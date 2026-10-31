@@ -7,38 +7,49 @@ import {
   createInstancedEntity, createVertexColorMaterial,
 } from '../core/mesh-utils.js';
 
-const BARK = [0.34, 0.26, 0.19];
+const BARK = [0.34, 0.26, 0.19];       // 質感画像が無いときの幹の色
+const BARK_TINT = [0.92, 0.88, 0.84];  // 質感画像があるときの色味の調整
 
-/** 針葉樹：幹 + 重ねた円錐（高さ約 11m） */
-function coniferArrays() {
-  const trunk = geometryToArrays(new pc.CylinderGeometry({ radius: 0.22, height: 4, heightSegments: 1, capSegments: 7 }));
-  const parts = [transformArrays(trunk, { offset: [0, 2, 0], color: BARK })];
-  const layers = [
-    { r: 2.6, h: 4.4, y: 4.3, c: [0.10, 0.17, 0.09] },
-    { r: 2.1, h: 3.9, y: 6.3, c: [0.11, 0.19, 0.10] },
-    { r: 1.6, h: 3.4, y: 8.1, c: [0.12, 0.21, 0.11] },
-    { r: 1.0, h: 2.9, y: 9.7, c: [0.14, 0.23, 0.12] },
-  ];
-  for (const l of layers) {
-    const cone = geometryToArrays(new pc.ConeGeometry({ baseRadius: l.r, peakRadius: 0, height: l.h, heightSegments: 1, capSegments: 9 }));
-    parts.push(transformArrays(cone, { offset: [0, l.y, 0], color: l.c }));
-  }
-  return mergeArrays(parts);
+/**
+ * 幹：円柱。UV は「周りに 1 周で画像 1 枚」、縦は実物の比率に合わせて繰り返す
+ * （横に半端な繰り返しにすると、継ぎ目で模様がずれるため）
+ */
+function trunkArrays(radius, height, textured) {
+  const cyl = geometryToArrays(new pc.CylinderGeometry({ radius, height, heightSegments: 2, capSegments: 10 }));
+  const around = 2 * Math.PI * radius;
+  return transformArrays(cyl, {
+    offset: [0, height / 2, 0],
+    color: textured ? BARK_TINT : BARK,
+    uvScale: [1, height / around],
+  });
 }
 
-/** 広葉樹：幹 + 丸い葉のかたまり（高さ約 9m） */
-function broadleafArrays() {
-  const trunk = geometryToArrays(new pc.CylinderGeometry({ radius: 0.28, height: 5, heightSegments: 1, capSegments: 7 }));
-  const parts = [transformArrays(trunk, { offset: [0, 2.5, 0], color: BARK })];
+/** 針葉樹の葉：重ねた円錐（高さ約 11m） */
+function coniferCrownArrays() {
+  const layers = [
+    { r: 2.6, h: 4.4, y: 4.3, c: [0.14, 0.22, 0.12] },
+    { r: 2.1, h: 3.9, y: 6.3, c: [0.15, 0.24, 0.13] },
+    { r: 1.6, h: 3.4, y: 8.1, c: [0.16, 0.26, 0.14] },
+    { r: 1.0, h: 2.9, y: 9.7, c: [0.18, 0.28, 0.15] },
+  ];
+  return mergeArrays(layers.map((l) => {
+    const cone = geometryToArrays(new pc.ConeGeometry({ baseRadius: l.r, peakRadius: 0, height: l.h, heightSegments: 1, capSegments: 9 }));
+    delete cone.uvs; // 葉には質感画像を貼らない
+    return transformArrays(cone, { offset: [0, l.y, 0], color: l.c });
+  }));
+}
+
+/** 広葉樹の葉：丸いかたまり（高さ約 9m） */
+function broadleafCrownArrays() {
   const blobs = [
-    { p: [0, 6.4, 0], s: [2.6, 2.0, 2.6], c: [0.16, 0.24, 0.10] },
-    { p: [1.3, 5.6, 0.6], s: [1.8, 1.5, 1.8], c: [0.18, 0.26, 0.11] },
-    { p: [-1.1, 5.8, -0.8], s: [1.9, 1.5, 1.9], c: [0.15, 0.23, 0.10] },
-    { p: [0.2, 7.8, -0.3], s: [1.7, 1.4, 1.7], c: [0.19, 0.28, 0.12] },
+    { p: [0, 6.4, 0], s: [2.6, 2.0, 2.6], c: [0.22, 0.30, 0.14] },
+    { p: [1.3, 5.6, 0.6], s: [1.8, 1.5, 1.8], c: [0.24, 0.32, 0.15] },
+    { p: [-1.1, 5.8, -0.8], s: [1.9, 1.5, 1.9], c: [0.21, 0.29, 0.14] },
+    { p: [0.2, 7.8, -0.3], s: [1.7, 1.4, 1.7], c: [0.25, 0.34, 0.16] },
   ];
   const sphere = geometryToArrays(new pc.SphereGeometry({ radius: 1, latitudeBands: 6, longitudeBands: 9 }));
-  for (const b of blobs) parts.push(transformArrays(sphere, { offset: b.p, scale: b.s, color: b.c }));
-  return mergeArrays(parts);
+  delete sphere.uvs;
+  return mergeArrays(blobs.map((b) => transformArrays(sphere, { offset: b.p, scale: b.s, color: b.c })));
 }
 
 /** 草のかたまり：細い葉を 6 本、根元は暗く先は明るく */
@@ -79,15 +90,26 @@ function matrixAt(x, y, z, yaw, sx, sy, sz, tiltX = 0, tiltZ = 0) {
   return new pc.Mat4().setTRS(tmpPos, tmpRot, tmpScale);
 }
 
-export function createTrees(app, config, seed, terrain, obstacles) {
+export function createTrees(app, config, seed, terrain, obstacles, barkTextures = null) {
   const w = config.world;
   const rnd = createRandom(seed + 1000);
   const device = app.graphicsDevice;
-  const material = createVertexColorMaterial({ roughness: 0.9 });
+  const textured = !!barkTextures;
+  const barkMaterial = createVertexColorMaterial({ roughness: 0.9, textures: barkTextures });
+  const leafMaterial = createVertexColorMaterial({ roughness: 0.9 });
 
+  // 幹と葉は別の部品（幹だけに樹皮の質感を貼る）。置く場所は共通
   const kinds = [
-    { name: 'Conifers', count: w.conifers, spacing: 3.0, trunkR: 0.3, mesh: createMesh(device, coniferArrays()) },
-    { name: 'Broadleaves', count: w.broadleaves, spacing: 4.0, trunkR: 0.38, mesh: createMesh(device, broadleafArrays()) },
+    {
+      name: 'Conifer', count: w.conifers, spacing: 3.0, trunkR: 0.3,
+      trunk: createMesh(device, trunkArrays(0.22, 4.5, textured)),
+      crown: createMesh(device, coniferCrownArrays()),
+    },
+    {
+      name: 'Broadleaf', count: w.broadleaves, spacing: 4.0, trunkR: 0.38,
+      trunk: createMesh(device, trunkArrays(0.28, 5.5, textured)),
+      crown: createMesh(device, broadleafCrownArrays()),
+    },
   ];
 
   for (const kind of kinds) {
@@ -104,7 +126,8 @@ export function createTrees(app, config, seed, terrain, obstacles) {
       matrices.push(matrixAt(x, terrain.heightAt(x, z) - 0.15, z, rnd.range(0, 360), s, sy, s, rnd.range(-2, 2), rnd.range(-2, 2)));
       obstacles.add(x, z, kind.trunkR * s);
     }
-    createInstancedEntity(app, kind.name, kind.mesh, material, matrices);
+    createInstancedEntity(app, `${kind.name}Trunks`, kind.trunk, barkMaterial, matrices);
+    createInstancedEntity(app, `${kind.name}Crowns`, kind.crown, leafMaterial, matrices);
   }
 }
 

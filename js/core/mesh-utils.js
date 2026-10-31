@@ -5,12 +5,20 @@ import * as pc from 'playcanvas';
 /** 場面全体の三角形の数（性能の目安として画面隅に出す。エンジンの公開版の統計には無いため自前で数える） */
 export const sceneBudget = { triangles: 0, instances: 0 };
 
-/** 形状データ（配列の集まり）から Mesh を作る */
+/**
+ * 形状データ（配列の集まり）から Mesh を作る。
+ * UV があるときは接線（tangent）も計算して持たせる：凹凸（法線）マップの向きを決めるのに要る
+ */
 export function createMesh(device, geo) {
   const mesh = new pc.Mesh(device);
+  const normals = geo.normals || pc.calculateNormals(geo.positions, geo.indices);
   mesh.setPositions(geo.positions);
-  mesh.setNormals(geo.normals || pc.calculateNormals(geo.positions, geo.indices));
-  if (geo.uvs) mesh.setUvs(0, geo.uvs);
+  mesh.setNormals(normals);
+  if (geo.uvs) {
+    mesh.setUvs(0, geo.uvs);
+    const tangents = pc.calculateTangents(geo.positions, normals, geo.uvs, geo.indices);
+    mesh.setVertexStream(pc.SEMANTIC_TANGENT, tangents, 4);
+  }
   if (geo.colors) mesh.setColors(geo.colors, 4);
   mesh.setIndices(geo.indices);
   mesh.update(pc.PRIMITIVE_TRIANGLES);
@@ -22,12 +30,16 @@ export function geometryToArrays(geometry) {
   return {
     positions: Array.from(geometry.positions),
     normals: Array.from(geometry.normals),
+    uvs: geometry.uvs ? Array.from(geometry.uvs) : undefined,
     indices: Array.from(geometry.indices),
   };
 }
 
-/** 形を移動・拡大し、頂点色を塗る（複数の部品を 1 つにまとめる前の下ごしらえ） */
-export function transformArrays(arrays, { offset = [0, 0, 0], scale = [1, 1, 1], color = null } = {}) {
+/**
+ * 形を移動・拡大し、頂点色を塗る（複数の部品を 1 つにまとめる前の下ごしらえ）
+ * uvScale：質感画像の繰り返し回数（[横, 縦]）
+ */
+export function transformArrays(arrays, { offset = [0, 0, 0], scale = [1, 1, 1], color = null, uvScale = [1, 1] } = {}) {
   const p = arrays.positions.slice();
   const n = arrays.normals.slice();
   for (let i = 0; i < p.length; i += 3) {
@@ -35,11 +47,14 @@ export function transformArrays(arrays, { offset = [0, 0, 0], scale = [1, 1, 1],
     p[i + 1] = p[i + 1] * scale[1] + offset[1];
     p[i + 2] = p[i + 2] * scale[2] + offset[2];
     // 拡大率が軸ごとに違うときの法線の補正
-    let nx = n[i] / scale[0], ny = n[i + 1] / scale[1], nz = n[i + 2] / scale[2];
+    const nx = n[i] / scale[0], ny = n[i + 1] / scale[1], nz = n[i + 2] / scale[2];
     const len = Math.hypot(nx, ny, nz) || 1;
     n[i] = nx / len; n[i + 1] = ny / len; n[i + 2] = nz / len;
   }
   const out = { positions: p, normals: n, indices: arrays.indices.slice() };
+  if (arrays.uvs) {
+    out.uvs = arrays.uvs.map((v, i) => v * uvScale[i % 2]);
+  }
   if (color) {
     const count = p.length / 3;
     out.colors = new Array(count * 4);
@@ -57,17 +72,20 @@ export function transformArrays(arrays, { offset = [0, 0, 0], scale = [1, 1, 1],
 
 /** 複数の形を 1 つにまとめる */
 export function mergeArrays(list) {
-  const out = { positions: [], normals: [], indices: [], colors: [] };
+  const out = { positions: [], normals: [], uvs: [], indices: [], colors: [] };
   let base = 0;
   const withColors = list.every((a) => a.colors);
+  const withUvs = list.every((a) => a.uvs);
   for (const a of list) {
     out.positions.push(...a.positions);
     out.normals.push(...a.normals);
     if (withColors) out.colors.push(...a.colors);
+    if (withUvs) out.uvs.push(...a.uvs);
     for (const idx of a.indices) out.indices.push(idx + base);
     base += a.positions.length / 3;
   }
   if (!withColors) delete out.colors;
+  if (!withUvs) delete out.uvs;
   return out;
 }
 
@@ -114,8 +132,12 @@ export function createInstancedEntity(app, name, mesh, material, matrices, { cas
   return entity;
 }
 
-/** 頂点色を使う、PBR の基本マテリアル */
-export function createVertexColorMaterial({ roughness = 0.85, metalness = 0, doubleSided = false } = {}) {
+/**
+ * PBR マテリアル。頂点色は「色味の調整（掛け算）」として使う。
+ * textures を渡すと、実写の質感画像（色・凹凸・陰影と粗さ）を貼る
+ * @param {{diffuse: pc.Texture, normal: pc.Texture, arm: pc.Texture} | null} textures
+ */
+export function createVertexColorMaterial({ roughness = 0.85, metalness = 0, doubleSided = false, textures = null, normalStrength = 1 } = {}) {
   const m = new pc.StandardMaterial();
   m.diffuse = new pc.Color(1, 1, 1);
   m.diffuseVertexColor = true;
@@ -124,6 +146,20 @@ export function createVertexColorMaterial({ roughness = 0.85, metalness = 0, dou
   m.useMetalness = true;
   m.metalness = metalness;
   m.gloss = 1 - roughness;
+
+  if (textures) {
+    m.diffuseMap = textures.diffuse;
+    m.normalMap = textures.normal;
+    m.bumpiness = normalStrength;
+    // ARM 画像：R = 陰影（AO）、G = 粗さ、B = 金属度（自然物なので使わない）
+    m.aoMap = textures.arm;
+    m.aoMapChannel = 'r';
+    m.glossMap = textures.arm;
+    m.glossMapChannel = 'g';
+    m.glossInvert = true; // 粗さ → 滑らかさ に読み替える
+    m.gloss = 1;
+  }
+
   if (doubleSided) m.cull = pc.CULLFACE_NONE;
   m.update();
   return m;
