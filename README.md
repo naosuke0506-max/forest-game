@@ -7,6 +7,7 @@ iPad の Safari で動く、一人称の森の試作品です。
 - 公開：GitHub Pages（ビルド作業なし。置いたファイルがそのまま動く）
 - 外部ライブラリ：PlayCanvas のみ
 - 質感画像：Poly Haven（CC0）の地面・樹皮・岩（`assets/textures/CREDITS.md`）
+- 空：Poly Haven（CC0）の HDR 写真から作った背景と照明（`assets/sky/CREDITS.md`）
 
 ## 遊び方
 
@@ -37,6 +38,8 @@ css/style.css            画面サイズ・Safari のセーフエリアに合わ
 vendor/playcanvas/2.23.3 固定したエンジン本体・ライセンス・照合記録（VERSION.md）
 assets/textures/         実写の質感画像（読み込むのは軽くした WebP。出典は CREDITS.md）
 tools/optimize_textures.py 質感画像を WebP に軽くする道具（開発用）
+assets/sky/               空の背景と照明（出典は CREDITS.md）
+tools/make_sky.py        空の HDR 写真から、背景・照明・太陽の向きを作る道具（開発用）
 js/
   main.js                起動の順番だけ
   config.js              画質・森の密度・操作感度などの数値
@@ -45,7 +48,8 @@ js/
   core/mesh-utils.js     仮モデルの組み立てと、インスタンシング（大量の同じ物を 1 回で描く）
   world/materials.js     質感画像の読み込み（色・凹凸・陰影と粗さ）
   world/terrain.js       起伏のある地面と、地点ごとの高さ
-  world/environment.js   太陽光・影・空の明るさ・霧
+  world/environment.js   太陽光・影・霧
+  world/sky.js           空の背景、空全体から回り込む光、写真の太陽に合わせた太陽光の向き
   world/vegetation.js    木（針葉樹・広葉樹）と草
   world/rocks.js         岩
   world/obstacles.js     木の幹や岩の当たり判定（円）

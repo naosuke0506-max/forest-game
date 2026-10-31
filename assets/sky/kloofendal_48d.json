@@ -1,0 +1,27 @@
+{
+  "source": "kloofendal_48d_partly_cloudy_puresky_2k.hdr",
+  "sunU": 0.5957,
+  "sunV": 0.2305,
+  "skyScale": 2.07272,
+  "horizonLinear": [
+    0.43486,
+    0.48252,
+    0.61087
+  ],
+  "lightSize": [
+    128,
+    64
+  ],
+  "groundLinear": [
+    0.14583,
+    0.13777,
+    0.09899
+  ],
+  "sunIrradiance": 4.541,
+  "skyIrradiance": 1.3859,
+  "sunColor": [
+    0.9944,
+    1.0,
+    0.9128
+  ]
+}

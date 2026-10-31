@@ -7,6 +7,7 @@ import { createObstacles } from './world/obstacles.js';
 import { createTrees, createGrass } from './world/vegetation.js';
 import { createRocks } from './world/rocks.js';
 import { loadTextureSets } from './world/materials.js';
+import { loadSky } from './world/sky.js';
 import { createPlayer } from './player/controller.js';
 import { createInput } from './input/input.js';
 import { createTitleScreen, createStats } from './ui/screens.js';
@@ -20,12 +21,15 @@ async function boot() {
   const canvas = document.getElementById('app');
   const { app } = await createApp(canvas, CONFIG.quality);
 
-  // 実写の質感画像（地面・樹皮・岩）を先に読み込む
-  const tex = await loadTextureSets(app.graphicsDevice, CONFIG.quality, (done, total) => titleScreen.progress(done, total));
+  // 実写の質感画像（地面・樹皮・岩）と空を、並行して読み込む
+  const [tex, sky] = await Promise.all([
+    loadTextureSets(app.graphicsDevice, CONFIG.quality, (done, total) => titleScreen.progress(done, total)),
+    loadSky(),
+  ]);
 
   // 世界を組み立てる（置く順番が大事：木 → 岩 → 草。草は木や岩を避けて生える）
   const terrain = createTerrain(app, CONFIG, CONFIG.seed, tex.ground);
-  const env = createEnvironment(app, CONFIG);
+  const env = createEnvironment(app, CONFIG, sky);
   const obstacles = createObstacles();
   createTrees(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.bark);
   createRocks(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.rock);
