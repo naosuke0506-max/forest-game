@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1b211c">
+<title>静かな森</title>
+<link rel="stylesheet" href="./css/style.css">
+
+<!-- エンジンの版はここ 1 か所で決める（vendor/playcanvas/2.23.3/VERSION.md を参照） -->
+<script type="importmap">
+{
+  "imports": {
+    "playcanvas": "./vendor/playcanvas/2.23.3/playcanvas.min.mjs"
+  }
+}
+</script>
+
+<!-- モジュールより先に動く：iPad では開発者ツールが見られないため、エラーを画面に出す -->
+<script>
+  (function () {
+    function show(msg) {
+      var box = document.getElementById('error');
+      if (!box) { window.__pendingErrors = (window.__pendingErrors || []).concat(msg); return; }
+      box.hidden = false;
+      box.textContent += msg + '\n';
+    }
+    window.__showError = show;
+    window.addEventListener('error', function (e) {
+      show('エラー: ' + (e.message || e) + (e.filename ? '\n  ' + e.filename + ':' + e.lineno : ''));
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e.reason;
+      show('エラー: ' + (r && r.message ? r.message : r));
+    });
+    if (!(HTMLScriptElement.supports && HTMLScriptElement.supports('importmap'))) {
+      document.addEventListener('DOMContentLoaded', function () {
+        show('このブラウザは import map に対応していません。Safari 16.4 以降で開いてください。');
+      });
+    }
+  })();
+</script>
+</head>
+<body>
+<canvas id="app"></canvas>
+
+<!-- 指の操作を受ける層（左：移動、右：視点） -->
+<div id="touch-layer" hidden>
+  <div id="stick" class="stick" hidden><div class="stick-knob"></div></div>
+</div>
+
+<div id="hud" hidden>
+  <div id="stats" class="stats"></div>
+</div>
+
+<section id="title" class="title">
+  <div class="title-inner">
+    <h1>静かな森</h1>
+    <p class="sub">FOREST PROTOTYPE</p>
+    <button id="start" class="start" type="button" disabled>読み込み中…</button>
+    <p class="hint">左側をなぞって移動　／　右側をなぞって見回す</p>
+  </div>
+</section>
+
+<pre id="error" class="error" hidden></pre>
+
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
