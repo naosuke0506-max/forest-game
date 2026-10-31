@@ -1,5 +1,7 @@
 // 実写の質感画像（Poly Haven, CC0）を読み込む。出典は assets/textures/CREDITS.md
 // 1 種類につき 3 枚：色（diff）、凹凸（nor_gl）、陰影と粗さ（arm）
+// 読み込むのは tools/optimize_textures.py で軽くした WebP。
+// ※ ファイル名を変えたら、index.html の <link rel="preload"> も合わせて直す
 import * as pc from 'playcanvas';
 
 const ROOT = './assets/textures';
@@ -58,7 +60,7 @@ export async function loadTextureSets(device, quality, onProgress = () => {}) {
   await Promise.all(entries.map(async ([name, set]) => {
     try {
       const images = await Promise.all(MAPS.map(async (map) => {
-        const img = await loadImage(`${ROOT}/${set.id}/${set.id}_${map.suffix}_1k.jpg`);
+        const img = await loadImage(`${ROOT}/${set.id}/${set.id}_${map.suffix}.webp`);
         onProgress(++done, total);
         return img;
       }));
