@@ -9,6 +9,33 @@
 <meta name="theme-color" content="#1b211c">
 <title>静かな森</title>
 <link rel="stylesheet" href="./css/style.css">
+<!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
+<link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
+<link rel="modulepreload" href="./js/main.js">
+<link rel="modulepreload" href="./js/config.js">
+<link rel="modulepreload" href="./js/core/app.js">
+<link rel="modulepreload" href="./js/core/random.js">
+<link rel="modulepreload" href="./js/core/mesh-utils.js">
+<link rel="modulepreload" href="./js/world/materials.js">
+<link rel="modulepreload" href="./js/world/terrain.js">
+<link rel="modulepreload" href="./js/world/environment.js">
+<link rel="modulepreload" href="./js/world/obstacles.js">
+<link rel="modulepreload" href="./js/world/vegetation.js">
+<link rel="modulepreload" href="./js/world/rocks.js">
+<link rel="modulepreload" href="./js/player/controller.js">
+<link rel="modulepreload" href="./js/input/input.js">
+<link rel="modulepreload" href="./js/input/touch.js">
+<link rel="modulepreload" href="./js/input/desktop.js">
+<link rel="modulepreload" href="./js/ui/screens.js">
+<link rel="preload" as="image" type="image/webp" href="./assets/textures/forrest_ground_01/forrest_ground_01_diff.webp">
+<link rel="preload" as="image" type="image/webp" href="./assets/textures/forrest_ground_01/forrest_ground_01_nor_gl.webp">
+<link rel="preload" as="image" type="image/webp" href="./assets/textures/forrest_ground_01/forrest_ground_01_arm.webp">
+<link rel="preload" as="image" type="image/webp" href="./assets/textures/pine_bark/pine_bark_diff.webp">
+<link rel="preload" as="image" type="image/webp" href="./assets/textures/pine_bark/pine_bark_nor_gl.webp">
+<link rel="preload" as="image" type="image/webp" href="./assets/textures/pine_bark/pine_bark_arm.webp">
+<link rel="preload" as="image" type="image/webp" href="./assets/textures/mossy_rock/mossy_rock_diff.webp">
+<link rel="preload" as="image" type="image/webp" href="./assets/textures/mossy_rock/mossy_rock_nor_gl.webp">
+<link rel="preload" as="image" type="image/webp" href="./assets/textures/mossy_rock/mossy_rock_arm.webp">
 
 <!-- エンジンの版はここ 1 か所で決める（vendor/playcanvas/2.23.3/VERSION.md を参照） -->
 <script type="importmap">

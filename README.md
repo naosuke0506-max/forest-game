@@ -35,7 +35,8 @@ iPad の Safari で動く、一人称の森の試作品です。
 index.html               入口。import map でエンジンの版を 1 か所で決める
 css/style.css            画面サイズ・Safari のセーフエリアに合わせた UI
 vendor/playcanvas/2.23.3 固定したエンジン本体・ライセンス・照合記録（VERSION.md）
-assets/textures/         実写の質感画像（1K、出典は CREDITS.md）
+assets/textures/         実写の質感画像（読み込むのは軽くした WebP。出典は CREDITS.md）
+tools/optimize_textures.py 質感画像を WebP に軽くする道具（開発用）
 js/
   main.js                起動の順番だけ
   config.js              画質・森の密度・操作感度などの数値
