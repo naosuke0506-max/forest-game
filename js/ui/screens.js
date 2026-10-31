@@ -6,6 +6,10 @@ export function createTitleScreen() {
   const button = document.getElementById('start');
 
   return {
+    /** 読み込みの進み具合 */
+    progress(done, total) {
+      button.textContent = `読み込み中… ${Math.round((done / total) * 100)}%`;
+    },
     /** 読み込みが終わったら押せるようにする */
     ready(onStart) {
       button.disabled = false;

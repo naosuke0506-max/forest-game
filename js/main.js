@@ -6,6 +6,7 @@ import { createEnvironment } from './world/environment.js';
 import { createObstacles } from './world/obstacles.js';
 import { createTrees, createGrass } from './world/vegetation.js';
 import { createRocks } from './world/rocks.js';
+import { loadTextureSets } from './world/materials.js';
 import { createPlayer } from './player/controller.js';
 import { createInput } from './input/input.js';
 import { createTitleScreen, createStats } from './ui/screens.js';
@@ -19,12 +20,15 @@ async function boot() {
   const canvas = document.getElementById('app');
   const { app } = await createApp(canvas, CONFIG.quality);
 
+  // 実写の質感画像（地面・樹皮・岩）を先に読み込む
+  const tex = await loadTextureSets(app.graphicsDevice, CONFIG.quality, (done, total) => titleScreen.progress(done, total));
+
   // 世界を組み立てる（置く順番が大事：木 → 岩 → 草。草は木や岩を避けて生える）
-  const terrain = createTerrain(app, CONFIG, CONFIG.seed);
+  const terrain = createTerrain(app, CONFIG, CONFIG.seed, tex.ground);
   const env = createEnvironment(app, CONFIG);
   const obstacles = createObstacles();
-  createTrees(app, CONFIG, CONFIG.seed, terrain, obstacles);
-  createRocks(app, CONFIG, CONFIG.seed, terrain, obstacles);
+  createTrees(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.bark);
+  createRocks(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.rock);
   createGrass(app, CONFIG, CONFIG.seed, terrain, obstacles);
 
   const player = createPlayer(app, CONFIG, terrain, obstacles, env.fogColor);
@@ -42,7 +46,7 @@ async function boot() {
   app.start();
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles };
+  window.__forest = { app, player, obstacles, terrain };
 
   titleScreen.ready(() => {
     input.reset();

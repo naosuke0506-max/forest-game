@@ -3,7 +3,7 @@ import * as pc from 'playcanvas';
 import { createRandom, fbm } from '../core/random.js';
 import { createMesh, geometryToArrays, createInstancedEntity, createVertexColorMaterial } from '../core/mesh-utils.js';
 
-function rockArrays(seed) {
+function rockArrays(seed, textured) {
   const a = geometryToArrays(new pc.SphereGeometry({ radius: 1, latitudeBands: 8, longitudeBands: 11 }));
   const p = a.positions;
   const colors = [];
@@ -13,21 +13,29 @@ function rockArrays(seed) {
     const n = fbm(x * 1.3 + y * 0.7 + 11, z * 1.3 - y * 0.9 + 5, seed, 3);
     const k = 0.72 + n * 0.6;
     p[i] = x * k; p[i + 1] = y * k * (y < 0 ? 0.6 : 1); p[i + 2] = z * k;
-    // 上の面は苔むした色、下は灰色
-    const moss = Math.max(0, y) * 0.55 * (0.6 + n);
-    const g = 0.36 + n * 0.12;
-    colors.push(g - moss * 0.18, g - moss * 0.06, g - moss * 0.24, 1);
+    if (textured) {
+      // 質感画像の色味の調整：下の面ほど暗く（土に埋もれた感じ）
+      const shade = 0.72 + 0.28 * Math.min(1, Math.max(0, y + 0.6)) + n * 0.08;
+      colors.push(shade, shade, shade * 0.97, 1);
+    } else {
+      // 上の面は苔むした色、下は灰色
+      const moss = Math.max(0, y) * 0.55 * (0.6 + n);
+      const g = 0.36 + n * 0.12;
+      colors.push(g - moss * 0.18, g - moss * 0.06, g - moss * 0.24, 1);
+    }
   }
-  return { positions: p, normals: pc.calculateNormals(p, a.indices), indices: a.indices, colors };
+  // 球の UV（横 1 周・縦は半周）を、横 2 回・縦 1 回の繰り返しにして模様の縦横比をそろえる
+  const uvs = a.uvs.map((v, i) => (i % 2 === 0 ? v * 2 : v));
+  return { positions: p, normals: pc.calculateNormals(p, a.indices), uvs, indices: a.indices, colors };
 }
 
-export function createRocks(app, config, seed, terrain, obstacles) {
+export function createRocks(app, config, seed, terrain, obstacles, rockTextures = null) {
   const w = config.world;
   const rnd = createRandom(seed + 3000);
   const device = app.graphicsDevice;
-  const material = createVertexColorMaterial({ roughness: 0.8 });
+  const material = createVertexColorMaterial({ roughness: 0.8, textures: rockTextures });
 
-  const variants = [0, 1].map((v) => ({ mesh: createMesh(device, rockArrays(seed + 3100 + v)), matrices: [] }));
+  const variants = [0, 1].map((v) => ({ mesh: createMesh(device, rockArrays(seed + 3100 + v, !!rockTextures)), matrices: [] }));
   const pos = new pc.Vec3(), rot = new pc.Quat(), scl = new pc.Vec3();
 
   let placed = 0;
