@@ -6,6 +6,7 @@ import { createEnvironment } from './world/environment.js';
 import { createObstacles } from './world/obstacles.js';
 import { createTrees, createGrass } from './world/vegetation.js';
 import { createRocks } from './world/rocks.js';
+import { createWind } from './world/wind.js';
 import { loadTextureSets } from './world/materials.js';
 import { loadSky } from './world/sky.js';
 import { loadTreeModels, startLoadingNear, createModelTrees } from './world/trees.js';
@@ -32,6 +33,7 @@ async function boot() {
   // 世界を組み立てる（置く順番が大事：木 → 岩 → 草。草は木や岩を避けて生える）
   const terrain = createTerrain(app, CONFIG, CONFIG.seed, tex.ground);
   const env = createEnvironment(app, CONFIG, sky);
+  const wind = createWind(app, CONFIG);
   const obstacles = createObstacles();
   // 木：Tripo AI の模型。読み込めなかったときは仮の木
   const trees = treeModels
@@ -49,6 +51,7 @@ async function boot() {
   app.on('update', (dt) => {
     if (playing) player.update(dt, input.read());
     trees?.update(dt, player.camera.getPosition());
+    wind.update(dt);
     stats.update(dt);
   });
 
