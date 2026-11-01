@@ -98,6 +98,18 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models) 
   const device = app.graphicsDevice;
   const lodDistance = config.quality.treeLodDistance;
 
+  // 根元の高さ：幹の中心と、根の張り出しの 8 方向の地面のうち、いちばん低い所に合わせる。
+  // 坂では、下り側に張った根が宙に浮かないように、その分だけ木を沈める
+  const groundUnderRoots = (x, z, rootR) => {
+    let y = terrain.heightAt(x, z);
+    const r = rootR * 0.6;
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      y = Math.min(y, terrain.heightAt(x + Math.cos(a) * r, z + Math.sin(a) * r));
+    }
+    return y - 0.08;
+  };
+
   // 1. 置く場所を決める（大きい木 → 若木の順。木どうしは葉の広がりに応じて間をあける）
   const placements = {};
   for (const name of TREE_TYPES) placements[name] = [];
@@ -116,7 +128,8 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models) 
       const yaw = rnd.range(0, 360);
       const sy = s * rnd.range(0.92, 1.08);
       const mat = new pc.Mat4().setTRS(
-        new pc.Vec3(x, terrain.heightAt(x, z) - 0.1, z),
+        // 根の付け根の 7 割を埋める（タコ足のように下へ伸びる根が、地面から浮いて見えないように）
+        new pc.Vec3(x, groundUnderRoots(x, z, (m.rootRadius ?? 0.5) * s) - (m.rootJunction ?? 0) * 0.7 * sy, z),
         new pc.Quat().setFromEulerAngles(rnd.range(-1.5, 1.5), yaw, rnd.range(-1.5, 1.5)),
         new pc.Vec3(s, sy, s),
       );
@@ -217,5 +230,6 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models) 
       counted = treeTriangles;
     },
     counts: Object.fromEntries(groups.map((g) => [g.name, g.list.length])),
+    placements, // 確認用（自動テストから木の位置を読むため）
   };
 }
