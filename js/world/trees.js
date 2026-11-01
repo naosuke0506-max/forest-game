@@ -146,7 +146,7 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models) 
       );
       placements[name].push({ x, z, mat });
       // 若木は踏み分けて通れるように当たり判定を小さく、それ以外は幹の太さで
-      obstacles.add(x, z, isSapling ? 0.01 : Math.max(0.15, m.trunkRadius * s));
+      obstacles.add(x, z, isSapling ? 0.01 : Math.max(0.15, m.trunkRadius * s), !isSapling);
       n++;
     }
   }

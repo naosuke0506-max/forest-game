@@ -10,6 +10,7 @@ import { createWind } from './world/wind.js';
 import { loadTextureSets } from './world/materials.js';
 import { loadSky } from './world/sky.js';
 import { loadTreeModels, startLoadingNear, createModelTrees } from './world/trees.js';
+import { loadProps, createProps } from './world/props.js';
 import { createPlayer } from './player/controller.js';
 import { createInput } from './input/input.js';
 import { createTitleScreen, createStats } from './ui/screens.js';
@@ -24,10 +25,11 @@ async function boot() {
   const { app } = await createApp(canvas, CONFIG.quality);
 
   // 実写の質感画像（地面・樹皮・岩）と空を、並行して読み込む
-  const [tex, sky, treeModels] = await Promise.all([
+  const [tex, sky, treeModels, propTypes] = await Promise.all([
     loadTextureSets(app.graphicsDevice, CONFIG.quality, (done, total) => titleScreen.progress(done, total)),
     loadSky(),
     loadTreeModels(app, CONFIG.quality),
+    loadProps(app, CONFIG.quality),
   ]);
 
   // 世界を組み立てる（置く順番が大事：木 → 岩 → 草。草は木や岩を避けて生える）
@@ -39,8 +41,14 @@ async function boot() {
   const trees = treeModels
     ? createModelTrees(app, CONFIG, CONFIG.seed, terrain, obstacles, treeModels)
     : (createTrees(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.bark), null);
-  createRocks(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.rock);
-  createGrass(app, CONFIG, CONFIG.seed, terrain, obstacles);
+  // 森の小物（岩・切り株・落ち枝・シダ・草）：Poly Haven の模型。読み込めなかったときは仮の岩と草
+  let props = null;
+  if (propTypes) {
+    props = createProps(app, CONFIG, CONFIG.seed, terrain, obstacles, propTypes);
+  } else {
+    createRocks(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.rock);
+    createGrass(app, CONFIG, CONFIG.seed, terrain, obstacles);
+  }
 
   const player = createPlayer(app, CONFIG, terrain, obstacles, env.fogColor);
   const touchLayer = document.getElementById('touch-layer');
@@ -51,6 +59,7 @@ async function boot() {
   app.on('update', (dt) => {
     if (playing) player.update(dt, input.read());
     trees?.update(dt, player.camera.getPosition());
+    props?.update(dt, player.camera.getPosition());
     wind.update(dt);
     stats.update(dt);
   });
@@ -62,7 +71,7 @@ async function boot() {
   if (trees) startLoadingNear(app, treeModels, (name) => trees.enableNear(name));
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain, trees, wind };
+  window.__forest = { app, player, obstacles, terrain, trees, props, wind };
 
   titleScreen.ready(() => {
     input.reset();
