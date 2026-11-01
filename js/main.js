@@ -62,7 +62,7 @@ async function boot() {
   if (trees) startLoadingNear(app, treeModels, (name) => trees.enableNear(name));
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain, trees };
+  window.__forest = { app, player, obstacles, terrain, trees, wind };
 
   titleScreen.ready(() => {
     input.reset();

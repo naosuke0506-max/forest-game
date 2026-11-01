@@ -137,7 +137,7 @@ export function createGrass(app, config, seed, terrain, obstacles) {
   const rnd = createRandom(seed + 2000);
   const mesh = createMesh(app.graphicsDevice, grassClumpArrays(createRandom(seed + 2001)));
   const material = createVertexColorMaterial({ roughness: 0.9, doubleSided: true });
-  applyWind(material, { height: 0.5, bend: 0.22, flutter: 0.015 }); // 草の先がなびく
+  applyWind(material, { height: 0.5, bend: 0.45, flutter: 0.03 }); // 草の先がなびく
 
   const matrices = [];
   const target = config.quality.grassClumps;

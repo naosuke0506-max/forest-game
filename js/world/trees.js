@@ -80,12 +80,12 @@ export function startLoadingNear(app, models, onLoaded) {
 
 // 風での揺れ方：bend＝てっぺんの揺れ幅（高さに対する割合）、flutter＝葉のそよぎ（m）
 const WIND = {
-  fir:       { bend: 0.010, flutter: 0.035 },
-  red_pine:  { bend: 0.010, flutter: 0.035 },
-  broadleaf: { bend: 0.016, flutter: 0.06 },
-  birch:     { bend: 0.020, flutter: 0.06 },
-  dead:      { bend: 0.005, flutter: 0.004 },
-  sapling:   { bend: 0.035, flutter: 0.03 },
+  fir:       { bend: 0.040, flutter: 0.10 },
+  red_pine:  { bend: 0.038, flutter: 0.10 },
+  broadleaf: { bend: 0.050, flutter: 0.15 },
+  birch:     { bend: 0.060, flutter: 0.15 },
+  dead:      { bend: 0.015, flutter: 0.01 },
+  sapling:   { bend: 0.080, flutter: 0.06 },
 };
 
 function createTreeMaterial(texture, name, height) {
