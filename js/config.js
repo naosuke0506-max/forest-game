@@ -9,6 +9,7 @@ const QUALITY = {
     anisotropy: 2,
     shadowDistance: 30,
     grassClumps: 1500,
+    treeLodDistance: 25,   // これより近い木は精細な形（近く用）で描く（m）
   },
   medium: {
     maxPixelRatio: 1.5,
@@ -17,6 +18,7 @@ const QUALITY = {
     anisotropy: 4,
     shadowDistance: 40,
     grassClumps: 3000,
+    treeLodDistance: 35,
   },
   high: {
     maxPixelRatio: 2.0,
@@ -25,6 +27,7 @@ const QUALITY = {
     anisotropy: 8,
     shadowDistance: 55,
     grassClumps: 5000,
+    treeLodDistance: 50,
   },
 };
 
@@ -45,7 +48,9 @@ export const CONFIG = {
     playRadius: 62,         // 歩ける範囲の半径（m）
     forestRadius: 70,       // 木を置く範囲の半径（m）
     clearingRadius: 7,      // 開始地点の周りの空き地（m）
-    conifers: 110,
+    // 木の本数（Tripo AI の模型を使うとき）。置く順番もこの順（大きい木から）
+    trees: { fir: 60, red_pine: 22, broadleaf: 26, birch: 22, dead: 10, sapling: 60 },
+    conifers: 110,          // 模型が読み込めなかったときの仮の木の本数
     broadleaves: 45,
     rocks: 45,
     grassRadius: 48,        // 草を置く範囲の半径（m）
