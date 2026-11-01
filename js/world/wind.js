@@ -35,7 +35,7 @@ vec4 evalWorldPosition(vec3 vertexPosition, mat4 modelMatrix) {
 	float t = uWindTime;
 
 	// しなり：ゆっくりした揺れ 2 つと突風
-	float sway = sin(t * 0.83 + phase) * 0.55 + sin(t * 1.61 + phase * 1.7) * 0.25 + uWindGust;
+	float sway = sin(t * 1.25 + phase) * 0.55 + sin(t * 2.3 + phase * 1.7) * 0.25 + uWindGust;
 	float bend = h * h * uWindHeight * uWindBend * uWindStrength;
 	posW.xz += uWindDir * sway * bend;
 	posW.y -= abs(sway) * bend * 0.12 * h;               // 傾いた分だけ少し下がる（長さを保つ）
