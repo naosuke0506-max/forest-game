@@ -26,7 +26,7 @@ iPad の Safari で動く、一人称の森の試作品です。
 | `?q=low` / `?q=high` | 画質（既定は medium） |
 | `?stats=0` | 左上の性能表示を消す |
 | `?seed=123` | 森の配置を変える |
-| `?wind=0.5` | 風の強さ（既定 1、0 で無風） |
+| `?wind=0.5` | 風の強さ（既定 1.5、0 で無風） |
 
 例：`https://naosuke0506-max.github.io/forest-game/?q=low`
 
