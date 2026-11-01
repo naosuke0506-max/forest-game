@@ -73,7 +73,7 @@ export const CONFIG = {
   // 風（見た目だけ。ゲームの計算には使わない）
   wind: {
     direction: 35,          // 風の吹いていく向き（度）
-    strength: params.has('wind') ? Number(params.get('wind')) || 0 : 1.0, // 全体の強さ（0 で無風）。URL の ?wind=0.5 などで試せる
+    strength: params.has('wind') ? Number(params.get('wind')) || 0 : 1.5, // 全体の強さ（0 で無風）。iPad で見て 1.5 に決めた。URL の ?wind=0.5 などで試せる
     gust: 0.6,              // 突風の強さ
   },
 
