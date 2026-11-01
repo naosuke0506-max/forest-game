@@ -10,6 +10,7 @@
 import * as pc from 'playcanvas';
 import { createRandom } from '../core/random.js';
 import { sceneBudget } from '../core/mesh-utils.js';
+import { applyWind } from './wind.js';
 
 const ROOT = './assets/trees';
 export const TREE_TYPES = ['fir', 'red_pine', 'broadleaf', 'birch', 'dead', 'sapling'];
@@ -77,7 +78,17 @@ export function startLoadingNear(app, models, onLoaded) {
   }
 }
 
-function createTreeMaterial(texture) {
+// 風での揺れ方：bend＝てっぺんの揺れ幅（高さに対する割合）、flutter＝葉のそよぎ（m）
+const WIND = {
+  fir:       { bend: 0.010, flutter: 0.035 },
+  red_pine:  { bend: 0.010, flutter: 0.035 },
+  broadleaf: { bend: 0.016, flutter: 0.06 },
+  birch:     { bend: 0.020, flutter: 0.06 },
+  dead:      { bend: 0.005, flutter: 0.004 },
+  sapling:   { bend: 0.035, flutter: 0.03 },
+};
+
+function createTreeMaterial(texture, name, height) {
   const m = new pc.StandardMaterial();
   m.diffuseMap = texture;
   m.useMetalness = true;
@@ -85,7 +96,7 @@ function createTreeMaterial(texture) {
   m.gloss = 0.18;              // 樹皮も葉もほぼつやなし
   m.cull = pc.CULLFACE_NONE;   // 葉は薄い板なので両面を描く
   m.twoSidedLighting = true;   // 裏面も正しい向きで光を受ける
-  m.update();
+  applyWind(m, { height, ...WIND[name] });
   return m;
 }
 
@@ -147,7 +158,7 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models) 
     const list = placements[name];
     if (!list.length) continue;
     const t = models.types[name];
-    const material = createTreeMaterial(t.texture);
+    const material = createTreeMaterial(t.texture, name, t.meta.height);
     const makeLayer = (mesh, label) => {
       const data = new Float32Array(list.length * 16);
       const vb = new pc.VertexBuffer(device, pc.VertexFormat.getDefaultInstancingFormat(device), list.length, {

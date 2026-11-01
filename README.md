@@ -26,6 +26,7 @@ iPad の Safari で動く、一人称の森の試作品です。
 | `?q=low` / `?q=high` | 画質（既定は medium） |
 | `?stats=0` | 左上の性能表示を消す |
 | `?seed=123` | 森の配置を変える |
+| `?wind=0.5` | 風の強さ（既定 1、0 で無風） |
 
 例：`https://naosuke0506-max.github.io/forest-game/?q=low`
 
@@ -55,6 +56,7 @@ js/
   world/environment.js   太陽光・影・霧
   world/sky.js           空の背景、空全体から回り込む光、写真の太陽に合わせた太陽光の向き
   world/trees.js         木の模型を並べる。距離で近く用・遠く用を切り替える（LOD）
+  world/wind.js          風：木と草を頂点シェーダーで揺らす（しなり・突風・葉のそよぎ）
   world/vegetation.js    草と、模型が読み込めなかったときの仮の木
   world/rocks.js         岩
   world/obstacles.js     木の幹や岩の当たり判定（円）
