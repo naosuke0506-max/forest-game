@@ -8,6 +8,7 @@ import { createTrees, createGrass } from './world/vegetation.js';
 import { createRocks } from './world/rocks.js';
 import { loadTextureSets } from './world/materials.js';
 import { loadSky } from './world/sky.js';
+import { loadTreeModels, startLoadingNear, createModelTrees } from './world/trees.js';
 import { createPlayer } from './player/controller.js';
 import { createInput } from './input/input.js';
 import { createTitleScreen, createStats } from './ui/screens.js';
@@ -22,16 +23,20 @@ async function boot() {
   const { app } = await createApp(canvas, CONFIG.quality);
 
   // 実写の質感画像（地面・樹皮・岩）と空を、並行して読み込む
-  const [tex, sky] = await Promise.all([
+  const [tex, sky, treeModels] = await Promise.all([
     loadTextureSets(app.graphicsDevice, CONFIG.quality, (done, total) => titleScreen.progress(done, total)),
     loadSky(),
+    loadTreeModels(app, CONFIG.quality),
   ]);
 
   // 世界を組み立てる（置く順番が大事：木 → 岩 → 草。草は木や岩を避けて生える）
   const terrain = createTerrain(app, CONFIG, CONFIG.seed, tex.ground);
   const env = createEnvironment(app, CONFIG, sky);
   const obstacles = createObstacles();
-  createTrees(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.bark);
+  // 木：Tripo AI の模型。読み込めなかったときは仮の木
+  const trees = treeModels
+    ? createModelTrees(app, CONFIG, CONFIG.seed, terrain, obstacles, treeModels)
+    : (createTrees(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.bark), null);
   createRocks(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.rock);
   createGrass(app, CONFIG, CONFIG.seed, terrain, obstacles);
 
@@ -43,14 +48,18 @@ async function boot() {
   let playing = false;
   app.on('update', (dt) => {
     if (playing) player.update(dt, input.read());
+    trees?.update(dt, player.camera.getPosition());
     stats.update(dt);
   });
 
   // タイトルの後ろでも森を描いておく（背景として見せる）
   app.start();
 
+  // 木の近く用（精細な形）は、起動後に裏で読み込む
+  if (trees) startLoadingNear(app, treeModels, (name) => trees.enableNear(name));
+
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain };
+  window.__forest = { app, player, obstacles, terrain, trees };
 
   titleScreen.ready(() => {
     input.reset();

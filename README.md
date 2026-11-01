@@ -8,6 +8,7 @@ iPad の Safari で動く、一人称の森の試作品です。
 - 外部ライブラリ：PlayCanvas のみ
 - 質感画像：Poly Haven（CC0）の地面・樹皮・岩（`assets/textures/CREDITS.md`）
 - 空：Poly Haven（CC0）の HDR 写真から作った背景と照明（`assets/sky/CREDITS.md`）
+- 木：Tripo AI で作った 6 種類の模型（`assets/trees/CREDITS.md`）
 
 ## 遊び方
 
@@ -40,6 +41,9 @@ assets/textures/         実写の質感画像（読み込むのは軽くした 
 tools/optimize_textures.py 質感画像を WebP に軽くする道具（開発用）
 assets/sky/               空の背景と照明（出典は CREDITS.md）
 tools/make_sky.py        空の HDR 写真から、背景・照明・太陽の向きを作る道具（開発用）
+assets/trees/            木の模型（近く用・遠く用の形と色の画像。出典は CREDITS.md）
+source_models/trees/     木の元の模型（Tripo AI の GLB。ゲームは読み込まない）
+tools/process_trees.mjs  木の模型をゲーム用に軽くする道具（開発用。cd tools && npm ci）
 js/
   main.js                起動の順番だけ
   config.js              画質・森の密度・操作感度などの数値
@@ -50,7 +54,8 @@ js/
   world/terrain.js       起伏のある地面と、地点ごとの高さ
   world/environment.js   太陽光・影・霧
   world/sky.js           空の背景、空全体から回り込む光、写真の太陽に合わせた太陽光の向き
-  world/vegetation.js    木（針葉樹・広葉樹）と草
+  world/trees.js         木の模型を並べる。距離で近く用・遠く用を切り替える（LOD）
+  world/vegetation.js    草と、模型が読み込めなかったときの仮の木
   world/rocks.js         岩
   world/obstacles.js     木の幹や岩の当たり判定（円）
   input/touch.js         iPad のタッチ（左：スティック、右：視点）
@@ -60,9 +65,9 @@ js/
   ui/screens.js          タイトル画面と性能表示
 ```
 
-木・草・岩の形はまだ仮モデル（エンジンの基本形を組み合わせたもの）です。地面・幹・岩には実写の質感画像を貼っています。
-質感画像が読み込めなかったときは、その種類だけ色だけの表示で続けます（画面下に知らせが出ます）。
-Meshy AI の GLB に差し替えるときは `world/vegetation.js` と `world/rocks.js` の「形を作る」部分を置き換えます。
+木は Tripo AI の模型です。草と岩の形はまだ仮モデル（エンジンの基本形を組み合わせたもの）で、地面と岩には実写の質感画像を貼っています。
+木の模型や質感画像が読み込めなかったときは、その分だけ仮の表示で続けます（画面下に知らせが出ます）。
+新しい木を足すときは、元の GLB を `source_models/trees/` に置き、`tools/process_trees.mjs` の `TREES` と `js/world/trees.js` の `TREE_TYPES`、`js/config.js` の `world.trees` に名前を足します。
 
 ## GitHub Pages で公開する手順（iPad の Safari で）
 
