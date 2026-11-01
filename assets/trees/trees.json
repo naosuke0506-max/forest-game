@@ -1,12 +1,16 @@
 {
   "fir": {
+    "rootRadius": 0.862,
+    "rootJunction": 0.1,
     "height": 15,
-    "trunkRadius": 1.995,
+    "trunkRadius": 0.331,
     "crownRadius": 3.353,
     "lod0Triangles": 6646,
     "lod1Triangles": 1049
   },
   "red_pine": {
+    "rootRadius": 2.606,
+    "rootJunction": 0.9,
     "height": 16,
     "trunkRadius": 0.744,
     "crownRadius": 4.644,
@@ -14,6 +18,8 @@
     "lod1Triangles": 1100
   },
   "broadleaf": {
+    "rootRadius": 1.491,
+    "rootJunction": 0.6,
     "height": 12,
     "trunkRadius": 0.377,
     "crownRadius": 5.502,
@@ -21,6 +27,8 @@
     "lod1Triangles": 1166
   },
   "birch": {
+    "rootRadius": 1.223,
+    "rootJunction": 0.4,
     "height": 13,
     "trunkRadius": 0.188,
     "crownRadius": 3.879,
@@ -28,6 +36,8 @@
     "lod1Triangles": 996
   },
   "dead": {
+    "rootRadius": 1.921,
+    "rootJunction": 1,
     "height": 10,
     "trunkRadius": 0.447,
     "crownRadius": 2.842,
@@ -35,8 +45,10 @@
     "lod1Triangles": 926
   },
   "sapling": {
+    "rootRadius": 0.598,
+    "rootJunction": 0,
     "height": 2.4,
-    "trunkRadius": 0.273,
+    "trunkRadius": 0.068,
     "crownRadius": 0.677,
     "lod0Triangles": 2045,
     "lod1Triangles": 367
