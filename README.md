@@ -9,6 +9,7 @@ iPad の Safari で動く、一人称の森の試作品です。
 - 質感画像：Poly Haven（CC0）の地面・樹皮・岩（`assets/textures/CREDITS.md`）
 - 空：Poly Haven（CC0）の HDR 写真から作った背景と照明（`assets/sky/CREDITS.md`）
 - 木：Tripo AI で作った 6 種類の模型（`assets/trees/CREDITS.md`）
+- 草・シダ・落ち枝・岩・切り株：Poly Haven（CC0）の 3D 模型（`assets/props/CREDITS.md`）
 
 ## 遊び方
 
@@ -45,6 +46,9 @@ tools/make_sky.py        空の HDR 写真から、背景・照明・太陽の�
 assets/trees/            木の模型（近く用・遠く用の形と色の画像。出典は CREDITS.md）
 source_models/trees/     木の元の模型（Tripo AI の GLB。ゲームは読み込まない）
 tools/process_trees.mjs  木の模型をゲーム用に軽くする道具（開発用。cd tools && npm ci）
+assets/props/            森の小物（草・シダ・落ち枝・岩・切り株。出典は CREDITS.md）
+tools/fetch_polyhaven_models.py  Poly Haven の模型を取り込む道具（開発用）
+tools/process_props.mjs  森の小物をゲーム用に軽くする道具（開発用）
 js/
   main.js                起動の順番だけ
   config.js              画質・森の密度・操作感度などの数値
@@ -57,9 +61,10 @@ js/
   world/sky.js           空の背景、空全体から回り込む光、写真の太陽に合わせた太陽光の向き
   world/trees.js         木の模型を並べる。距離で近く用・遠く用を切り替える（LOD）
   world/wind.js          風：木と草を頂点シェーダーで揺らす（しなり・突風・葉のそよぎ）
-  world/vegetation.js    草と、模型が読み込めなかったときの仮の木
-  world/rocks.js         岩
-  world/obstacles.js     木の幹や岩の当たり判定（円）
+  world/props.js         森の小物を置く。距離で近く用・遠く用・描かないを切り替える
+  world/vegetation.js    模型が読み込めなかったときの仮の木と草
+  world/rocks.js         模型が読み込めなかったときの仮の岩
+  world/obstacles.js     当たり判定（円）。ぶつかる物と、置き場所を取るだけの物を分けて持つ
   input/touch.js         iPad のタッチ（左：スティック、右：視点）
   input/desktop.js       キーボード・マウス（補助）
   input/input.js         入力を「移動」「視点」の形にそろえる
@@ -67,7 +72,7 @@ js/
   ui/screens.js          タイトル画面と性能表示
 ```
 
-木は Tripo AI の模型です。草と岩の形はまだ仮モデル（エンジンの基本形を組み合わせたもの）で、地面と岩には実写の質感画像を貼っています。
+木は Tripo AI の模型、草・シダ・落ち枝・岩・切り株は Poly Haven の実写スキャンの模型です。地面には実写の質感画像を貼っています。
 木の模型や質感画像が読み込めなかったときは、その分だけ仮の表示で続けます（画面下に知らせが出ます）。
 新しい木を足すときは、元の GLB を `source_models/trees/` に置き、`tools/process_trees.mjs` の `TREES` と `js/world/trees.js` の `TREE_TYPES`、`js/config.js` の `world.trees` に名前を足します。
 

@@ -8,8 +8,11 @@ export function createObstacles() {
   const all = [];
   const key = (gx, gz) => gx * 73856093 ^ gz * 19349663;
 
-  function add(x, z, r) {
-    const o = { x, z, r };
+  /**
+   * @param {boolean} solid ぶつかる物か。false は「置き場所が重ならないように場所を取るだけ」（草・若木など）
+   */
+  function add(x, z, r, solid = true) {
+    const o = { x, z, r, solid };
     all.push(o);
     for (let gx = Math.floor((x - r) / CELL); gx <= Math.floor((x + r) / CELL); gx++) {
       for (let gz = Math.floor((z - r) / CELL); gz <= Math.floor((z + r) / CELL); gz++) {
@@ -28,6 +31,7 @@ export function createObstacles() {
   /** 位置 p（{x, z}）を、半径 radius の円として障害物から押し出す */
   function resolve(p, radius) {
     for (const o of near(p.x, p.z)) {
+      if (!o.solid) continue;
       const dx = p.x - o.x, dz = p.z - o.z;
       const min = o.r + radius;
       const d2 = dx * dx + dz * dz;
