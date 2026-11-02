@@ -32,6 +32,14 @@
 <link rel="modulepreload" href="./js/input/touch.js">
 <link rel="modulepreload" href="./js/input/desktop.js">
 <link rel="modulepreload" href="./js/ui/screens.js">
+<link rel="modulepreload" href="./js/game/data.js">
+<link rel="modulepreload" href="./js/game/match.js">
+<link rel="modulepreload" href="./js/game/movement.js">
+<link rel="modulepreload" href="./js/game/bot.js">
+<link rel="modulepreload" href="./js/render/fighter-view.js">
+<link rel="modulepreload" href="./js/render/boundary.js">
+<link rel="modulepreload" href="./js/ui/hud.js">
+<link rel="modulepreload" href="./js/ui/settings.js">
 <link rel="preload" as="fetch" href="./assets/trees/trees.json" crossorigin>
 <link rel="preload" as="fetch" href="./assets/trees/fir_lod1.glb" crossorigin>
 <link rel="preload" as="image" type="image/webp" href="./assets/trees/fir_color.webp">
@@ -101,13 +109,68 @@
 </div>
 
 <div id="hud" hidden>
+  <!-- 左上：フェーズと残り時間、設定 -->
+  <div class="hud-tl">
+    <div id="phase-name" class="phase-name"></div>
+    <div id="phase-time" class="phase-time"></div>
+  </div>
+  <button id="settings-btn" class="icon-btn" type="button" aria-label="設定">⚙</button>
+  <!-- 右上：ポイントのランキング -->
+  <ol id="ranking" class="ranking"></ol>
+  <!-- 左下：ポイントの知らせ -->
+  <div id="feed" class="feed"></div>
+  <!-- 画面中央の大きな知らせ -->
+  <div id="center-msg" class="center-msg" hidden><div class="cm-title"></div><div class="cm-sub"></div></div>
   <div id="stats" class="stats"></div>
+  <!-- 確認用（?debug=1） -->
+  <div id="debug" class="debug" hidden>
+    <button type="button" data-act="kill-bot">bot を 1 体倒す</button>
+    <button type="button" data-act="die">自分が倒れる</button>
+    <button type="button" data-act="skip">次のフェーズへ</button>
+  </div>
 </div>
+
+<!-- フェーズ報酬（画面中央） -->
+<section id="reward" class="panel reward" hidden>
+  <div class="reward-head"></div>
+  <div class="reward-sub">報酬を 1 つ選ぶ</div>
+  <div class="reward-cards"></div>
+  <div class="reward-time"></div>
+</section>
+
+<!-- 試合の結果 -->
+<section id="result" class="panel result" hidden>
+  <h2 class="result-head"></h2>
+  <ol class="result-list"></ol>
+  <button id="again" class="start" type="button">もう一度</button>
+</section>
+
+<!-- 設定 -->
+<section id="settings" class="panel settings" hidden>
+  <h2>設定</h2>
+  <div class="set-row">
+    <span>視点</span>
+    <div class="seg" data-key="view">
+      <button type="button" data-val="first">一人称</button>
+      <button type="button" data-val="third">三人称</button>
+    </div>
+  </div>
+  <div class="set-row">
+    <span>性能表示</span>
+    <div class="seg" data-key="stats">
+      <button type="button" data-val="on">表示</button>
+      <button type="button" data-val="off">隠す</button>
+    </div>
+  </div>
+  <button id="settings-close" class="start" type="button">閉じる</button>
+</section>
 
 <section id="title" class="title">
   <div class="title-inner">
     <h1>静かな森</h1>
-    <p class="sub">FOREST PROTOTYPE</p>
+    <p class="sub">練習モード　bot 3 体と対戦</p>
+    <div id="char-select" class="char-select"></div>
+    <p id="char-desc" class="char-desc"></p>
     <button id="start" class="start" type="button" disabled>読み込み中…</button>
     <p class="hint">左側をなぞって移動　／　右側をなぞって見回す</p>
   </div>

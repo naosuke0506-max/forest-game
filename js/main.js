@@ -14,6 +14,8 @@ import { loadProps, createProps } from './world/props.js';
 import { createPlayer } from './player/controller.js';
 import { createInput } from './input/input.js';
 import { createTitleScreen, createStats } from './ui/screens.js';
+import { createSettings } from './ui/settings.js';
+import { startPracticeMatch } from './match-session.js';
 
 // <head> の仕組みが拾ったエラーのうち、画面ができる前のものをここで表示する
 (window.__pendingErrors || []).forEach((m) => window.__showError(m));
@@ -55,9 +57,10 @@ async function boot() {
   const input = createInput(touchLayer, document.getElementById('stick'), CONFIG);
   const stats = createStats(app, CONFIG.showStats, CONFIG.qualityName);
 
-  let playing = false;
+  let playing = false, session = null;
   app.on('update', (dt) => {
     if (playing) player.update(dt, input.read());
+    session?.update(dt);
     trees?.update(dt, player.camera.getPosition());
     props?.update(dt, player.camera.getPosition());
     wind.update(dt);
@@ -73,10 +76,24 @@ async function boot() {
   // 確認用（自動テストから状態を読むため）
   window.__forest = { app, player, obstacles, terrain, trees, props, wind };
 
-  titleScreen.ready(() => {
+  // 設定（視点・性能表示）。変わるたびに反映する
+  const applySettings = (st) => {
+    player.setViewMode(st.view);
+    session?.showMyBody(st.view === 'third');
+    document.getElementById('stats').hidden = st.stats === 'off';
+  };
+  const settings = createSettings(applySettings);
+
+  titleScreen.ready((myChar) => {
     input.reset();
     touchLayer.hidden = false;
     document.getElementById('hud').hidden = false;
+    session = startPracticeMatch({
+      app, config: CONFIG, terrain, obstacles, player, myChar,
+      debug: CONFIG.debug, phaseDuration: CONFIG.phaseDuration,
+    });
+    window.__forest.session = session;
+    applySettings(settings);
     playing = true;
   });
 }
