@@ -140,3 +140,125 @@ canvas#app {
   -webkit-user-select: text;
   user-select: text;
 }
+
+/* ===== 試合の画面表示 ===== */
+.hud-tl {
+  position: absolute;
+  left: calc(12px + var(--safe-l));
+  top: calc(10px + var(--safe-t));
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .8);
+}
+.phase-name { font-size: clamp(16px, 2.2vmin, 22px); font-weight: 600; letter-spacing: .12em; }
+.phase-time { font: 600 clamp(20px, 3vmin, 30px)/1.2 ui-monospace, Menlo, monospace; }
+.phase-time.overtime { color: #ff9a7a; }
+.icon-btn {
+  position: absolute;
+  left: calc(12px + var(--safe-l));
+  top: calc(78px + var(--safe-t));
+  width: 44px; height: 44px;           /* 指で押しやすい大きさ */
+  font-size: 22px; line-height: 1;
+  color: var(--ink);
+  background: rgba(20, 26, 22, .55);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.ranking {
+  position: absolute;
+  right: calc(10px + var(--safe-r));
+  top: calc(10px + var(--safe-t));
+  margin: 0; padding: 6px 8px;
+  min-width: min(240px, 46vw);
+  list-style: none;
+  background: rgba(10, 14, 12, .55);
+  border: 1px solid rgba(236, 231, 218, .2);
+  border-radius: 8px;
+  font-size: clamp(13px, 1.7vmin, 16px);
+}
+.ranking li { display: grid; grid-template-columns: 1.6em 1fr auto; gap: 6px; padding: 3px 2px; align-items: center; }
+.ranking li .dot { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-right: .4em; }
+.ranking li .pts { font-family: ui-monospace, Menlo, monospace; font-weight: 600; }
+.ranking li.me { color: #ffe39a; }
+.ranking li.out { opacity: .45; text-decoration: line-through; }
+.feed {
+  position: absolute;
+  left: calc(12px + var(--safe-l));
+  bottom: calc(14px + var(--safe-b));
+  max-width: 60vw;
+  font-size: clamp(12px, 1.6vmin, 15px);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
+}
+.feed div { margin-top: 4px; animation: feedOut 5s forwards; }
+@keyframes feedOut { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+.center-msg {
+  position: absolute; left: 0; right: 0; top: 28%;
+  text-align: center;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, .8);
+  animation: cmIn .4s ease-out;
+}
+.cm-title { font-size: clamp(30px, 6vmin, 64px); font-weight: 700; letter-spacing: .18em; }
+.cm-sub { margin-top: 8px; font-size: clamp(14px, 2.2vmin, 20px); color: #e6e0cf; }
+@keyframes cmIn { from { opacity: 0; transform: scale(1.08); } to { opacity: 1; transform: none; } }
+.stats { left: auto; right: calc(10px + var(--safe-r)); top: auto; bottom: calc(8px + var(--safe-b)); text-align: right; }
+.debug {
+  position: absolute;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(10px + var(--safe-b));
+  display: flex; gap: 8px; pointer-events: auto;
+}
+.debug button { min-height: 40px; padding: 6px 10px; font: inherit; font-size: 13px; color: #fff; background: rgba(90, 30, 30, .7); border: 1px solid rgba(255, 160, 140, .5); border-radius: 6px; }
+
+/* ===== 中央のパネル（報酬・結果・設定） ===== */
+.panel {
+  position: fixed;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 25;
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 18px 18px 20px;
+  text-align: center;
+  background: rgba(14, 18, 15, .9);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-sizing: border-box;
+}
+.panel h2 { margin: 0 0 12px; letter-spacing: .2em; font-weight: 600; }
+.reward-head { font-size: clamp(22px, 4vmin, 40px); font-weight: 700; letter-spacing: .15em; }
+.reward-sub { margin: 4px 0 14px; color: var(--dim); }
+.reward-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.reward-card {
+  min-height: 110px; padding: 14px 10px;
+  font: inherit; color: var(--ink);
+  background: rgba(40, 52, 40, .75);
+  border: 1px solid var(--line); border-radius: 10px;
+  cursor: pointer;
+}
+.reward-card:active { background: rgba(80, 100, 70, .85); }
+.reward-card .rc-name { font-size: clamp(16px, 2.4vmin, 21px); font-weight: 600; }
+.reward-card .rc-val { margin-top: 8px; font: 700 clamp(22px, 3.6vmin, 32px) ui-monospace, Menlo, monospace; color: #ffe39a; }
+.reward-time { margin-top: 12px; color: var(--dim); font-size: 13px; }
+.result-head { font-size: clamp(26px, 5vmin, 48px); }
+.result-list { list-style: none; margin: 0 0 16px; padding: 0; text-align: left; }
+.result-list li { display: grid; grid-template-columns: 2em 1fr auto; gap: 8px; padding: 8px 6px; border-bottom: 1px solid rgba(236, 231, 218, .12); font-size: clamp(14px, 2.2vmin, 18px); }
+.result-list li.me { color: #ffe39a; }
+.result-list li .why { grid-column: 2 / 4; font-size: 12px; color: var(--dim); }
+.settings { width: min(420px, calc(100vw - 32px)); }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { min-width: 84px; min-height: 44px; font: inherit; color: var(--ink); background: transparent; border: 0; }
+.seg button.on { background: rgba(110, 140, 90, .7); color: #fff; }
+
+/* ===== キャラ選択（タイトル） ===== */
+.char-select { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 auto 10px; max-width: 560px; }
+.char-btn {
+  min-height: 56px; padding: 8px 6px;
+  font: inherit; font-size: clamp(15px, 2.2vmin, 19px); letter-spacing: .1em;
+  color: var(--ink); background: rgba(30, 38, 30, .65);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.char-btn.sel { border-color: #ffe39a; background: rgba(90, 80, 40, .75); color: #fff; }
+.char-desc { min-height: 2.6em; margin: 0 auto 14px; max-width: 520px; color: var(--dim); font-size: clamp(12px, 1.8vmin, 15px); }
+@media (max-width: 520px) { .char-select { grid-template-columns: repeat(2, 1fr); } }

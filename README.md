@@ -1,7 +1,18 @@
 # 静かな森（Forest Prototype）
 
-iPad の Safari で動く、一人称の森の試作品です。
-写実的な 3D サバイバルゲームの土台として、まずは最小構成で作っています。
+iPad の Safari で動く、4 人で戦う対戦ゲームの試作品です（一人称。設定で三人称に切り替えられる）。
+今は練習モード（あなた＋bot 3 体）で、試合の骨組み（フェーズ・ポイント・報酬・結果）までできています。
+
+## 試合のルール（今できているところ）
+
+- 4 人（あなた＋bot 3 体）で始まる。一度倒れたら脱落
+- 5 つのフェーズ。フェーズが進むと、歩ける範囲（光る境界）が外へ広がる
+- 最終フェーズの時間が切れても、生き残りが 1 人になるまで延長する
+- 1 人になった瞬間に終わり、最後の生き残りに大きな加点。ポイントが一番高い人の勝ち
+- フェーズを生き残るたびに加点と、画面中央の報酬（3 つから 1 つ選ぶ）
+- 右上に全員のポイントをランキング順で表示
+
+数値（フェーズの長さ・範囲・ポイント・報酬）は `js/game/data.js` にまとめてある。
 
 - エンジン：PlayCanvas Engine **2.23.3（リポジトリ内に固定）**
 - 公開：GitHub Pages（ビルド作業なし。置いたファイルがそのまま動く）
@@ -28,6 +39,8 @@ iPad の Safari で動く、一人称の森の試作品です。
 | `?stats=0` | 左上の性能表示を消す |
 | `?seed=123` | 森の配置を変える |
 | `?wind=0.5` | 風の強さ（既定 1、0 で無風） |
+| `?debug=1` | 確認用のボタン（bot を倒す・自分が倒れる・次のフェーズへ） |
+| `?phase=30` | フェーズの長さを 30 秒にする（確認用） |
 
 例：`https://naosuke0506-max.github.io/forest-game/?q=low`
 
@@ -49,8 +62,16 @@ tools/process_trees.mjs  木の模型をゲーム用に軽くする道具（開�
 assets/props/            森の小物（草・シダ・落ち枝・岩・切り株。出典は CREDITS.md）
 tools/fetch_polyhaven_models.py  Poly Haven の模型を取り込む道具（開発用）
 tools/process_props.mjs  森の小物をゲーム用に軽くする道具（開発用）
+source_models/props/     倒木・キノコ・焚き火の元の模型（Tripo AI。まだゲームでは使っていない）
 js/
   main.js                起動の順番だけ
+  match-session.js       練習モードの試合：試合の計算と、見た目・画面をつなぐ
+  game/data.js           キャラ・フェーズ・ポイント・フェーズ報酬の数値
+  game/match.js          試合の流れ（フェーズ・延長・範囲・ポイント・脱落・終了）。PlayCanvas に依存しない
+  game/movement.js       戦う人の移動の計算（bot が使う）
+  game/bot.js            bot の考え（今は森を歩き回るだけ）
+  render/fighter-view.js 戦う人の仮の見た目（カプセルの体と頭）
+  render/boundary.js     歩ける範囲の光る境界
   config.js              画質・森の密度・操作感度などの数値
   core/app.js            エンジンの起動（WebGL2・描画解像度の上限・画面の大きさ合わせ）
   core/random.js         種から決まる乱数とノイズ（同じ種なら同じ森）
@@ -68,8 +89,10 @@ js/
   input/touch.js         iPad のタッチ（左：スティック、右：視点）
   input/desktop.js       キーボード・マウス（補助）
   input/input.js         入力を「移動」「視点」の形にそろえる
-  player/controller.js   一人称の移動・接地・当たり判定・範囲の制限
-  ui/screens.js          タイトル画面と性能表示
+  player/controller.js   プレイヤーの移動と視点（一人称 / 三人称）
+  ui/screens.js          タイトル画面（キャラ選択）と性能表示
+  ui/hud.js              試合中の表示（フェーズ・残り時間・ランキング・知らせ・報酬・結果）
+  ui/settings.js         設定（視点・性能表示）。この端末に保存
 ```
 
 木は Tripo AI の模型、草・シダ・落ち枝・岩・切り株は Poly Haven の実写スキャンの模型です。地面には実写の質感画像を貼っています。
