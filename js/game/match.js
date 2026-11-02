@@ -16,11 +16,12 @@ export function createFighter({ id, name, char, isPlayer, color }) {
     stats: { maxHp: c.maxHp, hp: c.maxHp, attack: 1, defense: 1, speed: c.speed, maxStamina: COMBAT.maxStamina },
     // 戦闘（game/combat.js が動かす）
     weapon: c.weapon,        // 持っている武器（WEAPONS の名前）
+    weight: c.weight,        // 装備の重さ（回避の仕方が変わる）
     shield: c.shield,
     armor: c.armor,
     stamina: COMBAT.maxStamina,
     staminaDelay: 0,         // スタミナが戻り始めるまでの残り時間
-    action: null,            // 行動中：{ kind: 'attack', t, hit } / { kind: 'draw', t }
+    action: null,            // 行動中：{ kind: 'attack', t, hit } / { kind: 'draw', t } / { kind: 'dodge', t, dirX, dirZ, moved }
     guarding: false,
     stun: 0,                 // ひるんでいる残り時間
     lastHitBy: null,

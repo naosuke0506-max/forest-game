@@ -3,7 +3,7 @@
 // 模型は tools/characters/build_character.py で作る（assets/characters/<名前>.glb と、動きの長さ・速さの .json）。
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
-import { WEAPONS } from '../game/data.js';
+import { WEAPONS, DODGE } from '../game/data.js';
 import { createWeaponModel, createShieldModel } from './weapons.js';
 
 const cache = new Map();
@@ -130,6 +130,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         fwd += (f - fwd) * k;
       }
       px = fighter.x; pz = fighter.z;
+      if (fighter.action?.kind !== 'dodge') body.setLocalEulerAngles(0, 180, 0);   // 前転で変えた体の向きを戻す
 
       if (!fighter.alive) {
         if (!deathStarted) { deathStarted = true; restart('death', 1); }
@@ -153,6 +154,14 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
           restart('draw', clip('draw').duration / w.drawTime);
         } else if (a.kind === 'release') {
           restart('shoot', 1);
+        } else if (a.kind === 'dodge') {
+          const d = DODGE[fighter.weight] || DODGE.medium;
+          restart(d.anim, clip(d.anim) ? clip(d.anim).duration / d.duration : 1);
+          // 前転は、転がる向きへ体を向ける（回避ステップは向きを変えずに跳ぶ）
+          if (d.anim === 'roll') {
+            const rel = (Math.atan2(-a.dirX, -a.dirZ) * 180) / Math.PI - fighter.yaw;
+            body.setLocalEulerAngles(0, 180 + rel, 0);
+          }
         }
       }
       if (a) return;
