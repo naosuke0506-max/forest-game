@@ -43,11 +43,15 @@ export function createObstacles() {
     }
   }
 
-  /** その場所に、ほかの物と重ならずに置けるか */
-  function isFree(x, z, r) {
+  /**
+   * その場所に、ほかの物と重ならずに置けるか
+   * @param {boolean} solidOnly ぶつかる物（木の幹・岩など）だけを見るか（草などの場所取りは無視する）
+   */
+  function isFree(x, z, r, solidOnly = false) {
     for (let gx = Math.floor((x - r) / CELL) - 1; gx <= Math.floor((x + r) / CELL) + 1; gx++) {
       for (let gz = Math.floor((z - r) / CELL) - 1; gz <= Math.floor((z + r) / CELL) + 1; gz++) {
         for (const o of grid.get(key(gx, gz)) || []) {
+          if (solidOnly && !o.solid) continue;
           if (Math.hypot(x - o.x, z - o.z) < o.r + r) return false;
         }
       }

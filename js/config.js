@@ -38,6 +38,8 @@ export const CONFIG = {
   qualityName,
   quality: QUALITY[qualityName],
   showStats: params.get('stats') !== '0',
+  debug: params.get('debug') === '1',                          // 確認用のボタンを出す
+  phaseDuration: Number(params.get('phase')) || null,           // フェーズの長さ（秒）を短くして確かめる
 
   // 同じ種からは必ず同じ森ができる（将来のマルチプレイで全員が同じ地形を共有するため）
   seed: Number(params.get('seed')) || 20261031,
@@ -46,10 +48,10 @@ export const CONFIG = {
     terrainSize: 180,       // 地面の一辺（m）
     terrainSegments: 72,    // 地面の分割数（多いほど滑らかで重い）
     playRadius: 62,         // 歩ける範囲の半径（m）
-    forestRadius: 70,       // 木を置く範囲の半径（m）
+    forestRadius: 86,       // 木を置く範囲の半径（m）。歩ける範囲の外まで木を置き、森の外縁がむき出しに見えないように
     clearingRadius: 7,      // 開始地点の周りの空き地（m）
     // 木の本数（Tripo AI の模型を使うとき）。置く順番もこの順（大きい木から）
-    trees: { fir: 60, red_pine: 22, broadleaf: 26, birch: 22, dead: 10, sapling: 60 },
+    trees: { fir: 90, red_pine: 32, broadleaf: 38, birch: 32, dead: 14, sapling: 70 },
     conifers: 110,          // 模型が読み込めなかったときの仮の木の本数
     broadleaves: 45,
     rocks: 45,
