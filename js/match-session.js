@@ -2,9 +2,12 @@
 import { CHARACTERS, BOT_NAMES } from './game/data.js';
 import { createFighter, createMatch } from './game/match.js';
 import { createBot } from './game/bot.js';
+import { createCombat } from './game/combat.js';
 import { createRandom } from './core/random.js';
 import { createFighterView } from './render/fighter-view.js';
 import { createBoundary } from './render/boundary.js';
+import { createViewModel } from './render/viewmodel.js';
+import { createProjectileViews } from './render/projectiles.js';
 import { createHud } from './ui/hud.js';
 
 const PLAYER_COLOR = '#ffd75e';
@@ -45,11 +48,51 @@ export function startPracticeMatch({ app, config, terrain, obstacles, player, my
   }
   player.spawn(me.x, me.z, me.yaw);
 
+  // 戦闘と bot
+  const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles });
+  const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => createBot(f, createRandom(config.seed + 100 + i), fighters));
+
   // 見た目
-  const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => createBot(f, createRandom(config.seed + 100 + i)));
   const views = new Map(fighters.map((f) => [f, createFighterView(app, f, terrain)]));
   const boundary = createBoundary(app, terrain);
   const hud = createHud(match, me);
+  const viewModel = createViewModel(player.camera, me);
+  const arrows = createProjectileViews(app, combat);
+  let thirdPerson = false;
+
+  // 戦闘の知らせ：自分が与えたダメージの数字、自分が受けたときの赤い縁
+  combat.on('hit', ({ attacker, target, amount, guarded }) => {
+    if (attacker === me) hud.showDamage(player.camera, target.x, terrain.heightAt(target.x, target.z) + 1.6, target.z, amount, guarded);
+    if (target === me) hud.hurt(amount / 25);
+  });
+  combat.on('guardBreak', ({ fighter }) => { if (fighter === me) hud.addFeed('防御が崩れた'); });
+
+  // 脱落したら、生き残りを肩越しに観戦する
+  let spectating = null;
+  const spectateEl = document.getElementById('spectate');
+  const nextSpectate = () => {
+    const alive = fighters.filter((f) => f.alive && f !== me);
+    if (!alive.length) return;
+    const i = alive.indexOf(spectating);
+    spectating = alive[(i + 1) % alive.length];
+    document.getElementById('spectate-name').textContent = `観戦中：${spectating.name}`;
+  };
+  document.getElementById('spectate-next').addEventListener('click', nextSpectate);
+  match.on('eliminated', ({ victim }) => {
+    if (victim === me) {
+      setTimeout(() => {
+        if (match.state !== 'running') return;
+        document.querySelector('.vitals').hidden = true;
+        document.getElementById('btn-attack').hidden = true;
+        document.getElementById('btn-guard').hidden = true;
+        spectateEl.hidden = false;
+        nextSpectate();
+      }, 2500);
+    } else if (victim === spectating) {
+      setTimeout(nextSpectate, 1500);
+    }
+  });
+  match.on('end', () => { spectateEl.hidden = true; });
 
   const world = { obstacles, get areaRadius() { return match.areaRadius; } };
   match.on('eliminated', ({ victim }) => { if (victim === me) player.setFrozen(true); });
@@ -87,19 +130,41 @@ export function startPracticeMatch({ app, config, terrain, obstacles, player, my
   return {
     match,
     fighters,
-    showMyBody(v) { views.get(me).setVisible(v); },
-    update(dt) {
+    combat,
+    bots,
+    /** 三人称のときは自分の体を見せ、手元の武器を隠す */
+    showMyBody(v) { thirdPerson = v; views.get(me).setVisible(v); viewModel.setVisible(!v); },
+    /** @param {{attack: boolean, guard: boolean}} input プレイヤーの攻撃・防御 */
+    update(dt, input) {
+      // 1 回の計算で進める時間は最大 0.1 秒（裏から戻った直後などに、一気に動いたり判定を飛ばしたりしないように）
+      dt = Math.min(dt, 0.1);
       match.update(dt);
+      const running = match.state === 'running';
       player.setAreaRadius(match.areaRadius);
-      // あなたの位置を、試合の記録へ写す（手順 2 で、人間も試合の計算で動かす）
-      me.x = player.position.x; me.z = player.position.z; me.yaw = player.yaw;
-      views.get(me).update(dt, player.moving);
+      player.speedScale = me.stats.speed * (me.moveScale ?? 1);
+      // あなたの位置を、試合の記録へ写す（いずれ人間も試合の計算で動かす）
+      if (me.alive) { me.x = player.position.x; me.z = player.position.z; me.yaw = player.yaw; me.pitch = player.pitch; }
+      if (running) combat.control(me, input);
       for (const b of bots) {
-        const moving = match.state === 'running' ? b.update(dt, world) : 0;
+        const moving = running ? b.update(dt, world) : 0;
+        if (running) combat.control(b.fighter, b.combatInput);
         views.get(b.fighter).update(dt, moving);
+      }
+      if (running) combat.update(dt);
+      views.get(me).update(dt, player.moving);
+      viewModel.update(dt, player.moving);
+      arrows.update();
+      // 観戦：見ている人の肩越しにカメラを置く
+      if (spectating) {
+        if (!spectating.alive) nextSpectate();
+        player.setPose(spectating.x, spectating.z, spectating.yaw);
+        views.get(me).setVisible(false);
       }
       boundary.update(dt, match.areaRadius);
       hud.update(dt);
+      hud.updateVitals(me);
+      hud.updateTags(player.camera, fighters, terrain.heightAt);
     },
+    get spectating() { return spectating; },
   };
 }

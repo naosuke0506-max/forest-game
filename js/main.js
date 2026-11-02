@@ -59,8 +59,9 @@ async function boot() {
 
   let playing = false, session = null;
   app.on('update', (dt) => {
-    if (playing) player.update(dt, input.read());
-    session?.update(dt);
+    const frame = playing ? input.read() : null;
+    if (playing) player.update(dt, frame);
+    session?.update(dt, frame || { attack: false, guard: false });
     trees?.update(dt, player.camera.getPosition());
     props?.update(dt, player.camera.getPosition());
     wind.update(dt);

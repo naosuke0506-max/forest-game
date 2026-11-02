@@ -103,11 +103,17 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     position: pos,
     speedScale: 1,
     get yaw() { return yaw; },
+    get pitch() { return pitch; },
     get moving() { return lastMag; },
     get viewMode() { return viewMode; },
     setViewMode(mode) { viewMode = mode === 'third' ? 'third' : 'first'; thirdDist = THIRD_DIST; placeCamera(0); },
     setAreaRadius(r) { areaRadius = r; },
     setFrozen(v) { frozen = v; },
+    /** 観戦：見ている人の位置と向きにカメラを合わせる（三人称にする） */
+    setPose(x, z, faceYaw) {
+      pos.x = x; pos.z = z; yaw = faceYaw;
+      if (viewMode !== 'third') { viewMode = 'third'; thirdDist = THIRD_DIST; }
+    },
     /** 出現する場所と向き */
     spawn(x, z, faceYaw) {
       pos.x = x; pos.z = z; yaw = faceYaw; pitch = -2;

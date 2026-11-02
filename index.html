@@ -36,6 +36,10 @@
 <link rel="modulepreload" href="./js/game/match.js">
 <link rel="modulepreload" href="./js/game/movement.js">
 <link rel="modulepreload" href="./js/game/bot.js">
+<link rel="modulepreload" href="./js/game/combat.js">
+<link rel="modulepreload" href="./js/render/viewmodel.js">
+<link rel="modulepreload" href="./js/render/weapons.js">
+<link rel="modulepreload" href="./js/render/projectiles.js">
 <link rel="modulepreload" href="./js/render/fighter-view.js">
 <link rel="modulepreload" href="./js/render/boundary.js">
 <link rel="modulepreload" href="./js/ui/hud.js">
@@ -122,6 +126,20 @@
   <!-- 画面中央の大きな知らせ -->
   <div id="center-msg" class="center-msg" hidden><div class="cm-title"></div><div class="cm-sub"></div></div>
   <div id="stats" class="stats"></div>
+  <!-- 下：自分の体力とスタミナ -->
+  <div class="vitals">
+    <div class="bar hp"><i id="hp-fill"></i><span id="hp-text"></span></div>
+    <div class="bar st"><i id="st-fill"></i></div>
+  </div>
+  <!-- 右下：攻撃と防御（押している間） -->
+  <button id="btn-guard" class="act-btn guard" type="button">防御</button>
+  <button id="btn-attack" class="act-btn attack" type="button">攻撃</button>
+  <!-- 敵の頭上の体力・与えたダメージの数字 -->
+  <div id="tags" class="tags"></div>
+  <!-- 攻撃を受けたときに画面の縁が赤くなる -->
+  <div id="hurt" class="hurt"></div>
+  <!-- 脱落後の観戦 -->
+  <div id="spectate" class="spectate" hidden><span id="spectate-name"></span><button id="spectate-next" type="button">次の人を見る</button></div>
   <!-- 確認用（?debug=1） -->
   <div id="debug" class="debug" hidden>
     <button type="button" data-act="kill-bot">bot を 1 体倒す</button>
@@ -172,7 +190,7 @@
     <div id="char-select" class="char-select"></div>
     <p id="char-desc" class="char-desc"></p>
     <button id="start" class="start" type="button" disabled>読み込み中…</button>
-    <p class="hint">左側をなぞって移動　／　右側をなぞって見回す</p>
+    <p class="hint">左側をなぞって移動　／　右側をなぞって見回す　／　右下で攻撃・防御（弓は長押しで引く）</p>
   </div>
 </section>
 

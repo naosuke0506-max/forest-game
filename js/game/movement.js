@@ -1,5 +1,5 @@
 // 戦う人の移動（計算だけ）：入力（前後・左右・向き）を受けて動き、障害物を避け、歩ける範囲の外へ出ない。
-// bot はこれを使う。人間のプレイヤーも、手順 2 でこれに寄せる（オンライン化のとき、同じ計算で動かすため）
+// bot はこれを使う。人間のプレイヤーも、いずれこれに寄せる（オンライン化のとき、同じ計算で動かすため）
 
 export const WALK_SPEED = 3.0; // m/s
 export const RUN_SPEED = 5.2;
@@ -14,7 +14,7 @@ export function moveFighter(f, input, dt, world) {
   f.yaw = input.yaw;
   const mag = Math.min(1, Math.hypot(input.forward, input.strafe));
   if (mag > 0) {
-    const speed = (input.run ? RUN_SPEED : WALK_SPEED) * f.stats.speed;
+    const speed = (input.run ? RUN_SPEED : WALK_SPEED) * f.stats.speed * (f.moveScale ?? 1); // 防御中・攻撃中は遅い
     const rad = (f.yaw * Math.PI) / 180;
     const fx = -Math.sin(rad), fz = -Math.cos(rad);  // 前（-Z を向きで回したもの）
     const rx = Math.cos(rad), rz = -Math.sin(rad);   // 右

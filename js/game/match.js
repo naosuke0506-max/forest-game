@@ -1,18 +1,30 @@
 // 試合の流れ：フェーズ・残り時間・延長・歩ける範囲・ポイント・脱落・終了。
 // PlayCanvas に依存しない「計算だけ」の部分（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { PHASES, POINTS, REWARDS, REWARD_PICK_TIME } from './data.js';
+import { PHASES, POINTS, REWARDS, REWARD_PICK_TIME, CHARACTERS, COMBAT } from './data.js';
 
 /** 戦う人（人間・bot 共通の記録） */
 export function createFighter({ id, name, char, isPlayer, color }) {
+  const c = CHARACTERS[char];
   return {
     id, name, char, isPlayer, color,
-    x: 0, z: 0, yaw: 0,
+    x: 0, z: 0, yaw: 0, pitch: 0,
     alive: true,
     points: 0,
     kills: 0,
     log: [],                 // ポイントの内訳 [理由, 点数]
     state: 'normal',         // normal / enhanced（肉体強化）/ mutated（変異）… 手順 6 で使う
-    stats: { maxHp: 100, hp: 100, attack: 1, defense: 1, speed: 1, maxStamina: 100 },
+    stats: { maxHp: c.maxHp, hp: c.maxHp, attack: 1, defense: 1, speed: c.speed, maxStamina: COMBAT.maxStamina },
+    // 戦闘（game/combat.js が動かす）
+    weapon: c.weapon,        // 持っている武器（WEAPONS の名前）
+    shield: c.shield,
+    armor: c.armor,
+    stamina: COMBAT.maxStamina,
+    staminaDelay: 0,         // スタミナが戻り始めるまでの残り時間
+    action: null,            // 行動中：{ kind: 'attack', t, hit } / { kind: 'draw', t }
+    guarding: false,
+    stun: 0,                 // ひるんでいる残り時間
+    lastHitBy: null,
+    hitFlash: 0,             // 見た目用：攻撃を受けた直後
     pendingReward: null,     // 選んでいる途中のフェーズ報酬 { phase, options, timeLeft }
     rewards: [],             // 選んだ報酬
   };
