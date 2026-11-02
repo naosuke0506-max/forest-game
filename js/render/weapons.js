@@ -1,6 +1,28 @@
-// 武器と盾の仮の見た目（箱・円柱・球の組み合わせ）。
-// 持ち手（手の位置）を原点にして作る。剣・メイス・槍は -Z の向きへ伸び、弓は Z の向きに立つ
+// 武器と盾の見た目。
+// Tripo AI の模型（assets/weapons/。tools/process_weapons.mjs で向きをそろえたもの）があればそれを使い、
+// 無い武器（メイス・弓など）は、箱・円柱・球の組み合わせの仮の形で作る。
+// どちらも持ち手（手の位置）を原点にする。剣・メイス・槍は -Z の向きへ伸び、弓は Z の向きに立つ
 import * as pc from 'playcanvas';
+
+// 模型がある武器（武器の名前 → assets/weapons/ のファイル名）
+const MODEL_FILES = { armingsword: 'armingsword', longsword: 'longsword', spear: 'spear', shield: 'kite_shield' };
+const models = new Map();
+
+/** 武器・盾の模型を読み込む（読み込めなかった物は仮の形で続ける） */
+export function loadWeaponModels(app, weaponIds) {
+  const files = [...new Set(weaponIds.map((id) => MODEL_FILES[id]).filter(Boolean))].filter((f) => !models.has(f));
+  return Promise.all(files.map((file) => new Promise((resolve) => {
+    const asset = new pc.Asset(`weapon-${file}`, 'container', { url: `assets/weapons/${file}.glb` });
+    asset.once('load', () => { models.set(file, asset.resource); resolve(); });
+    asset.once('error', (err) => { console.warn(`武器の模型 ${file}:`, err); resolve(); });
+    app.assets.add(asset);
+    app.assets.load(asset);
+  })));
+}
+function modelOf(id, shadows) {
+  const res = models.get(MODEL_FILES[id]);
+  return res ? res.instantiateRenderEntity({ castShadows: shadows, receiveShadows: true }) : null;
+}
 
 const mats = {};
 function mat(name, color, { gloss = 0.4, metal = 0 } = {}) {
@@ -32,6 +54,8 @@ function part(parent, type, material, pos, scale, rot = [0, 0, 0], shadows = tru
 /** 武器を作る。shadows：影を落とすか（一人称の手元の武器は落とさない） */
 export function createWeaponModel(weaponId, { shadows = true } = {}) {
   const root = new pc.Entity(`weapon-${weaponId}`);
+  const model = modelOf(weaponId, shadows);
+  if (model) { root.addChild(model); return root; }
   const P = (type, m, pos, scale, rot) => part(root, type, m, pos, scale, rot, shadows);
   switch (weaponId) {
     case 'armingsword':
@@ -77,6 +101,8 @@ export function createWeaponModel(weaponId, { shadows = true } = {}) {
 /** 盾（騎士）：腕の外側に付ける */
 export function createShieldModel({ shadows = true } = {}) {
   const root = new pc.Entity('shield');
+  const model = modelOf('shield', shadows);
+  if (model) { root.addChild(model); return root; }
   part(root, 'box', shieldPaint(), [0, 0, 0], [0.06, 0.62, 0.5], [0, 0, 0], shadows);
   part(root, 'box', iron(), [0.035, 0, 0], [0.02, 0.66, 0.06], [0, 0, 0], shadows);
   part(root, 'box', iron(), [0.035, 0, 0], [0.02, 0.06, 0.54], [0, 0, 0], shadows);

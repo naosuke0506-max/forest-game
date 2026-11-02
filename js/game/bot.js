@@ -88,7 +88,7 @@ export function createBot(fighter, rng, fighters) {
     // 近接
     const reach = weapon.reach;
     const threat = t.action && t.action.kind === 'attack' && !t.action.hit && d < WEAPONS[t.weapon].reach + 1;
-    if (b.guardTimer <= 0 && threat && f.stamina > 20 && rng.next() < (lowHp ? 0.75 : 0.45)) b.guardTimer = 0.5 + rng.next() * 0.4;
+    if (f.shield && b.guardTimer <= 0 && threat && f.stamina > 20 && rng.next() < (lowHp ? 0.75 : 0.45)) b.guardTimer = 0.5 + rng.next() * 0.4;
     b.input.guard = b.guardTimer > 0;
     if (d > reach * 0.85) {
       b.input.forward = 1;
