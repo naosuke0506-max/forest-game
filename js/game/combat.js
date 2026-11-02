@@ -158,7 +158,7 @@ export function createCombat({ match, heightAt, obstacles }) {
           }
         }
       }
-      f.guarding = input.guard && !f.action && f.stamina > 0;
+      f.guarding = input.guard && f.shield && !f.action && f.stamina > 0;   // 防御できるのは盾だけ（武器では受けられない）
     },
 
     update(dt) {

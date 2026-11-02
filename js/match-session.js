@@ -6,6 +6,7 @@ import { createCombat } from './game/combat.js';
 import { createRandom } from './core/random.js';
 import { createFighterView } from './render/fighter-view.js';
 import { loadCharacterModel, createCharacterView } from './render/character-view.js';
+import { loadWeaponModels } from './render/weapons.js';
 import { createBoundary } from './render/boundary.js';
 import { createViewModel } from './render/viewmodel.js';
 import { createProjectileViews } from './render/projectiles.js';
@@ -60,17 +61,21 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 見た目
   // キャラの模型を読み込む。読み込めなかったキャラは、仮の人形で続ける（画面下に知らせを出す）
   const models = new Map();
-  await Promise.all([...new Set(fighters.map((f) => CHARACTERS[f.char].model))].map((id) =>
+  const weaponsLoaded = loadWeaponModels(app, fighters.flatMap((f) => (f.shield ? [f.weapon, 'shield'] : [f.weapon])));
+  const charIds = [...new Set(fighters.map((f) => CHARACTERS[f.char].model))];
+  await Promise.all([weaponsLoaded, ...charIds.map((id) =>
     loadCharacterModel(app, id).then((m) => models.set(id, m)).catch((err) => {
       console.warn(err);
       window.__showError?.(`キャラの模型を読み込めませんでした（仮の人形で続けます）: ${err.message}`);
-    })));
+    }))]);
   const views = new Map(fighters.map((f) => {
     const m = models.get(CHARACTERS[f.char].model);
     return [f, m ? createCharacterView(app, f, terrain, m) : createFighterView(app, f, terrain)];
   }));
   const boundary = createBoundary(app, terrain);
   const hud = createHud(match, me);
+  // 防御できるのは盾を持つキャラだけ（武器では受けられない）
+  document.getElementById('btn-guard').hidden = !me.shield;
   const viewModel = createViewModel(player.camera, me);
   const arrows = createProjectileViews(app, combat);
   let thirdPerson = false;
