@@ -2,22 +2,28 @@
 // 数値はすべてここに集める（調整しやすく、後で武器や時代を増やしやすくするため）
 
 /**
- * 中世のキャラ。
+ * 中世のキャラ（6 種）。
+ *   model      ：見た目の模型（assets/characters/<model>.glb）
  *   weaponClass：作れる武器の系統（手順 4 のクラフトで使う）
  *   weapon     ：初期の武器（WEAPONS の名前）
  *   shield     ：盾を持つか（防御で減らせる量が増える）
  *   armor      ：鎧の硬さ（受けるダメージの倍率。小さいほど硬い）
  *   speed      ：移動の速さの倍率（鎧が重いほど遅い）
+ * 防具はキャラごとに 1 つ（強化は手順 4）。扱える武器の全体は docs/DESIGN.md
  */
 export const CHARACTERS = {
-  knight:   { name: '騎士', weaponClass: 'slash',  weapon: 'longsword', shield: true,  armor: 0.8,  speed: 0.96, maxHp: 110,
-              desc: '剣と盾。受けが固く、攻守のつり合いがよい' },
-  archer:   { name: '弓兵', weaponClass: 'bow',    weapon: 'shortbow',  shield: false, armor: 1.0,  speed: 1.05, maxHp: 90,
-              desc: '弓で遠くから射る。引くほど強い。近寄られると弱い' },
-  maceman:  { name: '鎚兵', weaponClass: 'blunt',  weapon: 'mace',      shield: false, armor: 0.85, speed: 0.95, maxHp: 115,
-              desc: '打撃武器。一撃が重く、防御の上からも響く。強化状態やクリーチャーに強い' },
-  spearman: { name: '槍兵', weaponClass: 'thrust', weapon: 'spear',     shield: false, armor: 0.9,  speed: 1.0,  maxHp: 100,
-              desc: '刺突武器。間合いが一番長く、近づく前に突ける' },
+  shield:  { name: '盾剣騎士', model: 'shield',  weaponClass: 'shieldsword', weapon: 'armingsword', shield: true,  armor: 0.85, speed: 1.0,  maxHp: 105,
+             desc: '盾と片手武器。受けが固く、攻守のつり合いがよい（中装より少し軽い鎧）' },
+  sword:   { name: '剣騎士',   model: 'sword',   weaponClass: 'sword',       weapon: 'longsword',   shield: false, armor: 0.8,  speed: 0.97, maxHp: 110,
+             desc: '両手の剣と二刀流。振りが大きく、広く斬れる（中装より少し重い鎧）' },
+  polearm: { name: '長柄騎士', model: 'polearm', weaponClass: 'polearm',     weapon: 'spear',       shield: false, armor: 0.7,  speed: 0.9,  maxHp: 120,
+             desc: '長柄の武器。間合いが一番長く、近づく前に突ける（重めの重装）' },
+  blunt:   { name: '打撃騎士', model: 'blunt',   weaponClass: 'blunt',       weapon: 'mace',        shield: false, armor: 0.75, speed: 0.92, maxHp: 120,
+             desc: '打撃武器。一撃が重く、防御の上からも響く（重装より少し軽い鎧）' },
+  archer:  { name: '弓兵',     model: 'archer',  weaponClass: 'bow',         weapon: 'longbow',     shield: false, armor: 0.95, speed: 1.05, maxHp: 90,
+             desc: '弓で遠くから射る。引くほど強い。近寄られると弱い（軽装より少し重い）' },
+  cleric:  { name: '聖職者',   model: 'cleric',  weaponClass: 'cleric',      weapon: 'mace',        shield: false, armor: 1.0,  speed: 1.08, maxHp: 95,
+             desc: '聖なる奇跡を扱う（奇跡は後で追加）。今はメイスで戦う（軽装）' },
 };
 
 /**
@@ -27,10 +33,11 @@ export const CHARACTERS = {
  * 弓は押している間に引き（drawTime で満タン）、離すと放つ。引いた割合で威力と速さが変わる
  */
 export const WEAPONS = {
-  longsword: { name: 'ロングソード', kind: 'melee', damage: 24, reach: 2.3, arc: 110, windup: 0.24, recovery: 0.34, stamina: 14, guardPierce: 0.0 },
+  armingsword: { name: 'アーミングソード', kind: 'melee', damage: 22, reach: 2.1, arc: 110, windup: 0.22, recovery: 0.34, stamina: 12, guardPierce: 0.0 },
+  longsword: { name: 'ロングソード', kind: 'melee', damage: 28, reach: 2.5, arc: 120, windup: 0.28, recovery: 0.38, stamina: 16, guardPierce: 0.0 },
   mace:      { name: 'メイス',       kind: 'melee', damage: 32, reach: 1.9, arc: 90,  windup: 0.36, recovery: 0.44, stamina: 18, guardPierce: 0.35 },
   spear:     { name: 'スピア',       kind: 'melee', damage: 22, reach: 3.1, arc: 34,  windup: 0.22, recovery: 0.30, stamina: 12, guardPierce: 0.0 },
-  shortbow:  { name: '短弓',         kind: 'bow',   damage: 30, drawTime: 0.75, minDraw: 0.2, speed: 48, stamina: 8, reach: 1.2 },
+  longbow:   { name: 'ロングボウ',   kind: 'bow',   damage: 30, drawTime: 0.75, minDraw: 0.2, speed: 48, stamina: 8, reach: 1.2 },
 };
 
 /** 戦闘の決まりごと */

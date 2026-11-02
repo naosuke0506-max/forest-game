@@ -85,14 +85,14 @@ async function boot() {
   };
   const settings = createSettings(applySettings);
 
-  titleScreen.ready((myChar) => {
+  titleScreen.ready(async (myChar) => {
     input.reset();
-    touchLayer.hidden = false;
-    document.getElementById('hud').hidden = false;
-    session = startPracticeMatch({
+    session = await startPracticeMatch({
       app, config: CONFIG, terrain, obstacles, player, myChar,
       debug: CONFIG.debug, phaseDuration: CONFIG.phaseDuration,
     });
+    touchLayer.hidden = false;
+    document.getElementById('hud').hidden = false;
     window.__forest.session = session;
     applySettings(settings);
     playing = true;

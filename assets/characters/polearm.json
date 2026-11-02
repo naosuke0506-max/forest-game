@@ -1,0 +1,67 @@
+{
+ "scale": 1.7983,
+ "tris": 15000,
+ "group": "sp",
+ "clips": {
+  "idle": {
+   "duration": 1.8667,
+   "loop": true,
+   "speed": 0.0
+  },
+  "walk": {
+   "duration": 2.9333,
+   "loop": true,
+   "speed": 0.4563
+  },
+  "back": {
+   "duration": 0.7333,
+   "loop": true,
+   "speed": 0.8763
+  },
+  "run": {
+   "duration": 0.7333,
+   "loop": true,
+   "speed": 1.4878
+  },
+  "a1": {
+   "duration": 0.5333,
+   "loop": false,
+   "speed": 0.1114
+  },
+  "a2": {
+   "duration": 0.5333,
+   "loop": false,
+   "speed": 0.1114
+  },
+  "a3": {
+   "duration": 0.6667,
+   "loop": false,
+   "speed": 0.0
+  },
+  "heavy": {
+   "duration": 0.9333,
+   "loop": false,
+   "speed": 0.1656
+  },
+  "guard": {
+   "duration": 0.4667,
+   "loop": true,
+   "speed": 0.0
+  },
+  "hit": {
+   "duration": 0.4,
+   "loop": false,
+   "speed": 0.0
+  },
+  "stagger": {
+   "duration": 1.2667,
+   "loop": false,
+   "speed": 0.0
+  },
+  "death": {
+   "duration": 2.4,
+   "loop": false,
+   "speed": 0.0
+  }
+ }
+}
