@@ -26,7 +26,11 @@ else:
     CLIPS = {'idle': f'idle_{g}', 'walk': f'walk_{g}', 'back': f'back_{g}', 'run': f'run_{g}',
              'a1': f'{g}_a1', 'a2': f'{g}_a2', 'a3': f'{g}_a3', 'heavy': f'{g}_heavy',
              'guard': ch.get('guard', f'{g}_guard'), 'hit': f'{g}_hit', 'stagger': f'{g}_stagger', 'death': 'death'}
+# 回避：軽装・中装は前転（roll）、重装は身をかがめて跳ぶ回避ステップ（各武器の _roll）
+CLIPS['roll'] = 'roll'
+CLIPS['step'] = '1h_roll' if g == 'bw' else f'{g}_roll'
 LOOP = {'idle', 'walk', 'back', 'run', 'guard'}
+INPLACE = LOOP | {'roll', 'step'}   # 体が進む分は消す（回避で進む距離はゲームの計算で決める）
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scn = bpy.context.scene
@@ -119,7 +123,7 @@ for game_name, clip in CLIPS.items():
                     off = (sp.matrix.to_translation() - SB[s].matrix_local.to_translation()) * scale
                     if hip_start is None: hip_start = off.copy()
                     hip_end = off.copy()
-                    if game_name in LOOP:   # その場で動くようにする（上下の揺れは残す）
+                    if game_name in INPLACE:   # その場で動くようにする（上下の揺れは残す）
                         off.x = 0; off.y = 0
                     loc = R_b.to_translation() + off
                 Mb = Matrix.Translation(loc) @ q.to_matrix().to_4x4()

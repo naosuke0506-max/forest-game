@@ -1,7 +1,8 @@
 // 戦闘（計算だけ）：攻撃・防御・弓と矢・ダメージ・ひるみ・スタミナ。
 // 人間も bot も、同じ形の入力 { attack: 押している, guard: 押している } で動かす。
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { WEAPONS, COMBAT } from './data.js';
+import { WEAPONS, COMBAT, DODGE } from './data.js';
+import { keepInside, BODY_RADIUS } from './movement.js';
 
 const DEG = Math.PI / 180;
 const wrap = (a) => ((a + 540) % 360) - 180;
@@ -31,6 +32,12 @@ export function createCombat({ match, heightAt, obstacles }) {
   /** ダメージを与える。from：攻撃した人（向きの判定に使う） */
   function damage(target, raw, attacker, { pierce = 0, fromX, fromZ, kind = 'melee' } = {}) {
     if (!target.alive || match.state !== 'running') return;
+    // 回避中の、攻撃が当たらない時間
+    const a = target.action;
+    if (a?.kind === 'dodge') {
+      const d = DODGE[target.weight];
+      if (a.t >= d.invuln[0] && a.t <= d.invuln[1]) { emit('dodged', { attacker, target }); return; }
+    }
     let amount = (raw * (attacker ? attacker.stats.attack : 1) * target.armor) / target.stats.defense;
     let guarded = false;
     // 防御：前から来た攻撃だけ。盾があるほど多く減らせる。減らした分だけスタミナを使う
@@ -129,7 +136,8 @@ export function createCombat({ match, heightAt, obstacles }) {
 
     /**
      * 1 人分の入力を受ける（毎フレーム、移動の後に呼ぶ）
-     * @param {{attack: boolean, guard: boolean}} input 押している間 true
+     * @param {{attack: boolean, guard: boolean, dodge?: boolean, moveX?: number, moveY?: number}} input
+     *   attack・guard・dodge は押している間 true。moveX（右）・moveY（前）は回避の向き（移動スティック）
      */
     control(f, input) {
       if (!f.alive) { f.guarding = false; return; }
@@ -137,7 +145,25 @@ export function createCombat({ match, heightAt, obstacles }) {
       const pressed = input.attack && !f._attackHeld;
       const released = !input.attack && f._attackHeld;
       f._attackHeld = input.attack;
+      const dodgePressed = input.dodge && !f._dodgeHeld;
+      f._dodgeHeld = !!input.dodge;
       if (f.stun > 0) { f.guarding = false; if (f.action?.kind === 'draw') f.action = null; return; }
+
+      // 回避：移動スティックの向きへ（倒していなければ後ろへ）。行動中（弓を引いている途中は除く）はできない
+      if (f.action?.kind === 'dodge') { f.guarding = false; return; }
+      const d = DODGE[f.weight] || DODGE.medium;
+      if (dodgePressed && (!f.action || f.action.kind === 'draw') && f.stamina >= d.stamina * 0.5) {
+        let mx = input.moveX || 0, my = input.moveY || 0;
+        if (Math.hypot(mx, my) < 0.2) { mx = 0; my = -1; }
+        const len = Math.hypot(mx, my);
+        const rad = (f.yaw * Math.PI) / 180;
+        const fx = -Math.sin(rad), fz = -Math.cos(rad), rx = Math.cos(rad), rz = -Math.sin(rad);
+        f.action = { kind: 'dodge', t: 0, dirX: (fx * my + rx * mx) / len, dirZ: (fz * my + rz * mx) / len, moved: 0 };
+        f.guarding = false;
+        spendStamina(f, d.stamina);
+        emit('dodge', { fighter: f });
+        return;
+      }
 
       if (w.kind === 'melee') {
         if (pressed && !f.action && f.stamina >= w.stamina * 0.5) {
@@ -179,10 +205,21 @@ export function createCombat({ match, heightAt, obstacles }) {
             if (a.t >= w.windup + w.recovery) f.action = null;
           } else if (a.kind === 'release' && a.t >= 0.25) {
             f.action = null;
+          } else if (a.kind === 'dodge') {
+            // 始めに速く、終わりにゆっくり進む
+            const d = DODGE[f.weight] || DODGE.medium;
+            const u = Math.min(1, a.t / d.duration);
+            const goal = d.distance * (1 - (1 - u) * (1 - u));
+            const step = goal - a.moved;
+            a.moved = goal;
+            f.x += a.dirX * step; f.z += a.dirZ * step;
+            obstacles.resolve(f, BODY_RADIUS);
+            keepInside(f, match.areaRadius);
+            if (a.t >= d.duration) f.action = null;
           }
         }
         // 動きの速さ：防御中・攻撃中・ひるみ中は遅い
-        f.moveScale = f.stun > 0 ? 0.25 : f.guarding ? COMBAT.guardMoveScale
+        f.moveScale = f.action?.kind === 'dodge' ? 0 : f.stun > 0 ? 0.25 : f.guarding ? COMBAT.guardMoveScale
           : (a && a.kind !== 'release') ? COMBAT.attackMoveScale : 1;
       }
       for (let i = projectiles.length - 1; i >= 0; i--) {

@@ -105,6 +105,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         document.querySelector('.vitals').hidden = true;
         document.getElementById('btn-attack').hidden = true;
         document.getElementById('btn-guard').hidden = true;
+        document.getElementById('btn-dodge').hidden = true;
         spectateEl.hidden = false;
         nextSpectate();
       }, 2500);
@@ -154,7 +155,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     bots,
     /** 三人称のときは自分の体を見せ、手元の武器を隠す */
     showMyBody(v) { thirdPerson = v; views.get(me).setVisible(v); viewModel.setVisible(!v); },
-    /** @param {{attack: boolean, guard: boolean}} input プレイヤーの攻撃・防御 */
+    /** @param {{attack: boolean, guard: boolean, dodge: boolean, moveX: number, moveY: number}} input プレイヤーの攻撃・防御・回避と移動スティック */
     update(dt, input) {
       // 1 回の計算で進める時間は最大 0.1 秒（裏から戻った直後などに、一気に動いたり判定を飛ばしたりしないように）
       dt = Math.min(dt, 0.1);
@@ -171,6 +172,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         views.get(b.fighter).update(dt, moving);
       }
       if (running) combat.update(dt);
+      // 回避は試合の計算が体を動かすので、その位置をプレイヤーの操作へ戻す
+      if (me.alive && me.action?.kind === 'dodge') { player.position.x = me.x; player.position.z = me.z; }
       views.get(me).update(dt, player.moving);
       viewModel.update(dt, player.moving);
       arrows.update();

@@ -23,7 +23,8 @@ export function createBot(fighter, rng, fighters) {
     strafeDir: 1,
     strafeTimer: 0,
     drawGoal: 0,         // 弓：どれだけ引いてから放つか（秒）
-    input: { forward: 0, strafe: 0, run: false, yaw: fighter.yaw, pitch: 0, attack: false, guard: false },
+    dodgeCooldown: 0,
+    input: { forward: 0, strafe: 0, run: false, yaw: fighter.yaw, pitch: 0, attack: false, guard: false, dodge: false, dodgeX: 0, dodgeY: 0 },
   };
   const f = fighter;
   const w = () => WEAPONS[f.weapon];
@@ -82,6 +83,13 @@ export function createBot(fighter, rng, fighters) {
         b.drawGoal = weapon.drawTime * (0.7 + rng.next() * 0.35);
       }
       b.input.guard = false;
+      b.input.dodge = false;
+      const close = t.action && t.action.kind === 'attack' && d < (WEAPONS[t.weapon].reach || 2) + 1.5;
+      if (close && b.dodgeCooldown <= 0 && f.stamina > 25 && rng.next() < 0.5) {
+        b.input.dodge = true; b.input.attack = false;
+        b.dodgeCooldown = 1 + rng.next();
+        b.input.dodgeX = b.strafeDir * 0.5; b.input.dodgeY = -1;
+      }
       return;
     }
 
@@ -90,6 +98,17 @@ export function createBot(fighter, rng, fighters) {
     const threat = t.action && t.action.kind === 'attack' && !t.action.hit && d < WEAPONS[t.weapon].reach + 1;
     if (f.shield && b.guardTimer <= 0 && threat && f.stamina > 20 && rng.next() < (lowHp ? 0.75 : 0.45)) b.guardTimer = 0.5 + rng.next() * 0.4;
     b.input.guard = b.guardTimer > 0;
+    // 回避：相手の振りかぶりが見えたら、ときどき後ろか横へ避ける（盾があれば防御の方を多く使う）
+    b.input.dodge = false;
+    const dodgeChance = (f.shield ? 0.12 : 0.4) * (lowHp ? 1.4 : 1);
+    if (threat && !b.input.guard && !f.action && b.dodgeCooldown <= 0 && f.stamina > 30 && rng.next() < dodgeChance) {
+      b.input.dodge = true;
+      b.dodgeCooldown = 1.2 + rng.next() * 1.5;
+      const side = rng.next() < 0.5;
+      b.input.dodgeX = side ? b.strafeDir : 0;
+      b.input.dodgeY = side ? -0.3 : -1;
+      return;
+    }
     if (d > reach * 0.85) {
       b.input.forward = 1;
       b.input.strafe = 0;
@@ -113,6 +132,7 @@ export function createBot(fighter, rng, fighters) {
       b.thinkTimer -= dt;
       b.attackCooldown -= dt;
       b.guardTimer -= dt;
+      b.dodgeCooldown -= dt;
       b.strafeTimer -= dt;
       if (b.strafeTimer <= 0) { b.strafeTimer = 1 + rng.next() * 2; b.strafeDir = rng.next() < 0.5 ? -1 : 1; }
       if (b.thinkTimer <= 0) { b.thinkTimer = 0.15 + rng.next() * 0.15; think(world); }
@@ -139,6 +159,9 @@ export function createBot(fighter, rng, fighters) {
       return moveFighter(f, turned, dt, world);
     },
     /** 戦闘の入力（combat.control に渡す） */
-    get combatInput() { return { attack: b.input.attack, guard: b.input.guard }; },
+    get combatInput() {
+      const i = b.input;
+      return { attack: i.attack, guard: i.guard, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY };
+    },
   };
 }
