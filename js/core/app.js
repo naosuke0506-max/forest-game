@@ -19,6 +19,7 @@ export async function createApp(canvas, quality) {
     pc.RenderComponentSystem,
     pc.CameraComponentSystem,
     pc.LightComponentSystem,
+    pc.AnimComponentSystem,   // キャラの模型の動き
   ];
   // GLB（Meshy AI の模型）を後で読み込むための登録
   options.resourceHandlers = [pc.TextureHandler, pc.ContainerHandler];

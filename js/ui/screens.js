@@ -7,7 +7,7 @@ export function createTitleScreen() {
   const button = document.getElementById('start');
 
   // キャラ選択
-  let selected = 'knight';
+  let selected = 'shield';
   const list = document.getElementById('char-select');
   const desc = document.getElementById('char-desc');
   const render = () => {
@@ -34,9 +34,11 @@ export function createTitleScreen() {
     ready(onStart) {
       button.disabled = false;
       button.textContent = '試合を始める';
-      button.addEventListener('click', () => {
-        title.hidden = true;
-        onStart(selected);
+      button.addEventListener('click', async () => {
+        // キャラの模型を読み込む間は、タイトルを出したまま待つ
+        button.disabled = true;
+        button.textContent = 'キャラを読み込み中…';
+        try { await onStart(selected); } finally { title.hidden = true; }
       }, { once: true });
     },
     fail(message) {

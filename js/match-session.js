@@ -5,6 +5,7 @@ import { createBot } from './game/bot.js';
 import { createCombat } from './game/combat.js';
 import { createRandom } from './core/random.js';
 import { createFighterView } from './render/fighter-view.js';
+import { loadCharacterModel, createCharacterView } from './render/character-view.js';
 import { createBoundary } from './render/boundary.js';
 import { createViewModel } from './render/viewmodel.js';
 import { createProjectileViews } from './render/projectiles.js';
@@ -16,11 +17,15 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
 /**
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, debug, phaseDuration }
  */
-export function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, debug = false, phaseDuration = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, debug = false, phaseDuration = null }) {
   const rng = createRandom(config.seed + 9000);
 
-  // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ
+  // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）
   const others = Object.keys(CHARACTERS).filter((c) => c !== myChar);
+  for (let i = others.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [others[i], others[j]] = [others[j], others[i]];
+  }
   const names = [...BOT_NAMES];
   const fighters = [createFighter({ id: 0, name: 'あなた', char: myChar, isPlayer: true, color: PLAYER_COLOR })];
   for (let i = 0; i < 3; i++) {
@@ -53,7 +58,17 @@ export function startPracticeMatch({ app, config, terrain, obstacles, player, my
   const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => createBot(f, createRandom(config.seed + 100 + i), fighters));
 
   // 見た目
-  const views = new Map(fighters.map((f) => [f, createFighterView(app, f, terrain)]));
+  // キャラの模型を読み込む。読み込めなかったキャラは、仮の人形で続ける（画面下に知らせを出す）
+  const models = new Map();
+  await Promise.all([...new Set(fighters.map((f) => CHARACTERS[f.char].model))].map((id) =>
+    loadCharacterModel(app, id).then((m) => models.set(id, m)).catch((err) => {
+      console.warn(err);
+      window.__showError?.(`キャラの模型を読み込めませんでした（仮の人形で続けます）: ${err.message}`);
+    })));
+  const views = new Map(fighters.map((f) => {
+    const m = models.get(CHARACTERS[f.char].model);
+    return [f, m ? createCharacterView(app, f, terrain, m) : createFighterView(app, f, terrain)];
+  }));
   const boundary = createBoundary(app, terrain);
   const hud = createHud(match, me);
   const viewModel = createViewModel(player.camera, me);
@@ -166,5 +181,6 @@ export function startPracticeMatch({ app, config, terrain, obstacles, player, my
       hud.updateTags(player.camera, fighters, terrain.heightAt);
     },
     get spectating() { return spectating; },
+    views,   // 確認用（自動テストから見た目の状態を読むため）
   };
 }

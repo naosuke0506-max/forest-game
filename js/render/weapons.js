@@ -34,11 +34,17 @@ export function createWeaponModel(weaponId, { shadows = true } = {}) {
   const root = new pc.Entity(`weapon-${weaponId}`);
   const P = (type, m, pos, scale, rot) => part(root, type, m, pos, scale, rot, shadows);
   switch (weaponId) {
-    case 'longsword':
-      P('cylinder', leather(), [0, 0, 0.05], [0.04, 0.22, 0.04], [90, 0, 0]);        // 柄
-      P('box', iron(), [0, 0, -0.08], [0.24, 0.03, 0.04]);                           // 鍔
-      P('box', steel(), [0, 0, -0.55], [0.055, 0.012, 0.9]);                         // 刃
-      P('sphere', iron(), [0, 0, 0.18], [0.06, 0.06, 0.06]);                         // 柄頭
+    case 'armingsword':
+      P('cylinder', leather(), [0, 0, 0.03], [0.04, 0.16, 0.04], [90, 0, 0]);        // 柄
+      P('box', iron(), [0, 0, -0.07], [0.2, 0.03, 0.04]);                            // 鍔
+      P('box', steel(), [0, 0, -0.45], [0.05, 0.012, 0.75]);                         // 刃
+      P('sphere', iron(), [0, 0, 0.13], [0.055, 0.055, 0.055]);                      // 柄頭
+      break;
+    case 'longsword':  // 両手で持つので柄が長い
+      P('cylinder', leather(), [0, 0, 0.08], [0.04, 0.3, 0.04], [90, 0, 0]);         // 柄
+      P('box', iron(), [0, 0, -0.08], [0.26, 0.03, 0.04]);                           // 鍔
+      P('box', steel(), [0, 0, -0.6], [0.055, 0.012, 1.0]);                          // 刃
+      P('sphere', iron(), [0, 0, 0.25], [0.06, 0.06, 0.06]);                         // 柄頭
       break;
     case 'mace':
       P('cylinder', wood(), [0, 0, -0.18], [0.045, 0.62, 0.045], [90, 0, 0]);        // 柄
@@ -51,6 +57,7 @@ export function createWeaponModel(weaponId, { shadows = true } = {}) {
       P('cylinder', wood(), [0, 0, -0.55], [0.04, 2.3, 0.04], [90, 0, 0]);           // 柄（持つのは後ろから 1/4）
       P('cone', steel(), [0, 0, -1.83], [0.07, 0.3, 0.025], [-90, 0, 0]);            // 穂先
       break;
+    case 'longbow':
     case 'shortbow': {
       // 弓：Z の向きに立てた 2 本の弧（細い円柱を傾けて組む）と弦
       for (const s of [-1, 1]) {

@@ -1,0 +1,52 @@
+{
+ "scale": 1.7985,
+ "tris": 14999,
+ "group": "bw",
+ "clips": {
+  "idle": {
+   "duration": 1.8667,
+   "loop": true,
+   "speed": 0.0
+  },
+  "walk": {
+   "duration": 2.9333,
+   "loop": true,
+   "speed": 0.433
+  },
+  "back": {
+   "duration": 0.7333,
+   "loop": true,
+   "speed": 0.8188
+  },
+  "run": {
+   "duration": 0.7333,
+   "loop": true,
+   "speed": 1.3789
+  },
+  "draw": {
+   "duration": 0.4667,
+   "loop": false,
+   "speed": 0.0
+  },
+  "shoot": {
+   "duration": 0.4667,
+   "loop": false,
+   "speed": 0.0
+  },
+  "hit": {
+   "duration": 0.4,
+   "loop": false,
+   "speed": 0.0
+  },
+  "stagger": {
+   "duration": 1.2667,
+   "loop": false,
+   "speed": 0.0
+  },
+  "death": {
+   "duration": 2.4,
+   "loop": false,
+   "speed": 0.0
+  }
+ }
+}

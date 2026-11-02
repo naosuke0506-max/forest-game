@@ -34,10 +34,11 @@ export function createViewModel(camera, fighter) {
 
   // 構えの位置と角度（カメラから見て：右が +X、下が -Y、前が -Z）
   const REST = {
-    longsword: { pos: [0.32, -0.32, -0.55], rot: [12, 12, -8] },
+    armingsword: { pos: [0.32, -0.32, -0.55], rot: [12, 12, -8] },
+    longsword: { pos: [0.3, -0.34, -0.55], rot: [12, 12, -8] },
     mace:      { pos: [0.34, -0.36, -0.55], rot: [18, 10, -10] },
     spear:     { pos: [0.28, -0.3, -0.45], rot: [4, 4, 0] },
-    shortbow:  { pos: [-0.12, -0.12, -0.95], rot: [-90, 0, 12] },   // 弓は縦に立てる（模型は Z の向きに立っている）
+    longbow:   { pos: [-0.12, -0.12, -0.95], rot: [-90, 0, 12] },   // 弓は縦に立てる（模型は Z の向きに立っている）
   }[fighter.weapon];
 
   return {

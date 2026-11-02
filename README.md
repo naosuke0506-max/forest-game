@@ -2,7 +2,7 @@
 
 iPad の Safari で動く、4 人で戦う対戦ゲームの試作品です（一人称。設定で三人称に切り替えられる）。
 今は練習モード（あなた＋bot 3 体）で、試合の骨組み（フェーズ・ポイント・報酬・結果）と戦闘（近接・弓・防御）までできています。
-キャラの見た目はまだ仮の人形（箱と円柱。動きはコードで付けている）です。
+キャラは Tripo AI で作った 6 種類の模型で、動き（構え・歩き・走り・斬り・防御・ひるみ・倒れる・弓を引く）が付いています。武器と盾はまだ仮の形です。
 
 ## 試合のルール（今できているところ）
 
@@ -13,7 +13,7 @@ iPad の Safari で動く、4 人で戦う対戦ゲームの試作品です（�
 - フェーズを生き残るたびに加点と、画面中央の報酬（3 つから 1 つ選ぶ）
 - 右上に全員のポイントをランキング順で表示
 
-- キャラ（騎士・弓兵・鎚兵・槍兵）ごとに、初期の武器・盾・鎧の硬さ・体力・速さが違う
+- キャラ（盾剣騎士・剣騎士・長柄騎士・打撃騎士・弓兵・聖職者）ごとに、初期の武器・盾・鎧の硬さ・体力・速さが違う（設計の全体は `docs/DESIGN.md`）
 - 近接は「振りかぶり → 当たり → 戻り」。間合いと角度に入った相手に当たる
 - 弓は押している間に引き、離すと放つ。引くほど強く速い。矢は重力で落ちる
 - 防御は前からの攻撃を減らし（盾があるほど多く）、スタミナを使う。スタミナが尽きると崩れてひるむ
@@ -30,6 +30,7 @@ iPad の Safari で動く、4 人で戦う対戦ゲームの試作品です（�
 - 空：Poly Haven（CC0）の HDR 写真から作った背景と照明（`assets/sky/CREDITS.md`）
 - 木：Tripo AI で作った 6 種類の模型（`assets/trees/CREDITS.md`）
 - 草・シダ・落ち枝・岩・切り株：Poly Haven（CC0）の 3D 模型（`assets/props/CREDITS.md`）
+- キャラ：Tripo AI で作った 6 種類の模型と、魔境争覇から移した動き（`assets/characters/CREDITS.md`）
 
 ## 遊び方
 
@@ -74,6 +75,9 @@ assets/props/            森の小物（草・シダ・落ち枝・岩・切り�
 tools/fetch_polyhaven_models.py  Poly Haven の模型を取り込む道具（開発用）
 tools/process_props.mjs  森の小物をゲーム用に軽くする道具（開発用）
 source_models/props/     倒木・キノコ・焚き火の元の模型（Tripo AI。まだゲームでは使っていない）
+assets/characters/       キャラの模型（骨と動き入り、軽くしたもの）と、動きの長さ・速さ（.json）
+source_models/characters/ キャラの元の模型（Tripo AI で骨付けした GLB。ゲームは読み込まない）
+tools/characters/        キャラの模型を作る道具（Blender 4.2 で動かす開発用。下の「キャラの模型を作り直す」）
 js/
   main.js                起動の順番だけ
   match-session.js       練習モードの試合：試合の計算と、見た目・画面をつなぐ
@@ -82,7 +86,8 @@ js/
   game/movement.js       戦う人の移動の計算（bot が使う）
   game/combat.js         戦闘：攻撃・防御・弓と矢・ダメージ・ひるみ・スタミナ。PlayCanvas に依存しない
   game/bot.js            bot の考え（相手を選んで戦う。相手がいなければ歩き回る）
-  render/fighter-view.js 戦う人の仮の見た目（関節で動く人形と武器。動きはコードで付ける）
+  render/character-view.js 戦う人の見た目（キャラの模型と動き。戦闘の状態に合わせて動きを切り替える）
+  render/fighter-view.js 仮の人形（キャラの模型が読み込めなかったときに使う）
   render/viewmodel.js    一人称で手元に見える武器と盾
   render/weapons.js      武器・盾・矢の仮の形
   render/projectiles.js  飛んでいる矢の見た目
@@ -113,6 +118,18 @@ js/
 木は Tripo AI の模型、草・シダ・落ち枝・岩・切り株は Poly Haven の実写スキャンの模型です。地面には実写の質感画像を貼っています。
 木の模型や質感画像が読み込めなかったときは、その分だけ仮の表示で続けます（画面下に知らせが出ます）。
 新しい木を足すときは、元の GLB を `source_models/trees/` に置き、`tools/process_trees.mjs` の `TREES` と `js/world/trees.js` の `TREE_TYPES`、`js/config.js` の `world.trees` に名前を足します。
+
+## キャラの模型を作り直す（開発用）
+
+Tripo で骨付けした GLB を `source_models/characters/` に置き、`tools/characters/characters.json` に書いてから、Blender 4.2 で次を実行します（iPad ではできないので Claude Code の作業環境で動かす）。
+
+```
+blender -b --python tools/characters/build_character.py -- <キャラ名> <魔境争覇の剣士の GLB> assets/characters
+```
+
+- 動きを魔境争覇の剣士の模型から Tripo の骨へ移す（腕を下ろした姿勢と T ポーズの違いは骨ごとに補正）
+- 武器・盾・弓を持たせる位置（`socket_R` / `socket_L` / `socket_bow`）を、元の模型の武器の位置から測って手に付ける
+- 三角形を 1.5 万に減らし、質感の画像を 2048 にする
 
 ## GitHub Pages で公開する手順（iPad の Safari で）
 
