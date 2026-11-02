@@ -53,7 +53,7 @@ export function createRocks(app, config, seed, terrain, obstacles, rockTextures 
     scl.set(size * rnd.range(0.9, 1.3), sy, size * rnd.range(0.9, 1.3));
     variants[placed % 2].matrices.push(new pc.Mat4().setTRS(pos, rot, scl));
     // 足元の小石は踏み越せるように、当たり判定は大きめの岩だけ
-    obstacles.add(x, z, size > 0.6 ? size * 0.9 : 0.01);
+    obstacles.add(x, z, size > 0.6 ? size * 0.9 : 0.01, size > 0.6);
     placed++;
   }
 

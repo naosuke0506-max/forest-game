@@ -1,0 +1,218 @@
+{
+  "grass": {
+    "source": "grass_medium_01",
+    "alpha": true,
+    "variants": {
+      "tall_a": {
+        "size": [
+          0.161,
+          0.323,
+          0.159
+        ],
+        "lod0Triangles": 290,
+        "lod1Triangles": 79
+      },
+      "tall_b": {
+        "size": [
+          0.15,
+          0.286,
+          0.135
+        ],
+        "lod0Triangles": 310,
+        "lod1Triangles": 62
+      },
+      "tall_c": {
+        "size": [
+          0.153,
+          0.236,
+          0.128
+        ],
+        "lod0Triangles": 340,
+        "lod1Triangles": 60
+      },
+      "small_b": {
+        "size": [
+          0.166,
+          0.1,
+          0.19
+        ],
+        "lod0Triangles": 653,
+        "lod1Triangles": 79
+      }
+    }
+  },
+  "fern": {
+    "source": "fern_02",
+    "alpha": true,
+    "variants": {
+      "a": {
+        "size": [
+          0.552,
+          0.287,
+          0.613
+        ],
+        "lod0Triangles": 784,
+        "lod1Triangles": 299
+      },
+      "b": {
+        "size": [
+          0.99,
+          0.428,
+          0.894
+        ],
+        "lod0Triangles": 2384,
+        "lod1Triangles": 500
+      },
+      "c": {
+        "size": [
+          0.874,
+          0.349,
+          0.765
+        ],
+        "lod0Triangles": 2248,
+        "lod1Triangles": 500
+      },
+      "d": {
+        "size": [
+          0.573,
+          0.213,
+          0.593
+        ],
+        "lod0Triangles": 816,
+        "lod1Triangles": 300
+      }
+    }
+  },
+  "branches": {
+    "source": "dry_branches_medium_01",
+    "alpha": false,
+    "variants": {
+      "a": {
+        "size": [
+          0.323,
+          0.341,
+          1.299
+        ],
+        "lod0Triangles": 1229,
+        "lod1Triangles": 228
+      },
+      "b": {
+        "size": [
+          0.151,
+          0.142,
+          1.039
+        ],
+        "lod0Triangles": 1200,
+        "lod1Triangles": 240
+      },
+      "c": {
+        "size": [
+          0.131,
+          0.143,
+          0.777
+        ],
+        "lod0Triangles": 1200,
+        "lod1Triangles": 240
+      }
+    }
+  },
+  "rock_large": {
+    "source": "rock_moss_set_01",
+    "alpha": false,
+    "variants": {
+      "r1": {
+        "size": [
+          2.238,
+          1.473,
+          3.369
+        ],
+        "lod0Triangles": 1800,
+        "lod1Triangles": 350
+      },
+      "r2": {
+        "size": [
+          2.655,
+          1.262,
+          3.264
+        ],
+        "lod0Triangles": 1800,
+        "lod1Triangles": 350
+      },
+      "r3": {
+        "size": [
+          2.109,
+          1.1,
+          2.08
+        ],
+        "lod0Triangles": 1800,
+        "lod1Triangles": 350
+      },
+      "r5": {
+        "size": [
+          1.817,
+          1.205,
+          2.999
+        ],
+        "lod0Triangles": 1800,
+        "lod1Triangles": 350
+      }
+    }
+  },
+  "rock_medium": {
+    "source": "rock_moss_set_02",
+    "alpha": false,
+    "variants": {
+      "r8": {
+        "size": [
+          1.206,
+          0.529,
+          0.984
+        ],
+        "lod0Triangles": 1200,
+        "lod1Triangles": 250
+      },
+      "r9": {
+        "size": [
+          1.629,
+          0.61,
+          1.011
+        ],
+        "lod0Triangles": 1198,
+        "lod1Triangles": 248
+      },
+      "r10": {
+        "size": [
+          2.203,
+          0.768,
+          1.552
+        ],
+        "lod0Triangles": 1200,
+        "lod1Triangles": 250
+      },
+      "r12": {
+        "size": [
+          1.58,
+          0.736,
+          1.443
+        ],
+        "lod0Triangles": 1198,
+        "lod1Triangles": 250
+      }
+    }
+  },
+  "stump": {
+    "source": "tree_stump_01",
+    "alpha": false,
+    "variants": {
+      "a": {
+        "size": [
+          1.426,
+          0.573,
+          1.59
+        ],
+        "lod0Triangles": 2499,
+        "lod1Triangles": 499
+      }
+    }
+  }
+}
