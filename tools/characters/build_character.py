@@ -166,10 +166,13 @@ def make_socket(sname, side, weapon, kind):
         z = Vector(W[0]); proj = (V - np.array(hc[:])) @ W[0]
         if abs(proj.max()) < abs(proj.min()): z = -z
         x = Vector(W[1]); origin = hc
-    elif kind == 'bow':      # +Z が上の弓の先、握りは手の中
+    elif kind == 'bow':      # +Z が上の弓の先、+X が弦の側（射る人の側）、握りは手の中
         z = Vector(W[0])
         if z.z < 0: z = -z
-        x = Vector(W[1]); origin = hc
+        # 曲がった弓は、形の中心が握りより弦の側に寄る。それで弦の側を決める
+        x = Vector(W[1])
+        if x.dot(Vector(c) - hc) < 0: x = -x
+        origin = hc
     else:                    # 盾：+Z が縦、+X が腕から盾の板への向き
         z = Vector(W[0])
         if z.z < 0: z = -z

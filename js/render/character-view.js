@@ -55,19 +55,21 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
 
   // 武器と盾：模型の手に付けた「持ち手の点」（socket）に付ける。
   // 点の向きは +Y が刃先（弓は上の先）。点は模型の縮尺の中にあるので、武器は縮尺を打ち消して付ける
-  const attach = (socketName, model, rot, pos = [0, 0, 0]) => {
+  const attach = (socketName, model, rot, pos = [0, 0, 0], quat = null) => {
     const socket = body.findByName(socketName);
     if (!socket) return;
     const holder = new pc.Entity();
     holder.setLocalScale(1 / meta.scale, 1 / meta.scale, 1 / meta.scale);
-    holder.setLocalEulerAngles(...rot);
+    if (quat) holder.setLocalRotation(quat); else holder.setLocalEulerAngles(...rot);
     model.setLocalPosition(...pos);
     holder.addChild(model);
     socket.addChild(holder);
   };
   const weapon = createWeaponModel(fighter.weapon);
   if (w.kind === 'bow') {
-    attach('socket_bow', weapon, [-90, 0, 0]);               // 弓は Z の向きに立っているので、+Y へ起こす
+    // 弓の形は「Z の向きに弓の先、+Y の側に弦」。持ち手の点は「+Y が上の弓の先、+X が弦の側」なので、
+    // (1,1,1) の軸で -120 度回して Z→Y、Y→X、X→Z に入れ替える
+    attach('socket_bow', weapon, null, [0, 0, 0], new pc.Quat().setFromAxisAngle(new pc.Vec3(1, 1, 1).normalize(), -120));
   } else {
     // 武器は -Z の向きへ伸びているので、+Y（刃先）へ起こす。槍は後ろ寄りを持つ
     attach('socket_R', weapon, [90, 0, 0], fighter.weapon === 'spear' ? [0, 0, 0.55] : [0, 0, 0]);
