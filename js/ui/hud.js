@@ -123,7 +123,7 @@ export function createHud(match, me) {
           tagEls.set(f, el);
         }
         const d = Math.hypot(f.x - cam.x, f.z - cam.z);
-        const p = f.alive && d < 35 ? toScreen(camera, f.x, (f.y ?? heightAt(f.x, f.z)) + 2.1, f.z, screenPos) : null;
+        const p = f.alive && !f.hidden && d < 35 ? toScreen(camera, f.x, (f.y ?? heightAt(f.x, f.z)) + 2.1, f.z, screenPos) : null;
         if (!p) { el.style.display = 'none'; continue; }
         el.style.display = '';
         el.style.left = `${p.x}px`;

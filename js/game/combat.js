@@ -4,6 +4,13 @@
 import { WEAPONS, COMBAT, DODGE, HEAVY } from './data.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 import { upgradeOf } from './craft.js';
+import { SEARCH_TIME } from './hiding.js';
+
+// 隠れる・探すに関わる動き
+const FINISH_REACH = 2.4;   // 致命の一撃が届く近さ（無防備な相手まで m）
+const FINISH_HIT = 0.45;    // 致命の一撃が入るまで（秒）
+const ASSN_REACH = 3.2;     // 隠れた所から暗殺へ移れる近さ（m）
+const ASSN_WIN = 0.45;      // 暗殺の猶予（秒）。この間に相手が回避すると失敗する
 
 const DEG = Math.PI / 180;
 const wrap = (a) => ((a + 540) % 360) - 180;
@@ -37,9 +44,10 @@ export function attackStats(weaponId, heavy = false) {
  * @param {object} opt.match 試合（脱落と加点に使う）
  * @param {(x: number, z: number) => number} opt.heightAt 地面の高さ
  * @param {(x: number, z: number, y?: number) => number} [opt.groundAt] 立てる高さ（家の床・階段。無ければ地面）
+ * @param {object} [opt.hiding] 隠れ場所（game/hiding.js）。隠れている人には攻撃が当たらない
  * @param {object} opt.obstacles 木の幹や岩（矢が刺さる）
  */
-export function createCombat({ match, heightAt, obstacles, groundAt = null }) {
+export function createCombat({ match, heightAt, obstacles, groundAt = null, hiding = null }) {
   const floorAt = groundAt || ((x, z) => heightAt(x, z));
   const yOf = (f) => f.y ?? heightAt(f.x, f.z);   // 足の高さ（家の二階にいれば高い）
   const projectiles = [];
@@ -94,11 +102,35 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null }) {
     }
   }
 
+  /** 致命の一撃・暗殺：一撃で倒す */
+  function lethal(target, attacker, how) {
+    if (!target.alive || match.state !== 'running') return;
+    const amount = target.stats.hp;
+    target.stats.hp = 0;
+    target.hitFlash = 0.25;
+    target.action = null; target.helpless = 0;
+    emit('hit', { attacker, target, amount, guarded: false, kind: how });
+    emit('lethal', { attacker, target, how });
+    match.eliminate(target, attacker);
+  }
+  /** f の近く（reach 以内・同じ高さ）にいる相手のうち、条件に合う一番近い人 */
+  function nearestFoe(f, reach, test = () => true) {
+    let best = null, bd = reach;
+    const fy = yOf(f);
+    for (const t of fighters) {
+      if (t === f || !t.alive || t.hidden || !test(t)) continue;
+      const d = Math.hypot(t.x - f.x, t.z - f.z);
+      if (d < bd && Math.abs(yOf(t) - fy) < 1.3) { bd = d; best = t; }
+    }
+    return best;
+  }
+  const faceTo = (f, t) => { f.yaw = (Math.atan2(-(t.x - f.x), -(t.z - f.z)) * 180) / Math.PI; };
+
   /** 近接の当たり判定：間合いと角度に入っている、ほかの全員に当たる */
   function meleeHit(f, w) {
     const fy = yOf(f);
     for (const t of fighters) {
-      if (t === f || !t.alive) continue;
+      if (t === f || !t.alive || t.hidden) continue;
       const dx = t.x - f.x, dz = t.z - f.z, d = Math.hypot(dx, dz);
       if (d > w.reach + COMBAT.bodyRadius) continue;
       if (Math.abs(yOf(t) - fy) > 1.6) continue;
@@ -134,7 +166,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null }) {
     p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
     // 人に当たる：線分（前の位置 → 今の位置）と、体の円柱
     for (const t of fighters) {
-      if (t === p.owner || !t.alive) continue;
+      if (t === p.owner || !t.alive || t.hidden) continue;
       const g = yOf(t);
       if (p.y < g || p.y > g + COMBAT.bodyHeight) continue;
       const sx = p.x - ox, sz = p.z - oz, len2 = sx * sx + sz * sz || 1e-6;
@@ -179,7 +211,32 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null }) {
       f._leftHeld = leftHeld;
       const dodgePressed = input.dodge && !f._dodgeHeld;
       f._dodgeHeld = !!input.dodge;
+      const searchPressed = input.search && !f._searchHeld;
+      f._searchHeld = !!input.search;
       if (f.stun > 0) { f.guarding = false; if (f.action?.kind === 'draw') f.action = null; return; }
+
+      // 隠れている：攻撃ボタンで、近くの相手へ飛び出して暗殺（相手が猶予の間に回避すると失敗）。ほかのことはできない
+      if (f.hidden) {
+        f.guarding = false;
+        const t = pressed ? nearestFoe(f, ASSN_REACH + 1.2) : null;
+        if (t && Math.hypot(t.x - f.hidden.outX, t.z - f.hidden.outZ) < ASSN_REACH) {
+          hiding?.exit(f);
+          faceTo(f, t);
+          f.action = { kind: 'assassinate', t: 0, target: t, dodged: false };
+          emit('assassinate', { attacker: f, target: t });
+        }
+        return;
+      }
+      // 探す：近くのベッドやタンスを開ける
+      if (searchPressed && !f.action && hiding) {
+        const spot = hiding.nearest(f);
+        if (spot) { f.action = { kind: 'search', t: 0, spot }; f.guarding = false; emit('searchStart', { fighter: f, spot }); return; }
+      }
+      // 致命の一撃：無防備な相手（見つけて引きずり出した相手など）が近くにいれば、攻撃ボタンで
+      if (pressed && !f.action) {
+        const t = nearestFoe(f, FINISH_REACH, (o) => o.helpless > 0);
+        if (t) { faceTo(f, t); f.action = { kind: 'finisher', t: 0, target: t }; f.guarding = false; emit('finisherStart', { attacker: f, target: t }); return; }
+      }
 
       // 回避：移動スティックの向きへ（倒していなければ後ろへ）。行動中（弓を引いている途中は除く）はできない
       if (f.action?.kind === 'dodge') { f.guarding = false; return; }
@@ -235,6 +292,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null }) {
         if (!f.alive) continue;
         f.stun = Math.max(0, f.stun - dt);
         f.hitFlash = Math.max(0, f.hitFlash - dt);
+        if (f.helpless > 0) f.helpless = Math.max(0, f.helpless - dt);
         // スタミナ：使ってから少しして戻る（防御中は半分）
         f.staminaDelay -= dt;
         if (f.staminaDelay <= 0) f.stamina = Math.min(f.stats.maxStamina, f.stamina + COMBAT.staminaRegen * (f.guarding ? 0.5 : 1) * dt);
@@ -249,6 +307,34 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null }) {
             if (a.t >= st.windup + st.recovery) f.action = null;
           } else if (a.kind === 'release' && a.t >= 0.25) {
             f.action = null;
+          } else if (a.kind === 'search') {
+            if (a.t >= SEARCH_TIME) { f.action = null; hiding?.reveal(f, a.spot); }
+          } else if (a.kind === 'finisher') {
+            const t = a.target;
+            if (t.alive) faceTo(f, t);
+            if (!a.hit && a.t >= FINISH_HIT) {
+              a.hit = true;
+              if (t.alive && t.helpless > 0 && Math.hypot(t.x - f.x, t.z - f.z) < FINISH_REACH + 0.6) lethal(t, f, 'finisher');
+            }
+            if (a.t >= FINISH_HIT + 0.45) f.action = null;
+          } else if (a.kind === 'assassinate') {
+            // 相手へ飛びかかる。猶予の間に相手が回避したら失敗
+            const t = a.target;
+            if (t.action?.kind === 'dodge') a.dodged = true;
+            const dx = t.x - f.x, dz = t.z - f.z, d = Math.hypot(dx, dz);
+            if (!a.done && d > 0.9) {
+              const step = Math.min(d - 0.9, 7 * dt);
+              f.x += (dx / d) * step; f.z += (dz / d) * step;
+              obstacles.resolve(f, BODY_RADIUS);
+              f.y = floorAt(f.x, f.z, f.y);
+              faceTo(f, t);
+            }
+            if (!a.done && a.t >= ASSN_WIN) {
+              a.done = true;
+              if (!a.dodged && t.alive && !t.hidden && d < 2.2) lethal(t, f, 'assassinate');
+              else { f.stun = 0.8; emit('assassinFail', { attacker: f, target: t }); f.action = null; }
+            }
+            if (f.action && a.t >= ASSN_WIN + 0.4) f.action = null;
           } else if (a.kind === 'dodge') {
             // 始めに速く、終わりにゆっくり進む
             const d = DODGE[f.weight] || DODGE.medium;
@@ -264,7 +350,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null }) {
           }
         }
         // 動きの速さ：防御中・攻撃中・ひるみ中は遅い
-        f.moveScale = f.action?.kind === 'dodge' ? 0 : f.stun > 0 ? 0.25 : f.guarding ? COMBAT.guardMoveScale
+        const still = f.hidden || f.helpless > 0 || ['dodge', 'search', 'finisher', 'assassinate'].includes(f.action?.kind);
+        f.moveScale = still ? 0 : f.stun > 0 ? 0.25 : f.guarding ? COMBAT.guardMoveScale
           : (a && a.kind !== 'release') ? COMBAT.attackMoveScale : 1;
       }
       for (let i = projectiles.length - 1; i >= 0; i--) {

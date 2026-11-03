@@ -262,7 +262,13 @@ export function buildHouse(B, h, reg) {
   }
 
   // ===== 家具 =====
-  const furniture = new Furniture(B, F, y0, yaw, reg, range);
+  // 隠れ場所への道順（bot が使う）：扉の外 → 扉の内 →（二階なら）階段の下 → 階段の上
+  const W2 = (x, z) => { const p = F.at(x, 0, z); return { x: p[0], z: p[2] }; };
+  const routes = [
+    [W2(0, d / 2 + 1.3), W2(0, id - 0.9)],
+    [W2(0, d / 2 + 1.3), W2(0, id - 0.9), W2((sx0 + sx1) / 2, zb + 0.35), W2((sx0 + sx1) / 2, zt - 0.5)],
+  ];
+  const furniture = new Furniture(B, F, y0, yaw, reg, range, routes);
   if (twoStory) {
     const g = fy[0], u = fy[1];
     // 一階：暖炉（右の壁）、机と腰掛け、長持、タンス（後ろの壁）、袋
@@ -291,7 +297,7 @@ export function buildHouse(B, h, reg) {
 
 /** 家具（家の中の座標で置く）。ぶつかる範囲はその階の高さだけ */
 class Furniture {
-  constructor(B, F, y0, yaw, reg, range) { Object.assign(this, { B, F, y0, yaw, reg, range }); }
+  constructor(B, F, y0, yaw, reg, range, routes) { Object.assign(this, { B, F, y0, yaw, reg, range, routes }); }
   bx(surf, x, y, z, w, d, h, rot, opt = {}) {
     const p = this.F.at(x, 0, z);
     box(this.B, surf, p[0], this.y0 + y, p[2], w, d, h, this.yaw + rot, opt);
@@ -305,9 +311,19 @@ class Furniture {
     const p = this.F.at(x, 0, z);
     this.reg.solid(p[0], p[2], r, { y0: this.y0 + floorY - 0.6, y1: this.y0 + floorY + 0.7 });
   }
-  hide(kind, x, z, floorY, rot) {
-    const p = this.F.at(x, 0, z);
-    this.reg.hides.push({ kind, x: p[0], z: p[2], y: this.y0 + floorY, yaw: this.yaw + rot });
+  /**
+   * 隠れ場所を記録する（game/hiding.js が使う）
+   *   x, z：隠れている人の位置、y：床の高さ、yaw：外を覗く向き（家の座標の向きの約束：0 で +z）
+   *   eye：覗く目の位置（eyeX, eyeZ と床からの高さ eyeH）、out：出たときに立つ位置、route：外からの道順
+   */
+  hide(kind, x, z, floorY, lookRot, { eyeAhead, eyeH, outAhead }) {
+    const a = (lookRot * Math.PI) / 180, dx = Math.sin(a), dz = Math.cos(a);
+    const p = this.F.at(x, 0, z), e = this.F.at(x + dx * eyeAhead, 0, z + dz * eyeAhead), o = this.F.at(x + dx * outAhead, 0, z + dz * outAhead);
+    this.reg.hides.push({
+      kind, x: p[0], z: p[2], y: this.y0 + floorY, yaw: this.yaw + lookRot,
+      eyeX: e[0], eyeZ: e[2], eyeH, outX: o[0], outZ: o[2],
+      route: this.routes[floorY > 2 ? 1 : 0],
+    });
   }
   /** ベッド：長さ 2m・幅 1m。頭は rot の向きの後ろ。下に 0.3m の隙間（潜って隠れる） */
   bed(x, z, y, rot, rnd) {
@@ -322,7 +338,9 @@ class Furniture {
     { const [px, pz] = P(0, 0.3); this.bx('cloth', px, y + 0.57, pz, Wd - 0.02, L * 0.6, 0.05, rot, { shade: blanket }); }  // 毛布
     { const [px, pz] = P(0, -L / 2 + 0.32); this.bx('cloth', px, y + 0.57, pz, Wd * 0.6, 0.35, 0.1, rot, { shade: [0.92, 0.9, 0.84] }); }  // 枕
     for (const dz of [-0.6, 0, 0.6]) { const [px, pz] = P(0, dz); this.solid(px, pz, 0.48, y); }
-    { const [px, pz] = P(0, 0); this.hide('bed', px, pz, y, rot); }
+    // 下に潜って覗く向き：ベッドの横のうち、部屋の真ん中の側
+    const side = Math.cos((rot * Math.PI) / 180) * -x + -Math.sin((rot * Math.PI) / 180) * -z >= 0 ? 1 : -1;
+    { const [px, pz] = P(0, 0.1); this.hide('bed', px, pz, y, rot + side * 90, { eyeAhead: 0.4, eyeH: 0.2, outAhead: 1.05 }); }
   }
   /** タンス：幅 1.05・奥行き 0.55・高さ 1.95。扉は rot の向きの前（中に入って隠れる） */
   wardrobe(x, z, y, rot) {
@@ -336,7 +354,7 @@ class Furniture {
       this.bx('wood', kx, y + 0.95, kz, 0.04, 0.04, 0.12, rot, { shade: 0.35 });  // 取っ手
     }
     { const [px, pz] = P(0, 0); this.solid(px, pz, 0.5, y); }
-    { const [px, pz] = P(0, 0.05); this.hide('wardrobe', px, pz, y, rot); }
+    { const [px, pz] = P(0, 0.05); this.hide('wardrobe', px, pz, y, rot, { eyeAhead: 0.2, eyeH: 1.55, outAhead: 0.85 }); }
   }
   /** 机（1.4 × 0.8）と腰掛け 2 つ */
   table(x, z, y, rnd) {

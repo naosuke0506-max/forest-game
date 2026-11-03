@@ -1,0 +1,99 @@
+// 隠れる・探す（計算だけ。PlayCanvas に依存しない）。
+//   隠れ場所：家の中のベッドの下とタンスの中（world/house-builder.js が場所を記録する）。1 か所に 1 人
+//   隠れる：近く（同じ階・1.7m 以内）の隠れ場所へ。隠れている間は見つからず、攻撃も当たらない。動けないが外を覗ける
+//   出る：隠れ場所の前へ出る
+//   探す：近くの隠れ場所を開けて探す（少し時間がかかる）。誰かいれば、その人は引きずり出されて「無防備」になる
+//     （HELPLESS 秒、何もできない）。その間に、見つけた人は致命の一撃を入れられる（game/combat.js）
+//   すでに誰かが隠れている所に隠れようとしたら、見つけたのと同じ
+export const HIDE_REACH = 1.7;   // 隠れる・探すことができる近さ（m）
+export const SEARCH_TIME = 0.6;  // 探す（開ける）のにかかる時間（秒）
+export const HELPLESS = 2.6;     // 見つかった人が無防備でいる時間（秒）
+
+/**
+ * @param {object[]} spots 隠れ場所 { kind: 'bed' | 'wardrobe', x, z, y, yaw, eyeX, eyeZ, eyeH, outX, outZ, route }
+ */
+export function createHiding(spots) {
+  const listeners = {};
+  const emit = (type, data) => (listeners[type] || []).forEach((fn) => fn(data));
+  spots.forEach((s, i) => { s.id = i; s.occupant = null; });
+
+  /** 隠れ場所から出す（出た所に立たせる） */
+  function release(f) {
+    const s = f.hidden;
+    if (!s) return;
+    s.occupant = null;
+    f.hidden = null;
+    f.x = s.outX; f.z = s.outZ; f.y = s.y;
+    f.yaw = s.yaw + 180;   // 出た向き（外を向く。戦う人の向きは -Z が前）
+  }
+
+  const m = {
+    spots,
+    on(type, fn) { (listeners[type] ||= []).push(fn); return m; },
+
+    /** f の近くの隠れ場所（同じ階で、reach 以内の一番近い所） */
+    nearest(f, reach = HIDE_REACH) {
+      let best = null, bd = reach;
+      const y = f.y ?? 0;
+      for (const s of spots) {
+        if (s.occupant === f || Math.abs(s.y - y) > 1.0) continue;
+        const d = Math.hypot(s.x - f.x, s.z - f.z);
+        if (d < bd) { bd = d; best = s; }
+      }
+      return best;
+    },
+
+    /** 空いている隠れ場所のうち、近い所（bot が逃げ込む先を選ぶ） */
+    freeNear(x, z, maxDist) {
+      let best = null, bd = maxDist;
+      for (const s of spots) {
+        if (s.occupant) continue;
+        const d = Math.hypot(s.x - x, s.z - z);
+        if (d < bd) { bd = d; best = s; }
+      }
+      return best;
+    },
+
+    /**
+     * 隠れる。すでに誰かがいれば、隠れられずにその人を見つける（{ found }）。隠れたら { hidden: true }
+     */
+    hide(f, s) {
+      if (!f.alive || f.hidden || !s) return null;
+      if (s.occupant && s.occupant !== f) return m.reveal(f, s);
+      s.occupant = f;
+      f.hidden = s;
+      f.x = s.x; f.z = s.z; f.y = s.y;
+      f.action = null; f.guarding = false;
+      emit('hide', { fighter: f, spot: s });
+      return { hidden: true };
+    },
+
+    /** 出る */
+    exit(f) {
+      if (!f.hidden) return;
+      const s = f.hidden;
+      release(f);
+      emit('exit', { fighter: f, spot: s });
+    },
+
+    /** 開けて中を見る（探すの結果）。誰かいれば引きずり出して無防備に */
+    reveal(searcher, s) {
+      const v = s.occupant;
+      if (!v || v === searcher) { emit('empty', { searcher, spot: s }); return { found: null }; }
+      release(v);
+      // 見つけた人の方を向いて、目の前に引きずり出される
+      const dx = searcher.x - v.x, dz = searcher.z - v.z;
+      v.yaw = (Math.atan2(-dx, -dz) * 180) / Math.PI;
+      v.helpless = HELPLESS;
+      v.stun = Math.max(v.stun || 0, HELPLESS);
+      v.action = null; v.guarding = false;
+      v.foundBy = searcher;
+      emit('found', { searcher, victim: v, spot: s });
+      return { found: v };
+    },
+
+    /** 倒れた人は隠れ場所から外す */
+    drop(f) { if (f.hidden) release(f); },
+  };
+  return m;
+}

@@ -14,6 +14,7 @@ import { createViewModel } from './render/viewmodel.js';
 import { createProjectileViews } from './render/projectiles.js';
 import { createHud } from './ui/hud.js';
 import { createPickups } from './game/pickups.js';
+import { createHiding } from './game/hiding.js';
 import { createPickupViews } from './render/pickup-view.js';
 import { createCraftUi } from './ui/craft.js';
 import { ICONS, weaponIconOf } from './ui/icons.js';
@@ -26,7 +27,7 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
 /**
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, debug, phaseDuration }
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, zones = null, buildings = [], crateSpots = [], tex = null, trees = [], groundAt = null, insideHouse = null, debug = false, phaseDuration = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, zones = null, buildings = [], crateSpots = [], tex = null, trees = [], groundAt = null, insideHouse = null, hides = [], debug = false, phaseDuration = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）
@@ -67,8 +68,10 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const pickupViews = createPickupViews(app, pickups, terrain, tex, config.quality);
   match.on('phaseStart', () => pickups.refill());
 
+  // 隠れ場所（村の家のベッドの下・タンスの中）
+  const hiding = createHiding(hides);
   // 戦闘と bot
-  const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt });
+  const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt, hiding });
   const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => createBot(f, createRandom(config.seed + 100 + i), fighters));
 
   // 見た目
@@ -99,7 +102,13 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   document.getElementById('settings-btn').innerHTML = ICONS.gear;
   const attackBtn = document.getElementById('btn-attack');
   const attackLabel = () => (WEAPONS[me.weapon].kind === 'bow' ? '射る' : me.weapon === 'spear' ? '突き' : '攻撃');
-  const refreshAttack = () => setBtn(attackBtn, weaponIconOf(me.weapon), attackLabel());
+  let attackMode = '';   // 攻撃ボタンの今の表示（ふつう / 暗殺 / とどめ）
+  const refreshAttack = (mode = attackMode) => {
+    attackMode = mode;
+    if (mode === 'assassinate') setBtn(attackBtn, ICONS.dagger, '暗殺');
+    else if (mode === 'finisher') setBtn(attackBtn, ICONS.skull, 'とどめ');
+    else setBtn(attackBtn, weaponIconOf(me.weapon), attackLabel());
+  };
   refreshAttack();
   combat.on('switch', ({ fighter }) => { if (fighter === me) refreshAttack(); });
 
@@ -118,7 +127,51 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     hud.addFeed(item.kind === 'crate' ? `箱を開けた：${what}` : what);
     craftUi.update();
   });
-  let nearItem = null, useTimer = 0;
+  let nearItem = null, nearSpot = null, useTimer = 0;
+  const searchBtn = document.getElementById('btn-search');
+  setBtn(searchBtn, ICONS.eye, '探す');
+  const hideView = document.getElementById('hideview');
+
+  // 隠れる・探す：自分が隠れたら隙間から覗く見た目に。近くの bot に見られていたら、その bot は場所を覚えて探しに来る
+  const sees = (b, f) => {
+    const dx = f.x - b.x, dz = f.z - b.z, d = Math.hypot(dx, dz);
+    if (d > 22 || Math.abs((b.y ?? 0) - (f.y ?? 0)) > 2.5) return false;
+    if (d < 3) return true;
+    const yaw = (b.yaw * Math.PI) / 180;
+    return (-Math.sin(yaw) * dx - Math.cos(yaw) * dz) / d > Math.cos((75 * Math.PI) / 180);   // 前の 150 度に入っている
+  };
+  hiding.on('hide', ({ fighter, spot }) => {
+    for (const b of bots) if (b.fighter !== fighter && b.fighter.alive && sees(b.fighter, fighter)) b.knowSpot(spot);
+    if (fighter !== me) return;
+    player.setHide(spot);
+    viewModel.setVisible(false);
+    hideView.className = `hideview ${spot.kind}`;
+    hideView.hidden = false;
+    hud.addFeed(spot.kind === 'bed' ? 'ベッドの下に隠れた' : 'タンスの中に隠れた');
+  });
+  const leaveHideView = () => {
+    player.leaveHide(me.x, me.z, me.y, me.yaw);
+    viewModel.setVisible(!thirdPerson);
+    hideView.hidden = true;
+  };
+  hiding.on('exit', ({ fighter }) => { if (fighter === me) leaveHideView(); });
+  hiding.on('found', ({ searcher, victim, spot }) => {
+    if (victim === me) { leaveHideView(); hud.centerMsg('見つかった', '動けない……', 2.5); }
+    if (searcher === me) hud.addFeed(`${victim.name}を見つけた！ 攻撃ボタンで致命の一撃`);
+    else if (victim !== me && Math.hypot(spot.x - me.x, spot.z - me.z) < 25) hud.addFeed(`${searcher.name} が ${victim.name} を見つけた`);
+  });
+  hiding.on('empty', ({ searcher, spot }) => { if (searcher === me) hud.addFeed(spot.kind === 'bed' ? 'ベッドの下には誰もいない' : 'タンスの中には誰もいない'); });
+  combat.on('lethal', ({ attacker, target, how }) => {
+    if (attacker === me) hud.addFeed(how === 'assassinate' ? `${target.name}を暗殺した` : `致命の一撃：${target.name}`);
+  });
+  combat.on('assassinate', ({ attacker, target }) => {
+    if (target === me) hud.centerMsg('暗殺！', '回避で逃げろ', 1.2);
+    if (attacker === me) { player.leaveHide(me.x, me.z, me.y, me.yaw); }
+  });
+  combat.on('assassinFail', ({ attacker, target }) => {
+    if (attacker === me) hud.addFeed('暗殺に失敗した（回避された）');
+    if (target === me) hud.addFeed(`${attacker.name}の暗殺をかわした`);
+  });
   const viewModel = createViewModel(player.camera, me);
   const arrows = createProjectileViews(app, combat);
   let thirdPerson = false;
@@ -150,6 +203,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         document.getElementById('btn-left').hidden = true;
         document.getElementById('btn-dodge').hidden = true;
         useBtn.hidden = true;
+        searchBtn.hidden = true;
+        hideView.hidden = true;
         document.getElementById('mats').hidden = true;
         craftUi.close();
         spectateEl.hidden = false;
@@ -161,7 +216,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   });
   match.on('end', () => { spectateEl.hidden = true; });
 
-  const world = { obstacles, pickups, groundAt, get areaRadius() { return match.areaRadius; } };
+  const world = { obstacles, pickups, groundAt, hiding, get areaRadius() { return match.areaRadius; } };
+  match.on('eliminated', ({ victim }) => hiding.drop(victim));
   match.on('eliminated', ({ victim }) => { if (victim === me) player.setFrozen(true); });
   match.on('end', (res) => setTimeout(() => hud.showResult(res), 1200));
   match.on('rewardChosen', ({ fighter }) => { if (fighter === me) player.speedScale = me.stats.speed; });
@@ -214,31 +270,46 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       player.setAreaRadius(match.areaRadius);
       player.speedScale = me.stats.speed * (me.moveScale ?? 1);
       // あなたの位置を、試合の記録へ写す（いずれ人間も試合の計算で動かす）
-      if (me.alive) { me.x = player.position.x; me.z = player.position.z; me.y = player.position.y; me.yaw = player.yaw; me.pitch = player.pitch; }
+      // 隠れている間は、隠れ場所が自分の位置（体は動かない）
+      if (me.alive && !me.hidden) { me.x = player.position.x; me.z = player.position.z; me.y = player.position.y; me.yaw = player.yaw; me.pitch = player.pitch; }
+      if (me.hidden) { me.yaw = player.yaw; me.pitch = player.pitch; }
       if (running) combat.control(me, input);
-      // 拾う・開ける：近くに素材の山か箱があれば、ボタンを出す
+      // 右のボタン：隠れている間は「出る」。近くに素材の山か箱があれば「拾う・開ける」、ベッドやタンスがあれば「隠れる」と「探す」
       if ((useTimer -= dt) <= 0) {
         useTimer = 0.12;
-        nearItem = running && me.alive ? pickups.nearest(me) : null;
-        useBtn.hidden = !nearItem;
-        if (nearItem) {
-          const label = nearItem.kind === 'crate' ? '開ける' : '拾う';
-          const icon = nearItem.kind === 'crate' ? ICONS.crate : ICONS[nearItem.kind];
-          if (useBtn.dataset.label !== label + nearItem.kind) {
-            useBtn.dataset.label = label + nearItem.kind;
-            setBtn(useBtn, icon, nearItem.kind === 'crate' ? label : `${MATERIALS[nearItem.kind].name}<small>×${nearItem.amount}</small>`);
-          }
+        const free = running && me.alive && !(me.helpless > 0) && !me.action;
+        nearItem = free && !me.hidden ? pickups.nearest(me) : null;
+        nearSpot = free && !me.hidden && !nearItem ? hiding.nearest(me) : null;
+        const mode = me.hidden ? 'exit' : nearItem ? (nearItem.kind === 'crate' ? 'crate' : nearItem.kind) : nearSpot ? 'hide' : '';
+        useBtn.hidden = !mode;
+        if (mode && useBtn.dataset.label !== mode + (nearItem?.amount ?? '')) {
+          useBtn.dataset.label = mode + (nearItem?.amount ?? '');
+          if (mode === 'exit') setBtn(useBtn, ICONS.exit, '出る');
+          else if (mode === 'hide') setBtn(useBtn, ICONS.hood, '隠れる');
+          else if (mode === 'crate') setBtn(useBtn, ICONS.crate, '開ける');
+          else setBtn(useBtn, ICONS[mode], `${MATERIALS[mode].name}<small>×${nearItem.amount}</small>`);
         }
+        searchBtn.hidden = !nearSpot;
+        // 攻撃ボタン：隠れている間は「暗殺」、無防備な相手が近くにいれば「とどめ」
+        const helplessNear = fighters.some((f) => f !== me && f.alive && f.helpless > 0 && Math.hypot(f.x - me.x, f.z - me.z) < 2.6);
+        const want = me.hidden ? 'assassinate' : helplessNear ? 'finisher' : '';
+        if (want !== attackMode) refreshAttack(want);
       }
-      if (input.use && nearItem && running) { pickups.take(me, nearItem); nearItem = null; useTimer = 0; }
+      if (input.use && running && me.alive) {
+        if (me.hidden) hiding.exit(me);
+        else if (nearItem) pickups.take(me, nearItem);
+        else if (nearSpot) hiding.hide(me, nearSpot);   // 誰かがいれば、その人を見つける
+        nearItem = nearSpot = null; useTimer = 0;
+      }
       for (const b of bots) {
         const moving = running ? b.update(dt, world) : 0;
         if (running) combat.control(b.fighter, b.combatInput);
         views.get(b.fighter).update(dt, moving);
+        views.get(b.fighter).setVisible(!b.fighter.hidden);   // 隠れている人は見えない
       }
       if (running) combat.update(dt);
       // 回避は試合の計算が体を動かすので、その位置をプレイヤーの操作へ戻す
-      if (me.alive && me.action?.kind === 'dodge') { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
+      if (me.alive && (me.action?.kind === 'dodge' || me.action?.kind === 'assassinate')) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
       views.get(me).update(dt, player.moving);
       viewModel.update(dt, player.moving);
       arrows.update();
@@ -263,5 +334,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     debugAction,
     views,   // 確認用（自動テストから見た目の状態を読むため）
     pickups,
+    hiding,
   };
 }

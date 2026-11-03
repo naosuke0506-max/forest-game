@@ -142,7 +142,7 @@ async function boot() {
     session = await startPracticeMatch({
       app, config: CONFIG, terrain, obstacles, player, myChar, timeOfDay, zones, buildings: village?.footprints || [],
       crateSpots: village?.crateSpots || [], tex, trees: trees?.canopies || [],
-      groundAt: floors.groundAt, insideHouse: village?.insideHouse,
+      groundAt: floors.groundAt, insideHouse: village?.insideHouse, hides: village?.hides || [],
       debug: CONFIG.debug,
       // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」
       phaseDuration: CONFIG.phaseDuration ?? (settings.phaseLen === 'normal' ? null : Number(settings.phaseLen)),
