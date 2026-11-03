@@ -4,6 +4,7 @@
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
 import { WEAPONS, DODGE } from '../game/data.js';
+import { attackStats } from '../game/combat.js';
 import { createWeaponModel, createShieldModel } from './weapons.js';
 import { BUILD } from '../version.js';
 
@@ -32,7 +33,6 @@ const RUN_FROM = 1.6;   // これより速いと走りの動き（m/秒）
 const BLEND = 0.15;     // 動きを切り替えるときに混ぜる時間（秒）
 
 export function createCharacterView(app, fighter, terrain, { asset, meta }) {
-  const w = WEAPONS[fighter.weapon];
   const root = new pc.Entity(`fighter-${fighter.id}`);
   const body = asset.resource.instantiateRenderEntity({ castShadows: true, receiveShadows: true });
   body.setLocalScale(meta.scale, meta.scale, meta.scale);
@@ -58,23 +58,31 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   // 点の向きは +Y が刃先（弓は上の先）。点は模型の縮尺の中にあるので、武器は縮尺を打ち消して付ける
   const attach = (socketName, model, rot, pos = [0, 0, 0], quat = null) => {
     const socket = body.findByName(socketName);
-    if (!socket) return;
+    if (!socket) return null;
     const holder = new pc.Entity();
     holder.setLocalScale(1 / meta.scale, 1 / meta.scale, 1 / meta.scale);
     if (quat) holder.setLocalRotation(quat); else holder.setLocalEulerAngles(...rot);
     model.setLocalPosition(...pos);
     holder.addChild(model);
     socket.addChild(holder);
+    return holder;
   };
-  const weapon = createWeaponModel(fighter.weapon);
-  if (w.kind === 'bow') {
-    // 弓の形は「Z の向きに弓の先、+Y の側に弦」。持ち手の点は「+Y が上の弓の先、+X が弦の側」なので、
-    // (1,1,1) の軸で -120 度回して Z→Y、Y→X、X→Z に入れ替える
-    attach('socket_bow', weapon, null, [0, 0, 0], new pc.Quat().setFromAxisAngle(new pc.Vec3(1, 1, 1).normalize(), -120));
-  } else {
-    // 武器は -Z の向きへ伸びているので、+Y（刃先）へ起こす。槍は後ろ寄りを持つ
-    attach('socket_R', weapon, [90, 0, 0], fighter.weapon === 'spear' ? [0, 0, 0.55] : [0, 0, 0]);
+  // 手に持つ武器。持ち替え（弓兵の弓 ↔ ダガー）のときは付け直す
+  let weaponHolder = null, shownWeapon = null;
+  function showWeapon(id) {
+    weaponHolder?.destroy();
+    shownWeapon = id;
+    const model = createWeaponModel(id);
+    if (WEAPONS[id].kind === 'bow') {
+      // 弓の形は「Z の向きに弓の先、+Y の側に弦」。持ち手の点は「+Y が上の弓の先、+X が弦の側」なので、
+      // (1,1,1) の軸で -120 度回して Z→Y、Y→X、X→Z に入れ替える
+      weaponHolder = attach('socket_bow', model, null, [0, 0, 0], new pc.Quat().setFromAxisAngle(new pc.Vec3(1, 1, 1).normalize(), -120));
+    } else {
+      // 武器は -Z の向きへ伸びているので、+Y（刃先）へ起こす。槍は後ろ寄りを持つ
+      weaponHolder = attach('socket_R', model, [90, 0, 0], id === 'spear' ? [0, 0, 0.55] : [0, 0, 0]);
+    }
   }
+  showWeapon(fighter.weapon);
   if (fighter.shield) attach('socket_L', createShieldModel(), [0, 0, 0]);
 
   // 動き
@@ -132,6 +140,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       }
       px = fighter.x; pz = fighter.z;
       if (fighter.action?.kind !== 'dodge') body.setLocalEulerAngles(0, 180, 0);   // 前転で変えた体の向きを戻す
+      if (fighter.weapon !== shownWeapon) showWeapon(fighter.weapon);
 
       if (!fighter.alive) {
         if (!deathStarted) { deathStarted = true; restart('death', 1); }
@@ -149,10 +158,13 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         lastAction = a;
         if (a.kind === 'attack') {
           // 攻撃のたびに、3 種類の斬り（a1 → a2 → a3）を順に使う。長さは武器の振りの時間に合わせる
-          const name = ['a1', 'a2', 'a3'][swingIndex++ % 3];
-          restart(name, clip(name).duration / (w.windup + w.recovery));
+          // 強攻撃（左手）は heavy の動き。ふつうは 3 種類の斬りを順に。持ち替えた近接武器は ma1〜ma3
+          const st = attackStats(fighter.weapon, a.heavy);
+          const melee2 = fighter.weapon !== fighter.primary && has('ma1');
+          const name = a.heavy && has('heavy') ? 'heavy' : (melee2 ? ['ma1', 'ma2', 'ma3'] : ['a1', 'a2', 'a3'])[swingIndex++ % 3];
+          restart(name, clip(name).duration / (st.windup + st.recovery));
         } else if (a.kind === 'draw') {
-          restart('draw', clip('draw').duration / w.drawTime);
+          restart('draw', clip('draw').duration / WEAPONS[fighter.weapon].drawTime);
         } else if (a.kind === 'release') {
           restart('shoot', 1);
         } else if (a.kind === 'dodge') {

@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>静かな森</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-03.4';</script>
+<script>window.__BUILD = '2026-11-03.5';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -17,6 +17,7 @@
 <link rel="modulepreload" href="./js/version.js">
 <link rel="modulepreload" href="./js/core/freshness.js">
 <link rel="modulepreload" href="./js/match-session.js">
+<link rel="modulepreload" href="./js/ui/minimap.js">
 <link rel="modulepreload" href="./js/config.js">
 <link rel="modulepreload" href="./js/core/app.js">
 <link rel="modulepreload" href="./js/core/random.js">
@@ -124,15 +125,17 @@
 </div>
 
 <div id="hud" hidden>
-  <!-- 左上：フェーズと残り時間、設定 -->
-  <div class="hud-tl">
+  <!-- 上の真ん中：フェーズ・時間帯と残り時間 -->
+  <div class="hud-top">
     <div id="phase-name" class="phase-name"></div>
     <div id="phase-time" class="phase-time"></div>
   </div>
+  <!-- 左上：ミニマップと設定 -->
+  <canvas id="minimap" class="minimap"></canvas>
   <button id="settings-btn" class="icon-btn" type="button" aria-label="設定">⚙</button>
   <!-- 右上：ポイントのランキング -->
   <ol id="ranking" class="ranking"></ol>
-  <!-- 左下：ポイントの知らせ -->
+  <!-- 左：ポイントの知らせ（移動スティックの上） -->
   <div id="feed" class="feed"></div>
   <!-- 画面中央の大きな知らせ -->
   <div id="center-msg" class="center-msg" hidden><div class="cm-title"></div><div class="cm-sub"></div></div>
@@ -142,8 +145,8 @@
     <div class="bar hp"><i id="hp-fill"></i><span id="hp-text"></span></div>
     <div class="bar st"><i id="st-fill"></i></div>
   </div>
-  <!-- 右下：攻撃と防御（押している間） -->
-  <button id="btn-guard" class="act-btn guard" type="button">防御</button>
+  <!-- 右下：操作ボタン。右手（攻撃）・左手（盾で防御・強攻撃・持ち替え）・回避 -->
+  <button id="btn-left" class="act-btn left" type="button">左手</button>
   <button id="btn-dodge" class="act-btn dodge" type="button">回避</button>
   <button id="btn-attack" class="act-btn attack" type="button">攻撃</button>
   <!-- 敵の頭上の体力・与えたダメージの数字 -->
@@ -210,7 +213,7 @@
     <div id="char-select" class="char-select"></div>
     <p id="char-desc" class="char-desc"></p>
     <button id="start" class="start" type="button" disabled>読み込み中…</button>
-    <p class="hint">左側をなぞって移動　／　右側をなぞって見回す　／　右下で攻撃・防御（弓は長押しで引く）</p>
+    <p class="hint">左下のスティックで移動　／　右側をなぞって見回す　／　右下のボタンで右手・左手・回避（弓は長押しで引く）</p>
   </div>
 </section>
 

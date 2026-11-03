@@ -1,6 +1,6 @@
 // iPad のタッチ操作（Pointer Events）
-//   画面の左半分：触れた所に移動スティックが出る（離すと消える）
-//   画面の右半分：なぞった分だけ見回す
+//   左下：移動スティック（いつも同じ場所に出ている）。画面の左半分の下の方に触れると、スティックを動かす
+//   それ以外（右側など）：なぞった分だけ見回す（右下のボタンの上は除く）
 // 複数の指を同時に扱う（左で歩きながら右で見回せる）
 
 export function createTouchInput(layer, stickEl, config) {
@@ -11,12 +11,20 @@ export function createTouchInput(layer, stickEl, config) {
   let stickId = null, stickOx = 0, stickOy = 0, stickR = 60;
   const lookers = new Map(); // pointerId → 直前の位置
 
+  // スティックの大きさと場所：画面の短い辺に合わせ、左下に置く
   const sizeStick = () => {
     stickR = Math.max(44, Math.min(window.innerWidth, window.innerHeight) * cfg.stickRadiusRatio);
-    stickEl.style.setProperty('--stick-size', `${stickR * 2}px`);
+    document.documentElement.style.setProperty('--stick-size', `${stickR * 2}px`);
+    const safeL = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-l')) || 0;
+    const safeB = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-b')) || 0;
+    stickOx = safeL + 36 + stickR;
+    stickOy = window.innerHeight - safeB - 36 - stickR;
+    stickEl.style.left = `${stickOx}px`;
+    stickEl.style.top = `${stickOy}px`;
   };
   sizeStick();
   window.addEventListener('resize', sizeStick);
+  stickEl.hidden = false;
 
   function setKnob(dx, dy) {
     knob.style.transform = `translate(${dx}px, ${dy}px)`;
@@ -26,15 +34,11 @@ export function createTouchInput(layer, stickEl, config) {
     if (e.pointerType === 'mouse') return; // マウスは desktop.js が扱う
     e.preventDefault();
     layer.setPointerCapture?.(e.pointerId);
-    const leftSide = e.clientX < window.innerWidth * 0.5;
-    if (leftSide && stickId === null) {
+    // 左半分の下の方（上の 3 割はミニマップなどがあるので除く）に触れたらスティック
+    const stickZone = e.clientX < window.innerWidth * 0.5 && e.clientY > window.innerHeight * 0.3;
+    if (stickZone && stickId === null) {
       stickId = e.pointerId;
-      // 画面の端に寄りすぎないように、スティックの中心を内側へずらす
-      stickOx = Math.max(stickR + 8, e.clientX);
-      stickOy = Math.min(window.innerHeight - stickR - 8, Math.max(stickR + 8, e.clientY));
-      stickEl.style.left = `${stickOx}px`;
-      stickEl.style.top = `${stickOy}px`;
-      stickEl.hidden = false;
+      stickEl.classList.add('active');
       updateStick(e.clientX, e.clientY);
     } else {
       lookers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -79,7 +83,7 @@ export function createTouchInput(layer, stickEl, config) {
       state.moveX = 0;
       state.moveY = 0;
       setKnob(0, 0);
-      stickEl.hidden = true;
+      stickEl.classList.remove('active');
     }
     lookers.delete(e.pointerId);
   }
@@ -96,7 +100,7 @@ export function createTouchInput(layer, stickEl, config) {
     lookers.clear();
     state.moveX = state.moveY = 0;
     setKnob(0, 0);
-    stickEl.hidden = true;
+    stickEl.classList.remove('active');
   }
 
   return { state, reset };

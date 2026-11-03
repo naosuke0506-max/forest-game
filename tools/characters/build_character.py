@@ -26,6 +26,11 @@ else:
     CLIPS = {'idle': f'idle_{g}', 'walk': f'walk_{g}', 'back': f'back_{g}', 'run': f'run_{g}',
              'a1': f'{g}_a1', 'a2': f'{g}_a2', 'a3': f'{g}_a3', 'heavy': f'{g}_heavy',
              'guard': ch.get('guard', f'{g}_guard'), 'hit': f'{g}_hit', 'stagger': f'{g}_stagger', 'death': 'death'}
+# 左手ボタンの強攻撃（キャラごとに元の動きを変えられる。長柄騎士のなぎ払い など）
+if ch.get('heavy') and 'heavy' in CLIPS: CLIPS['heavy'] = ch['heavy']
+# 持ち替えた近接武器の攻撃（弓兵のダガー）：ma1〜ma3
+if ch.get('melee'):
+    for i in (1, 2, 3): CLIPS[f'ma{i}'] = f"{ch['melee']}_a{i}"
 # 回避：軽装・中装は前転（roll）、重装は身をかがめて跳ぶ回避ステップ（各武器の _roll）
 CLIPS['roll'] = 'roll'
 CLIPS['step'] = '1h_roll' if g == 'bw' else f'{g}_roll'

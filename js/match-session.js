@@ -1,5 +1,6 @@
 // 練習モードの試合：あなた＋bot 3 体。試合の計算（game/）と、見た目・画面（render/・ui/）をつなぐ
-import { CHARACTERS, BOT_NAMES } from './game/data.js';
+import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS } from './game/data.js';
+import { createMinimap } from './ui/minimap.js';
 import { TIMES } from './world/time-of-day.js';
 import { createFighter, createMatch } from './game/match.js';
 import { createBot } from './game/bot.js';
@@ -75,8 +76,15 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   }));
   const boundary = createBoundary(app, terrain);
   const hud = createHud(match, me);
-  // 防御できるのは盾を持つキャラだけ（武器では受けられない）
-  document.getElementById('btn-guard').hidden = !me.shield;
+  const minimap = createMinimap(document.getElementById('minimap'), { obstacles, areaRadius: AREA_RADIUS });
+  // 右手・左手ボタンの文字をキャラに合わせる（左手：盾持ちは防御、ほかは強攻撃・持ち替え など）
+  const leftBtn = document.getElementById('btn-left');
+  leftBtn.textContent = CHARACTERS[me.char].leftLabel;
+  leftBtn.classList.toggle('guard', me.left === 'guard');
+  const attackBtn = document.getElementById('btn-attack');
+  const attackLabel = () => (WEAPONS[me.weapon].kind === 'bow' ? '射る' : me.weapon === 'spear' ? '突き' : '攻撃');
+  attackBtn.textContent = attackLabel();
+  combat.on('switch', ({ fighter }) => { if (fighter === me) attackBtn.textContent = attackLabel(); });
   const viewModel = createViewModel(player.camera, me);
   const arrows = createProjectileViews(app, combat);
   let thirdPerson = false;
@@ -105,7 +113,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         if (match.state !== 'running') return;
         document.querySelector('.vitals').hidden = true;
         document.getElementById('btn-attack').hidden = true;
-        document.getElementById('btn-guard').hidden = true;
+        document.getElementById('btn-left').hidden = true;
         document.getElementById('btn-dodge').hidden = true;
         spectateEl.hidden = false;
         nextSpectate();
@@ -160,7 +168,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     bots,
     /** 三人称のときは自分の体を見せ、手元の武器を隠す */
     showMyBody(v) { thirdPerson = v; views.get(me).setVisible(v); viewModel.setVisible(!v); },
-    /** @param {{attack: boolean, guard: boolean, dodge: boolean, moveX: number, moveY: number}} input プレイヤーの攻撃・防御・回避と移動スティック */
+    /** @param {{attack: boolean, left: boolean, dodge: boolean, moveX: number, moveY: number}} input プレイヤーの右手・左手・回避と移動スティック */
     update(dt, input) {
       // 1 回の計算で進める時間は最大 0.1 秒（裏から戻った直後などに、一気に動いたり判定を飛ばしたりしないように）
       dt = Math.min(dt, 0.1);
@@ -191,6 +199,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       boundary.update(dt, match.areaRadius);
       hud.update(dt);
       hud.updateVitals(me);
+      minimap.update(dt, spectating || me);
       hud.updateTags(player.camera, fighters, terrain.heightAt);
     },
     get spectating() { return spectating; },

@@ -4,11 +4,32 @@
   "textureSize": 2048,
   "height": 1.8,
   "characters": {
-    "shield":  { "source": "shield_knight.glb",  "group": "1hs", "guard": "1hs_sguard" },
-    "sword":   { "source": "sword_knight.glb",   "group": "2h" },
-    "polearm": { "source": "polearm_knight.glb", "group": "sp" },
-    "blunt":   { "source": "blunt_knight.glb",   "group": "mc" },
-    "archer":  { "source": "archer.glb",         "group": "bw" },
-    "cleric":  { "source": "cleric.glb",         "group": "mc" }
+    "shield": {
+      "source": "shield_knight.glb",
+      "group": "1hs",
+      "guard": "1hs_sguard"
+    },
+    "sword": {
+      "source": "sword_knight.glb",
+      "group": "2h"
+    },
+    "polearm": {
+      "source": "polearm_knight.glb",
+      "group": "sp",
+      "heavy": "hb_heavy"
+    },
+    "blunt": {
+      "source": "blunt_knight.glb",
+      "group": "mc"
+    },
+    "archer": {
+      "source": "archer.glb",
+      "group": "bw",
+      "melee": "kn"
+    },
+    "cleric": {
+      "source": "cleric.glb",
+      "group": "mc"
+    }
   }
 }

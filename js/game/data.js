@@ -10,20 +10,22 @@
  *   armor      ：鎧の硬さ（受けるダメージの倍率。小さいほど硬い）
  *   speed      ：移動の速さの倍率（鎧が重いほど遅い）
  *   weight     ：装備の重さ（light 軽装 / medium 中装 / heavy 重装）。回避の仕方が変わる（DODGE）
+ *   left       ：左手ボタンでできること（guard 盾で防御 / heavy 強攻撃 / switch 近接武器と持ち替え）、leftLabel：ボタンの文字
+ *   sidearm    ：持ち替える近接武器（left が switch のとき）
  * 防具はキャラごとに 1 つ（強化は手順 4）。扱える武器の全体は docs/DESIGN.md
  */
 export const CHARACTERS = {
-  shield:  { name: '盾剣騎士', model: 'shield', weight: 'medium',  weaponClass: 'shieldsword', weapon: 'armingsword', shield: true,  armor: 0.85, speed: 1.0,  maxHp: 105,
+  shield:  { name: '盾剣騎士', model: 'shield', weight: 'medium', left: 'guard', leftLabel: '防御',  weaponClass: 'shieldsword', weapon: 'armingsword', shield: true,  armor: 0.85, speed: 1.0,  maxHp: 105,
              desc: '盾と片手武器。受けが固く、攻守のつり合いがよい（中装より少し軽い鎧）' },
-  sword:   { name: '剣騎士',   model: 'sword', weight: 'medium',   weaponClass: 'sword',       weapon: 'longsword',   shield: false, armor: 0.8,  speed: 0.97, maxHp: 110,
+  sword:   { name: '剣騎士',   model: 'sword', weight: 'medium', left: 'heavy', leftLabel: '強攻撃',   weaponClass: 'sword',       weapon: 'longsword',   shield: false, armor: 0.8,  speed: 0.97, maxHp: 110,
              desc: '両手の剣と二刀流。振りが大きく、広く斬れる（中装より少し重い鎧）' },
-  polearm: { name: '長柄騎士', model: 'polearm', weight: 'heavy', weaponClass: 'polearm',     weapon: 'spear',       shield: false, armor: 0.7,  speed: 0.9,  maxHp: 120,
+  polearm: { name: '長柄騎士', model: 'polearm', weight: 'heavy', left: 'heavy', leftLabel: 'なぎ払い', weaponClass: 'polearm',     weapon: 'spear',       shield: false, armor: 0.7,  speed: 0.9,  maxHp: 120,
              desc: '長柄の武器。間合いが一番長く、近づく前に突ける（重めの重装）' },
-  blunt:   { name: '打撃騎士', model: 'blunt', weight: 'heavy',   weaponClass: 'blunt',       weapon: 'mace',        shield: false, armor: 0.75, speed: 0.92, maxHp: 120,
+  blunt:   { name: '打撃騎士', model: 'blunt', weight: 'heavy', left: 'heavy', leftLabel: '叩きつけ',   weaponClass: 'blunt',       weapon: 'mace',        shield: false, armor: 0.75, speed: 0.92, maxHp: 120,
              desc: '打撃武器。一撃が重く、防御の上からも響く（重装より少し軽い鎧）' },
-  archer:  { name: '弓兵',     model: 'archer', weight: 'light',  weaponClass: 'bow',         weapon: 'longbow',     shield: false, armor: 0.95, speed: 1.05, maxHp: 90,
+  archer:  { name: '弓兵',     model: 'archer', weight: 'light', left: 'switch', leftLabel: '持ち替え',  weaponClass: 'bow',         weapon: 'longbow', sidearm: 'dagger', shield: false, armor: 0.95, speed: 1.05, maxHp: 90,
              desc: '弓で遠くから射る。引くほど強い。近寄られると弱い（軽装より少し重い）' },
-  cleric:  { name: '聖職者',   model: 'cleric', weight: 'light',  weaponClass: 'cleric',      weapon: 'mace',        shield: false, armor: 1.0,  speed: 1.08, maxHp: 95,
+  cleric:  { name: '聖職者',   model: 'cleric', weight: 'light', left: 'heavy', leftLabel: '強攻撃',  weaponClass: 'cleric',      weapon: 'mace',        shield: false, armor: 1.0,  speed: 1.08, maxHp: 95,
              desc: '聖なる奇跡を扱う（奇跡は後で追加）。今はメイスで戦う（軽装）' },
 };
 
@@ -38,6 +40,7 @@ export const WEAPONS = {
   longsword: { name: 'ロングソード', kind: 'melee', damage: 28, reach: 2.5, arc: 120, windup: 0.28, recovery: 0.38, stamina: 16, guardPierce: 0.0 },
   mace:      { name: 'メイス',       kind: 'melee', damage: 32, reach: 1.9, arc: 90,  windup: 0.36, recovery: 0.44, stamina: 18, guardPierce: 0.35 },
   spear:     { name: 'スピア',       kind: 'melee', damage: 22, reach: 3.1, arc: 34,  windup: 0.22, recovery: 0.30, stamina: 12, guardPierce: 0.0 },
+  dagger:    { name: 'ダガー',       kind: 'melee', damage: 14, reach: 1.5, arc: 90,  windup: 0.16, recovery: 0.26, stamina: 8,  guardPierce: 0.0 },
   longbow:   { name: 'ロングボウ',   kind: 'bow',   damage: 30, drawTime: 0.75, minDraw: 0.2, speed: 48, stamina: 8, reach: 1.2 },
 };
 
@@ -51,6 +54,18 @@ export const DODGE = {
   light:  { name: '軽やかな前転', anim: 'roll', duration: 0.55, distance: 4.5, invuln: [0.04, 0.38], stamina: 16 },
   medium: { name: '前転',         anim: 'roll', duration: 0.75, distance: 3.8, invuln: [0.08, 0.42], stamina: 20 },
   heavy:  { name: '回避ステップ', anim: 'step', duration: 0.5,  distance: 2.4, invuln: [0.04, 0.2],  stamina: 24 },
+};
+
+/**
+ * 強攻撃（左手ボタン）：ふつうの攻撃に対する倍率。振りかぶりが長く、隙も大きいが、重い。
+ * 武器ごとに arc（当たる角度）や guardPierce（防御の上から響く割合）を足せる
+ */
+export const HEAVY = {
+  damage: 1.7, windup: 1.7, recovery: 1.3, stamina: 1.8,
+  byWeapon: {
+    spear: { arc: 150, reach: 0.9 },          // なぎ払い：広く払う（間合いは少し短い）
+    mace: { guardPierce: 0.3 },               // 叩きつけ：防御の上からさらに響く
+  },
 };
 
 /** 戦闘の決まりごと */
