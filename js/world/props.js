@@ -129,7 +129,7 @@ function createPropMaterial(type, rule, antialias) {
 /**
  * 小物を置いて描く。毎フレーム update(dt, カメラの位置) を呼ぶ
  */
-export function createProps(app, config, seed, terrain, obstacles, types) {
+export function createProps(app, config, seed, terrain, obstacles, types, zones = null) {
   const device = app.graphicsDevice;
   const q = config.quality;
   const rnd = createRandom(seed + 5000);
@@ -139,10 +139,26 @@ export function createProps(app, config, seed, terrain, obstacles, types) {
   const box = new pc.BoundingBox(new pc.Vec3(0, 5, 0), new pc.Vec3(R + 10, 15, R + 10));
   const areaScale = config.world.playRadius / 62;   // 置く範囲の倍率（もとは半径 62m で決めた値）
   const CELL = 12;
+  // エリアごとの多さ（中央の森を 1 とした倍率）。道と城の場所には、岩・切り株・落ち枝を置かない
+  const ZONE_MUL = {
+    rock_large:  { mixed: 1, deep: 1.2, prairie: 0.5, castle: 0 },
+    rock_medium: { mixed: 1, deep: 1.2, prairie: 0.6, castle: 0 },
+    stump:       { mixed: 1, deep: 1.5, prairie: 0.3, castle: 0 },
+    branches:    { mixed: 1, deep: 2.2, prairie: 0.2, castle: 0 },
+    fern:        { mixed: 1, deep: 1.8, prairie: 0.3, castle: 0.2 },
+    grass:       { mixed: 1, deep: 0.35, prairie: 2.2, castle: 0.6 },
+  };
+  const zoneMul = (id, x, z) => {
+    if (!zones) return 1;
+    const w = zones.weights(x, z), m = ZONE_MUL[id];
+    const v = w.mixed * m.mixed + w.deep * m.deep + w.prairie * m.prairie + w.castle * m.castle;
+    return id === 'grass' || id === 'fern' ? v * (1 - zones.path(x, z) * 0.85) : v * (1 - zones.path(x, z));
+  };
 
   /** 1 本分の置き方を決める（置けなければ null）。stream の物は、木や岩（ぶつかる物）だけを避ける */
-  function placeOne(rule, type, vnames, r01, x, z) {
+  function placeOne(rule, type, vnames, r01, x, z, id) {
     const r = Math.hypot(x, z);
+    if (zones && r01() * 2.5 > zoneMul(id, x, z)) return null;   // エリアに合わせて間引く
     if (r < config.world.clearingRadius * (rule.collide ? 1 : 0.5) || r > R) return null;
     if (!rule.onSoil && rule.onSoil !== undefined && fbm(x * 0.06, z * 0.06, seed + 31) > 0.58) return null;
     const v = vnames[Math.floor(r01() * vnames.length)];
@@ -170,12 +186,12 @@ export function createProps(app, config, seed, terrain, obstacles, types) {
 
     // 1. 置く場所を決める（stream の物は、あとで自分の周りの区画ごとに作る）
     if (!rule.stream) {
-      const count = Math.round(baseCount * areaScale * areaScale);
+      const count = Math.round(baseCount * areaScale * areaScale * (zones ? 0.85 : 1));
       const area = Math.min(R, rule.area * areaScale);
-      for (let tries = 0, n = 0; n < count && tries < count * 25; tries++) {
+      for (let tries = 0, n = 0; n < count && tries < count * 60; tries++) {
         const r = Math.sqrt(rnd.next()) * area;
         const a = rnd.range(0, Math.PI * 2);
-        const p = placeOne(rule, type, vnames, () => rnd.next(), Math.cos(a) * r, Math.sin(a) * r);
+        const p = placeOne(rule, type, vnames, () => rnd.next(), Math.cos(a) * r, Math.sin(a) * r, id);
         if (!p) continue;
         lists[p.v].push(p);
         // 岩と切り株は当たり判定。それ以外は場所の重なりを避けるためだけに小さく登録する
@@ -187,8 +203,8 @@ export function createProps(app, config, seed, terrain, obstacles, types) {
     // 2. 形ごとに近く用・遠く用のインスタンシングを用意する
     const material = createPropMaterial(type, rule, q.antialias);
     const density = baseCount / (Math.PI * rule.area * rule.area);   // 1 平方メートルあたりの数（stream 用）
-    const perCell = density * CELL * CELL;
-    const capacity = rule.stream ? Math.ceil(perCell * Math.pow((2 * rule.far) / CELL + 2, 2) * 1.2 / vnames.length) + 16 : 0;
+    const perCell = density * CELL * CELL * (zones ? 2.5 : 1);   // エリアで間引く分を見込んで多めに試す
+    const capacity = rule.stream ? Math.ceil(perCell * Math.pow((2 * rule.far) / CELL + 2, 2) * 1.2 / vnames.length * (zones ? 0.9 : 1)) + 16 : 0;
     for (const v of vnames) {
       const list = lists[v];
       if (!rule.stream && !list.length) continue;
@@ -224,7 +240,7 @@ export function createProps(app, config, seed, terrain, obstacles, types) {
           const out = [];
           const n = Math.floor(perCell) + (r.next() < perCell % 1 ? 1 : 0);
           for (let i = 0; i < n; i++) {
-            const p = placeOne(rule, type, vnames, () => r.next(), (cx + r.next()) * CELL, (cz + r.next()) * CELL);
+            const p = placeOne(rule, type, vnames, () => r.next(), (cx + r.next()) * CELL, (cz + r.next()) * CELL, id);
             if (p) out.push(p);
           }
           return out;

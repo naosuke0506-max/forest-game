@@ -5,6 +5,7 @@ import { createTerrain } from './world/terrain.js';
 import { createEnvironment } from './world/environment.js';
 import { createTimeOfDay } from './world/time-of-day.js';
 import { createFence } from './world/fence.js';
+import { createZones } from './world/zones.js';
 import { createSunGlare } from './render/sun-glare.js';
 import { createRandom } from './core/random.js';
 import { AREA_RADIUS } from './game/data.js';
@@ -42,7 +43,9 @@ async function boot() {
   ]);
 
   // 世界を組み立てる（置く順番が大事：木 → 岩 → 草。草は木や岩を避けて生える）
-  const terrain = createTerrain(app, CONFIG, CONFIG.seed, tex.ground);
+  // エリア分け（中央の森・北の深い森・東の大草原・南西の城と村・道）
+  const zones = createZones(CONFIG.seed, CONFIG.world.playRadius);
+  const terrain = createTerrain(app, CONFIG, CONFIG.seed, tex.ground, zones);
   const env = createEnvironment(app, CONFIG, sky);
   const wind = createWind(app, CONFIG);
   const obstacles = createObstacles();
@@ -50,12 +53,12 @@ async function boot() {
   createFence(app, terrain, AREA_RADIUS, createRandom(CONFIG.seed + 55), tex.bark);
   // 木：Tripo AI の模型。読み込めなかったときは仮の木
   const trees = treeModels
-    ? createModelTrees(app, CONFIG, CONFIG.seed, terrain, obstacles, treeModels)
+    ? createModelTrees(app, CONFIG, CONFIG.seed, terrain, obstacles, treeModels, zones)
     : (createTrees(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.bark), null);
   // 森の小物（岩・切り株・落ち枝・シダ・草）：Poly Haven の模型。読み込めなかったときは仮の岩と草
   let props = null;
   if (propTypes) {
-    props = createProps(app, CONFIG, CONFIG.seed, terrain, obstacles, propTypes);
+    props = createProps(app, CONFIG, CONFIG.seed, terrain, obstacles, propTypes, zones);
   } else {
     createRocks(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.rock);
     createGrass(app, CONFIG, CONFIG.seed, terrain, obstacles);
@@ -73,7 +76,7 @@ async function boot() {
   const input = createInput(touchLayer, document.getElementById('stick'), CONFIG);
   const stats = createStats(app, CONFIG.showStats, CONFIG.qualityName);
 
-  let playing = false, session = null;
+  let playing = false, session = null, deepK = 0;
   app.on('update', (dt) => {
     const frame = playing ? input.read() : null;
     if (playing) player.update(dt, frame);
@@ -81,6 +84,12 @@ async function boot() {
     trees?.update(dt, player.camera.getPosition(), player.camera.forward);
     props?.update(dt, player.camera.getPosition(), player.camera.forward);
     wind.update(dt);
+    // 深い森の中は霧が濃く暗い（遠くは見えないので、木も近くだけ描く）
+    const cp = player.camera.getPosition();
+    const deep = zones.weights(cp.x, cp.z).deep;
+    deepK += (deep - deepK) * Math.min(1, dt * 1.5);
+    timeOfDay.setLocal({ fog: 1 + 1.3 * deepK, light: 1 - 0.35 * deepK });
+    trees?.setDrawDistance?.(CONFIG.world.drawDistance * (1 - 0.45 * deepK));
     timeOfDay.update(dt);
     sunGlare.update(dt);
     stats.update(dt);
@@ -93,7 +102,7 @@ async function boot() {
   if (trees) startLoadingNear(app, treeModels, (name) => trees.enableNear(name));
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay };
+  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones };
 
   // 設定（視点・性能表示）。変わるたびに反映する
   const applySettings = (st) => {
@@ -107,7 +116,7 @@ async function boot() {
   titleScreen.ready(async (myChar) => {
     input.reset();
     session = await startPracticeMatch({
-      app, config: CONFIG, terrain, obstacles, player, myChar, timeOfDay,
+      app, config: CONFIG, terrain, obstacles, player, myChar, timeOfDay, zones,
       debug: CONFIG.debug,
       // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」
       phaseDuration: CONFIG.phaseDuration ?? (settings.phaseLen === 'normal' ? null : Number(settings.phaseLen)),

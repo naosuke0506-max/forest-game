@@ -78,7 +78,8 @@ export function createTimeOfDay(app, base, config, camera = null) {
     };
   }
 
-  let current = 'day', from = null, to = null, k = 1, duration = 1;
+  let current = 'day', from = null, to = null, k = 1, duration = 1, lastState = null;
+  const local = { fog: 1, light: 1 };   // 場所による補正（深い森：霧が濃く、空からの光が弱い）
   let bgSky = base.daySky;      // 背景（skybox）に出している空
   let lightSky = base.daySky;   // 空から回り込む光（envAtlas）に使っている空
   const glare = { strength: TIMES.day.glare, color: [...TIMES.day.glareColor] };
@@ -134,7 +135,7 @@ export function createTimeOfDay(app, base, config, camera = null) {
     if (bgSky) {
       if (scene.skybox !== bgSky.skybox) scene.skybox = bgSky.skybox;
       if (scene.envAtlas !== lightSky.envAtlas) scene.envAtlas = lightSky.envAtlas;
-      scene.skyboxIntensity = intensityOf(bgSky, s.level);
+      scene.skyboxIntensity = intensityOf(bgSky, s.level) * local.light;
       if (domeSky) {
         domeMat.emissiveIntensity = intensityOf(domeSky, s.level);
         domeMat.opacity = fade;
@@ -148,8 +149,9 @@ export function createTimeOfDay(app, base, config, camera = null) {
     base.sun.light.intensity = s.sun;
     base.sun.light.color = color.set(s.sunColor[0], s.sunColor[1], s.sunColor[2]);
     scene.fog.color = fog.set(s.fog[0], s.fog[1], s.fog[2]);
-    scene.fog.density = s.fogDensity;
+    scene.fog.density = s.fogDensity * local.fog;
     scene.exposure = s.exposure;
+    lastState = s;
     glare.strength = s.glare;
     glare.color = s.glareColor;
     base.onFogColor?.(scene.fog.color);
@@ -186,6 +188,12 @@ export function createTimeOfDay(app, base, config, camera = null) {
       duration = Math.max(0.001, seconds);
       if (to.sky && to.sky !== bgSky && to.sky.image && seconds > 0) startDome(to.sky);
       if (seconds <= 0) { k = 1; bgSky = lightSky = to.sky || bgSky; endDome(); apply(to); }
+    },
+    /** 場所による補正（毎フレーム呼んでよい）。fog：霧の濃さの倍率、light：空と空から回り込む光の倍率 */
+    setLocal({ fog = 1, light = 1 }) {
+      if (Math.abs(fog - local.fog) < 0.002 && Math.abs(light - local.light) < 0.002) return;
+      local.fog = fog; local.light = light;
+      if (lastState && (!to || k >= 1)) apply(lastState);
     },
     /** 移り変わりの途中の、ある割合の所へ飛ぶ（確認用） */
     seek(p) { if (to) { k = Math.min(0.999999, Math.max(0, p)); this.update(0); } },
