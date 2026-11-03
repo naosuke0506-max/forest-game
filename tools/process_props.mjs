@@ -170,7 +170,8 @@ async function extract(src, nodeName, target) {
 }
 
 await fs.mkdir(outDir, { recursive: true });
-const meta = {};
+// ほかの道具（process_tripo_props.mjs）が書いた種類は残す
+const meta = JSON.parse(await fs.readFile(path.join(outDir, 'props.json'), 'utf8').catch(() => '{}'));
 for (const [id, opt] of Object.entries(PROPS)) {
   const dir = path.join(outDir, id);
   await fs.mkdir(dir, { recursive: true });

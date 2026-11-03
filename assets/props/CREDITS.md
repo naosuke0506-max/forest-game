@@ -15,6 +15,21 @@
 元の glTF（1K の質感画像つき）と、草・シダの透明部分の画像（Alpha の PNG）は、
 Poly Haven の API が示す MD5 と一致することを確かめて取り込みました。元のファイルはリポジトリに入れていません。
 
+## Tripo AI で作った小物
+
+| フォルダ | 元の模型（`source_models/props/`） | 中身 |
+|---|---|---|
+| `fallen_log/` | `fallen_log.glb` | 倒木（長さ 4.5m） |
+| `mushrooms/` | `mushrooms.glb` | キノコの株（高さ 35cm） |
+| `campfire/` | `campfire.glb` | 焚き火の跡（石の輪と燃えさしの薪） |
+
+利用者が Tripo AI で作った模型です。Blender で面を減らし、画像の貼り方を作り直して、元の模型の色を焼き付けました：
+
+```
+cd tools && npm ci
+BLENDER=<blender の実行ファイル> node process_tripo_props.mjs ../source_models/props ../assets/props
+```
+
 ## 作り直すとき
 
 ```
