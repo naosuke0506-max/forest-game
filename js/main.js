@@ -3,6 +3,7 @@ import { CONFIG } from './config.js';
 import { createApp } from './core/app.js';
 import { createTerrain } from './world/terrain.js';
 import { createEnvironment } from './world/environment.js';
+import { createTimeOfDay } from './world/time-of-day.js';
 import { createObstacles } from './world/obstacles.js';
 import { createTrees, createGrass } from './world/vegetation.js';
 import { createRocks } from './world/rocks.js';
@@ -55,6 +56,9 @@ async function boot() {
   }
 
   const player = createPlayer(app, CONFIG, terrain, obstacles, env.fogColor);
+  // 時間帯（朝・昼・夕暮れ・深夜）。霧の色が変わったら、空の無い所の背景色も合わせる
+  env.onFogColor = (c) => { player.camera.camera.clearColor = c; };
+  const timeOfDay = createTimeOfDay(app, env);
   const touchLayer = document.getElementById('touch-layer');
   const input = createInput(touchLayer, document.getElementById('stick'), CONFIG);
   const stats = createStats(app, CONFIG.showStats, CONFIG.qualityName);
@@ -67,6 +71,7 @@ async function boot() {
     trees?.update(dt, player.camera.getPosition());
     props?.update(dt, player.camera.getPosition());
     wind.update(dt);
+    timeOfDay.update(dt);
     stats.update(dt);
   });
 
@@ -77,12 +82,13 @@ async function boot() {
   if (trees) startLoadingNear(app, treeModels, (name) => trees.enableNear(name));
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain, trees, props, wind };
+  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay };
 
   // 設定（視点・性能表示）。変わるたびに反映する
   const applySettings = (st) => {
-    player.setViewMode(st.view);
-    session?.showMyBody(st.view === 'third');
+    // 視点は一人称だけ（三人称は観戦のときと、確認用の ?view=third だけ）
+    player.setViewMode(CONFIG.view);
+    session?.showMyBody(CONFIG.view === 'third');
     document.getElementById('stats').hidden = st.stats === 'off';
   };
   const settings = createSettings(applySettings, (act) => session?.debugAction(act));
@@ -90,7 +96,7 @@ async function boot() {
   titleScreen.ready(async (myChar) => {
     input.reset();
     session = await startPracticeMatch({
-      app, config: CONFIG, terrain, obstacles, player, myChar,
+      app, config: CONFIG, terrain, obstacles, player, myChar, timeOfDay,
       debug: CONFIG.debug,
       // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」
       phaseDuration: CONFIG.phaseDuration ?? (settings.phaseLen === 'normal' ? null : Number(settings.phaseLen)),

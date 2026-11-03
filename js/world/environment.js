@@ -39,7 +39,7 @@ export function createEnvironment(app, config, sky) {
   });
   app.root.addChild(sun);
 
-  let fogColor;
+  let fogColor, sunDirection, sunIntensity, sunColor, skyboxIntensity = null, skyImage = null;
   if (sky) {
     // 空の写真から：背景の空・空全体から回り込む光・霧の色。太陽の向きも写真の太陽に合わせる
     const result = applySky(app, sky, config);
@@ -47,9 +47,15 @@ export function createEnvironment(app, config, sky) {
     sun.light.intensity = result.sunIntensity;
     sun.light.color = result.sunColor;
     fogColor = result.fogColor;
+    ({ sunDirection, sunIntensity, sunColor } = result);
+    skyImage = sky.image;
+    skyboxIntensity = scene.skyboxIntensity;
   } else {
     // 空が読み込めなかったとき：単色の環境光と、空側からの弱い補助光
     sun.setEulerAngles(...a.sunEuler);
+    sunDirection = sun.up.clone();   // 光は -Y へ進むので、光が来る向きは +Y
+    sunIntensity = a.sunIntensity;
+    sunColor = new pc.Color(...a.sunColor);
     scene.ambientLight = new pc.Color(...a.ambient);
     const skyFill = new pc.Entity('SkyFill');
     skyFill.addComponent('light', {
@@ -68,5 +74,10 @@ export function createEnvironment(app, config, sky) {
   scene.fog.color = fogColor;
   scene.fog.density = a.fogDensity;
 
-  return { sun, fogColor };
+  // 時間帯（world/time-of-day.js）が使う「昼」の値
+  return {
+    sun, fogColor, sunDirection, sunIntensity, sunColor, skyboxIntensity, ambient: a.ambient,
+    skyImage, daySkybox: scene.skybox,
+    pointSunFrom: (dir) => pointLightFrom(sun, dir),
+  };
 }

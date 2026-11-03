@@ -1,5 +1,6 @@
 // 練習モードの試合：あなた＋bot 3 体。試合の計算（game/）と、見た目・画面（render/・ui/）をつなぐ
 import { CHARACTERS, BOT_NAMES } from './game/data.js';
+import { TIMES } from './world/time-of-day.js';
 import { createFighter, createMatch } from './game/match.js';
 import { createBot } from './game/bot.js';
 import { createCombat } from './game/combat.js';
@@ -18,7 +19,7 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
 /**
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, debug, phaseDuration }
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, debug = false, phaseDuration = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, debug = false, phaseDuration = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）
@@ -128,7 +129,10 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     }
   });
 
-  hud.centerMsg(match.phaseInfo.name, match.phaseInfo.note);
+  hud.centerMsg(`${match.phaseInfo.name}・${TIMES[match.phaseInfo.time].name}`, match.phaseInfo.note);
+  // 時間帯：フェーズが進むと変わる（朝 → 昼 → 夕暮れ → 深夜）
+  timeOfDay?.set(match.phaseInfo.time, 2);
+  match.on('phaseStart', ({ info }) => timeOfDay?.set(info.time, 8));
 
   // テスト用の操作：設定画面のボタンと、?debug=1 のときの画面上のボタンから使う
   function debugAction(act) {

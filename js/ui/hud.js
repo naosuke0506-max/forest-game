@@ -2,6 +2,7 @@
 // 画面中央の大きな知らせ、フェーズ報酬の選択、試合の結果
 import * as pc from 'playcanvas';
 import { CHARACTERS, PHASES } from '../game/data.js';
+import { TIMES } from '../world/time-of-day.js';
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -73,7 +74,7 @@ export function createHud(match, me) {
     addFeed(killer ? `${killer.name} が ${victim.name} を倒した` : `${victim.name} が脱落した`);
     if (victim === me) centerMsg('脱落', '残りの戦いを見届ける', 4);
   });
-  match.on('phaseStart', ({ info }) => centerMsg(info.name, info.note));
+  match.on('phaseStart', ({ info }) => centerMsg(`${info.name}・${TIMES[info.time]?.name ?? ''}`, info.note));
   match.on('overtime', () => centerMsg('延長戦', '最後の一人になるまで終わらない'));
   match.on('rewardChosen', ({ fighter, option }) => {
     if (fighter !== me) return;
@@ -147,7 +148,7 @@ export function createHud(match, me) {
     },
     update(dt) {
       // 左上：フェーズと残り時間
-      phaseName.textContent = match.phaseInfo.name;
+      phaseName.textContent = `${match.phaseInfo.name}・${TIMES[match.phaseInfo.time]?.name ?? ''}`;
       if (match.overtime) {
         phaseTime.textContent = '延長戦';
         phaseTime.classList.add('overtime');
