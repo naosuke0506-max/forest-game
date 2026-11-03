@@ -3,6 +3,7 @@
 // 無い武器（メイス・弓など）は、箱・円柱・球の組み合わせの仮の形で作る。
 // どちらも持ち手（手の位置）を原点にする。剣・メイス・槍は -Z の向きへ伸び、弓は Z の向きに立つ
 import * as pc from 'playcanvas';
+import { BUILD } from '../version.js';
 
 // 模型がある武器（武器の名前 → assets/weapons/ のファイル名）
 const MODEL_FILES = { armingsword: 'armingsword', longsword: 'longsword', spear: 'spear', shield: 'kite_shield' };
@@ -12,7 +13,7 @@ const models = new Map();
 export function loadWeaponModels(app, weaponIds) {
   const files = [...new Set(weaponIds.map((id) => MODEL_FILES[id]).filter(Boolean))].filter((f) => !models.has(f));
   return Promise.all(files.map((file) => new Promise((resolve) => {
-    const asset = new pc.Asset(`weapon-${file}`, 'container', { url: `assets/weapons/${file}.glb` });
+    const asset = new pc.Asset(`weapon-${file}`, 'container', { url: `assets/weapons/${file}.glb?v=${BUILD}` });
     asset.once('load', () => { models.set(file, asset.resource); resolve(); });
     asset.once('error', (err) => { console.warn(`武器の模型 ${file}:`, err); resolve(); });
     app.assets.add(asset);
