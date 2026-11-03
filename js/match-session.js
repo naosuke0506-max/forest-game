@@ -75,7 +75,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     return [f, m ? createCharacterView(app, f, terrain, m) : createFighterView(app, f, terrain)];
   }));
   const hud = createHud(match, me);
-  const minimap = createMinimap(document.getElementById('minimap'), { obstacles, areaRadius: AREA_RADIUS, zones });
+  const minimap = createMinimap(document.getElementById('minimap'), { areaRadius: AREA_RADIUS, zones });
   // 別のエリアに入ったら、左の知らせに出す
   let zoneNow = zones ? zones.zoneAt(me.x, me.z) : null, zoneTimer = 0;
   // 右手・左手ボタンの文字をキャラに合わせる（左手：盾持ちは防御、ほかは強攻撃・持ち替え など）

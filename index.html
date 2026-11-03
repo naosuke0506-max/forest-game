@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>静かな森</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-03.10';</script>
+<script>window.__BUILD = '2026-11-03.11';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -167,6 +167,12 @@
     <button type="button" data-act="die">自分が倒れる</button>
     <button type="button" data-act="skip">次のフェーズへ</button>
   </div>
+</div>
+
+<!-- 大きな地図（ミニマップをタップで開く。タップで閉じる） -->
+<div id="mapview" class="mapview" hidden>
+  <canvas></canvas>
+  <div class="mapview-hint">タップで閉じる</div>
 </div>
 
 <!-- フェーズ報酬（画面中央） -->
