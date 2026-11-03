@@ -1,5 +1,5 @@
-// 村（南西の「村」のエリア）。木の柵で囲み、森の中央の側に入り口がひとつ。
-//   家（石の土台・しっくいの壁・木の骨組み・わら / 瓦の屋根）が、井戸のある石畳の広場を囲む
+// 村（南西の「村」のエリア）。長方形の木の柵で囲み、森の中央の側に入り口がひとつ。
+//   入り口からの表通りと横の通りが真ん中の広場（井戸）で交わり、通りに沿って家（石の土台・しっくいの壁・木の骨組み・わら / 瓦の屋根）が並ぶ
 //   建物は箱・切妻屋根を組み合わせて作り、Poly Haven（CC0）の実写の質感を貼る。
 // 質感ごとに 1 つの形にまとめて描く（描画命令は質感の数だけ）。質感の画像は、起動の後に裏で読み込んで貼る。
 // 画像の貼り方は、面の向きと場所から決める（どの建物でも実物の大きさで繰り返す）
@@ -146,7 +146,7 @@ function fenceRun(B, terrain, a, b, solidLine) {
 }
 
 /**
- * 村を作る（南西の「村」のエリア）。木の柵で囲み、森の中央の側に入り口がひとつ
+ * 村を作る（南西の「村」のエリア）。長方形の木の柵で囲み、森の中央の側に入り口がひとつ
  * @param {object} zones エリア分け（zones.castle が村の場所）
  * @param {object} obstacles 当たり判定（柵や家を通れないように円を並べる）
  */
@@ -156,9 +156,7 @@ export function createVillage(app, config, terrain, obstacles, zones) {
   const footprints = [];   // 地図に描く形：{ type: 'rect', x, z, w, d, yaw } / { type: 'circle', x, z, r } / { type: 'line', pts }
   const rnd = createRandom(config.seed + 333);
   // 入り口は森の中央を向く
-  const fl = Math.hypot(C.x, C.z) || 1;
-  const f = [-C.x / fl, -C.z / fl];                 // 森の中央への向き
-  const r = [f[1], -f[0]];                           // 右
+  const f = C.f, r = C.r;                            // 森の中央への向きと右（zones.js の長方形と同じ）
   const yawF = (Math.atan2(f[0], f[1]) * 180) / Math.PI;
   const at = (fx, rx) => [C.x + f[0] * fx + r[0] * rx, C.z + f[1] * fx + r[1] * rx];
   const solid = (x, z, rad) => obstacles.add(x, z, rad, true);
@@ -167,20 +165,17 @@ export function createVillage(app, config, terrain, obstacles, zones) {
     const n = Math.ceil(Math.hypot(bx - ax, bz - az) / (rad * 0.9));
     for (let i = 0; i <= n; i++) solid(ax + ((bx - ax) * i) / n, az + ((bz - az) * i) / n, rad);
   };
-  /** 村の中心から、入り口の向きを 0 度として ang 度・距離 d の地点 */
-  const polar = (angDeg, d) => { const a = (angDeg * Math.PI) / 180; return at(Math.cos(a) * d, Math.sin(a) * d); };
 
-  // ---- 柵：村を囲む輪（半径 30m ほど。少し揺らす）。入り口（幅 5m）だけ開ける ----
-  const FENCE_R = 30, GATE_W = 5;
-  const gateHalf = (Math.asin(GATE_W / 2 / FENCE_R) * 180) / Math.PI;
-  const SEG = 26;
-  const radAt = (ang) => FENCE_R + Math.sin(ang * 0.05 + 1.3) * 1.5 + Math.sin(ang * 0.11) * 0.8;
+  // ---- 柵：村を囲む長方形（奥行き 54m・横 84m）。森の中央の側の真ん中に入り口（幅 5m） ----
+  const FF = C.halfF - 5, FR = C.halfR - 5, GATE_W = 5;
+  const corners = [[FF, GATE_W / 2], [FF, FR], [-FF, FR], [-FF, -FR], [FF, -FR], [FF, -GATE_W / 2]];
   const pts = [];
-  for (let i = 0; i <= SEG; i++) {
-    const ang = gateHalf + ((360 - 2 * gateHalf) * i) / SEG;
-    pts.push(polar(ang, radAt(ang)));
+  for (let i = 0; i < corners.length - 1; i++) {
+    const [a0, b0] = corners[i], [a1, b1] = corners[i + 1];
+    const n = Math.max(1, Math.round(Math.hypot(a1 - a0, b1 - b0) / 12));   // 12m ほどごとに区切り、地面に沿わせる
+    for (let k = i ? 1 : 0; k <= n; k++) pts.push(at(a0 + ((a1 - a0) * k) / n, b0 + ((b1 - b0) * k) / n));
   }
-  for (let i = 0; i < SEG; i++) fenceRun(B, terrain, pts[i], pts[i + 1], solidLine);
+  for (let i = 0; i < pts.length - 1; i++) fenceRun(B, terrain, pts[i], pts[i + 1], solidLine);
   footprints.push({ type: 'line', pts });
   // 入り口の門柱（太く高い 2 本）と、上の横木
   const gL = pts[pts.length - 1], gR = pts[0];
@@ -188,18 +183,22 @@ export function createVillage(app, config, terrain, obstacles, zones) {
   { const mx = (gL[0] + gR[0]) / 2, mz = (gL[1] + gR[1]) / 2, len = Math.hypot(gR[0] - gL[0], gR[1] - gL[1]);
     box(B, 'wood', mx, terrain.heightAt(mx, mz) + 2.8, mz, len + 0.8, 0.3, 0.28, yawF); }
 
-  // ---- 家：真ん中の広場を囲んで輪に並べ、扉を広場へ向ける（入り口からの道は空ける） ----
+  // ---- 家：入り口からまっすぐ奥へ向かう表通りと、真ん中で交わる横の通り。横の通りの両側に家を並べ、
+  //      奥と入り口の側にもう一列ずつ。扉は通りの側へ向ける ----
   const houses = [];
   const roofs = ['thatch', 'tiles'];
-  const N = 10;
-  for (let i = 0; i < N; i++) {
-    const ang = 38 + ((360 - 76) * i) / (N - 1) + (rnd.next() - 0.5) * 6;
-    const dist = 17 + rnd.next() * 3.5;
-    const [x, z] = polar(ang, dist);
+  const rows = [
+    { fx: 8, face: -1, rx: [-37, -28, -19, -10, 10, 19, 28, 37] },    // 横の通りの入り口側（扉は奥へ向く）
+    { fx: -8, face: 1, rx: [-37, -28, -19, -10, 10, 19, 28, 37] },    // 横の通りの奥側（扉は入り口へ向く）
+    { fx: -20, face: 1, rx: [-36, -24, -12, 12, 24, 36] },            // 奥の列
+    { fx: 20, face: -1, rx: [-34, -22, 22, 34] },                      // 入り口の側の列
+  ];
+  let i = 0;
+  for (const row of rows) for (const rx0 of row.rx) {
     const w = 5 + rnd.next() * 1.5, d = 6 + rnd.next() * 1.5, h = 3.6 + rnd.next() * 0.8;
-    // 家の正面（扉）を広場へ向ける
-    const yaw = (Math.atan2(C.x - x, C.z - z) * 180) / Math.PI + (rnd.next() - 0.5) * 8;
-    const roof = roofs[i % 2];
+    const [x, z] = at(row.fx + (rnd.next() - 0.5) * 1.2, rx0 + (rnd.next() - 0.5) * 1.5);
+    const yaw = yawF + (row.face > 0 ? 0 : 180) + (rnd.next() - 0.5) * 6;
+    const roof = roofs[(i++ + (rnd.next() < 0.3 ? 1 : 0)) % 2];
     house(B, x, terrain.heightAt(x, z), z, yaw, w, d, h, roof);
     houses.push({ x, z, w, d, yaw });
     footprints.push({ type: 'rect', x, z, w, d, yaw, roof });
@@ -210,7 +209,7 @@ export function createVillage(app, config, terrain, obstacles, zones) {
   }
   // 広場（石畳）と井戸
   { const [x, z] = at(0, 0); const y = terrain.heightAt(x, z) + 0.04;
-    const s = 7;
+    const s = 6;
     const P = (a, b) => [x + f[0] * a + r[0] * b, y, z + f[1] * a + r[1] * b];
     B.quad('cobble', P(s, -s), P(s, s), P(-s, s), P(-s, -s), [0, 1, 0]);
     const [wx, wz] = at(-1.5, 2);
