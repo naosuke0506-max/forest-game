@@ -16,7 +16,9 @@ import { applyWind } from './wind.js';
 // 各模型は「樹皮（bark）」と「葉（leaves）」の 2 つの部分を持ち、それぞれ別の画像を貼る
 // （前の Tripo AI の木は assets/trees/ に残してある）
 const ROOT = './assets/trees_blender';
-export const TREE_TYPES = ['fir', 'red_pine', 'broadleaf', 'birch', 'dead', 'sapling'];
+export const TREE_TYPES = ['fir', 'red_pine', 'broadleaf', 'birch', 'dead', 'sapling', 'bush'];
+// 小さな木（若木・低い木）：踏み分けて通れ、太陽もさえぎらない。描く遠さも短い
+const SMALL = { sapling: 60, bush: 60 };
 
 /** 模型を読み込み、部分ごとの形（材質の名前 → 形）にする */
 function loadContainer(app, url) {
@@ -100,12 +102,13 @@ const WIND = {
   birch:     { bend: 0.060, flutter: 0.15 },
   dead:      { bend: 0.015, flutter: 0.01 },
   sapling:   { bend: 0.080, flutter: 0.06 },
+  bush:      { bend: 0.06, flutter: 0.1 },
 };
 
 // 葉の色に掛ける色（葉の房の画像は明るい黄緑なので、種類ごとに落ち着いた色にする）
 const LEAF_TINT = {
   fir: [0.62, 0.78, 0.6], red_pine: [0.7, 0.82, 0.62], sapling: [0.66, 0.82, 0.62],
-  broadleaf: [0.66, 0.78, 0.5], birch: [0.78, 0.9, 0.55], dead: [1, 1, 1],
+  broadleaf: [0.66, 0.78, 0.5], birch: [0.78, 0.9, 0.55], dead: [1, 1, 1], bush: [0.8, 0.88, 0.45],
 };
 
 /** 樹皮（不透明。画像を繰り返して貼る）と葉（透明な所を切り抜く。両面）の材質 */
@@ -165,21 +168,31 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models, 
   const order = Object.entries(w.trees); // [[種類, 本数], ...]
   // エリアごとの木の多さ（中央の森を 1 とした倍率。深い森は 3 倍以上、大草原はまばら、城と道には置かない）。
   // 本数は「森全体が中央の森と同じ多さ」のときの数なので、平均の多さを掛けて実際の本数にする
-  const densityAt = zones ? zones.treeDensity : () => 1;
-  let avg = 0;
-  if (zones) {
+  // 茂み（bush）だけは、深い森でも増やしすぎない（下草として森全体にほどよく）
+  const densityOf = (name) => {
+    if (!zones) return () => 1;
+    if (name !== 'bush') return zones.treeDensity;
+    return (x, z) => {
+      const w = zones.weights(x, z);
+      return (w.mixed * 1 + w.deep * 0.8 + w.prairie * 0.25) * (1 - zones.path(x, z));
+    };
+  };
+  const avgOf = (fn) => {
+    if (!zones) return 1;
     const probe = createRandom(seed + 4321);
+    let avg = 0;
     for (let i = 0; i < 4000; i++) {
       const r = Math.sqrt(probe.next()) * w.forestRadius, a = probe.next() * Math.PI * 2;
-      avg += densityAt(Math.cos(a) * r, Math.sin(a) * r);
+      avg += fn(Math.cos(a) * r, Math.sin(a) * r);
     }
-    avg /= 4000;
-  } else avg = 1;
+    return avg / 4000;
+  };
   const MAX_D = 3.2;
   for (const [name, baseCount] of order) {
     const m = models.types[name].meta;
-    const isSapling = name === 'sapling';
-    const count = Math.round(baseCount * avg);
+    const isSapling = name in SMALL;
+    const densityAt = densityOf(name);
+    const count = Math.round(baseCount * avgOf(densityAt));
     for (let tries = 0, n = 0; n < count && tries < count * 60; tries++) {
       const r = Math.sqrt(rnd.next()) * w.forestRadius;
       const a = rnd.range(0, Math.PI * 2);
@@ -245,6 +258,7 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models, 
     };
     groups.push({
       name, list, material, makeLayer,
+      maxDist2: SMALL[name] ? SMALL[name] * SMALL[name] : Infinity,   // 小さな木は近くだけ描く
       far: makeLayer(t.lod1, 'far'),
       near: null,               // 近く用の形が届いたら作る
       tris: { lod0: t.meta.lod0Triangles, lod1: t.meta.lod1Triangles },
@@ -278,7 +292,7 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models, 
       let nNear = 0, nFar = 0;
       for (const p of g.list) {
         const dx = p.x - cx, dz = p.z - cz, dd = dx * dx + dz * dz;
-        if (dd > drawDist2) continue;
+        if (dd > drawDist2 || dd > g.maxDist2) continue;
         if (dd > keep2 && (dx * fx + dz * fz) / Math.sqrt(dd) < cosView - 8 / Math.sqrt(dd)) continue;
         if (g.near && dd < d2) g.near.data.set(p.mat.data, (nNear++) * 16);
         else g.far.data.set(p.mat.data, (nFar++) * 16);

@@ -33,7 +33,7 @@ iPad の Safari で動く、4 人で戦う対戦ゲームの試作品です（�
 - 外部ライブラリ：PlayCanvas のみ
 - 質感画像：Poly Haven（CC0）の地面・樹皮・岩（`assets/textures/CREDITS.md`）
 - 空：Poly Haven（CC0）の HDR 写真 4 枚（朝・昼・夕暮れ・深夜）から作った背景と照明（`assets/sky/CREDITS.md`）
-- 木：Blender（Sapling Tree Gen）で作った 6 種類の模型。葉は ambientCG（CC0）の写真、樹皮は Poly Haven（CC0）の写真（`assets/trees_blender/CREDITS.md`）。前の Tripo AI の木は `assets/trees/` に残してある（今は使っていない）
+- 木と茂み：Blender（Sapling Tree Gen）で作った 7 種類の模型。地面の草も Blender で描いた画像。葉は ambientCG（CC0）の写真、樹皮は Poly Haven（CC0）の写真（`assets/trees_blender/CREDITS.md`）。前の Tripo AI の木は `assets/trees/` に残してある（今は使っていない）
 - 草・シダ・落ち枝・岩・切り株：Poly Haven（CC0）の 3D 模型（`assets/props/CREDITS.md`）
 - キャラ：Tripo AI で作った 6 種類の模型と、魔境争覇から移した動き（`assets/characters/CREDITS.md`）
 - 武器・盾：Tripo AI で作った模型（`assets/weapons/CREDITS.md`）
@@ -115,6 +115,7 @@ js/
   render/boundary.js     歩ける範囲の光る境界（今は使っていない。外周は world/fence.js の柵）
   render/sun-glare.js    太陽を見たときのまぶしさ（画面に重ねる光）
   world/fence.js         外周の丸太の柵（高さ約 10m）
+  world/ground-cover.js  地面を覆う草（自分の周りだけ。短い草・穂・白い花・大草原の背の高い草。エリアで多さが変わる）
   world/zones.js         エリア分け（森・深い森・大草原・城と村・道）。木や小物の多さ、地面の色、霧に使う
   config.js              画質・森の密度・操作感度などの数値
   core/app.js            エンジンの起動（WebGL2・描画解像度の上限・画面の大きさ合わせ）

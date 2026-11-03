@@ -7,6 +7,10 @@
    blender -b --python tools/trees_blender/make_leaf_atlas.py -- broad Leaf001_1K-PNG_Color.png Leaf001_1K-PNG_Opacity.png <作業>/leaves_broad.png
    blender -b --python tools/trees_blender/make_leaf_atlas.py -- needle none none <作業>/leaves_needle.png
    ```
+   地面の草の画像も描く：
+   ```
+   blender -b --python tools/trees_blender/make_grass_atlas.py -- <作業>/grass.png
+   ```
 3. 樹皮の写真（Poly Haven の 1k の Diffuse JPG。名前は `make_tree_textures.py` の BARK）を <樹皮のフォルダ> に置き、画像を作る
    ```
    python3 tools/trees_blender/make_tree_textures.py <作業> <樹皮のフォルダ> assets/trees_blender

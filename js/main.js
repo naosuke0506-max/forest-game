@@ -6,6 +6,7 @@ import { createEnvironment } from './world/environment.js';
 import { createTimeOfDay } from './world/time-of-day.js';
 import { createFence } from './world/fence.js';
 import { createZones } from './world/zones.js';
+import { loadGroundCover, createGroundCover } from './world/ground-cover.js';
 import { createSunGlare } from './render/sun-glare.js';
 import { createRandom } from './core/random.js';
 import { AREA_RADIUS } from './game/data.js';
@@ -35,11 +36,12 @@ async function boot() {
   const { app } = await createApp(canvas, CONFIG.quality);
 
   // 実写の質感画像（地面・樹皮・岩）と空を、並行して読み込む
-  const [tex, sky, treeModels, propTypes] = await Promise.all([
+  const [tex, sky, treeModels, propTypes, grassTex] = await Promise.all([
     loadTextureSets(app.graphicsDevice, CONFIG.quality, (done, total) => titleScreen.progress(done, total)),
     loadSky(),
     loadTreeModels(app, CONFIG.quality),
     loadProps(app, CONFIG.quality),
+    loadGroundCover(app, CONFIG.quality),
   ]);
 
   // 世界を組み立てる（置く順番が大事：木 → 岩 → 草。草は木や岩を避けて生える）
@@ -63,6 +65,8 @@ async function boot() {
     createRocks(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.rock);
     createGrass(app, CONFIG, CONFIG.seed, terrain, obstacles);
   }
+  // 地面を覆う草（自分の周りだけ。短い草・穂・白い花・大草原の背の高い草）
+  const groundCover = grassTex ? createGroundCover(app, CONFIG, CONFIG.seed, terrain, obstacles, grassTex, zones) : null;
 
   const player = createPlayer(app, CONFIG, terrain, obstacles, env.fogColor);
   // 時間帯（朝・昼・夕暮れ・深夜）。霧の色が変わったら、空の無い所の背景色も合わせる
@@ -82,6 +86,7 @@ async function boot() {
     if (playing) player.update(dt, frame);
     session?.update(dt, frame || { attack: false, left: false, dodge: false, moveX: 0, moveY: 0 });
     trees?.update(dt, player.camera.getPosition(), player.camera.forward);
+    groundCover?.update(dt, player.camera.getPosition(), player.camera.forward);
     props?.update(dt, player.camera.getPosition(), player.camera.forward);
     wind.update(dt);
     // 深い森の中は霧が濃く暗い（遠くは見えないので、木も近くだけ描く）
@@ -102,7 +107,7 @@ async function boot() {
   if (trees) startLoadingNear(app, treeModels, (name) => trees.enableNear(name));
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones };
+  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover };
 
   // 設定（視点・性能表示）。変わるたびに反映する
   const applySettings = (st) => {

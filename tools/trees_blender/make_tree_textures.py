@@ -49,6 +49,11 @@ for kind in ('broad', 'needle'):
     img = Image.open(leaf_dir / f'leaves_{kind}.png').convert('RGBA')
     bleed(img).save(out / f'leaves_{kind}.webp', quality=88, alpha_quality=95, method=6)
     print('葉', kind, img.size)
+# 地面の草（make_grass_atlas.py で描いたもの）
+if (leaf_dir / 'grass.png').exists():
+    img = Image.open(leaf_dir / 'grass.png').convert('RGBA')
+    bleed(img).save(out / 'grass.webp', quality=88, alpha_quality=95, method=6)
+    print('草', img.size)
 
 BARK = {'oak': 'jolcham_oak_bark_01', 'fir': 'bark_brown_02', 'pine': 'pine_bark', 'dead': 'bark_brown_01', 'birch': 'bark_platanus'}
 for name, src in BARK.items():

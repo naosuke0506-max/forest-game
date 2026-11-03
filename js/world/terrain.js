@@ -47,12 +47,12 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
   const uvs = new Array(verts * verts * 2);
   const half = size / 2;
   // 質感画像があるときは、頂点色を「色味の調整（掛け算）」に使う。無いときは今までどおり色そのもの
-  const moss = textures ? [0.50, 0.56, 0.42] : [0.20, 0.27, 0.12];
+  const moss = textures ? [0.40, 0.64, 0.26] : [0.20, 0.27, 0.12];   // 草の地面：緑（土の画像に緑を強く掛ける）
   const soil = textures ? [0.62, 0.53, 0.45] : [0.29, 0.23, 0.16];
   const dryGrass = textures ? [0.66, 0.60, 0.46] : [0.36, 0.34, 0.20];
   const tile = textures ? textures.size : size; // 質感画像 1 枚が覆う大きさ（m）
   const deepMoss = textures ? [0.34, 0.40, 0.30] : [0.12, 0.18, 0.08];  // 深い森：暗い苔
-  const meadow = textures ? [0.72, 0.74, 0.46] : [0.40, 0.42, 0.18];    // 大草原：明るい草
+  const meadow = textures ? [0.62, 0.74, 0.38] : [0.40, 0.42, 0.18];    // 大草原：明るい草
   const dirt = textures ? [0.78, 0.64, 0.5] : [0.40, 0.32, 0.22];       // 道・城の場所：土
 
   for (let iz = 0; iz < verts; iz++) {
@@ -70,7 +70,7 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
       // 土・苔・枯れ草をノイズで混ぜる（質感画像を使うまでの仮の色）
       const n1 = fbm(x * 0.06, z * 0.06, seed + 31);
       const n2 = fbm(x * 0.25, z * 0.25, seed + 47);
-      const tSoil = smoothstep(0.45, 0.7, n1);
+      const tSoil = smoothstep(0.55, 0.78, n1) * 0.7;   // 土の見える所は少なめに
       const tDry = smoothstep(0.55, 0.8, n2) * 0.6;
       // エリアごとの色味：深い森は暗い苔、大草原は明るい草、城の場所と道は土
       const zw = zones ? zones.weights(x, z) : null;
