@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>静かな森</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-03.17';</script>
+<script>window.__BUILD = '2026-11-03.18';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -59,6 +59,11 @@
 <link rel="modulepreload" href="./js/render/boundary.js">
 <link rel="modulepreload" href="./js/ui/hud.js">
 <link rel="modulepreload" href="./js/ui/settings.js">
+<link rel="modulepreload" href="./js/ui/craft.js">
+<link rel="modulepreload" href="./js/ui/icons.js">
+<link rel="modulepreload" href="./js/game/craft.js">
+<link rel="modulepreload" href="./js/game/pickups.js">
+<link rel="modulepreload" href="./js/render/pickup-view.js">
 <link rel="preload" as="fetch" href="./assets/trees_blender/trees.json" crossorigin>
 <link rel="preload" as="fetch" href="./assets/trees_blender/fir_lod1.glb" crossorigin>
 <link rel="preload" as="fetch" href="./assets/trees_blender/red_pine_lod1.glb" crossorigin>
@@ -138,12 +143,14 @@
 <div id="hud" hidden>
   <!-- 上の真ん中：フェーズ・時間帯と残り時間 -->
   <div class="hud-top">
-    <div id="phase-name" class="phase-name"></div>
+    <div class="phase-row"><span id="phase-icon" class="phase-icon"></span><span id="phase-name" class="phase-name"></span></div>
     <div id="phase-time" class="phase-time"></div>
   </div>
   <!-- 左上：ミニマップと設定 -->
   <canvas id="minimap" class="minimap"></canvas>
   <button id="settings-btn" class="icon-btn" type="button" aria-label="設定">⚙</button>
+  <!-- 地図の下：持っている素材。タップでクラフト画面 -->
+  <div id="mats" class="mats" role="button" aria-label="素材とクラフト"></div>
   <!-- 右上：ポイントのランキング -->
   <ol id="ranking" class="ranking"></ol>
   <!-- 左：ポイントの知らせ（移動スティックの上） -->
@@ -160,6 +167,8 @@
   <button id="btn-left" class="act-btn left" type="button">左手</button>
   <button id="btn-dodge" class="act-btn dodge" type="button">回避</button>
   <button id="btn-attack" class="act-btn attack" type="button">攻撃</button>
+  <!-- 素材の山・箱の近くで出る：拾う・開ける -->
+  <button id="btn-use" class="act-btn use" type="button" hidden>拾う</button>
   <!-- 敵の頭上の体力・与えたダメージの数字 -->
   <div id="tags" class="tags"></div>
   <!-- 攻撃を受けたときに画面の縁が赤くなる -->
@@ -193,6 +202,14 @@
   <h2 class="result-head"></h2>
   <ol class="result-list"></ol>
   <button id="again" class="start" type="button">もう一度</button>
+</section>
+
+<!-- クラフト（素材の表示をタップで開く。試合は止まらない） -->
+<section id="craft" class="panel craft" hidden>
+  <div class="craft-head"><h2>クラフト</h2><button class="craft-close icon-btn" type="button" aria-label="閉じる">×</button></div>
+  <div class="craft-mats"></div>
+  <div class="craft-list"></div>
+  <p class="craft-note">どこでもすぐ作れる（試合は止まらない）。素材は森に落ちている物と、村の家の前の箱から</p>
 </section>
 
 <!-- 設定 -->
@@ -230,7 +247,7 @@
     <div id="char-select" class="char-select"></div>
     <p id="char-desc" class="char-desc"></p>
     <button id="start" class="start" type="button" disabled>読み込み中…</button>
-    <p class="hint">左下のスティックで移動　／　右側をなぞって見回す　／　右下のボタンで右手・左手・回避（弓は長押しで引く）</p>
+    <p class="hint">左下のスティックで移動　／　右側をなぞって見回す　／　右下のボタンで右手・左手・回避（弓は長押しで引く）<br>素材を拾い、左上の素材の表示をタップしてクラフト</p>
   </div>
 </section>
 

@@ -194,6 +194,9 @@ export function createVillage(app, config, terrain, obstacles, zones) {
     { fx: 20, face: -1, rx: [-34, -22, 22, 34] },                      // 入り口の側の列
   ];
   let i = 0;
+  // 箱を置く場所（家の扉の横。中身は game/pickups.js が決める）。家の並びを変えないよう、別の乱数で選ぶ
+  const crateSpots = [];
+  const rndCrate = createRandom(config.seed + 334);
   for (const row of rows) for (const rx0 of row.rx) {
     const w = 5 + rnd.next() * 1.5, d = 6 + rnd.next() * 1.5, h = 3.6 + rnd.next() * 0.8;
     const [x, z] = at(row.fx + (rnd.next() - 0.5) * 1.2, rx0 + (rnd.next() - 0.5) * 1.5);
@@ -205,6 +208,12 @@ export function createVillage(app, config, terrain, obstacles, zones) {
     const F = frame(x, 0, z, yaw);
     for (let a = -w / 2 + 0.8; a <= w / 2 - 0.7; a += 1.4) for (let b = -d / 2 + 0.8; b <= d / 2 - 0.7; b += 1.4) {
       const q = F.at(a, 0, b); solid(q[0], q[2], 1.0);
+    }
+    if (rndCrate.next() < 0.55) {
+      const side = rndCrate.next() < 0.5 ? -1 : 1;
+      const q = F.at(side * (w / 2 - 0.6), 0, d / 2 + 0.95);
+      crateSpots.push({ x: q[0], z: q[2], yaw: yaw + (rndCrate.next() - 0.5) * 30 });
+      solid(q[0], q[2], 0.45);
     }
   }
   // 広場（石畳）と井戸
@@ -252,5 +261,5 @@ export function createVillage(app, config, terrain, obstacles, zones) {
       m.update();
     });
   }
-  return { houses, triangles: tris, footprints };
+  return { houses, triangles: tris, footprints, crateSpots };
 }

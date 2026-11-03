@@ -1,11 +1,12 @@
 // 試合の流れ：フェーズ・残り時間・延長・歩ける範囲・ポイント・脱落・終了。
 // PlayCanvas に依存しない「計算だけ」の部分（後でオンライン化するとき、サーバーにそのまま移せるように）
 import { PHASES, POINTS, REWARDS, REWARD_PICK_TIME, CHARACTERS, COMBAT } from './data.js';
+import { initInventory } from './craft.js';
 
 /** 戦う人（人間・bot 共通の記録） */
 export function createFighter({ id, name, char, isPlayer, color }) {
   const c = CHARACTERS[char];
-  return {
+  const f = {
     id, name, char, isPlayer, color,
     x: 0, z: 0, yaw: 0, pitch: 0,
     alive: true,
@@ -32,6 +33,8 @@ export function createFighter({ id, name, char, isPlayer, color }) {
     pendingReward: null,     // 選んでいる途中のフェーズ報酬 { phase, options, timeLeft }
     rewards: [],             // 選んだ報酬
   };
+  initInventory(f);          // 素材・持っている武器・強化の段階（game/craft.js）
+  return f;
 }
 
 /**
