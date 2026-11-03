@@ -5,6 +5,7 @@
 import * as pc from 'playcanvas';
 import { WEAPONS, DODGE } from '../game/data.js';
 import { createWeaponModel, createShieldModel } from './weapons.js';
+import { BUILD } from '../version.js';
 
 const cache = new Map();
 
@@ -12,13 +13,13 @@ const cache = new Map();
 export function loadCharacterModel(app, id) {
   if (!cache.has(id)) {
     const glb = new Promise((resolve, reject) => {
-      const asset = new pc.Asset(`character-${id}`, 'container', { url: `assets/characters/${id}.glb` });
+      const asset = new pc.Asset(`character-${id}`, 'container', { url: `assets/characters/${id}.glb?v=${BUILD}` });
       asset.once('load', () => resolve(asset));
       asset.once('error', (err) => reject(new Error(`キャラの模型 ${id}: ${err}`)));
       app.assets.add(asset);
       app.assets.load(asset);
     });
-    const meta = fetch(`assets/characters/${id}.json`).then((r) => {
+    const meta = fetch(`assets/characters/${id}.json?v=${BUILD}`).then((r) => {
       if (!r.ok) throw new Error(`キャラの情報 ${id}: ${r.status}`);
       return r.json();
     });

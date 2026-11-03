@@ -16,6 +16,8 @@ import { createInput } from './input/input.js';
 import { createTitleScreen, createStats } from './ui/screens.js';
 import { createSettings } from './ui/settings.js';
 import { startPracticeMatch } from './match-session.js';
+import { BUILD } from './version.js';
+import { refreshIfStale } from './core/freshness.js';
 
 // <head> の仕組みが拾ったエラーのうち、画面ができる前のものをここで表示する
 (window.__pendingErrors || []).forEach((m) => window.__showError(m));
@@ -99,7 +101,8 @@ async function boot() {
   });
 }
 
-boot().catch((err) => {
+// 古いファイルが混ざっていたら、取り直して読み込み直す（そのときは起動しない）
+if (!(await refreshIfStale(BUILD))) boot().catch((err) => {
   console.error(err);
   titleScreen.fail(`起動エラー: ${err && err.message ? err.message : err}`);
 });

@@ -8,10 +8,15 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1b211c">
 <title>静かな森</title>
+<!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
+<script>window.__BUILD = '2026-11-03.1';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
 <link rel="modulepreload" href="./js/main.js">
+<link rel="modulepreload" href="./js/version.js">
+<link rel="modulepreload" href="./js/core/freshness.js">
+<link rel="modulepreload" href="./js/match-session.js">
 <link rel="modulepreload" href="./js/config.js">
 <link rel="modulepreload" href="./js/core/app.js">
 <link rel="modulepreload" href="./js/core/random.js">

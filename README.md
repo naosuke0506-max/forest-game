@@ -86,6 +86,8 @@ tools/process_weapons.mjs 武器・盾の模型の向きと持ち手をそろえ
 tools/characters/        キャラの模型を作る道具（Blender 4.2 で動かす開発用。下の「キャラの模型を作り直す」）
 js/
   main.js                起動の順番だけ
+  version.js             公開している版の番号（index.html と同じ値）
+  core/freshness.js      古いファイルが混ざっていたら取り直す
   match-session.js       練習モードの試合：試合の計算と、見た目・画面をつなぐ
   game/data.js           キャラ・フェーズ・ポイント・フェーズ報酬の数値
   game/match.js          試合の流れ（フェーズ・延長・範囲・ポイント・脱落・終了）。PlayCanvas に依存しない
@@ -147,6 +149,10 @@ blender -b --python tools/characters/build_character.py -- <キャラ名> <魔�
 
 更新を反映させたいときは、main に変更が入れば自動で公開し直されます（数分かかります）。
 古い画面が出るときは、Safari で再読み込みしてください。
+
+更新の直後は、Safari が新しいページと古いプログラムを混ぜて読み込むことがあります（ボタンが反応しない など）。
+そのためページとプログラムに版の番号（`index.html` の `window.__BUILD` と `js/version.js`）を持たせ、
+合わないときはプログラムを取り直して 1 回だけ読み込み直します。**変更を公開するたびに、両方の番号を上げます。**
 
 ## 不具合が出たとき
 
