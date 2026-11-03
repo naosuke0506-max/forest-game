@@ -84,7 +84,7 @@ export function createFighterView(app, fighter, terrain) {
   }
   app.root.addChild(root);
 
-  let groundY = terrain.heightAt(fighter.x, fighter.z), walk = 0, fall = 0, flashOn = false, guardBlend = 0;
+  let groundY = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z)), walk = 0, fall = 0, flashOn = false, guardBlend = 0;
 
   /** 関節の角度（度）をまとめて決める */
   function pose(p) {
@@ -103,7 +103,7 @@ export function createFighterView(app, fighter, terrain) {
     root,
     /** speed01：0〜1 の動きの大きさ（歩く揺れに使う） */
     update(dt, speed01 = 0) {
-      const target = terrain.heightAt(fighter.x, fighter.z);
+      const target = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z));
       groundY += (target - groundY) * Math.min(1, dt * 12);
 
       // 攻撃を受けた直後は赤く光る。発光の色は最初から持たせ、強さ（数値）だけを変える

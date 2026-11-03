@@ -23,7 +23,9 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   body.addChild(eye);
   app.root.addChild(body);
 
-  const pos = { x: 0, z: 2 };
+  const pos = { x: 0, z: 2, y: undefined };   // y：足の高さ（家の二階などの床に乗っているとき、地面より高い）
+  // 立てる高さ：地面のほかに、家の床や階段（world/floors.js）。setGround で差し替える
+  let groundAt = (x, z) => terrain.heightAt(x, z);
   let yaw = 200, pitch = -2, groundY = terrain.heightAt(pos.x, pos.z), bob = 0, lastMag = 0;
   let viewMode = 'first';               // first / third
   let areaRadius = config.world.playRadius;
@@ -87,8 +89,9 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     const r = Math.hypot(pos.x, pos.z);
     if (r > areaRadius) { pos.x *= areaRadius / r; pos.z *= areaRadius / r; }
 
-    // 地面の高さへなめらかに合わせる（段差でカメラががくっとしないように）
-    const target = terrain.heightAt(pos.x, pos.z);
+    // 地面（床）の高さへなめらかに合わせる（段差でカメラががくっとしないように）
+    const target = groundAt(pos.x, pos.z, pos.y);
+    pos.y = target;
     groundY += (target - groundY) * Math.min(1, dt * 12);
 
     body.setPosition(pos.x, groundY, pos.z);
@@ -108,10 +111,12 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     get viewMode() { return viewMode; },
     setViewMode(mode) { viewMode = mode === 'third' ? 'third' : 'first'; thirdDist = THIRD_DIST; placeCamera(0); },
     setAreaRadius(r) { areaRadius = r; },
+    /** 立てる高さを決める仕組み（家の床と階段）を使う */
+    setGround(fn) { groundAt = fn; pos.y = fn(pos.x, pos.z, null); groundY = pos.y; },
     setFrozen(v) { frozen = v; },
     /** 観戦：見ている人の位置と向きにカメラを合わせる（三人称にする） */
-    setPose(x, z, faceYaw) {
-      pos.x = x; pos.z = z; yaw = faceYaw;
+    setPose(x, z, faceYaw, y) {
+      pos.x = x; pos.z = z; yaw = faceYaw; if (y !== undefined) pos.y = y;
       if (viewMode !== 'third') { viewMode = 'third'; thirdDist = THIRD_DIST; }
     },
     /** 向きと上下の角度を直接決める（確認用） */
@@ -119,7 +124,8 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     /** 出現する場所と向き */
     spawn(x, z, faceYaw) {
       pos.x = x; pos.z = z; yaw = faceYaw; pitch = -2;
-      groundY = terrain.heightAt(x, z);
+      pos.y = groundAt(x, z, null);
+      groundY = pos.y;
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
     },
   };

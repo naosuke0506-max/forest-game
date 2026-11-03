@@ -11,8 +11,9 @@ import { PICKUPS, CRATE, MATERIAL_KEYS } from './data.js';
  * @param {(x: number, z: number, r: number, solidOnly: boolean) => boolean} opt.isFree 木の幹・岩・家と重ならないか
  * @param {number} opt.areaRadius 歩ける範囲の半径
  * @param {{x: number, z: number, yaw: number}[]} opt.crateSpots 村の箱の場所
+ * @param {(x: number, z: number) => boolean} [opt.blocked] 置かない場所（家の中）
  */
-export function createPickups({ rng, zones, isFree, areaRadius, crateSpots = [] }) {
+export function createPickups({ rng, zones, isFree, areaRadius, crateSpots = [], blocked = null }) {
   const items = [];
   const listeners = {};
   const emit = (type, data) => (listeners[type] || []).forEach((fn) => fn(data));
@@ -33,6 +34,7 @@ export function createPickups({ rng, zones, isFree, areaRadius, crateSpots = [] 
         if (rng.next() > p) continue;
       }
       if (!isFree(x, z, 0.9, true)) continue;
+      if (blocked?.(x, z)) continue;
       if (items.some((o) => !o.taken && Math.abs(o.x - x) < 3 && Math.abs(o.z - z) < 3)) continue;
       const item = { id: nextId++, kind, x, z, yaw: rng.next() * 360, amount: range(rule.amount), taken: false };
       items.push(item);
