@@ -1,4 +1,5 @@
-// 森の小物：草・シダ・落ち枝・岩・切り株（Poly Haven の CC0 模型を tools/process_props.mjs で軽くしたもの）
+// 森の小物：草・シダ・落ち枝・岩・切り株（Poly Haven の CC0 模型を tools/process_props.mjs で軽くしたもの）と、
+//   倒木・焚き火の跡・キノコ（Tripo AI で作った模型を tools/process_tripo_props.mjs で軽くしたもの）
 //
 // 種類ごとに数個の形（バリエーション）があり、それぞれ近く用（lod0）と遠く用（lod1）を持つ。
 // プレイヤーとの距離で、近く用 → 遠く用 → 描かない、を少しずつ入れ替える。
@@ -20,6 +21,7 @@ const ROOT = './assets/props';
  *   sink      ：高さに対する、地面に埋める割合
  *   spacing   ：ほかの物との間隔（m。大きさの倍率を掛ける）
  *   collide   ：当たり判定の半径（横幅に対する割合。0 は判定なし）
+ *   collideAlong：細長い物（倒木）。長い向きに沿って、太さ（高さの半分）の円を並べる
  *   tilt      ：傾きの最大（度）
  *   shadows   ：影を落とすか
  *   wind      ：風での揺れ方（applyWind に渡す値）
@@ -32,7 +34,10 @@ const ROOT = './assets/props';
 const RULES = {
   rock_large:  { count: 12, area: 66, near: 30, far: 170, scale: [0.7, 1.25], sink: 0.28, spacing: 2.4, collide: 0.36, tilt: 6, shadows: true },
   rock_medium: { count: 30, area: 66, near: 25, far: 170, scale: [0.6, 1.3], sink: 0.22, spacing: 1.4, collide: 0.36, tilt: 8, shadows: true },
+  fallen_log:  { count: 6, area: 60, near: 30, far: 120, scale: [0.8, 1.15], sink: 0.1, spacing: 1.0, collide: 0.3, collideAlong: true, tilt: 2, shadows: true },
+  campfire:    { count: 1.6, area: 60, near: 25, far: 100, scale: [0.9, 1.1], sink: 0.05, spacing: 2.0, collide: 0.35, tilt: 2, shadows: true },
   stump:       { count: 8, area: 60, near: 25, far: 120, scale: [0.8, 1.15], sink: 0.12, spacing: 1.2, collide: 0.28, tilt: 3, shadows: true },
+  mushrooms:   { count: 40, area: 60, near: 12, far: 32, scale: [0.8, 1.7], sink: 0.03, spacing: 0.4, collide: 0, tilt: 5, shadows: false, stream: true },
   branches:    { count: 55, area: 60, near: 15, far: 45, scale: [0.9, 1.4], sink: 0.15, spacing: 0.6, collide: 0, tilt: 6, shadows: true, stream: true },
   fern:        { count: 160, area: 58, near: 18, far: 50, scale: [1.0, 1.7], sink: 0.05, spacing: 0.7, collide: 0, tilt: 4, shadows: false,
                  wind: { height: 0.45, bend: 0.18, flutter: 0.025 }, onSoil: true, stream: true },
@@ -144,6 +149,9 @@ export function createProps(app, config, seed, terrain, obstacles, types, zones 
     rock_large:  { mixed: 1, deep: 1.2, prairie: 0.5, castle: 0 },
     rock_medium: { mixed: 1, deep: 1.2, prairie: 0.6, castle: 0 },
     stump:       { mixed: 1, deep: 1.5, prairie: 0.3, castle: 0 },
+    fallen_log:  { mixed: 1, deep: 2.0, prairie: 0.15, castle: 0 },
+    campfire:    { mixed: 1, deep: 0.6, prairie: 0.7, castle: 0 },
+    mushrooms:   { mixed: 0.8, deep: 2.5, prairie: 0.05, castle: 0 },
     branches:    { mixed: 1, deep: 2.2, prairie: 0.2, castle: 0 },
     fern:        { mixed: 1, deep: 1.8, prairie: 0.3, castle: 0.2 },
     grass:       { mixed: 0.6, deep: 0.3, prairie: 0.4, castle: 0.4 },   // 地面の草（ground-cover.js）があるので控えめに
@@ -168,12 +176,13 @@ export function createProps(app, config, seed, terrain, obstacles, types, zones 
     const clear = Math.max(rule.spacing * s, rule.collide ? width * 0.4 : 0);
     if (!obstacles.isFree(x, z, rule.stream ? Math.max(0.3, clear * 0.5) : clear, !!rule.stream)) return null;
     const y = terrain.heightAt(x, z) - vm.size[1] * s * rule.sink;
+    const yaw = r01() * 360;
     const mat = new pc.Mat4().setTRS(
       new pc.Vec3(x, y, z),
-      new pc.Quat().setFromEulerAngles((r01() * 2 - 1) * rule.tilt, r01() * 360, (r01() * 2 - 1) * rule.tilt),
+      new pc.Quat().setFromEulerAngles((r01() * 2 - 1) * rule.tilt, yaw, (r01() * 2 - 1) * rule.tilt),
       new pc.Vec3(s, s * (0.9 + r01() * 0.2), s),
     );
-    return { v, x, z, mat, width };
+    return { v, x, z, mat, width, yaw, s, size: vm.size };
   }
 
   for (const id of PROP_TYPES) {
@@ -195,7 +204,15 @@ export function createProps(app, config, seed, terrain, obstacles, types, zones 
         if (!p) continue;
         lists[p.v].push(p);
         // 岩と切り株は当たり判定。それ以外は場所の重なりを避けるためだけに小さく登録する
-        obstacles.add(p.x, p.z, rule.collide ? p.width * rule.collide : 0.01, !!rule.collide);
+        if (rule.collideAlong) {
+          // 細長い物：長い向き（模型の x か z の長い方）に沿って円を並べる
+          const [sx, , sz] = p.size, a = (p.yaw * Math.PI) / 180;
+          const long = Math.max(sx, sz) * p.s, rad = Math.max(0.35, p.size[1] * p.s * 0.5);   // 太さは高さから（横には枝が張り出すので）
+          const dir = sz >= sx ? [Math.sin(a), Math.cos(a)] : [Math.cos(a), -Math.sin(a)];
+          for (let t = -long / 2 + rad; t <= long / 2 - rad + 0.01; t += rad) obstacles.add(p.x + dir[0] * t, p.z + dir[1] * t, rad, true);
+        } else {
+          obstacles.add(p.x, p.z, rule.collide ? p.width * rule.collide : 0.01, !!rule.collide);
+        }
         n++;
       }
     }
@@ -318,6 +335,8 @@ export function createProps(app, config, seed, terrain, obstacles, types, zones 
       updateStreams(camPos.x, camPos.z);
       assign(camPos.x, camPos.z, camFwd ? camFwd.x / fl : 0, camFwd ? camFwd.z / fl : 1);
     },
+    /** 確認用：置いた場所の一覧（stream でない物） */
+    positions: (id) => groups.filter((g) => g.id === id).flatMap((g) => g.list.map((q) => ({ x: q.x, z: q.z }))),
     counts: Object.fromEntries(PROP_TYPES.map((id) => [id, groups.filter((g) => g.id === id).reduce((s, g) => s + g.list.length, 0)])),
   };
 }

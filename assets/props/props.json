@@ -214,5 +214,50 @@
         "lod1Triangles": 499
       }
     }
+  },
+  "fallen_log": {
+    "source": "tripo:fallen_log.glb",
+    "alpha": false,
+    "variants": {
+      "a": {
+        "size": [
+          2.773,
+          0.977,
+          4.5
+        ],
+        "lod0Triangles": 1598,
+        "lod1Triangles": 299
+      }
+    }
+  },
+  "mushrooms": {
+    "source": "tripo:mushrooms.glb",
+    "alpha": false,
+    "variants": {
+      "a": {
+        "size": [
+          0.233,
+          0.35,
+          0.306
+        ],
+        "lod0Triangles": 698,
+        "lod1Triangles": 231
+      }
+    }
+  },
+  "campfire": {
+    "source": "tripo:campfire.glb",
+    "alpha": false,
+    "variants": {
+      "a": {
+        "size": [
+          1.185,
+          0.725,
+          1.2
+        ],
+        "lod0Triangles": 1596,
+        "lod1Triangles": 442
+      }
+    }
   }
 }

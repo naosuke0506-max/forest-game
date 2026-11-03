@@ -87,9 +87,10 @@ tools/trees_blender/     木を Blender で作る道具（葉の房の画像・�
 assets/trees/            前の木の模型（Tripo AI。今は使っていない）
 source_models/trees/     木の元の模型（Tripo AI の GLB。ゲームは読み込まない）
 tools/process_trees.mjs  木の模型をゲーム用に軽くする道具（開発用。cd tools && npm ci）
-assets/props/            森の小物（草・シダ・落ち枝・岩・切り株。出典は CREDITS.md）
+assets/props/            森の小物（草・シダ・落ち枝・岩・切り株・倒木・キノコ・焚き火の跡。出典は CREDITS.md）
 tools/fetch_polyhaven_models.py  Poly Haven の模型を取り込む道具（開発用）
 tools/process_props.mjs  森の小物をゲーム用に軽くする道具（開発用）
+tools/process_tripo_props.mjs, tools/props_blender/  Tripo の小物を Blender で軽くして色を焼き付け直す道具（開発用）
 source_models/props/     倒木・キノコ・焚き火の元の模型（Tripo AI。まだゲームでは使っていない）
 assets/characters/       キャラの模型（骨と動き入り、軽くしたもの）と、動きの長さ・速さ（.json）
 source_models/characters/ キャラの元の模型（Tripo AI で骨付けした GLB。ゲームは読み込まない）
