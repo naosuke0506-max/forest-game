@@ -162,11 +162,11 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
           const st = attackStats(fighter.weapon, a.heavy);
           const melee2 = fighter.weapon !== fighter.primary && has('ma1');
           const name = a.heavy && has('heavy') ? 'heavy' : (melee2 ? ['ma1', 'ma2', 'ma3'] : ['a1', 'a2', 'a3'])[swingIndex++ % 3];
-          restart(name, clip(name).duration / (st.windup + st.recovery));
+          if (has(name)) restart(name, clip(name).duration / (st.windup + st.recovery));   // 動きの無い模型では何もしない
         } else if (a.kind === 'finisher' || a.kind === 'assassinate') {
           // 致命の一撃・暗殺：強攻撃の大きな振り（専用の動きができるまで）
           const name = has('heavy') ? 'heavy' : 'a1';
-          restart(name, clip(name).duration / 0.85);
+          if (has(name)) restart(name, clip(name).duration / 0.85);
         } else if (a.kind === 'search') {
           // 探す：かがんで開ける（専用の動きができるまで、構えの動きで代わりにする）
           restart(has('guard') ? 'guard' : 'idle', 1);

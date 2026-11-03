@@ -1,11 +1,18 @@
-// 音の土台（Web Audio。音の素材ファイルは使わず、その場で作る）。
+// 音の土台（Web Audio）。
+//   録音の音（assets/sounds/。CC0）を読み込んで鳴らす仕組みと、その場で音を作る道具（雑音・音程のある音・金属の響き）
 //   iPad の Safari は、指で触ったとき（試合を始めるボタン）に音を出す許可が下りる。unlock() をその中で呼ぶ
 //   ・音量：master（設定の「音」）。最後に音のつぶれを防ぐコンプレッサーを通す
 //   ・雑音の素：白い雑音・茶色の雑音（低い音が多い）を最初に 1 回だけ作り、使い回す
 //   ・位置：聞く人（カメラ）からの左右の向きと遠さで、左右の振り分け・大きさ・こもり（遠いほど高い音が減る）を決める
 // 計算が軽い物だけを使う（3D の立体音響 HRTF は使わない）
 
-let ctx = null, master = null, out = null, white = null, brown = null;
+import { BUILD } from '../version.js';
+
+let ctx = null, master = null, out = null, white = null, brown = null, reverb = null;
+// 録音の音：名前 → AudioBuffer。「step_grass_0」「step_grass_1」…は「step_grass」でまとめて引ける
+const raw = new Map();      // 名前 → 読み込んだファイル（ArrayBuffer。音を出せるようになったら AudioBuffer に直す）
+const buffers = new Map();
+const groups = new Map();   // まとめた名前 → [名前]
 let volume = 0.8;
 const listener = { x: 0, y: 0, z: 0, yaw: 0, indoor: 0 };
 
@@ -34,6 +41,12 @@ export const audio = {
         out = master;
         white = makeNoise(ctx, 2, false);
         brown = makeNoise(ctx, 4, true);
+        // 残響（時計台の鐘・遠くの音）：雑音を指数で弱めた響きを畳み込む
+        reverb = ctx.createConvolver();
+        reverb.buffer = makeImpulse(ctx, 3.2, 2.6);
+        const wet = ctx.createGain(); wet.gain.value = 0.55;
+        reverb.connect(wet); wet.connect(master);
+        decodeAll();
       }
       if (ctx.state !== 'running') ctx.resume();
       // 無音を 1 回鳴らして、確実に音の出口を開ける（古い Safari 向け）
@@ -49,10 +62,75 @@ export const audio = {
   /** 聞く人の位置と向き（毎フレーム）。indoor：家の中（0〜1。外の音がこもる） */
   setListener(x, y, z, yaw, indoor = 0) { Object.assign(listener, { x, y, z, yaw, indoor }); },
 
+  /** 残響へ送る入口（音をここにもつなぐと、響きが付く） */
+  get reverb() { return reverb; },
+  /** 録音の音（name は「step_grass」のようなまとめた名前でもよい。そのときは中から 1 つを選ぶ） */
+  buffer(name) {
+    if (buffers.has(name)) return buffers.get(name);
+    const g = groups.get(name);
+    if (!g || !g.length) return null;
+    const pick = g.filter((n) => buffers.has(n));
+    return pick.length ? buffers.get(pick[Math.floor(Math.random() * pick.length)]) : null;
+  },
   get white() { return white; },
   get brown() { return brown; },
   get out() { return out; },
 };
+
+/** 録音の音のファイルを取りに行く（起動してすぐ呼ぶ。音を出せるようになったら AudioBuffer に直す） */
+export async function loadSounds() {
+  try {
+    const meta = await (await fetch(`./assets/sounds/sounds.json?v=${BUILD}`)).json();
+    for (const name of Object.keys(meta)) {
+      const g = name.replace(/_\d+$/, '');
+      if (g !== name) { if (!groups.has(g)) groups.set(g, []); groups.get(g).push(name); }
+    }
+    await Promise.all(Object.entries(meta).map(async ([name, m]) => {
+      try { raw.set(name, await (await fetch(`./assets/sounds/${m.file}?v=${BUILD}`)).arrayBuffer()); } catch { /* 無い音は鳴らさない */ }
+    }));
+    if (ctx) decodeAll();
+  } catch (err) { console.warn('音のファイルを読み込めません', err); }
+}
+function decodeAll() {
+  for (const [name, ab] of raw) {
+    raw.delete(name);
+    // Safari の古い形（コールバック）にも合わせる
+    new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)).then((b) => buffers.set(name, b)).catch(() => {});
+  }
+}
+
+/**
+ * 録音の音を鳴らす。返り値は鳴らした音（止めたり、音量を変えたりできる）。音がまだ無ければ null
+ * @param {AudioNode} dest つなぐ先（outlet() の返り値など）
+ */
+export function playSample(dest, name, { t = 0, rate = 1, gain = 1, loop = false, offset = 0 } = {}) {
+  if (!ctx || !dest) return null;
+  const b = audio.buffer(name);
+  if (!b) return null;
+  const s = ctx.createBufferSource();
+  s.buffer = b; s.loop = loop;
+  s.playbackRate.value = rate;
+  const g = ctx.createGain(); g.gain.value = gain;
+  s.connect(g); g.connect(dest);
+  s.start(ctx.currentTime + t, loop ? (offset % b.duration) : 0);
+  s.gainNode = g;
+  return s;
+}
+
+/** 残響の響き（左右で違う雑音を、指数で弱める） */
+function makeImpulse(c, sec, decay) {
+  const n = Math.floor(c.sampleRate * sec);
+  const buf = c.createBuffer(2, n, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    let lp = 0;
+    for (let i = 0; i < n; i++) {
+      lp += 0.35 * ((Math.random() * 2 - 1) - lp);   // 高い音を少し落とす（石の塔の響き）
+      d[i] = lp * Math.pow(1 - i / n, decay);
+    }
+  }
+  return buf;
+}
 
 /** 雑音の素（長さ sec 秒、繰り返して使う）。brown は低い音の多い茶色の雑音 */
 function makeNoise(c, sec, isBrown) {

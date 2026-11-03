@@ -174,6 +174,12 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (target === me) hud.centerMsg('暗殺！', '回避で逃げろ', 1.2);
     if (attacker === me) { player.leaveHide(me.x, me.z, me.y, me.yaw); }
   });
+  // ぴったり回避（無敵の間に攻撃をかわした）：画面が一瞬白く光る（音は audio/sfx.js）
+  const perfectEl = document.getElementById('perfect');
+  combat.on('dodged', ({ target }) => {
+    if (target !== me) return;
+    perfectEl.classList.remove('on'); void perfectEl.offsetWidth; perfectEl.classList.add('on');
+  });
   combat.on('assassinFail', ({ attacker, target }) => {
     if (attacker === me) hud.addFeed('暗殺に失敗した（回避された）');
     if (target === me) hud.addFeed(`${attacker.name}の暗殺をかわした`);
@@ -335,7 +341,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         const z = zones.zoneAt(me.x, me.z);
         if (z !== zoneNow) { zoneNow = z; hud.addFeed(`${ZONE_NAMES[z]}に入った`); }
       }
-      hud.updateTags(player.camera, fighters, terrain.heightAt);
+      // 敵の頭上の名前と体力は出さない（見つけるのも、相手の残りを見極めるのも自分の目で）
     },
     get spectating() { return spectating; },
     debugAction,

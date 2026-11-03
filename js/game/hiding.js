@@ -8,6 +8,18 @@
 export const HIDE_REACH = 1.7;   // 隠れる・探すことができる近さ（m）
 export const SEARCH_TIME = 0.6;  // 探す（開ける）のにかかる時間（秒）
 export const HELPLESS = 2.6;     // 見つかった人が無防備でいる時間（秒）
+export const HIDE_BREATH = 1.2;  // 隠れている間は、息遣いが 1.2 倍大きい（息を潜めても、狭い所では響く）
+export const HEAR_REACH = 4.5;   // 隠れている人の息が聞こえる近さ（m）
+
+/**
+ * 息遣いの大きさ（0〜1 くらい）：スタミナが減るほど荒い。隠れている間は 1.2 倍
+ * 音（audio/sfx.js）と、bot が隠れている人に気づく確からしさ（game/bot.js）に使う
+ */
+export function breathLevel(f) {
+  const s = Math.max(0, Math.min(1, f.stamina / (f.stats?.maxStamina || 100)));
+  const base = 0.25 + 0.75 * Math.max(0, (0.7 - s) / 0.7);
+  return base * (f.hidden ? HIDE_BREATH : 1);
+}
 
 /**
  * @param {object[]} spots 隠れ場所 { kind: 'bed' | 'wardrobe', x, z, y, yaw, eyeX, eyeZ, eyeH, outX, outZ, route }

@@ -11,6 +11,7 @@
 import { moveFighter } from './movement.js';
 import { WEAPONS, COMBAT } from './data.js';
 import { botCraft } from './craft.js';
+import { breathLevel, HEAR_REACH } from './hiding.js';
 
 const DEG = Math.PI / 180;
 const wrap = (a) => ((a + 540) % 360) - 180;
@@ -108,11 +109,12 @@ export function createBot(fighter, rng, fighters) {
     const r = b.route;
     const p = r.pts[r.i];
     const d = Math.hypot(p.x - f.x, p.z - f.z);
-    // 次の点へ近づけていなければ（壁に引っかかっている）、しばらくして諦める
+    // 次の点へ近づけていなければ（家具や壁に引っかかっている）、横へよけてから、もう一度向かう。それでもだめなら諦める
     if (r.best === undefined || d < r.best - 0.15) { r.best = d; r.since = 0; } else r.since += 0.25;
-    if (r.since > 3) { b.route = null; if (r.why === 'search') b.knownSpot = null; return; }
+    if (r.since > 4) { b.route = null; if (r.why === 'search') b.knownSpot = null; return; }
+    if (r.since > 1 && !(r.sideT > 0)) { r.side = rng.next() < 0.5 ? -1 : 1; r.sideT = 0.6; }
     const last = r.i === r.pts.length - 1;
-    if (d < (last ? 1.3 : 0.7)) {
+    if (d < (last ? 0.9 : 0.7)) {
       if (!last) { r.i++; r.best = undefined; return; }
       const H = world.hiding;
       if (r.why === 'hide' && H && !r.spot.occupant) {
@@ -133,13 +135,14 @@ export function createBot(fighter, rng, fighters) {
     b.input.yaw = yawTo(f, p.x, p.z);
     b.input.forward = 1;
     b.input.strafe = 0;
+    if (r.sideT > 0) { r.sideT -= 0.25; b.input.forward = 0.3; b.input.strafe = r.side; }   // 横へよける
     b.input.run = r.why === 'hide' || d > 6;
     b.input.attack = false;
     b.input.guard = false;
   }
   /** 隠れ場所への道順。すでに同じ階の近く（同じ家の中）にいれば、まっすぐ向かう */
   const routeTo = (spot, why) => {
-    const pts = [...spot.route, { x: spot.x, z: spot.z }];
+    const pts = [...spot.route, { x: spot.outX, z: spot.outZ }];   // 最後は家具の前（家具の中へは歩けない）
     const inside = Math.abs((f.y ?? -99) - spot.y) < 0.25 && Math.hypot(f.x - spot.x, f.z - spot.z) < 8;
     return { pts, i: inside ? pts.length - 1 : 0, why, spot };
   };
@@ -168,6 +171,15 @@ export function createBot(fighter, rng, fighters) {
       }
     }
     b.target = pickTarget();
+    // 近くに隠れている人の息遣いが聞こえたら、その場所を覚えて探す（息が荒いほど気づきやすい）
+    if (!b.knownSpot) {
+      for (const t of fighters) {
+        if (t === f || !t.alive || !t.hidden) continue;
+        const d = Math.hypot(t.x - f.x, t.z - f.z);
+        if (d > HEAR_REACH || Math.abs((t.y ?? 0) - (f.y ?? 0)) > 1.5) continue;
+        if (rng.next() < 0.05 * breathLevel(t) * (1 - d / HEAR_REACH * 0.5)) { b.knownSpot = t.hidden; break; }
+      }
+    }
     // 体力が少なく、相手が近い：近くのベッドやタンスへ逃げ込む
     b.hideCooldown -= 0.25;
     const H = world.hiding;

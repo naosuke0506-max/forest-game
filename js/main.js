@@ -12,7 +12,7 @@ import { loadGroundCover, createGroundCover } from './world/ground-cover.js';
 import { createSunGlare } from './render/sun-glare.js';
 import { createSkyLights } from './render/sky-lights.js';
 import { createAirParticles } from './render/air-particles.js';
-import { audio } from './audio/engine.js';
+import { audio, loadSounds } from './audio/engine.js';
 import { createAmbience } from './audio/ambience.js';
 import { createRandom } from './core/random.js';
 import { AREA_RADIUS } from './game/data.js';
@@ -92,7 +92,9 @@ async function boot() {
     canopies: trees?.canopies || [], heightAt: terrain.heightAt, zones, farClip: CONFIG.atmosphere.farClip,
   });
   const air = createAirParticles(app, player.camera, timeOfDay, { heightAt: terrain.heightAt, zones, sun: env.sun });
-  // 環境音（風・葉・鳥・夜の虫・梟）。音は試合を始めるボタンを押したときから出る（iPad の決まり）
+  // 環境音（風・葉・鳥・虫・カラス）。音は試合を始めるボタンを押したときから出る（iPad の決まり）。
+  // 録音の音のファイルは、今のうちに裏で取りに行く
+  loadSounds();
   const ambience = createAmbience({ timeOfDay, wind, zones });
   let indoorK = 0;
   const touchLayer = document.getElementById('touch-layer');

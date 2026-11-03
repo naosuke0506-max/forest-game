@@ -129,6 +129,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   /** 近接の当たり判定：間合いと角度に入っている、ほかの全員に当たる */
   function meleeHit(f, w) {
     const fy = yOf(f);
+    let hits = 0;
     for (const t of fighters) {
       if (t === f || !t.alive || t.hidden) continue;
       const dx = t.x - f.x, dz = t.z - f.z, d = Math.hypot(dx, dz);
@@ -136,7 +137,15 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (Math.abs(yOf(t) - fy) > 1.6) continue;
       if (d > 0.6 && angleTo(f.yaw, dx, dz) > w.arc / 2) continue;
       damage(t, w.damage * upgradeOf(f, f.weapon).damage, f, { pierce: w.guardPierce, fromX: f.x, fromZ: f.z });   // 強化で威力が増える
+      hits++;
     }
+    // 振り終わり：誰にも当たらなければ、前に木の幹や壁があるか（当たった音を変える）
+    let blocked = false;
+    if (!hits) {
+      const yaw = f.yaw * DEG, r = w.reach * 0.75;
+      blocked = !obstacles.isFree(f.x - Math.sin(yaw) * r, f.z - Math.cos(yaw) * r, 0.15, true);
+    }
+    emit('strike', { fighter: f, weapon: f.weapon, hits, blocked });
   }
 
   /** 矢を放つ。power：引いた割合（0〜1） */
