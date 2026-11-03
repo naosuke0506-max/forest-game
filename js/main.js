@@ -58,7 +58,7 @@ async function boot() {
   const player = createPlayer(app, CONFIG, terrain, obstacles, env.fogColor);
   // 時間帯（朝・昼・夕暮れ・深夜）。霧の色が変わったら、空の無い所の背景色も合わせる
   env.onFogColor = (c) => { player.camera.camera.clearColor = c; };
-  const timeOfDay = createTimeOfDay(app, env);
+  const timeOfDay = createTimeOfDay(app, env, CONFIG);
   const touchLayer = document.getElementById('touch-layer');
   const input = createInput(touchLayer, document.getElementById('stick'), CONFIG);
   const stats = createStats(app, CONFIG.showStats, CONFIG.qualityName);

@@ -23,15 +23,15 @@ async function fetchOk(url) {
 }
 
 /** 空のファイルを読み込む。失敗したら null（今までの単色の空と環境光で続ける） */
-export async function loadSky() {
+export async function loadSky(name = SKY_NAME) {
   try {
-    const base = `${ROOT}/${SKY_NAME}`;
+    const base = `${ROOT}/${name}`;
     const [meta, light, image] = await Promise.all([
       fetchOk(`${base}.json`).then((r) => r.json()),
       fetchOk(`${base}_light.f16`).then((r) => r.arrayBuffer()),
       loadImage(`${base}_sky.webp`),
     ]);
-    return { meta, light: new Uint16Array(light), image };
+    return { name, meta, light: new Uint16Array(light), image };
   } catch (err) {
     console.warn(err);
     window.__showError?.(`空の読み込みに失敗しました。単色の空で続けます。\n  ${err.message}`);
@@ -63,13 +63,15 @@ const linearToSrgb = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 
  * 空を場面に組み込む：背景の空、空全体からの照明、霧の色
  * @returns {{ sunDirection: pc.Vec3, sunIntensity: number, sunColor: pc.Color, fogColor: pc.Color }}
  */
-export function applySky(app, sky, config) {
+/**
+ * 空のファイルから、空全体からの照明（envAtlas）と背景の空（skybox）を作る（場面にはまだ組み込まない）
+ */
+export function prepareSky(app, sky) {
   const device = app.graphicsDevice;
-  const scene = app.scene;
   const { meta } = sky;
   const [lw, lh] = meta.lightSize;
 
-  // 照明用：半精度の HDR データ（写真の明るさがそのまま入っている）
+  // 照明用：半精度の HDR データ（写真の明るさを skyScale で割ってある）
   const lightTex = new pc.Texture(device, {
     name: 'sky-light',
     width: lw,
@@ -84,7 +86,7 @@ export function applySky(app, sky, config) {
     levels: [sky.light],
   });
   const source = pc.EnvLighting.generateLightingSource(lightTex, { size: 64 });
-  scene.envAtlas = pc.EnvLighting.generateAtlas(source, { size: 256 });
+  const envAtlas = pc.EnvLighting.generateAtlas(source, { size: 256 });
   lightTex.destroy();
   source.destroy();
 
@@ -103,14 +105,38 @@ export function applySky(app, sky, config) {
     magFilter: pc.FILTER_LINEAR,
   });
   skyTex.setSource(sky.image);
-  scene.skybox = pc.EnvLighting.generateSkyboxCubemap(skyTex);
+  const skybox = pc.EnvLighting.generateSkyboxCubemap(skyTex);
   skyTex.destroy();
+
+  return {
+    name: sky.name,
+    meta,
+    envAtlas,
+    skybox,
+    sunDirection: uvToDirection(meta.sunU, meta.sunV),
+    // 空全体の明るさ（空から回り込む光＋太陽光）。時間帯ごとの明るさをそろえるのに使う
+    irradiance: meta.skyIrradiance + meta.sunIrradiance / Math.PI,
+  };
+}
+
+/** 線形の色 → 画面の色（霧の色に使う） */
+export const toSrgbColor = (lin) => new pc.Color(...lin.map((c) => linearToSrgb(Math.min(1, Math.max(0, c)))));
+
+/**
+ * 空を場面に組み込む：背景の空、空全体からの照明、霧の色
+ * @returns {{ sunDirection: pc.Vec3, sunIntensity: number, sunColor: pc.Color, fogColor: pc.Color, prepared: object }}
+ */
+export function applySky(app, sky, config) {
+  const scene = app.scene;
+  const prepared = prepareSky(app, sky);
+  const { meta } = prepared;
+  scene.envAtlas = prepared.envAtlas;
+  scene.skybox = prepared.skybox;
   scene.skyboxMip = 0;
   scene.skyboxIntensity = meta.skyScale * config.atmosphere.skyBrightness;
 
   // 霧の色 = 地平線のすぐ上の空の色（遠くの木が空に自然に溶け込む）
-  const h = meta.horizonLinear.map((c) => linearToSrgb(Math.min(1, c * config.atmosphere.skyBrightness * config.atmosphere.fogTint)));
-  const fogColor = new pc.Color(h[0], h[1], h[2]);
+  const fogColor = toSrgbColor(meta.horizonLinear.map((c) => c * config.atmosphere.skyBrightness * config.atmosphere.fogTint));
 
   // 太陽光の強さ：写真から求めた「太陽に正対した面が受ける光」。
   // エンジンの平行光源は π で割らない約束なので、ここで π で割って空の光とつり合わせる
@@ -118,43 +144,6 @@ export function applySky(app, sky, config) {
   const sunIntensity = (meta.sunIrradiance / Math.PI) * b * config.atmosphere.sunScale;
   const sunColor = new pc.Color(...meta.sunColor.map(linearToSrgb));
 
-  return { sunDirection: uvToDirection(meta.sunU, meta.sunV), sunIntensity, sunColor, fogColor };
+  return { sunDirection: prepared.sunDirection, sunIntensity, sunColor, fogColor, prepared };
 }
 
-/**
- * 空の写真に色をかけた背景（立方体マップ）を作る。時間帯（朝・夕暮れ・深夜）の空に使う。
- * top：真上にかける色、horizon：地平線にかける色（0〜1。1 で元のまま）。下半分は地平線の色
- */
-export function makeTintedSkybox(app, image, top, horizon) {
-  const canvas = document.createElement('canvas');
-  canvas.width = image.width;
-  canvas.height = image.height;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(image, 0, 0);
-  const g = ctx.createLinearGradient(0, 0, 0, canvas.height / 2);
-  const css = (c) => `rgb(${c.map((v) => Math.round(Math.min(1, v) * 255)).join(',')})`;
-  g.addColorStop(0, css(top));
-  g.addColorStop(1, css(horizon));
-  ctx.globalCompositeOperation = 'multiply';
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, canvas.width, canvas.height / 2);
-  ctx.fillStyle = css(horizon);
-  ctx.fillRect(0, canvas.height / 2, canvas.width, canvas.height / 2);
-  const tex = new pc.Texture(app.graphicsDevice, {
-    name: 'sky-tinted',
-    width: canvas.width,
-    height: canvas.height,
-    format: pc.PIXELFORMAT_RGBA8,
-    srgb: true,
-    mipmaps: false,
-    projection: pc.TEXTUREPROJECTION_EQUIRECT,
-    addressU: pc.ADDRESS_REPEAT,
-    addressV: pc.ADDRESS_CLAMP_TO_EDGE,
-    minFilter: pc.FILTER_LINEAR,
-    magFilter: pc.FILTER_LINEAR,
-  });
-  tex.setSource(canvas);
-  const cube = pc.EnvLighting.generateSkyboxCubemap(tex);
-  tex.destroy();
-  return cube;
-}

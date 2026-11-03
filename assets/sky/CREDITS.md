@@ -4,12 +4,18 @@
 
 | 素材 | 作者 | 元のファイル |
 |---|---|---|
-| [Kloofendal 48d Partly Cloudy (Pure Sky)](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky) | Greg Zaal（撮影）、Jarod Guest（空の編集） | `kloofendal_48d_partly_cloudy_puresky_2k.hdr`（2048×1024） |
+| [Kloofendal 48d Partly Cloudy (Pure Sky)](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky)（昼） | Greg Zaal（撮影）、Jarod Guest（空の編集） | `kloofendal_48d_partly_cloudy_puresky_2k.hdr`（2048×1024） |
+| [Qwantani Sunrise (Pure Sky)](https://polyhaven.com/a/qwantani_sunrise_puresky)（朝） | Greg Zaal（撮影）、Jarod Guest（処理） | `qwantani_sunrise_puresky_2k.hdr`（MD5 `b5d5244221b3571199032dae0d9d6c5c`） |
+| [Belfast Sunset (Pure Sky)](https://polyhaven.com/a/belfast_sunset_puresky)（夕暮れ） | Dimitrios Savva（撮影）、Greg Zaal（処理）、Jarod Guest（空の編集） | `belfast_sunset_puresky_2k.hdr`（MD5 `4bb56d6163ef1c7ec762e4a7ef8ede81`） |
+| [Kloppenheim 02 (Pure Sky)](https://polyhaven.com/a/kloppenheim_02_puresky)（深夜） | Greg Zaal（元の写真）、Jarod Guest（空の編集） | `kloppenheim_02_puresky_2k.hdr`（MD5 `60bfe04a56522962933359cf4410f32c`） |
 
 元のファイルの入手元：`https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/kloofendal_48d_partly_cloudy_puresky_2k.hdr`
 （MD5 `2eba3a4d7eeb23cbfbeca364c97e7980` が、Poly Haven の API の値と一致することを確認済み）
 
-元の HDR（5.5MB）はリポジトリに入れていません。上の URL から取り直せます。
+元の HDR（各 4〜6MB）はリポジトリに入れていません。上の URL（朝・夕暮れ・深夜も同じ形の URL で、名前だけ違う）から取り直せます。
+MD5 は Poly Haven の API の値と一致することを確認済み。
+
+ゲームでは時間帯（`js/world/time-of-day.js`）ごとに使い分ける。写真ごとに明るさが違うので、昼の明るさに対する割合でそろえる。
 
 ## このフォルダのファイル（`tools/make_sky.py` で作成）
 
@@ -23,4 +29,7 @@
 
 ```
 python3 tools/make_sky.py <元の .hdr> assets/sky kloofendal_48d
+python3 tools/make_sky.py qwantani_sunrise_puresky_2k.hdr assets/sky qwantani_sunrise
+python3 tools/make_sky.py belfast_sunset_puresky_2k.hdr assets/sky belfast_sunset
+python3 tools/make_sky.py kloppenheim_02_puresky_2k.hdr assets/sky kloppenheim_02
 ```
