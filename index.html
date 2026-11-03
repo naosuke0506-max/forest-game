@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>静かな森</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-03.21';</script>
+<script>window.__BUILD = '2026-11-03.23';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -68,6 +68,7 @@
 <link rel="modulepreload" href="./js/ui/icons.js">
 <link rel="modulepreload" href="./js/game/craft.js">
 <link rel="modulepreload" href="./js/game/pickups.js">
+<link rel="modulepreload" href="./js/game/hiding.js">
 <link rel="modulepreload" href="./js/render/pickup-view.js">
 <link rel="preload" as="fetch" href="./assets/trees_blender/trees.json" crossorigin>
 <link rel="preload" as="fetch" href="./assets/trees_blender/fir_lod1.glb" crossorigin>
@@ -148,6 +149,8 @@
 <div id="glare" class="glare"></div>
 <div id="dazzle" class="dazzle"></div>
 <div id="hud" hidden>
+  <!-- 隠れている間：隙間から覗く見た目（ベッドの下・タンスの中）。ほかの表示より下に描く -->
+  <div id="hideview" class="hideview" hidden><div class="hv-label">隠れている</div></div>
   <!-- 上の真ん中：フェーズ・時間帯と残り時間 -->
   <div class="hud-top">
     <div class="phase-row"><span id="phase-icon" class="phase-icon"></span><span id="phase-name" class="phase-name"></span></div>
@@ -176,6 +179,9 @@
   <button id="btn-attack" class="act-btn attack" type="button">攻撃</button>
   <!-- 素材の山・箱の近くで出る：拾う・開ける -->
   <button id="btn-use" class="act-btn use" type="button" hidden>拾う</button>
+  <!-- ベッド・タンスの近くで出る：探す -->
+  <button id="btn-search" class="act-btn search" type="button" hidden>探す</button>
+
   <!-- 敵の頭上の体力・与えたダメージの数字 -->
   <div id="tags" class="tags"></div>
   <!-- 攻撃を受けたときに画面の縁が赤くなる -->

@@ -30,6 +30,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   let viewMode = 'first';               // first / third
   let areaRadius = config.world.playRadius;
   let frozen = false;                   // 脱落したら動かない
+  let hide = null;                      // 隠れている所（ベッドの下・タンスの中）。動けず、目の位置と見回せる範囲が決まる
   let thirdDist = THIRD_DIST;           // 三人称のカメラの距離（地面に当たると縮める）
 
   function speedFor(mag) {
@@ -39,6 +40,11 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   }
 
   function placeCamera(mag) {
+    if (hide) {   // 隠れている：隙間の目の高さから覗く
+      eye.setLocalPosition(0, hide.eyeH, 0);
+      eye.setLocalEulerAngles(pitch, 0, 0);
+      return;
+    }
     if (viewMode === 'first') {
       eye.setLocalPosition(0, p.eyeHeight + Math.sin(bob) * 0.025 * Math.min(1, mag * 1.5), 0);
       eye.setLocalEulerAngles(pitch, 0, 0);
@@ -68,6 +74,17 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
 
     yaw -= input.lookX;
     pitch = Math.max(-p.pitchLimit, Math.min(p.pitchLimit, pitch - input.lookY));
+    if (hide) {
+      // 隠れている間は、覗く向きの左右 40 度・上下の決まった範囲だけ見回せる。動かない
+      const c = hide.yaw + 180;   // 外を見る向き（プレイヤーの向きの約束は -Z が前）
+      const dy = ((yaw - c + 540) % 360) - 180;
+      yaw = c + Math.max(-40, Math.min(40, dy));
+      pitch = Math.max(hide.pitchMin, Math.min(hide.pitchMax, pitch));
+      body.setPosition(hide.eyeX, hide.y, hide.eyeZ);
+      body.setEulerAngles(0, yaw, 0);
+      placeCamera(0);
+      return;
+    }
 
     const mag = Math.hypot(input.moveX, input.moveY);
     if (mag > 0) {
@@ -111,6 +128,22 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     get viewMode() { return viewMode; },
     setViewMode(mode) { viewMode = mode === 'third' ? 'third' : 'first'; thirdDist = THIRD_DIST; placeCamera(0); },
     setAreaRadius(r) { areaRadius = r; },
+    /** 隠れる（ベッドの下・タンスの中）：その場所の隙間から覗く。null で解除 */
+    setHide(spot) {
+      if (!spot) { hide = null; return; }
+      hide = { ...spot, pitchMin: spot.kind === 'bed' ? -8 : -30, pitchMax: spot.kind === 'bed' ? 18 : 20 };
+      pos.x = spot.x; pos.z = spot.z; pos.y = spot.y; groundY = spot.y;
+      yaw = spot.yaw + 180; pitch = 0;
+      update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
+    },
+    /** 隠れ場所から出た：x, z, y に立ち、yaw を向く */
+    leaveHide(x, z, y, faceYaw) {
+      hide = null;
+      pos.x = x; pos.z = z; pos.y = y; groundY = y;
+      if (faceYaw !== undefined) yaw = faceYaw;
+      update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
+    },
+    get hidden() { return !!hide; },
     /** 立てる高さを決める仕組み（家の床と階段）を使う */
     setGround(fn) { groundAt = fn; pos.y = fn(pos.x, pos.z, null); groundY = pos.y; },
     setFrozen(v) { frozen = v; },

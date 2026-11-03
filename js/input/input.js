@@ -20,11 +20,11 @@ export function createInput(layer, stickEl, config) {
 
   // 右手（攻撃）・左手（防御・強攻撃・持ち替え）・回避・拾う：画面右側のボタン（押している間 true）と、
   // PC の J（右手）・K（左手）・L かスペース（回避）・E（拾う・開ける）
-  const held = { attack: false, left: false, dodge: false, use: false };
-  const keys = { attack: false, left: false, dodge: false, use: false };
+  const held = { attack: false, left: false, dodge: false, use: false, search: false };
+  const keys = { attack: false, left: false, dodge: false, use: false, search: false };
   // 押した瞬間を覚えておく：フレームの間隔より短い押下（素早いタップ）でも、必ず 1 回は攻撃として伝える
-  const latched = { attack: false, left: false, dodge: false, use: false };
-  for (const [id, key] of [['btn-attack', 'attack'], ['btn-left', 'left'], ['btn-dodge', 'dodge'], ['btn-use', 'use']]) {
+  const latched = { attack: false, left: false, dodge: false, use: false, search: false };
+  for (const [id, key] of [['btn-attack', 'attack'], ['btn-left', 'left'], ['btn-dodge', 'dodge'], ['btn-use', 'use'], ['btn-search', 'search']]) {
     const el = document.getElementById(id);
     if (!el) continue;
     const down = (e) => { e.preventDefault(); held[key] = true; latched[key] = true; el.classList.add('down'); try { el.setPointerCapture?.(e.pointerId); } catch { /* 指がもう離れていたら何もしない */ } };
@@ -34,13 +34,13 @@ export function createInput(layer, stickEl, config) {
     el.addEventListener('pointercancel', up);
     el.addEventListener('lostpointercapture', up);
   }
-  const keyOf = { KeyJ: 'attack', KeyK: 'left', KeyL: 'dodge', Space: 'dodge', KeyE: 'use' };
+  const keyOf = { KeyJ: 'attack', KeyK: 'left', KeyL: 'dodge', Space: 'dodge', KeyE: 'use', KeyF: 'search' };
   window.addEventListener('keydown', (e) => { if (keyOf[e.code] && !e.repeat) { keys[keyOf[e.code]] = true; latched[keyOf[e.code]] = true; } });
   window.addEventListener('keyup', (e) => { if (keyOf[e.code]) keys[keyOf[e.code]] = false; });
-  const resetButtons = () => { for (const o of [held, keys]) o.attack = o.left = o.dodge = o.use = false; };
+  const resetButtons = () => { for (const o of [held, keys]) o.attack = o.left = o.dodge = o.use = o.search = false; };
   document.addEventListener('visibilitychange', resetButtons);
 
-  const frame = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, attack: false, left: false, dodge: false, use: false };
+  const frame = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, attack: false, left: false, dodge: false, use: false, search: false };
 
   /** 1 フレーム分の入力を取り出す（向きの変化量はここで 0 に戻す） */
   function read() {
@@ -57,7 +57,8 @@ export function createInput(layer, stickEl, config) {
     frame.left = held.left || keys.left || latched.left;
     frame.dodge = held.dodge || keys.dodge || latched.dodge;
     frame.use = held.use || keys.use || latched.use;
-    latched.attack = latched.left = latched.dodge = latched.use = false;
+    frame.search = held.search || keys.search || latched.search;
+    latched.attack = latched.left = latched.dodge = latched.use = latched.search = false;
     return frame;
   }
 
