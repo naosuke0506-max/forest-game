@@ -20,7 +20,7 @@ const RES = 360;            // 地図の絵の大きさ（画素）。1 画素 �
  * @param {HTMLCanvasElement} canvas 左上の小さな地図
  * @param {{ areaRadius: number, zones: object }} opt
  */
-export function createMinimap(canvas, { areaRadius, zones = null }) {
+export function createMinimap(canvas, { areaRadius, zones = null, buildings = [] }) {
   const view = areaRadius + 8;                      // 地図に入れる範囲の半径（m）
   const toPx = (x, z) => [(x / view * 0.5 + 0.5) * RES, (z / view * 0.5 + 0.5) * RES];
 
@@ -60,6 +60,22 @@ export function createMinimap(canvas, { areaRadius, zones = null }) {
     }
   }
   fctx.putImageData(img, 0, 0);
+  // 建物（城の壁・塔・天守・家）
+  for (const b of buildings) {
+    const [bx, by] = toPx(b.x, b.z);
+    const k = RES / (2 * view);
+    fctx.fillStyle = b.roof === 'thatch' ? '#c9a464' : b.roof === 'tiles' ? '#b0563a' : '#8c8478';
+    fctx.strokeStyle = 'rgba(30, 24, 18, .9)';
+    fctx.lineWidth = 1;
+    if (b.type === 'circle') {
+      fctx.beginPath(); fctx.arc(bx, by, b.r * k, 0, Math.PI * 2); fctx.fill(); fctx.stroke();
+    } else {
+      fctx.save(); fctx.translate(bx, by); fctx.rotate((-b.yaw * Math.PI) / 180);
+      fctx.fillRect((-b.w / 2) * k, (-b.d / 2) * k, b.w * k, b.d * k);
+      fctx.strokeRect((-b.w / 2) * k, (-b.d / 2) * k, b.w * k, b.d * k);
+      fctx.restore();
+    }
+  }
   // 柵の輪
   fctx.beginPath();
   fctx.arc(RES / 2, RES / 2, (areaRadius / view) * RES / 2, 0, Math.PI * 2);

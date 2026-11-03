@@ -14,6 +14,14 @@ SIZES = {
     'forrest_ground_01': {'diff': 1024, 'nor_gl': 512, 'arm': 512},
     'pine_bark': {'diff': 512, 'nor_gl': 512, 'arm': 512},
     'mossy_rock': {'diff': 512, 'nor_gl': 512, 'arm': 512},
+    # 城と村（建物）
+    'castle_wall_slates': {'diff': 1024, 'nor_gl': 512, 'arm': 512},
+    'white_plaster_rough_01': {'diff': 512, 'nor_gl': 512, 'arm': 512},
+    'weathered_brown_planks': {'diff': 512, 'nor_gl': 512, 'arm': 512},
+    'thatch_roof_angled': {'diff': 512, 'nor_gl': 512, 'arm': 512},
+    'clay_roof_tiles': {'diff': 512, 'nor_gl': 512, 'arm': 512},
+    'cobblestone_floor_04': {'diff': 512, 'nor_gl': 512, 'arm': 512},
+    'wooden_gate': {'diff': 512, 'nor_gl': 512, 'arm': 512},
 }
 # WebP の画質（凹凸は細かい向きの情報なので高め）
 QUALITY = {'diff': 82, 'nor_gl': 90, 'arm': 85}

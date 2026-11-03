@@ -78,3 +78,19 @@ export async function loadTextureSets(device, quality, onProgress = () => {}) {
 
   return result;
 }
+
+/**
+ * 質感 1 種類を読み込む（起動の後に裏で読むもの用。城と村の建物など）。失敗したら null
+ * @param {string} id assets/textures/ の名前
+ */
+export async function loadTextureSet(device, id, quality) {
+  try {
+    const images = await Promise.all(MAPS.map((map) => loadImage(`${ROOT}/${id}/${id}_${map.suffix}.webp`)));
+    const textures = {};
+    MAPS.forEach((map, i) => { textures[map.key] = createTexture(device, images[i], `${id}_${map.suffix}`, map.srgb, quality.anisotropy); });
+    return textures;
+  } catch (err) {
+    console.warn(err);
+    return null;
+  }
+}

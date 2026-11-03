@@ -9,6 +9,20 @@
 | `pine_bark/` | [Pine Bark](https://polyhaven.com/a/pine_bark) | Dimitrios Savva | 2m 四方 | 木の幹 |
 | `mossy_rock/` | [Mossy Rock](https://polyhaven.com/a/mossy_rock) | Rob Tuytel | 3m 四方 | 岩 |
 
+## 城と村の建物（`js/world/castle.js`。起動の後に裏で読み込む）
+
+| 素材 | 使う所 |
+|---|---|
+| [castle_wall_slates](https://polyhaven.com/a/castle_wall_slates) | 城壁・塔・天守・家の土台・井戸 |
+| [white_plaster_rough_01](https://polyhaven.com/a/white_plaster_rough_01) | 家のしっくいの壁 |
+| [weathered_brown_planks](https://polyhaven.com/a/weathered_brown_planks) | 家の木の骨組み・井戸の柱 |
+| [thatch_roof_angled](https://polyhaven.com/a/thatch_roof_angled) | わらぶき屋根 |
+| [clay_roof_tiles](https://polyhaven.com/a/clay_roof_tiles) | 瓦屋根 |
+| [cobblestone_floor_04](https://polyhaven.com/a/cobblestone_floor_04) | 城の中庭・村の広場の石畳 |
+| [wooden_gate](https://polyhaven.com/a/wooden_gate) | 城門の扉・家の扉 |
+
+どれも Poly Haven（CC0）。取り込んだときに MD5 を確かめた。色は 1024（城壁）か 512、凹凸と陰影・粗さは 512 の WebP にした。
+
 ## 使っているファイル
 
 ゲームが読み込むのは、`tools/optimize_textures.py` で元の 1K JPG から作った **WebP** です（9 枚で合計約 0.9MB）。
