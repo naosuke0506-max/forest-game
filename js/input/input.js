@@ -18,29 +18,29 @@ export function createInput(layer, stickEl, config) {
   // 裏に回った・戻ったときは、押しっぱなしの状態を残さない
   document.addEventListener('visibilitychange', () => sources.forEach((s) => s.reset()));
 
-  // 右手（攻撃）・左手（防御・強攻撃・持ち替え）・回避：画面右側のボタン（押している間 true）と、
-  // PC の J（右手）・K（左手）・L かスペース（回避）
-  const held = { attack: false, left: false, dodge: false };
-  const keys = { attack: false, left: false, dodge: false };
+  // 右手（攻撃）・左手（防御・強攻撃・持ち替え）・回避・拾う：画面右側のボタン（押している間 true）と、
+  // PC の J（右手）・K（左手）・L かスペース（回避）・E（拾う・開ける）
+  const held = { attack: false, left: false, dodge: false, use: false };
+  const keys = { attack: false, left: false, dodge: false, use: false };
   // 押した瞬間を覚えておく：フレームの間隔より短い押下（素早いタップ）でも、必ず 1 回は攻撃として伝える
-  const latched = { attack: false, left: false, dodge: false };
-  for (const [id, key] of [['btn-attack', 'attack'], ['btn-left', 'left'], ['btn-dodge', 'dodge']]) {
+  const latched = { attack: false, left: false, dodge: false, use: false };
+  for (const [id, key] of [['btn-attack', 'attack'], ['btn-left', 'left'], ['btn-dodge', 'dodge'], ['btn-use', 'use']]) {
     const el = document.getElementById(id);
     if (!el) continue;
-    const down = (e) => { e.preventDefault(); held[key] = true; latched[key] = true; el.classList.add('down'); el.setPointerCapture?.(e.pointerId); };
+    const down = (e) => { e.preventDefault(); held[key] = true; latched[key] = true; el.classList.add('down'); try { el.setPointerCapture?.(e.pointerId); } catch { /* 指がもう離れていたら何もしない */ } };
     const up = () => { held[key] = false; el.classList.remove('down'); };
     el.addEventListener('pointerdown', down);
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
     el.addEventListener('lostpointercapture', up);
   }
-  const keyOf = { KeyJ: 'attack', KeyK: 'left', KeyL: 'dodge', Space: 'dodge' };
+  const keyOf = { KeyJ: 'attack', KeyK: 'left', KeyL: 'dodge', Space: 'dodge', KeyE: 'use' };
   window.addEventListener('keydown', (e) => { if (keyOf[e.code] && !e.repeat) { keys[keyOf[e.code]] = true; latched[keyOf[e.code]] = true; } });
   window.addEventListener('keyup', (e) => { if (keyOf[e.code]) keys[keyOf[e.code]] = false; });
-  const resetButtons = () => { for (const o of [held, keys]) o.attack = o.left = o.dodge = false; };
+  const resetButtons = () => { for (const o of [held, keys]) o.attack = o.left = o.dodge = o.use = false; };
   document.addEventListener('visibilitychange', resetButtons);
 
-  const frame = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, attack: false, left: false, dodge: false };
+  const frame = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, attack: false, left: false, dodge: false, use: false };
 
   /** 1 フレーム分の入力を取り出す（向きの変化量はここで 0 に戻す） */
   function read() {
@@ -56,7 +56,8 @@ export function createInput(layer, stickEl, config) {
     frame.attack = held.attack || keys.attack || latched.attack;
     frame.left = held.left || keys.left || latched.left;
     frame.dodge = held.dodge || keys.dodge || latched.dodge;
-    latched.attack = latched.left = latched.dodge = false;
+    frame.use = held.use || keys.use || latched.use;
+    latched.attack = latched.left = latched.dodge = latched.use = false;
     return frame;
   }
 

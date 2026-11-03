@@ -13,6 +13,12 @@ import { loadWeaponModels } from './render/weapons.js';
 import { createViewModel } from './render/viewmodel.js';
 import { createProjectileViews } from './render/projectiles.js';
 import { createHud } from './ui/hud.js';
+import { createPickups } from './game/pickups.js';
+import { createPickupViews } from './render/pickup-view.js';
+import { createCraftUi } from './ui/craft.js';
+import { ICONS, weaponIconOf } from './ui/icons.js';
+import { MATERIALS } from './game/data.js';
+import { levelOf } from './game/craft.js';
 
 const PLAYER_COLOR = '#ffd75e';
 const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
@@ -20,7 +26,7 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
 /**
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, debug, phaseDuration }
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, zones = null, buildings = [], debug = false, phaseDuration = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, zones = null, buildings = [], crateSpots = [], tex = null, trees = [], debug = false, phaseDuration = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）
@@ -56,6 +62,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   }
   player.spawn(me.x, me.z, me.yaw);
 
+  // 落ちている素材と村の箱。フェーズが始まるたびに少し足す
+  const pickups = createPickups({ rng: createRandom(config.seed + 7700), zones, isFree: obstacles.isFree, areaRadius: AREA_RADIUS, crateSpots });
+  const pickupViews = createPickupViews(app, pickups, terrain, tex, config.quality);
+  match.on('phaseStart', () => pickups.refill());
+
   // 戦闘と bot
   const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles });
   const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => createBot(f, createRandom(config.seed + 100 + i), fighters));
@@ -63,7 +74,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 見た目
   // キャラの模型を読み込む。読み込めなかったキャラは、仮の人形で続ける（画面下に知らせを出す）
   const models = new Map();
-  const weaponsLoaded = loadWeaponModels(app, fighters.flatMap((f) => (f.shield ? [f.weapon, 'shield'] : [f.weapon])));
+  // 武器の模型：みんなの今の武器と、自分がクラフトで作れる武器
+  const weaponsLoaded = loadWeaponModels(app, [...fighters.flatMap((f) => (f.shield ? [f.weapon, 'shield'] : [f.weapon])), ...CHARACTERS[me.char].crafts]);
   const charIds = [...new Set(fighters.map((f) => CHARACTERS[f.char].model))];
   await Promise.all([weaponsLoaded, ...charIds.map((id) =>
     loadCharacterModel(app, id).then((m) => models.set(id, m)).catch((err) => {
@@ -75,17 +87,38 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     return [f, m ? createCharacterView(app, f, terrain, m) : createFighterView(app, f, terrain)];
   }));
   const hud = createHud(match, me);
-  const minimap = createMinimap(document.getElementById('minimap'), { areaRadius: AREA_RADIUS, zones, buildings });
+  const minimap = createMinimap(document.getElementById('minimap'), { areaRadius: AREA_RADIUS, zones, buildings, heightAt: terrain.heightAt, trees });
   // 別のエリアに入ったら、左の知らせに出す
   let zoneNow = zones ? zones.zoneAt(me.x, me.z) : null, zoneTimer = 0;
-  // 右手・左手ボタンの文字をキャラに合わせる（左手：盾持ちは防御、ほかは強攻撃・持ち替え など）
+  // ボタン：絵と文字。右手・左手の文字をキャラに合わせる（左手：盾持ちは防御、ほかは強攻撃・持ち替え など）
+  const setBtn = (el, icon, label) => { el.innerHTML = `<span class="ab-icon">${icon}</span><span class="ab-label">${label}</span>`; };
   const leftBtn = document.getElementById('btn-left');
-  leftBtn.textContent = CHARACTERS[me.char].leftLabel;
+  setBtn(leftBtn, me.left === 'guard' ? ICONS.shield : me.left === 'switch' ? ICONS.switch : ICONS.heavy, CHARACTERS[me.char].leftLabel);
   leftBtn.classList.toggle('guard', me.left === 'guard');
+  setBtn(document.getElementById('btn-dodge'), ICONS.dodge, '回避');
+  document.getElementById('settings-btn').innerHTML = ICONS.gear;
   const attackBtn = document.getElementById('btn-attack');
   const attackLabel = () => (WEAPONS[me.weapon].kind === 'bow' ? '射る' : me.weapon === 'spear' ? '突き' : '攻撃');
-  attackBtn.textContent = attackLabel();
-  combat.on('switch', ({ fighter }) => { if (fighter === me) attackBtn.textContent = attackLabel(); });
+  const refreshAttack = () => setBtn(attackBtn, weaponIconOf(me.weapon), attackLabel());
+  refreshAttack();
+  combat.on('switch', ({ fighter }) => { if (fighter === me) refreshAttack(); });
+
+  // 素材とクラフト：拾ったら左に知らせ、素材の表示を更新する
+  const useBtn = document.getElementById('btn-use');
+  const craftUi = createCraftUi(me, (act, id) => {
+    const name = id ? WEAPONS[id].name : CHARACTERS[me.char].armorName;
+    if (act === 'make') hud.addFeed(`${name}を作った（クラフト画面の「装備」で持ち替え）`);
+    else if (act === 'upgrade') hud.addFeed(`${name}を強化した（強化 ${levelOf(me, id)}）`);
+    else if (act === 'armor') hud.addFeed(`${name}を強化した（強化 ${me.armorLevel}）`);
+    else if (act === 'equip') { hud.addFeed(`${name}に持ち替えた`); refreshAttack(); }
+  });
+  pickups.on('taken', ({ fighter, item, got }) => {
+    if (fighter !== me) return;
+    const what = Object.entries(got).filter(([, n]) => n).map(([k, n]) => `${MATERIALS[k].name} +${n}`).join('　');
+    hud.addFeed(item.kind === 'crate' ? `箱を開けた：${what}` : what);
+    craftUi.update();
+  });
+  let nearItem = null, useTimer = 0;
   const viewModel = createViewModel(player.camera, me);
   const arrows = createProjectileViews(app, combat);
   let thirdPerson = false;
@@ -116,6 +149,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         document.getElementById('btn-attack').hidden = true;
         document.getElementById('btn-left').hidden = true;
         document.getElementById('btn-dodge').hidden = true;
+        useBtn.hidden = true;
+        document.getElementById('mats').hidden = true;
+        craftUi.close();
         spectateEl.hidden = false;
         nextSpectate();
       }, 2500);
@@ -125,7 +161,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   });
   match.on('end', () => { spectateEl.hidden = true; });
 
-  const world = { obstacles, get areaRadius() { return match.areaRadius; } };
+  const world = { obstacles, pickups, get areaRadius() { return match.areaRadius; } };
   match.on('eliminated', ({ victim }) => { if (victim === me) player.setFrozen(true); });
   match.on('end', (res) => setTimeout(() => hud.showResult(res), 1200));
   match.on('rewardChosen', ({ fighter }) => { if (fighter === me) player.speedScale = me.stats.speed; });
@@ -180,6 +216,21 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // あなたの位置を、試合の記録へ写す（いずれ人間も試合の計算で動かす）
       if (me.alive) { me.x = player.position.x; me.z = player.position.z; me.yaw = player.yaw; me.pitch = player.pitch; }
       if (running) combat.control(me, input);
+      // 拾う・開ける：近くに素材の山か箱があれば、ボタンを出す
+      if ((useTimer -= dt) <= 0) {
+        useTimer = 0.12;
+        nearItem = running && me.alive ? pickups.nearest(me) : null;
+        useBtn.hidden = !nearItem;
+        if (nearItem) {
+          const label = nearItem.kind === 'crate' ? '開ける' : '拾う';
+          const icon = nearItem.kind === 'crate' ? ICONS.crate : ICONS[nearItem.kind];
+          if (useBtn.dataset.label !== label + nearItem.kind) {
+            useBtn.dataset.label = label + nearItem.kind;
+            setBtn(useBtn, icon, nearItem.kind === 'crate' ? label : `${MATERIALS[nearItem.kind].name}<small>×${nearItem.amount}</small>`);
+          }
+        }
+      }
+      if (input.use && nearItem && running) { pickups.take(me, nearItem); nearItem = null; useTimer = 0; }
       for (const b of bots) {
         const moving = running ? b.update(dt, world) : 0;
         if (running) combat.control(b.fighter, b.combatInput);
@@ -191,6 +242,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       views.get(me).update(dt, player.moving);
       viewModel.update(dt, player.moving);
       arrows.update();
+      pickupViews.update(dt, player.camera.getPosition());
       // 観戦：見ている人の肩越しにカメラを置く
       if (spectating) {
         if (!spectating.alive) nextSpectate();
@@ -210,5 +262,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     get spectating() { return spectating; },
     debugAction,
     views,   // 確認用（自動テストから見た目の状態を読むため）
+    pickups,
   };
 }

@@ -3,6 +3,7 @@
 import * as pc from 'playcanvas';
 import { CHARACTERS, PHASES } from '../game/data.js';
 import { TIMES } from '../world/time-of-day.js';
+import { timeIcon } from './icons.js';
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -13,7 +14,8 @@ function formatTime(sec) {
 }
 
 export function createHud(match, me) {
-  const phaseName = $('#phase-name'), phaseTime = $('#phase-time');
+  const phaseName = $('#phase-name'), phaseTime = $('#phase-time'), phaseIcon = $('#phase-icon');
+  let shownTime = null;
   const ranking = $('#ranking'), feed = $('#feed');
   const center = $('#center-msg');
   const reward = $('#reward');
@@ -149,6 +151,7 @@ export function createHud(match, me) {
     update(dt) {
       // 左上：フェーズと残り時間
       phaseName.textContent = `${match.phaseInfo.name}・${TIMES[match.phaseInfo.time]?.name ?? ''}`;
+      if (shownTime !== match.phaseInfo.time) { shownTime = match.phaseInfo.time; phaseIcon.innerHTML = timeIcon(shownTime); }
       if (match.overtime) {
         phaseTime.textContent = '延長戦';
         phaseTime.classList.add('overtime');

@@ -87,7 +87,7 @@ async function boot() {
   app.on('update', (dt) => {
     const frame = playing ? input.read() : null;
     if (playing) player.update(dt, frame);
-    session?.update(dt, frame || { attack: false, left: false, dodge: false, moveX: 0, moveY: 0 });
+    session?.update(dt, frame || { attack: false, left: false, dodge: false, use: false, moveX: 0, moveY: 0 });
     trees?.update(dt, player.camera.getPosition(), player.camera.forward);
     groundCover?.update(dt, player.camera.getPosition(), player.camera.forward);
     props?.update(dt, player.camera.getPosition(), player.camera.forward);
@@ -125,6 +125,7 @@ async function boot() {
     input.reset();
     session = await startPracticeMatch({
       app, config: CONFIG, terrain, obstacles, player, myChar, timeOfDay, zones, buildings: village?.footprints || [],
+      crateSpots: village?.crateSpots || [], tex, trees: trees?.canopies || [],
       debug: CONFIG.debug,
       // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」
       phaseDuration: CONFIG.phaseDuration ?? (settings.phaseLen === 'normal' ? null : Number(settings.phaseLen)),
