@@ -71,6 +71,11 @@ export function createWeaponModel(weaponId, { shadows = true } = {}) {
       P('box', steel(), [0, 0, -0.6], [0.055, 0.012, 1.0]);                          // 刃
       P('sphere', iron(), [0, 0, 0.25], [0.06, 0.06, 0.06]);                         // 柄頭
       break;
+    case 'dagger':
+      P('cylinder', leather(), [0, 0, 0.02], [0.035, 0.11, 0.035], [90, 0, 0]);       // 柄
+      P('box', iron(), [0, 0, -0.05], [0.12, 0.025, 0.03]);                          // 鍔
+      P('box', steel(), [0, 0, -0.2], [0.04, 0.01, 0.28]);                           // 刃
+      break;
     case 'mace':
       P('cylinder', wood(), [0, 0, -0.18], [0.045, 0.62, 0.045], [90, 0, 0]);        // 柄
       P('sphere', iron(), [0, 0, -0.52], [0.16, 0.16, 0.16]);                        // 頭

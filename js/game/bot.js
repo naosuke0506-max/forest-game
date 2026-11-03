@@ -24,7 +24,7 @@ export function createBot(fighter, rng, fighters) {
     strafeTimer: 0,
     drawGoal: 0,         // 弓：どれだけ引いてから放つか（秒）
     dodgeCooldown: 0,
-    input: { forward: 0, strafe: 0, run: false, yaw: fighter.yaw, pitch: 0, attack: false, guard: false, dodge: false, dodgeX: 0, dodgeY: 0 },
+    input: { forward: 0, strafe: 0, run: false, yaw: fighter.yaw, pitch: 0, attack: false, guard: false, left: false, dodge: false, dodgeX: 0, dodgeY: 0 },
   };
   const f = fighter;
   const w = () => WEAPONS[f.weapon];
@@ -72,6 +72,12 @@ export function createBot(fighter, rng, fighters) {
     const t = b.target, d = Math.hypot(t.x - f.x, t.z - f.z), weapon = w();
     const lowHp = f.stats.hp < f.stats.maxHp * 0.35;
     b.input.run = d > 9;
+    b.input.left = false;
+    // 弓兵：近づかれたらダガーに持ち替え、離れたら弓に戻す（押して離す 1 回で持ち替え）
+    if (f.left === 'switch' && !f.action) {
+      const wantMelee = d < 4.5, isMelee = f.weapon !== f.primary;
+      if (wantMelee !== isMelee && (wantMelee || d > 9)) { b.input.left = true; b.input.attack = false; return; }
+    }
 
     if (weapon.kind === 'bow') {
       // 弓：近すぎると下がる、中距離で横に動く、遠すぎると近づく
@@ -118,8 +124,17 @@ export function createBot(fighter, rng, fighters) {
       b.input.strafe = b.strafeDir * 0.4;
       const facing = Math.abs(wrap(yawTo(f, t.x, t.z) - f.yaw)) < 22;
       // 押して離す（1 回の攻撃）。押しっぱなしにしないよう、次の考えで離す
-      b.input.attack = !b.input.attack && facing && !f.action && !b.input.guard && b.attackCooldown <= 0 && f.stamina > weapon.stamina;
-      if (b.input.attack) b.attackCooldown = 0.25 + rng.next() * 0.7;
+      const ready = facing && !f.action && !b.input.guard && b.attackCooldown <= 0;
+      // 強攻撃（左手）：相手が防御している・ひるんでいるときに多く使う。スタミナが多く要る
+      const heavyChance = t.guarding || t.stun > 0 ? 0.55 : 0.18;
+      if (f.left === 'heavy' && ready && !b.input.attack && f.stamina > weapon.stamina * 2 && rng.next() < heavyChance) {
+        b.input.left = true;
+        b.input.attack = false;
+        b.attackCooldown = 0.5 + rng.next() * 0.8;
+      } else {
+        b.input.attack = !b.input.attack && ready && f.stamina > weapon.stamina;
+        if (b.input.attack) b.attackCooldown = 0.25 + rng.next() * 0.7;
+      }
     }
   }
 
@@ -161,7 +176,8 @@ export function createBot(fighter, rng, fighters) {
     /** 戦闘の入力（combat.control に渡す） */
     get combatInput() {
       const i = b.input;
-      return { attack: i.attack, guard: i.guard, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY };
+      // 左手ボタン：盾持ちは防御、ほかは強攻撃・持ち替え
+      return { attack: i.attack, left: f.left === 'guard' ? i.guard : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY };
     },
   };
 }

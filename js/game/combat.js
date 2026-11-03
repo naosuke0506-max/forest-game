@@ -1,7 +1,7 @@
 // 戦闘（計算だけ）：攻撃・防御・弓と矢・ダメージ・ひるみ・スタミナ。
 // 人間も bot も、同じ形の入力 { attack: 押している, guard: 押している } で動かす。
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { WEAPONS, COMBAT, DODGE } from './data.js';
+import { WEAPONS, COMBAT, DODGE, HEAVY } from './data.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 
 const DEG = Math.PI / 180;
@@ -10,6 +10,25 @@ const wrap = (a) => ((a + 540) % 360) - 180;
 function angleTo(yaw, dx, dz) {
   const to = Math.atan2(-dx, -dz) / DEG;
   return Math.abs(wrap(to - yaw));
+}
+
+/**
+ * 1 回の近接攻撃の数値（ふつうの攻撃か、左手ボタンの強攻撃か）。見た目（動きの長さ）もこれに合わせる
+ */
+export function attackStats(weaponId, heavy = false) {
+  const w = WEAPONS[weaponId];
+  if (!heavy) return w;
+  const extra = HEAVY.byWeapon[weaponId] || {};
+  return {
+    ...w,
+    damage: w.damage * HEAVY.damage,
+    windup: w.windup * HEAVY.windup,
+    recovery: w.recovery * HEAVY.recovery,
+    stamina: w.stamina * HEAVY.stamina,
+    arc: extra.arc ?? w.arc,
+    reach: w.reach * (extra.reach ?? 1),
+    guardPierce: Math.min(1, (w.guardPierce || 0) + (extra.guardPierce || 0)),
+  };
 }
 
 /**
@@ -136,21 +155,32 @@ export function createCombat({ match, heightAt, obstacles }) {
 
     /**
      * 1 人分の入力を受ける（毎フレーム、移動の後に呼ぶ）
-     * @param {{attack: boolean, guard: boolean, dodge?: boolean, moveX?: number, moveY?: number}} input
-     *   attack・guard・dodge は押している間 true。moveX（右）・moveY（前）は回避の向き（移動スティック）
+     * @param {{attack: boolean, left?: boolean, guard?: boolean, dodge?: boolean, moveX?: number, moveY?: number}} input
+     *   attack（右手）・left（左手。古い名前の guard でもよい）・dodge は押している間 true。moveX（右）・moveY（前）は回避の向き（移動スティック）
      */
     control(f, input) {
       if (!f.alive) { f.guarding = false; return; }
-      const w = WEAPONS[f.weapon];
+      let w = WEAPONS[f.weapon];
       const pressed = input.attack && !f._attackHeld;
       const released = !input.attack && f._attackHeld;
       f._attackHeld = input.attack;
+      // 左手ボタン：盾持ちは防御（押している間）、ほかは強攻撃、弓兵は近接武器との持ち替え
+      const leftHeld = !!(input.left ?? input.guard);
+      const leftPressed = leftHeld && !f._leftHeld;
+      f._leftHeld = leftHeld;
       const dodgePressed = input.dodge && !f._dodgeHeld;
       f._dodgeHeld = !!input.dodge;
       if (f.stun > 0) { f.guarding = false; if (f.action?.kind === 'draw') f.action = null; return; }
 
       // 回避：移動スティックの向きへ（倒していなければ後ろへ）。行動中（弓を引いている途中は除く）はできない
       if (f.action?.kind === 'dodge') { f.guarding = false; return; }
+      // 持ち替え（弓兵）：弓を引いている途中でも、すぐに持ち替える
+      if (f.left === 'switch' && leftPressed && f.sidearm && (!f.action || f.action.kind === 'draw')) {
+        f.action = null;
+        f.weapon = f.weapon === f.primary ? f.sidearm : f.primary;
+        w = WEAPONS[f.weapon];
+        emit('switch', { fighter: f, weapon: f.weapon });
+      }
       const d = DODGE[f.weight] || DODGE.medium;
       if (dodgePressed && (!f.action || f.action.kind === 'draw') && f.stamina >= d.stamina * 0.5) {
         let mx = input.moveX || 0, my = input.moveY || 0;
@@ -166,10 +196,13 @@ export function createCombat({ match, heightAt, obstacles }) {
       }
 
       if (w.kind === 'melee') {
-        if (pressed && !f.action && f.stamina >= w.stamina * 0.5) {
-          f.action = { kind: 'attack', t: 0, hit: false };
-          spendStamina(f, w.stamina);
-          emit('swing', { fighter: f });
+        // 強攻撃（左手）を先に見る：両方押したときは重い方
+        const heavy = f.left === 'heavy' && leftPressed;
+        const a = attackStats(f.weapon, heavy);
+        if ((pressed || heavy) && !f.action && f.stamina >= a.stamina * 0.5) {
+          f.action = { kind: 'attack', t: 0, hit: false, heavy };
+          spendStamina(f, a.stamina);
+          emit('swing', { fighter: f, heavy });
         }
       } else {
         // 弓：押して引き、離して放つ
@@ -184,7 +217,7 @@ export function createCombat({ match, heightAt, obstacles }) {
           }
         }
       }
-      f.guarding = input.guard && f.shield && !f.action && f.stamina > 0;   // 防御できるのは盾だけ（武器では受けられない）
+      f.guarding = leftHeld && f.left === 'guard' && f.shield && !f.action && f.stamina > 0;   // 防御できるのは盾だけ（武器では受けられない）
     },
 
     update(dt) {
@@ -201,8 +234,9 @@ export function createCombat({ match, heightAt, obstacles }) {
         if (a) {
           a.t += dt;
           if (a.kind === 'attack') {
-            if (!a.hit && a.t >= w.windup) { a.hit = true; meleeHit(f, w); }
-            if (a.t >= w.windup + w.recovery) f.action = null;
+            const st = attackStats(f.weapon, a.heavy);
+            if (!a.hit && a.t >= st.windup) { a.hit = true; meleeHit(f, st); }
+            if (a.t >= st.windup + st.recovery) f.action = null;
           } else if (a.kind === 'release' && a.t >= 0.25) {
             f.action = null;
           } else if (a.kind === 'dodge') {

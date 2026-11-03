@@ -1,6 +1,7 @@
 // 一人称で画面の手前に見える、自分の武器と盾。カメラの子にして、行動に合わせて動かす
 import * as pc from 'playcanvas';
 import { WEAPONS } from '../game/data.js';
+import { attackStats } from '../game/combat.js';
 import { createWeaponModel, createShieldModel, createArrowModel } from './weapons.js';
 
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -8,43 +9,52 @@ const ease = (t) => t * t * (3 - 2 * t);
 const lerp3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 
 export function createViewModel(camera, fighter) {
-  const w = WEAPONS[fighter.weapon];
+  let w = WEAPONS[fighter.weapon];
   const root = new pc.Entity('viewmodel');
   camera.addChild(root);
 
   // 武器を持つ「手の位置」。ここを動かして振る
   const grip = new pc.Entity('grip');
   root.addChild(grip);
-  const weapon = createWeaponModel(fighter.weapon, { shadows: false });
-  grip.addChild(weapon);
-  if (fighter.weapon === 'spear') weapon.setLocalPosition(0, 0, 0.7);
+  // 手に持つ武器。持ち替え（弓兵の弓 ↔ ダガー）のときは作り直す
+  let weapon = null, shownWeapon = null;
+  function showWeapon(id) {
+    weapon?.destroy();
+    weapon = createWeaponModel(id, { shadows: false });
+    grip.addChild(weapon);
+    if (id === 'spear') weapon.setLocalPosition(0, 0, 0.7);
+    shownWeapon = id;
+    w = WEAPONS[id];
+    REST = RESTS[id];
+  }
 
   let shield = null;
   if (fighter.shield) {
     shield = createShieldModel({ shadows: false });
     root.addChild(shield);
   }
-  let arrow = null;
-  if (w.kind === 'bow') {
-    arrow = createArrowModel();
-    root.addChild(arrow);
-  }
+  const arrow = fighter.sidearm || w.kind === 'bow' ? createArrowModel() : null;
+  if (arrow) { root.addChild(arrow); arrow.enabled = false; }
 
   let sway = 0, guardBlend = 0;
 
   // 構えの位置と角度（カメラから見て：右が +X、下が -Y、前が -Z）
-  const REST = {
+  const RESTS = {
     armingsword: { pos: [0.32, -0.32, -0.55], rot: [12, 12, -8] },
     longsword: { pos: [0.3, -0.34, -0.55], rot: [12, 12, -8] },
     mace:      { pos: [0.34, -0.36, -0.55], rot: [18, 10, -10] },
     spear:     { pos: [0.28, -0.3, -0.45], rot: [4, 4, 0] },
+    dagger:    { pos: [0.3, -0.3, -0.5], rot: [14, 10, -12] },
     longbow:   { pos: [-0.12, -0.12, -0.95], rot: [-90, 0, 12] },   // 弓は縦に立てる（模型は Z の向きに立っている）
-  }[fighter.weapon];
+  };
+  let REST = null;
+  showWeapon(fighter.weapon);
 
   return {
     setVisible(v) { root.enabled = v; },
     update(dt, moving) {
       if (!fighter.alive) { root.enabled = false; return; }
+      if (fighter.weapon !== shownWeapon) showWeapon(fighter.weapon);
       sway += dt * (2 + 6 * moving);
       const bob = [Math.sin(sway) * 0.012 * moving, Math.abs(Math.cos(sway)) * 0.015 * moving, 0];
       let pos = [...REST.pos], rot = [...REST.rot];
@@ -59,17 +69,18 @@ export function createViewModel(camera, fighter) {
         }
         if (a?.kind === 'attack') {
           const t = a.t;
+          const ws = attackStats(fighter.weapon, a.heavy);   // 強攻撃は振りかぶりが長い
           if (fighter.weapon === 'spear') {
-            const pull = ease(Math.min(1, t / w.windup));
-            const thrust = ease(Math.min(1, Math.max(0, (t - w.windup) / 0.08)));
-            const back = ease(Math.min(1, Math.max(0, (t - w.windup - 0.08) / w.recovery)));
+            const pull = ease(Math.min(1, t / ws.windup));
+            const thrust = ease(Math.min(1, Math.max(0, (t - ws.windup) / 0.08)));
+            const back = ease(Math.min(1, Math.max(0, (t - ws.windup - 0.08) / ws.recovery)));
             pos[2] += pull * 0.12 - thrust * (1 - back) * 0.65;
             pos[0] -= thrust * (1 - back) * 0.12;
           } else {
             // 右上へ振りかぶって、左下へ振り抜く
-            const up = ease(Math.min(1, t / w.windup));
-            const swing = ease(Math.min(1, Math.max(0, (t - w.windup) / 0.12)));
-            const back = ease(Math.min(1, Math.max(0, (t - w.windup - 0.12) / w.recovery)));
+            const up = ease(Math.min(1, t / ws.windup));
+            const swing = ease(Math.min(1, Math.max(0, (t - ws.windup) / 0.12)));
+            const back = ease(Math.min(1, Math.max(0, (t - ws.windup - 0.12) / ws.recovery)));
             const raised = [0.42, 0.05, -0.45], raisedRot = [-50, 20, -40];
             const done = [-0.25, -0.42, -0.55], doneRot = [55, -30, 30];
             let p2 = lerp3(pos, raised, up), r2 = lerp3(rot, raisedRot, up);
@@ -77,6 +88,7 @@ export function createViewModel(camera, fighter) {
             pos = lerp3(p2, pos, back); rot = lerp3(r2, rot, back);
           }
         }
+        if (arrow) arrow.enabled = false;
       } else {
         // 弓：引いた割合で矢を手前へ。引いていないときは少し下げる
         const drawing = a?.kind === 'draw';

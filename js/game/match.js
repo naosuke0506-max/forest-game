@@ -15,7 +15,10 @@ export function createFighter({ id, name, char, isPlayer, color }) {
     state: 'normal',         // normal / enhanced（肉体強化）/ mutated（変異）… 手順 6 で使う
     stats: { maxHp: c.maxHp, hp: c.maxHp, attack: 1, defense: 1, speed: c.speed, maxStamina: COMBAT.maxStamina },
     // 戦闘（game/combat.js が動かす）
-    weapon: c.weapon,        // 持っている武器（WEAPONS の名前）
+    weapon: c.weapon,        // 手に持っている武器（WEAPONS の名前）
+    primary: c.weapon,       // 主の武器
+    sidearm: c.sidearm || null, // 持ち替える近接武器（弓兵のダガー）
+    left: c.left,            // 左手ボタンでできること（guard / heavy / switch）
     weight: c.weight,        // 装備の重さ（回避の仕方が変わる）
     shield: c.shield,
     armor: c.armor,
