@@ -46,17 +46,19 @@ export const CONFIG = {
   seed: Number(params.get('seed')) || 20261031,
 
   world: {
-    terrainSize: 180,       // 地面の一辺（m）
-    terrainSegments: 72,    // 地面の分割数（多いほど滑らかで重い）
-    playRadius: 62,         // 歩ける範囲の半径（m）
-    forestRadius: 86,       // 木を置く範囲の半径（m）。歩ける範囲の外まで木を置き、森の外縁がむき出しに見えないように
+    terrainSize: 440,       // 地面の一辺（m）
+    terrainSegments: 160,   // 地面の分割数（多いほど滑らかで重い。約 2.75m ごと）
+    playRadius: 175,        // 歩ける範囲の半径（m）。端から端まで 350m。game/data.js の AREA_RADIUS と同じ値にする
+    forestRadius: 200,      // 木を置く範囲の半径（m）。柵の外まで木を置き、森の外縁がむき出しに見えないように
     clearingRadius: 7,      // 開始地点の周りの空き地（m）
+    drawDistance: 125,      // 木や岩を描く遠さ（m）。霧で 9 割見えなくなる辺り。広い森でも描く数が増えすぎないように
     // 木の本数（Tripo AI の模型を使うとき）。置く順番もこの順（大きい木から）
-    trees: { fir: 90, red_pine: 32, broadleaf: 38, birch: 32, dead: 14, sapling: 70 },
-    conifers: 110,          // 模型が読み込めなかったときの仮の木の本数
-    broadleaves: 45,
-    rocks: 45,
-    grassRadius: 48,        // 草を置く範囲の半径（m）
+    // 本数は半径 86m のときの 5.4 倍（広さの比）
+    trees: { fir: 486, red_pine: 173, broadleaf: 205, birch: 173, dead: 76, sapling: 378 },
+    conifers: 600,          // 模型が読み込めなかったときの仮の木の本数
+    broadleaves: 240,
+    rocks: 240,
+    grassRadius: 175,       // 草を置く範囲の半径（m。模型が読み込めなかったときの仮の草）
   },
 
   atmosphere: {
