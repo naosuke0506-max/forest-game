@@ -139,7 +139,7 @@ export function createProps(app, config, seed, terrain, obstacles, types, zones 
   const box = new pc.BoundingBox(new pc.Vec3(0, 5, 0), new pc.Vec3(R + 10, 15, R + 10));
   const areaScale = config.world.playRadius / 62;   // 置く範囲の倍率（もとは半径 62m で決めた値）
   const CELL = 12;
-  // エリアごとの多さ（中央の森を 1 とした倍率）。道と城の場所には、岩・切り株・落ち枝を置かない
+  // エリアごとの多さ（中央の森を 1 とした倍率）。道と村の場所には、岩・切り株・落ち枝を置かない
   const ZONE_MUL = {
     rock_large:  { mixed: 1, deep: 1.2, prairie: 0.5, castle: 0 },
     rock_medium: { mixed: 1, deep: 1.2, prairie: 0.6, castle: 0 },
