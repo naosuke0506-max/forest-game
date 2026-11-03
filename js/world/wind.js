@@ -111,6 +111,8 @@ export function createWind(app, config) {
   uTime.setValue(0); uDir.setValue(dir); uStrength.setValue(w.strength); uGust.setValue(0);
 
   return {
+    /** 今の突風の強さ（0〜。音の風の強さに使う） */
+    get gust() { return gust; },
     update(dt) {
       time += dt;
       // 突風：数秒ごとに次の強さを決め、そこへなめらかに近づける

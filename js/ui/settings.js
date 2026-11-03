@@ -1,6 +1,6 @@
 // 設定：性能表示、テスト用（フェーズの長さ・フェーズを飛ばす など）。設定はこの端末に保存する（保存できない環境でも動く）
 const KEY = 'forest-game.settings';
-const DEFAULTS = { stats: 'on', phaseLen: 'normal' };
+const DEFAULTS = { stats: 'on', phaseLen: 'normal', sound: 'mid' };
 
 function load() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return { ...DEFAULTS }; }

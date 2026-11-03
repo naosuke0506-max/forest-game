@@ -12,6 +12,8 @@ import { loadGroundCover, createGroundCover } from './world/ground-cover.js';
 import { createSunGlare } from './render/sun-glare.js';
 import { createSkyLights } from './render/sky-lights.js';
 import { createAirParticles } from './render/air-particles.js';
+import { audio } from './audio/engine.js';
+import { createAmbience } from './audio/ambience.js';
 import { createRandom } from './core/random.js';
 import { AREA_RADIUS } from './game/data.js';
 import { createObstacles } from './world/obstacles.js';
@@ -90,6 +92,9 @@ async function boot() {
     canopies: trees?.canopies || [], heightAt: terrain.heightAt, zones, farClip: CONFIG.atmosphere.farClip,
   });
   const air = createAirParticles(app, player.camera, timeOfDay, { heightAt: terrain.heightAt, zones, sun: env.sun });
+  // 環境音（風・葉・鳥・夜の虫・梟）。音は試合を始めるボタンを押したときから出る（iPad の決まり）
+  const ambience = createAmbience({ timeOfDay, wind, zones });
+  let indoorK = 0;
   const touchLayer = document.getElementById('touch-layer');
   const input = createInput(touchLayer, document.getElementById('stick'), CONFIG);
   const stats = createStats(app, CONFIG.showStats, CONFIG.qualityName);
@@ -113,6 +118,11 @@ async function boot() {
     sunGlare.update(dt);
     skyLights.update(dt);
     air.update(dt);
+    // 音：聞く人の位置と向き。家の中では外の音がこもる
+    const inside = village?.insideHouse?.(cp.x, cp.z) && player.position.y > terrain.heightAt(cp.x, cp.z) + 0.25 ? 1 : 0;
+    indoorK += (inside - indoorK) * Math.min(1, dt * 3);
+    audio.setListener(cp.x, cp.y, cp.z, player.yaw, indoorK);
+    ambience.update(dt);
     stats.update(dt);
   });
 
@@ -134,10 +144,15 @@ async function boot() {
     player.setViewMode(CONFIG.view);
     session?.showMyBody(CONFIG.view === 'third');
     document.getElementById('stats').hidden = st.stats === 'off';
+    audio.setVolume({ high: 1, mid: 0.7, low: 0.4, off: 0 }[st.sound] ?? 0.7);
   };
   const settings = createSettings(applySettings, (act) => session?.debugAction(act));
 
+  // 音：iPad は指で触ったときにしか音を出し始められない。試合を始めるボタンで出し、
+  // 裏から戻ったなどで止まっていたら、次に画面に触れたときに再び出す
+  document.addEventListener('pointerdown', () => { if (playing && !audio.ready) audio.unlock(); }, true);
   titleScreen.ready(async (myChar) => {
+    audio.unlock();
     input.reset();
     session = await startPracticeMatch({
       app, config: CONFIG, terrain, obstacles, player, myChar, timeOfDay, zones, buildings: village?.footprints || [],
