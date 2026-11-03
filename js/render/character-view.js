@@ -111,13 +111,13 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     current = name;
   };
 
-  let groundY = terrain.heightAt(fighter.x, fighter.z), flashOn = false;
+  let groundY = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z)), flashOn = false;
   let px = fighter.x, pz = fighter.z, vel = 0, fwd = 0;
 
   return {
     root,
     update(dt) {
-      const target = terrain.heightAt(fighter.x, fighter.z);
+      const target = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z));
       groundY += (target - groundY) * Math.min(1, dt * 12);
       root.setPosition(fighter.x, groundY, fighter.z);
       root.setEulerAngles(0, fighter.yaw, 0);

@@ -10,9 +10,10 @@ export function createObstacles() {
 
   /**
    * @param {boolean} solid ぶつかる物か。false は「置き場所が重ならないように場所を取るだけ」（草・若木など）
+   * @param {{y0?: number, y1?: number}} range この高さ（足の高さ）の間にいる人だけがぶつかる（家の家具・二階の手すり・階段の横）。無ければ全部の高さ
    */
-  function add(x, z, r, solid = true) {
-    const o = { x, z, r, solid };
+  function add(x, z, r, solid = true, { y0 = -Infinity, y1 = Infinity } = {}) {
+    const o = { x, z, r, solid, y0, y1 };
     all.push(o);
     for (let gx = Math.floor((x - r) / CELL); gx <= Math.floor((x + r) / CELL); gx++) {
       for (let gz = Math.floor((z - r) / CELL); gz <= Math.floor((z + r) / CELL); gz++) {
@@ -28,10 +29,11 @@ export function createObstacles() {
     return grid.get(key(Math.floor(x / CELL), Math.floor(z / CELL))) || [];
   }
 
-  /** 位置 p（{x, z}）を、半径 radius の円として障害物から押し出す */
+  /** 位置 p（{x, z}、あれば足の高さ y）を、半径 radius の円として障害物から押し出す */
   function resolve(p, radius) {
     for (const o of near(p.x, p.z)) {
       if (!o.solid) continue;
+      if (p.y !== undefined && (p.y < o.y0 || p.y > o.y1)) continue;   // 別の階の物にはぶつからない
       const dx = p.x - o.x, dz = p.z - o.z;
       const min = o.r + radius;
       const d2 = dx * dx + dz * dz;

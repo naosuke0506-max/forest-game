@@ -36,9 +36,12 @@ export function attackStats(weaponId, heavy = false) {
  * @param {object} opt
  * @param {object} opt.match 試合（脱落と加点に使う）
  * @param {(x: number, z: number) => number} opt.heightAt 地面の高さ
+ * @param {(x: number, z: number, y?: number) => number} [opt.groundAt] 立てる高さ（家の床・階段。無ければ地面）
  * @param {object} opt.obstacles 木の幹や岩（矢が刺さる）
  */
-export function createCombat({ match, heightAt, obstacles }) {
+export function createCombat({ match, heightAt, obstacles, groundAt = null }) {
+  const floorAt = groundAt || ((x, z) => heightAt(x, z));
+  const yOf = (f) => f.y ?? heightAt(f.x, f.z);   // 足の高さ（家の二階にいれば高い）
   const projectiles = [];
   const listeners = {};
   const emit = (type, data) => (listeners[type] || []).forEach((fn) => fn(data));
@@ -93,12 +96,12 @@ export function createCombat({ match, heightAt, obstacles }) {
 
   /** 近接の当たり判定：間合いと角度に入っている、ほかの全員に当たる */
   function meleeHit(f, w) {
-    const fy = heightAt(f.x, f.z);
+    const fy = yOf(f);
     for (const t of fighters) {
       if (t === f || !t.alive) continue;
       const dx = t.x - f.x, dz = t.z - f.z, d = Math.hypot(dx, dz);
       if (d > w.reach + COMBAT.bodyRadius) continue;
-      if (Math.abs(heightAt(t.x, t.z) - fy) > 1.6) continue;
+      if (Math.abs(yOf(t) - fy) > 1.6) continue;
       if (d > 0.6 && angleTo(f.yaw, dx, dz) > w.arc / 2) continue;
       damage(t, w.damage * upgradeOf(f, f.weapon).damage, f, { pierce: w.guardPierce, fromX: f.x, fromZ: f.z });   // 強化で威力が増える
     }
@@ -111,7 +114,7 @@ export function createCombat({ match, heightAt, obstacles }) {
     const dir = [-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
     const p = {
       owner: f,
-      x: f.x + dir[0] * 0.5, y: heightAt(f.x, f.z) + 1.5, z: f.z + dir[2] * 0.5,
+      x: f.x + dir[0] * 0.5, y: yOf(f) + 1.5, z: f.z + dir[2] * 0.5,
       vx: dir[0] * speed, vy: dir[1] * speed, vz: dir[2] * speed,
       damage: w.damage * upgradeOf(f, f.weapon).damage * (0.35 + 0.65 * power),
       life: 5,
@@ -132,7 +135,7 @@ export function createCombat({ match, heightAt, obstacles }) {
     // 人に当たる：線分（前の位置 → 今の位置）と、体の円柱
     for (const t of fighters) {
       if (t === p.owner || !t.alive) continue;
-      const g = heightAt(t.x, t.z);
+      const g = yOf(t);
       if (p.y < g || p.y > g + COMBAT.bodyHeight) continue;
       const sx = p.x - ox, sz = p.z - oz, len2 = sx * sx + sz * sz || 1e-6;
       const k = Math.max(0, Math.min(1, ((t.x - ox) * sx + (t.z - oz) * sz) / len2));
@@ -148,7 +151,7 @@ export function createCombat({ match, heightAt, obstacles }) {
       return false;
     }
     // 地面や木の幹に刺さる
-    if (p.y <= heightAt(p.x, p.z) || obstacles.isFree(p.x, p.z, 0.05, true) === false && p.y < heightAt(p.x, p.z) + 8) {
+    if (p.y <= floorAt(p.x, p.z, p.y) || obstacles.isFree(p.x, p.z, 0.05, true) === false && p.y < heightAt(p.x, p.z) + 8) {
       p.stuck = 0.0001;
       emit('projectileStuck', { projectile: p });
     }
@@ -256,6 +259,7 @@ export function createCombat({ match, heightAt, obstacles }) {
             f.x += a.dirX * step; f.z += a.dirZ * step;
             obstacles.resolve(f, BODY_RADIUS);
             keepInside(f, match.areaRadius);
+            f.y = floorAt(f.x, f.z, f.y);
             if (a.t >= d.duration) f.action = null;
           }
         }

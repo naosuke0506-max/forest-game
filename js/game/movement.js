@@ -8,7 +8,7 @@ export const BODY_RADIUS = 0.35;
 /**
  * @param {object} f 戦う人（createFighter の記録）
  * @param {{forward: number, strafe: number, run: boolean, yaw: number}} input
- * @param {{obstacles: object, areaRadius: number}} world
+ * @param {{obstacles: object, areaRadius: number, groundAt?: Function}} world
  */
 export function moveFighter(f, input, dt, world) {
   f.yaw = input.yaw;
@@ -24,6 +24,7 @@ export function moveFighter(f, input, dt, world) {
   }
   world.obstacles.resolve(f, BODY_RADIUS);
   keepInside(f, world.areaRadius);
+  if (world.groundAt) f.y = world.groundAt(f.x, f.z, f.y);   // 家の床・階段の高さ
   return mag;
 }
 

@@ -6,6 +6,7 @@ import { createEnvironment } from './world/environment.js';
 import { createTimeOfDay } from './world/time-of-day.js';
 import { createFence } from './world/fence.js';
 import { createVillage } from './world/castle.js';
+import { createFloors } from './world/floors.js';
 import { createZones } from './world/zones.js';
 import { loadGroundCover, createGroundCover } from './world/ground-cover.js';
 import { createSunGlare } from './render/sun-glare.js';
@@ -69,11 +70,14 @@ async function boot() {
     createGrass(app, CONFIG, CONFIG.seed, terrain, obstacles);
   }
   // 城と村（南西のエリア）。建物の当たり判定も登録するので、地面の草より先に作る
-  const village = createVillage(app, CONFIG, terrain, obstacles, zones);
+  // 歩ける床（地面のほかに、家の一階・二階の床と階段）
+  const floors = createFloors(terrain.heightAt);
+  const village = createVillage(app, CONFIG, terrain, obstacles, zones, floors);
   // 地面を覆う草（自分の周りだけ。短い草・穂・白い花・大草原の背の高い草）
   const groundCover = grassTex ? createGroundCover(app, CONFIG, CONFIG.seed, terrain, obstacles, grassTex, zones) : null;
 
   const player = createPlayer(app, CONFIG, terrain, obstacles, env.fogColor);
+  player.setGround(floors.groundAt);
   // 時間帯（朝・昼・夕暮れ・深夜）。霧の色が変わったら、空の無い所の背景色も合わせる
   env.onFogColor = (c) => { player.camera.camera.clearColor = c; };
   const timeOfDay = createTimeOfDay(app, env, CONFIG, player.camera);
@@ -122,7 +126,7 @@ async function boot() {
     .then(([grass, litter]) => terrain.setGroundTextures(grass, litter));
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air };
+  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air, floors };
 
   // 設定（視点・性能表示）。変わるたびに反映する
   const applySettings = (st) => {
@@ -138,6 +142,7 @@ async function boot() {
     session = await startPracticeMatch({
       app, config: CONFIG, terrain, obstacles, player, myChar, timeOfDay, zones, buildings: village?.footprints || [],
       crateSpots: village?.crateSpots || [], tex, trees: trees?.canopies || [],
+      groundAt: floors.groundAt, insideHouse: village?.insideHouse,
       debug: CONFIG.debug,
       // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」
       phaseDuration: CONFIG.phaseDuration ?? (settings.phaseLen === 'normal' ? null : Number(settings.phaseLen)),

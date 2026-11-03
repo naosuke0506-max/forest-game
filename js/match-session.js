@@ -26,7 +26,7 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
 /**
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, debug, phaseDuration }
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, zones = null, buildings = [], crateSpots = [], tex = null, trees = [], debug = false, phaseDuration = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, zones = null, buildings = [], crateSpots = [], tex = null, trees = [], groundAt = null, insideHouse = null, debug = false, phaseDuration = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）
@@ -63,12 +63,12 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   player.spawn(me.x, me.z, me.yaw);
 
   // 落ちている素材と村の箱。フェーズが始まるたびに少し足す
-  const pickups = createPickups({ rng: createRandom(config.seed + 7700), zones, isFree: obstacles.isFree, areaRadius: AREA_RADIUS, crateSpots });
+  const pickups = createPickups({ rng: createRandom(config.seed + 7700), zones, isFree: obstacles.isFree, areaRadius: AREA_RADIUS, crateSpots, blocked: insideHouse });
   const pickupViews = createPickupViews(app, pickups, terrain, tex, config.quality);
   match.on('phaseStart', () => pickups.refill());
 
   // 戦闘と bot
-  const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles });
+  const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt });
   const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => createBot(f, createRandom(config.seed + 100 + i), fighters));
 
   // 見た目
@@ -125,7 +125,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
 
   // 戦闘の知らせ：自分が与えたダメージの数字、自分が受けたときの赤い縁
   combat.on('hit', ({ attacker, target, amount, guarded }) => {
-    if (attacker === me) hud.showDamage(player.camera, target.x, terrain.heightAt(target.x, target.z) + 1.6, target.z, amount, guarded);
+    if (attacker === me) hud.showDamage(player.camera, target.x, (target.y ?? terrain.heightAt(target.x, target.z)) + 1.6, target.z, amount, guarded);
     if (target === me) hud.hurt(amount / 25);
   });
   combat.on('guardBreak', ({ fighter }) => { if (fighter === me) hud.addFeed('防御が崩れた'); });
@@ -161,7 +161,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   });
   match.on('end', () => { spectateEl.hidden = true; });
 
-  const world = { obstacles, pickups, get areaRadius() { return match.areaRadius; } };
+  const world = { obstacles, pickups, groundAt, get areaRadius() { return match.areaRadius; } };
   match.on('eliminated', ({ victim }) => { if (victim === me) player.setFrozen(true); });
   match.on('end', (res) => setTimeout(() => hud.showResult(res), 1200));
   match.on('rewardChosen', ({ fighter }) => { if (fighter === me) player.speedScale = me.stats.speed; });
@@ -214,7 +214,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       player.setAreaRadius(match.areaRadius);
       player.speedScale = me.stats.speed * (me.moveScale ?? 1);
       // あなたの位置を、試合の記録へ写す（いずれ人間も試合の計算で動かす）
-      if (me.alive) { me.x = player.position.x; me.z = player.position.z; me.yaw = player.yaw; me.pitch = player.pitch; }
+      if (me.alive) { me.x = player.position.x; me.z = player.position.z; me.y = player.position.y; me.yaw = player.yaw; me.pitch = player.pitch; }
       if (running) combat.control(me, input);
       // 拾う・開ける：近くに素材の山か箱があれば、ボタンを出す
       if ((useTimer -= dt) <= 0) {
@@ -238,7 +238,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       }
       if (running) combat.update(dt);
       // 回避は試合の計算が体を動かすので、その位置をプレイヤーの操作へ戻す
-      if (me.alive && me.action?.kind === 'dodge') { player.position.x = me.x; player.position.z = me.z; }
+      if (me.alive && me.action?.kind === 'dodge') { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
       views.get(me).update(dt, player.moving);
       viewModel.update(dt, player.moving);
       arrows.update();
@@ -246,7 +246,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // 観戦：見ている人の肩越しにカメラを置く
       if (spectating) {
         if (!spectating.alive) nextSpectate();
-        player.setPose(spectating.x, spectating.z, spectating.yaw);
+        player.setPose(spectating.x, spectating.z, spectating.yaw, spectating.y);
         views.get(me).setVisible(false);
       }
       hud.update(dt);
