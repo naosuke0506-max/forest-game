@@ -2,7 +2,7 @@
 //   中央・その他：森と草原が混ざる森（mixed）
 //   北：深い森（deep）。木が密で、空がほぼ葉で覆われる。霧も濃い
 //   東：大草原（prairie）。木はまばらで、背の高い草が茂る（草は手順 4）
-//   南西：村の場所（castle という名前のまま）。平らにならし、木や岩を置かない（家と柵は castle.js）
+//   南西：村の場所（castle という名前のまま）。長方形。平らにならし、木や岩を置かない（家と柵は castle.js）
 //   中央から各エリアへ土の道（path）
 // 地図の上で北は -Z、東は +X。境目はノイズで少し揺らし、なめらかに混ぜる
 import { fbm } from '../core/random.js';
@@ -18,9 +18,19 @@ export const ZONE_NAMES = { mixed: '森', deep: '深い森', prairie: '大草原
  */
 export function createZones(seed, radius) {
   const centerR = radius * 0.34;              // 中央の森の半径（約 60m）
-  // 城と村：南西、中心から半径の 6 割の所に、半径 0.27 倍ほどの円
+  // 村：南西、中心から半径の 6 割の所に、長方形（森の中央へ向かう向きに奥行き、横に長い）
+  //   f は森の中央への向き、r は右。halfF・halfR は平らにならす範囲の半分（その内側 5m に柵）
   const castleAng = 225 * DEG;                 // 北から時計回り（北 0、東 90、南 180、西 270）
-  const castle = { x: Math.sin(castleAng) * radius * 0.6, z: -Math.cos(castleAng) * radius * 0.6, r: radius * 0.27 };
+  const cx0 = Math.sin(castleAng) * radius * 0.6, cz0 = -Math.cos(castleAng) * radius * 0.6, cl = Math.hypot(cx0, cz0) || 1;
+  const cf = [-cx0 / cl, -cz0 / cl];
+  const castle = { x: cx0, z: cz0, f: cf, r: [cf[1], -cf[0]], halfF: 32, halfR: 47 };
+  /** 村の長方形からの距離（内側は負） */
+  const villageDist = (x, z) => {
+    const dx = x - castle.x, dz = z - castle.z;
+    const a = Math.abs(dx * castle.f[0] + dz * castle.f[1]) - castle.halfF;
+    const b = Math.abs(dx * castle.r[0] + dz * castle.r[1]) - castle.halfR;
+    return a > 0 && b > 0 ? Math.hypot(a, b) : Math.max(a, b);
+  };
   const sectors = {
     deep: { ang: 0, half: 58 },                // 北
     prairie: { ang: 95, half: 50 },            // 東
@@ -60,7 +70,7 @@ export function createZones(seed, radius) {
       const d = Math.abs(((ang - s.ang + 540) % 360) - 180);
       return 1 - smooth(s.half - 14, s.half + 14, d + wobble * 0.5);
     };
-    const castleW = 1 - smooth(castle.r - 10, castle.r + 10, Math.hypot(x - castle.x, z - castle.z) + wobble * 0.4);
+    const castleW = 1 - smooth(0, 16, villageDist(x, z) + Math.abs(wobble) * 0.3);
     const deep = sector(sectors.deep) * outer * (1 - castleW);
     const prairie = sector(sectors.prairie) * outer * (1 - castleW);
     const mixed = Math.max(0, 1 - deep - prairie - castleW);
