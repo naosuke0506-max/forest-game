@@ -1,27 +1,28 @@
 {
-  "source": "kloofendal_48d_partly_cloudy_puresky_2k.hdr",
+  "source": "kloofendal_48d.hdr",
+  "grade": "sat=1.45,gain=0.92:1.0:1.12,top=0.75:0.85:1.05",
   "sunU": 0.5957,
   "sunV": 0.2305,
-  "skyScale": 2.07272,
+  "skyScale": 1.89012,
   "horizonLinear": [
-    0.43486,
-    0.48252,
-    0.61087
+    0.37914,
+    0.48168,
+    0.74997
   ],
   "lightSize": [
     128,
     64
   ],
   "groundLinear": [
-    0.14583,
-    0.13777,
-    0.09899
+    0.11829,
+    0.12985,
+    0.11691
   ],
-  "sunIrradiance": 4.541,
-  "skyIrradiance": 1.3859,
+  "sunIrradiance": 4.229,
+  "skyIrradiance": 1.3056,
   "sunColor": [
-    0.9944,
-    1.0,
-    0.9128
+    0.8256,
+    0.9437,
+    1.0
   ]
 }

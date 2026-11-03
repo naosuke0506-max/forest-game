@@ -8,16 +8,21 @@ import { loadSky, prepareSky, toSrgbColor } from './sky.js';
  * sky：空の写真の名前（assets/sky/<名前>_*）
  * level：空と、空から回り込む光の明るさ（昼の写真の明るさを 1 とした割合）
  * sun：太陽（深夜は月）の光の強さ（昼の写真の太陽を 1 とした割合）
- * sunWhite：太陽の色を白に寄せる割合（朝焼け・夕焼けの写真の太陽は赤すぎるため）
+ * sunWhite：太陽の色を白に寄せる割合（朝焼け・夕焼けの写真の太陽は赤すぎるため）、sunColor：太陽の色を直接決める（昼）
+ * glare・glareColor：太陽（夜は月）を見たときのまぶしさの強さと色（render/sun-glare.js）
  * minElevation：太陽の高さの下限（度）。地平線すれすれだと地面がほぼ照らされないため
  * fogDensity：霧の濃さ、fogMax：霧の色の明るさの上限（朝焼け・夕焼けの地平線は明るすぎて、霧が白く飛ぶため）
  * exposure：画面全体の明るさ
  */
 export const TIMES = {
-  morning: { name: '朝',     sky: 'qwantani_sunrise', level: 0.55, sun: 0.6,  sunWhite: 0.45, minElevation: 12, fogDensity: 0.014, fogMax: 0.42, exposure: 1.0 },
-  day:     { name: '昼',     sky: 'kloofendal_48d',   level: 1.05, sun: 1.6,  sunWhite: 0,    minElevation: 0,  fogDensity: 0.012, fogMax: 1,    exposure: 1.08 },
-  dusk:    { name: '夕暮れ', sky: 'belfast_sunset',   level: 0.4,  sun: 0.65, sunWhite: 0.15, minElevation: 7,  fogDensity: 0.014, fogMax: 0.36, exposure: 1.05 },
-  night:   { name: '深夜',   sky: 'kloppenheim_02',   level: 0.06, sun: 0.22, sunWhite: 0,    minElevation: 25, fogDensity: 0.02,  fogMax: 1,    exposure: 1.5 },
+  morning: { name: '朝',     sky: 'qwantani_sunrise', level: 0.55, sun: 0.6,  sunWhite: 0.45, minElevation: 12, fogDensity: 0.014, fogMax: 0.42, exposure: 1.0,
+             glare: 0.6,  glareColor: [1.0, 0.86, 0.7] },
+  day:     { name: '昼',     sky: 'kloofendal_48d',   level: 1.05, sun: 1.6,  sunColor: [1.0, 0.96, 0.88], minElevation: 0, fogDensity: 0.012, fogMax: 1, exposure: 1.08,
+             glare: 1.0,  glareColor: [1.0, 0.98, 0.92] },
+  dusk:    { name: '夕暮れ', sky: 'kloppenheim_06',   level: 0.45, sun: 0.75, sunWhite: 0.1,  minElevation: 7,  fogDensity: 0.014, fogMax: 0.4,  exposure: 1.05,
+             glare: 0.8,  glareColor: [1.0, 0.58, 0.28] },
+  night:   { name: '深夜',   sky: 'kloppenheim_02',   level: 0.06, sun: 0.22, sunWhite: 0,    minElevation: 25, fogDensity: 0.02,  fogMax: 1,    exposure: 1.5,
+             glare: 0.22, glareColor: [0.7, 0.8, 1.0] },
 };
 
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -63,7 +68,8 @@ export function createTimeOfDay(app, base, config) {
     return {
       sky, level: t.level, n,
       sun: t.sun * base.sunIntensity,
-      sunColor: sunCol.map((c) => lerp(c, 1, t.sunWhite)),
+      sunColor: t.sunColor ? [...t.sunColor] : sunCol.map((c) => lerp(c, 1, t.sunWhite ?? 0)),
+      glare: t.glare, glareColor: [...t.glareColor],
       dir: [dir.x, dir.y, dir.z],
       fog: [fog.r, fog.g, fog.b],
       fogDensity: t.fogDensity,
@@ -72,6 +78,7 @@ export function createTimeOfDay(app, base, config) {
   }
 
   let current = 'day', from = null, to = null, k = 1, duration = 1, shownSky = base.daySky;
+  const glare = { strength: TIMES.day.glare, color: [...TIMES.day.glareColor] };
   const dir = new pc.Vec3(), color = new pc.Color(), fog = new pc.Color();
 
   function apply(s, sky) {
@@ -88,6 +95,8 @@ export function createTimeOfDay(app, base, config) {
     scene.fog.color = fog.set(s.fog[0], s.fog[1], s.fog[2]);
     scene.fog.density = s.fogDensity;
     scene.exposure = s.exposure;
+    glare.strength = s.glare;
+    glare.color = s.glareColor;
     base.onFogColor?.(scene.fog.color);
   }
   const mix = (a, b, t) => ({
@@ -98,11 +107,15 @@ export function createTimeOfDay(app, base, config) {
     fog: a.fog.map((v, i) => lerp(v, b.fog[i], t)),
     fogDensity: lerp(a.fogDensity, b.fogDensity, t),
     exposure: lerp(a.exposure, b.exposure, t),
+    glare: lerp(a.glare, b.glare, t),
+    glareColor: a.glareColor.map((v, i) => lerp(v, b.glareColor[i], t)),
   });
 
   return {
     get current() { return current; },
     get name() { return TIMES[current].name; },
+    /** 太陽（夜は月）を見たときのまぶしさ { strength, color } */
+    glare,
     /** 時間帯を変える。seconds：変わるのにかける時間（0 ならすぐ） */
     set(key, seconds = 6) {
       if (!TIMES[key]) return;

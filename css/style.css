@@ -326,3 +326,18 @@ canvas#app {
 .settings .test-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 14px; }
 .settings .test-btns button { flex: 1 1 30%; min-height: 44px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.25); background: rgba(120, 60, 40, .45); color: #fff; font-size: 14px; }
 .settings .test-btns button:disabled { opacity: .35; }
+
+/* 太陽のまぶしさ：太陽の位置の光の輪と光の筋（js/render/sun-glare.js が位置と濃さを決める） */
+.glare {
+  position: fixed; left: 0; top: 0; z-index: 15;
+  width: 70vmin; height: 70vmin;
+  pointer-events: none; opacity: 0;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(circle, rgba(255,255,255,1) 0 2.5%, var(--glare-color, #fff8e8) 4%, rgba(255,255,255,0) 22%),
+    repeating-conic-gradient(from 0deg, rgba(255,255,255,.55) 0deg 1.2deg, rgba(255,255,255,0) 2.5deg 15deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0, rgba(0,0,0,.6) 18%, transparent 50%);
+  mask-image: radial-gradient(circle, #000 0, rgba(0,0,0,.6) 18%, transparent 50%);
+  will-change: transform, opacity;
+}
+.dazzle { position: fixed; inset: 0; z-index: 15; pointer-events: none; opacity: 0; mix-blend-mode: screen; }
