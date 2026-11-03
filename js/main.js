@@ -5,6 +5,7 @@ import { createTerrain } from './world/terrain.js';
 import { createEnvironment } from './world/environment.js';
 import { createTimeOfDay } from './world/time-of-day.js';
 import { createFence } from './world/fence.js';
+import { createCastleVillage } from './world/castle.js';
 import { createZones } from './world/zones.js';
 import { loadGroundCover, createGroundCover } from './world/ground-cover.js';
 import { createSunGlare } from './render/sun-glare.js';
@@ -65,6 +66,8 @@ async function boot() {
     createRocks(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.rock);
     createGrass(app, CONFIG, CONFIG.seed, terrain, obstacles);
   }
+  // 城と村（南西のエリア）。建物の当たり判定も登録するので、地面の草より先に作る
+  const castle = createCastleVillage(app, CONFIG, terrain, obstacles, zones);
   // 地面を覆う草（自分の周りだけ。短い草・穂・白い花・大草原の背の高い草）
   const groundCover = grassTex ? createGroundCover(app, CONFIG, CONFIG.seed, terrain, obstacles, grassTex, zones) : null;
 
@@ -107,7 +110,7 @@ async function boot() {
   if (trees) startLoadingNear(app, treeModels, (name) => trees.enableNear(name));
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover };
+  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, castle };
 
   // 設定（視点・性能表示）。変わるたびに反映する
   const applySettings = (st) => {
@@ -121,7 +124,7 @@ async function boot() {
   titleScreen.ready(async (myChar) => {
     input.reset();
     session = await startPracticeMatch({
-      app, config: CONFIG, terrain, obstacles, player, myChar, timeOfDay, zones,
+      app, config: CONFIG, terrain, obstacles, player, myChar, timeOfDay, zones, buildings: castle?.footprints || [],
       debug: CONFIG.debug,
       // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」
       phaseDuration: CONFIG.phaseDuration ?? (settings.phaseLen === 'normal' ? null : Number(settings.phaseLen)),
