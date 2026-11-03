@@ -12,6 +12,9 @@ ROOT = Path(__file__).resolve().parent.parent / 'assets' / 'textures'
 # 素材ごと・画像ごとの一辺の画素数。画面に大きく映る地面の色だけ 1024
 SIZES = {
     'forrest_ground_01': {'diff': 1024, 'nor_gl': 512, 'arm': 512},
+    # 地面に混ぜる草（大草原・森の草地）と落ち葉と苔（深い森）。色だけを使う
+    'aerial_grass_rock': {'diff': 1024},
+    'forest_leaves_02': {'diff': 768},
     'pine_bark': {'diff': 512, 'nor_gl': 512, 'arm': 512},
     'mossy_rock': {'diff': 512, 'nor_gl': 512, 'arm': 512},
     # 城と村（建物）

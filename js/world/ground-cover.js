@@ -28,12 +28,14 @@ const PATH_DENSITY = 0.15;   // 道の上（土）の割合
 /** 十字（3 枚の板）の株。横幅 1・高さ 1。画像の tile 番目を貼る */
 function tuftMesh(device, tile) {
   const ox = (tile % 2) * 0.5, oy = Math.floor(tile / 2) * 0.5;
-  const positions = [], normals = [], uvs = [], indices = [];
+  const positions = [], normals = [], uvs = [], indices = [], colors = [];
   for (let k = 0; k < 3; k++) {
     const a = (k * Math.PI) / 3, cx = Math.cos(a) * 0.5, cz = Math.sin(a) * 0.5;
     const b = positions.length / 3;
     positions.push(-cx, 0, -cz, cx, 0, cz, cx, 1, cz, -cx, 1, -cz);
     for (let i = 0; i < 4; i++) normals.push(0, 1, 0);
+    // 根元は葉の陰で暗く、先は明るい（株に奥行きが出る）
+    colors.push(0.42, 0.42, 0.42, 1, 0.42, 0.42, 0.42, 1, 1.1, 1.1, 1.05, 1, 1.1, 1.1, 1.05, 1);
     // 画像の下（v が大きい側）が根元
     uvs.push(ox, oy + 0.5, ox + 0.5, oy + 0.5, ox + 0.5, oy, ox, oy);
     indices.push(b, b + 1, b + 2, b, b + 2, b + 3);
@@ -42,6 +44,7 @@ function tuftMesh(device, tile) {
   mesh.setPositions(positions);
   mesh.setNormals(normals);
   mesh.setUvs(0, uvs);
+  mesh.setColors(colors, 4);
   mesh.setIndices(indices);
   mesh.update(pc.PRIMITIVE_TRIANGLES);
   return mesh;
@@ -89,6 +92,7 @@ export function createGroundCover(app, config, seed, terrain, obstacles, texture
   mat.alphaTest = 0.4;
   mat.alphaToCoverage = !!q.antialias;
   mat.diffuse = new pc.Color(0.6, 0.76, 0.46);   // 画像は明るめに描いてあるので、落ち着いた緑にする
+  mat.diffuseVertexColor = true;                 // 根元を暗く（tuftMesh の頂点色）
   mat.useMetalness = true;
   mat.metalness = 0;
   mat.gloss = 0.2;

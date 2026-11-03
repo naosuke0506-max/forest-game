@@ -9,13 +9,15 @@ import { createVillage } from './world/castle.js';
 import { createZones } from './world/zones.js';
 import { loadGroundCover, createGroundCover } from './world/ground-cover.js';
 import { createSunGlare } from './render/sun-glare.js';
+import { createSkyLights } from './render/sky-lights.js';
+import { createAirParticles } from './render/air-particles.js';
 import { createRandom } from './core/random.js';
 import { AREA_RADIUS } from './game/data.js';
 import { createObstacles } from './world/obstacles.js';
 import { createTrees, createGrass } from './world/vegetation.js';
 import { createRocks } from './world/rocks.js';
 import { createWind } from './world/wind.js';
-import { loadTextureSets } from './world/materials.js';
+import { loadTextureSets, loadDiffuse } from './world/materials.js';
 import { loadSky } from './world/sky.js';
 import { loadTreeModels, startLoadingNear, createModelTrees } from './world/trees.js';
 import { loadProps, createProps } from './world/props.js';
@@ -79,6 +81,11 @@ async function boot() {
     canopies: trees?.canopies || [], trunks: trees?.trunks || [],
     fence: { radius: AREA_RADIUS + 0.4, height: 10 }, heightAt: terrain.heightAt,
   });
+  // 太陽と月の円盤・木漏れ日の光の筋、空気の中の塵・舞い落ちる葉・蛍
+  const skyLights = createSkyLights(app, player.camera, env.sun, timeOfDay, {
+    canopies: trees?.canopies || [], heightAt: terrain.heightAt, zones, farClip: CONFIG.atmosphere.farClip,
+  });
+  const air = createAirParticles(app, player.camera, timeOfDay, { heightAt: terrain.heightAt, zones, sun: env.sun });
   const touchLayer = document.getElementById('touch-layer');
   const input = createInput(touchLayer, document.getElementById('stick'), CONFIG);
   const stats = createStats(app, CONFIG.showStats, CONFIG.qualityName);
@@ -100,6 +107,8 @@ async function boot() {
     trees?.setDrawDistance?.(CONFIG.world.drawDistance * (1 - 0.45 * deepK));
     timeOfDay.update(dt);
     sunGlare.update(dt);
+    skyLights.update(dt);
+    air.update(dt);
     stats.update(dt);
   });
 
@@ -108,9 +117,12 @@ async function boot() {
 
   // 木の近く用（精細な形）は、起動後に裏で読み込む
   if (trees) startLoadingNear(app, treeModels, (name) => trees.enableNear(name));
+  // 地面に混ぜる草地と落ち葉の画像も、起動後に裏で読み込む（届くまでは土の画像だけ）
+  Promise.all([loadDiffuse(app.graphicsDevice, 'aerial_grass_rock', CONFIG.quality), loadDiffuse(app.graphicsDevice, 'forest_leaves_02', CONFIG.quality)])
+    .then(([grass, litter]) => terrain.setGroundTextures(grass, litter));
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village };
+  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air };
 
   // 設定（視点・性能表示）。変わるたびに反映する
   const applySettings = (st) => {

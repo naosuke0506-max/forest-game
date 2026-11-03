@@ -13,16 +13,22 @@ import { loadSky, prepareSky, toSrgbColor } from './sky.js';
  * minElevation：太陽の高さの下限（度）。地平線すれすれだと地面がほぼ照らされないため
  * fogDensity：霧の濃さ、fogMax：霧の色の明るさの上限（朝焼け・夕焼けの地平線は明るすぎて、霧が白く飛ぶため）
  * exposure：画面全体の明るさ
+ * fx：雰囲気の飾りの強さ（0〜1。render/sky-lights.js と render/air-particles.js が使う）
+ *   sun：太陽の円盤、moon：月の円盤、shafts：木漏れ日の光の筋、dust：光に舞う塵、leaves：舞い落ちる葉、fireflies：蛍
  */
 export const TIMES = {
   morning: { name: '朝',     sky: 'qwantani_sunrise', level: 0.55, sun: 0.6,  sunWhite: 0.45, minElevation: 12, fogDensity: 0.014, fogMax: 0.42, exposure: 1.0,
-             glare: 0.6,  glareColor: [1.0, 0.86, 0.7] },
+             glare: 0.6,  glareColor: [1.0, 0.86, 0.7],
+             fx: { sun: 1, moon: 0, shafts: 1, dust: 1, leaves: 0.8, fireflies: 0 } },
   day:     { name: '昼',     sky: 'kloofendal_48d',   level: 1.05, sun: 1.6,  sunColor: [1.0, 0.96, 0.88], minElevation: 0, fogDensity: 0.012, fogMax: 1, exposure: 1.08,
-             glare: 1.0,  glareColor: [1.0, 0.98, 0.92] },
+             glare: 1.0,  glareColor: [1.0, 0.98, 0.92],
+             fx: { sun: 1, moon: 0, shafts: 0.6, dust: 0.7, leaves: 1, fireflies: 0 } },
   dusk:    { name: '夕暮れ', sky: 'kloppenheim_06',   level: 0.09, sun: 0.8,  sunWhite: 0.1,  minElevation: 7,  fogDensity: 0.015, fogMax: 0.22, exposure: 1.1,
-             glare: 0.8,  glareColor: [1.0, 0.58, 0.28] },
+             glare: 0.8,  glareColor: [1.0, 0.58, 0.28],
+             fx: { sun: 1, moon: 0, shafts: 1, dust: 0.9, leaves: 0.8, fireflies: 0.35 } },
   night:   { name: '深夜',   sky: 'kloppenheim_02',   level: 0.06, sun: 0.22, sunWhite: 0,    minElevation: 25, fogDensity: 0.02,  fogMax: 1,    exposure: 1.5,
-             glare: 0,    glareColor: [0.7, 0.8, 1.0] },   // 月はまぶしくしない
+             glare: 0,    glareColor: [0.7, 0.8, 1.0],   // 月はまぶしくしない
+             fx: { sun: 0, moon: 1, shafts: 0, dust: 0, leaves: 0.3, fireflies: 1 } },
 };
 
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -54,6 +60,7 @@ export function createTimeOfDay(app, base, config, camera = null) {
     const n = sky ? (t.level * dayIrr) / sky.irradiance : t.level;   // この写真にかける明るさの倍率
     const sunCol = sky ? sky.meta.sunColor : [base.sunColor.r, base.sunColor.g, base.sunColor.b];
     const dir = (sky ? sky.sunDirection : base.sunDirection).clone();
+    const photoDir = [dir.x, dir.y, dir.z];   // 写真の中の太陽（月）の向き（円盤はここに描く。光の向きは低すぎれば持ち上げる）
     const minE = Math.sin(t.minElevation * pc.math.DEG_TO_RAD);
     if (dir.y < minE) {   // 低すぎる太陽を少し持ち上げる（向きはそのまま）
       const h = Math.sqrt(1 - minE * minE);
@@ -72,9 +79,11 @@ export function createTimeOfDay(app, base, config, camera = null) {
       sunColor: t.sunColor ? [...t.sunColor] : sunCol.map((c) => lerp(c, 1, t.sunWhite ?? 0)),
       glare: t.glare, glareColor: [...t.glareColor],
       dir: [dir.x, dir.y, dir.z],
+      photoDir,
       fog: [fog.r, fog.g, fog.b],
       fogDensity: t.fogDensity,
       exposure: t.exposure,
+      fx: { ...t.fx },
     };
   }
 
@@ -83,6 +92,8 @@ export function createTimeOfDay(app, base, config, camera = null) {
   let bgSky = base.daySky;      // 背景（skybox）に出している空
   let lightSky = base.daySky;   // 空から回り込む光（envAtlas）に使っている空
   const glare = { strength: TIMES.day.glare, color: [...TIMES.day.glareColor] };
+  const fx = { ...TIMES.day.fx };   // 雰囲気の飾りの強さ（時間帯が変わるときは混ぜる）
+  const skyDir = base.sunDirection.clone();   // 写真の中の太陽（月）の向き
   const dir = new pc.Vec3(), color = new pc.Color(), fog = new pc.Color();
   const intensityOf = (sky, level) => sky.meta.skyScale * atm.skyBrightness * (level * dayIrr) / sky.irradiance;
 
@@ -154,6 +165,8 @@ export function createTimeOfDay(app, base, config, camera = null) {
     lastState = s;
     glare.strength = s.glare;
     glare.color = s.glareColor;
+    Object.assign(fx, s.fx);
+    skyDir.set(s.photoDir[0], s.photoDir[1], s.photoDir[2]).normalize();
     base.onFogColor?.(scene.fog.color);
   }
   const mix = (a, b, t) => ({
@@ -161,11 +174,13 @@ export function createTimeOfDay(app, base, config, camera = null) {
     sun: lerp(a.sun, b.sun, t),
     sunColor: a.sunColor.map((v, i) => lerp(v, b.sunColor[i], t)),
     dir: a.dir.map((v, i) => lerp(v, b.dir[i], t)),
+    photoDir: a.photoDir.map((v, i) => lerp(v, b.photoDir[i], t)),
     fog: a.fog.map((v, i) => lerp(v, b.fog[i], t)),
     fogDensity: lerp(a.fogDensity, b.fogDensity, t),
     exposure: lerp(a.exposure, b.exposure, t),
     glare: lerp(a.glare, b.glare, t),
     glareColor: a.glareColor.map((v, i) => lerp(v, b.glareColor[i], t)),
+    fx: Object.fromEntries(Object.keys(a.fx).map((k) => [k, lerp(a.fx[k], b.fx[k], t)])),
   });
 
   return {
@@ -176,6 +191,10 @@ export function createTimeOfDay(app, base, config, camera = null) {
     get loadedSkies() { return Object.keys(skies); },
     /** 太陽（夜は月）を見たときのまぶしさ { strength, color } */
     glare,
+    /** 雰囲気の飾りの強さ { sun, moon, shafts, dust, leaves, fireflies }（0〜1） */
+    fx,
+    /** 写真の中の太陽（深夜は月）の向き（単位ベクトル）。太陽・月の円盤を描く向き */
+    skyDir,
     /** 時間帯を変える。seconds：変わるのにかける時間（0 ならすぐ） */
     set(key, seconds = 6) {
       if (!TIMES[key]) return;
