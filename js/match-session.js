@@ -15,6 +15,7 @@ import { createProjectileViews } from './render/projectiles.js';
 import { createHud } from './ui/hud.js';
 import { createPickups } from './game/pickups.js';
 import { createHiding } from './game/hiding.js';
+import { createSfx, wireSounds } from './audio/sfx.js';
 import { createPickupViews } from './render/pickup-view.js';
 import { createCraftUi } from './ui/craft.js';
 import { ICONS, weaponIconOf } from './ui/icons.js';
@@ -116,6 +117,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const useBtn = document.getElementById('btn-use');
   const craftUi = createCraftUi(me, (act, id) => {
     const name = id ? WEAPONS[id].name : CHARACTERS[me.char].armorName;
+    if (act !== 'equip') sfx.craft();
     if (act === 'make') hud.addFeed(`${name}を作った（クラフト画面の「装備」で持ち替え）`);
     else if (act === 'upgrade') hud.addFeed(`${name}を強化した（強化 ${levelOf(me, id)}）`);
     else if (act === 'armor') hud.addFeed(`${name}を強化した（強化 ${me.armorLevel}）`);
@@ -131,6 +133,10 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const searchBtn = document.getElementById('btn-search');
   setBtn(searchBtn, ICONS.eye, '探す');
   const hideView = document.getElementById('hideview');
+
+  // 効果音（足音・戦闘・拾う・隠れる・鐘など）
+  const sfx = createSfx({ terrain, zones, insideHouse, villageCenter: zones?.castle });
+  wireSounds(sfx, { combat, match, hiding, pickups, me });
 
   // 隠れる・探す：自分が隠れたら隙間から覗く見た目に。近くの bot に見られていたら、その bot は場所を覚えて探しに来る
   const sees = (b, f) => {
@@ -308,6 +314,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         views.get(b.fighter).setVisible(!b.fighter.hidden);   // 隠れている人は見えない
       }
       if (running) combat.update(dt);
+      sfx.update(dt, fighters);
       // 回避は試合の計算が体を動かすので、その位置をプレイヤーの操作へ戻す
       if (me.alive && (me.action?.kind === 'dodge' || me.action?.kind === 'assassinate')) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
       views.get(me).update(dt, player.moving);
@@ -335,5 +342,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     views,   // 確認用（自動テストから見た目の状態を読むため）
     pickups,
     hiding,
+    sfx,
   };
 }
