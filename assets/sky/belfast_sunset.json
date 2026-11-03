@@ -1,0 +1,27 @@
+{
+  "source": "belfast_sunset_puresky.hdr",
+  "sunU": 0.6035,
+  "sunV": 0.4883,
+  "skyScale": 9.35352,
+  "horizonLinear": [
+    3.45849,
+    2.36235,
+    1.739
+  ],
+  "lightSize": [
+    128,
+    64
+  ],
+  "groundLinear": [
+    0.10712,
+    0.09416,
+    0.08874
+  ],
+  "sunIrradiance": 0.2992,
+  "skyIrradiance": 3.3908,
+  "sunColor": [
+    1.0,
+    0.6829,
+    0.3814
+  ]
+}

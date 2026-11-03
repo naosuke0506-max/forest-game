@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>静かな森</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-03.3';</script>
+<script>window.__BUILD = '2026-11-03.4';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -67,6 +67,10 @@
 <link rel="preload" as="fetch" href="./assets/sky/kloofendal_48d.json" crossorigin>
 <link rel="preload" as="fetch" href="./assets/sky/kloofendal_48d_light.f16" crossorigin>
 <link rel="preload" as="image" type="image/webp" href="./assets/sky/kloofendal_48d_sky.webp">
+<!-- 朝（第一フェーズ）の空も先に取りに行く。ほかの時間帯の空は起動の後に裏で読む -->
+<link rel="preload" as="fetch" href="./assets/sky/qwantani_sunrise.json" crossorigin>
+<link rel="preload" as="fetch" href="./assets/sky/qwantani_sunrise_light.f16" crossorigin>
+<link rel="preload" as="image" type="image/webp" href="./assets/sky/qwantani_sunrise_sky.webp">
 <link rel="preload" as="image" type="image/webp" href="./assets/textures/forrest_ground_01/forrest_ground_01_diff.webp">
 <link rel="preload" as="image" type="image/webp" href="./assets/textures/forrest_ground_01/forrest_ground_01_nor_gl.webp">
 <link rel="preload" as="image" type="image/webp" href="./assets/textures/forrest_ground_01/forrest_ground_01_arm.webp">

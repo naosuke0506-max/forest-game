@@ -1,0 +1,27 @@
+{
+  "source": "kloppenheim_02_puresky.hdr",
+  "sunU": 0.5996,
+  "sunV": 0.4023,
+  "skyScale": 1.09907,
+  "horizonLinear": [
+    0.32893,
+    0.39314,
+    0.47796
+  ],
+  "lightSize": [
+    128,
+    64
+  ],
+  "groundLinear": [
+    0.02711,
+    0.02869,
+    0.02447
+  ],
+  "sunIrradiance": 1.5862,
+  "skyIrradiance": 0.5107,
+  "sunColor": [
+    0.7961,
+    0.8622,
+    1.0
+  ]
+}
