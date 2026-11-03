@@ -110,6 +110,7 @@ export function prepareSky(app, sky) {
 
   return {
     name: sky.name,
+    image: sky.image,   // 時間帯が変わるときに、空をなめらかに重ねる（ドーム）のに使う
     meta,
     envAtlas,
     skybox,
