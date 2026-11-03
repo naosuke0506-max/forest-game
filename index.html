@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>静かな森</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-03.1';</script>
+<script>window.__BUILD = '2026-11-03.2';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -186,6 +186,21 @@
       <button type="button" data-val="on">表示</button>
       <button type="button" data-val="off">隠す</button>
     </div>
+  </div>
+  <h3 class="test-head">テスト用</h3>
+  <div class="set-row">
+    <span>フェーズの長さ</span>
+    <div class="seg" data-key="phaseLen">
+      <button type="button" data-val="normal">通常</button>
+      <button type="button" data-val="60">60 秒</button>
+      <button type="button" data-val="30">30 秒</button>
+    </div>
+  </div>
+  <p class="test-note">フェーズの長さは次の試合から変わります</p>
+  <div class="test-btns">
+    <button type="button" data-test="skip">次のフェーズへ</button>
+    <button type="button" data-test="kill-bot">bot を 1 体倒す</button>
+    <button type="button" data-test="die">自分が倒れる</button>
   </div>
   <button id="settings-close" class="start" type="button">閉じる</button>
 </section>

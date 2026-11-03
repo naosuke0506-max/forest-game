@@ -130,21 +130,22 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
 
   hud.centerMsg(match.phaseInfo.name, match.phaseInfo.note);
 
-  // 確認用のボタン（?debug=1）：戦闘ができるまで、脱落や試合終了を試すため
+  // テスト用の操作：設定画面のボタンと、?debug=1 のときの画面上のボタンから使う
+  function debugAction(act) {
+    if (match.state !== 'running') return;
+    if (act === 'kill-bot') {
+      const target = fighters.find((f) => !f.isPlayer && f.alive);
+      if (target) match.eliminate(target, me.alive ? me : null);
+    } else if (act === 'die') {
+      if (me.alive) match.eliminate(me, fighters.find((f) => !f.isPlayer && f.alive) || null);
+    } else if (act === 'skip') {
+      match.timeLeft = 0.01;
+    }
+  }
   if (debug) {
     const panel = document.getElementById('debug');
     panel.hidden = false;
-    panel.addEventListener('click', (e) => {
-      const act = e.target.dataset.act;
-      if (act === 'kill-bot') {
-        const target = fighters.find((f) => !f.isPlayer && f.alive);
-        if (target) match.eliminate(target, me.alive ? me : null);
-      } else if (act === 'die') {
-        match.eliminate(me, fighters.find((f) => !f.isPlayer && f.alive) || null);
-      } else if (act === 'skip') {
-        match.timeLeft = 0.01;
-      }
-    });
+    panel.addEventListener('click', (e) => { if (e.target.dataset.act) debugAction(e.target.dataset.act); });
   }
   document.getElementById('again').addEventListener('click', () => location.reload());
 
@@ -189,6 +190,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       hud.updateTags(player.camera, fighters, terrain.heightAt);
     },
     get spectating() { return spectating; },
+    debugAction,
     views,   // 確認用（自動テストから見た目の状態を読むため）
   };
 }
