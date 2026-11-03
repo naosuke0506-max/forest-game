@@ -9,6 +9,8 @@
 | `*_lod0.glb` / `*_lod1.glb` | 木の形（近く用 / 遠く用）。材質は `bark`（樹皮）と `leaves`（葉）の 2 つ | Sapling Tree Gen で作成 |
 | `leaves_broad.webp` | 広葉樹の葉の房（4 種類） | 葉の写真：[ambientCG Leaf001](https://ambientcg.com/view?id=Leaf001)（CC0）を Blender で小枝に付けて描いた |
 | `leaves_needle.webp` | 針葉樹の針の房（4 種類） | Blender で細い円柱を並べて描いた（写真なし） |
+| `grass.webp` | 地面の草の株（短い草・穂・白い花・背の高い草の 4 種類） | Blender で細い草の葉・花を並べて描いた（写真なし。`tools/trees_blender/make_grass_atlas.py`） |
+| `bush_lod0.glb` / `bush_lod1.glb` | 低い木（茂み） | Sapling Tree Gen で作成（葉は `leaves_broad.webp`） |
 | `bark_oak.webp` | 広葉樹の樹皮 | [Poly Haven jolcham_oak_bark_01](https://polyhaven.com/a/jolcham_oak_bark_01)（CC0） |
 | `bark_fir.webp` | モミ・若木の樹皮 | [Poly Haven bark_brown_02](https://polyhaven.com/a/bark_brown_02)（CC0） |
 | `bark_pine.webp` | アカマツの樹皮 | [Poly Haven pine_bark](https://polyhaven.com/a/pine_bark)（CC0） |

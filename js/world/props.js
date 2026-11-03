@@ -146,7 +146,7 @@ export function createProps(app, config, seed, terrain, obstacles, types, zones 
     stump:       { mixed: 1, deep: 1.5, prairie: 0.3, castle: 0 },
     branches:    { mixed: 1, deep: 2.2, prairie: 0.2, castle: 0 },
     fern:        { mixed: 1, deep: 1.8, prairie: 0.3, castle: 0.2 },
-    grass:       { mixed: 1, deep: 0.35, prairie: 2.2, castle: 0.6 },
+    grass:       { mixed: 0.6, deep: 0.3, prairie: 0.4, castle: 0.4 },   // 地面の草（ground-cover.js）があるので控えめに
   };
   const zoneMul = (id, x, z) => {
     if (!zones) return 1;

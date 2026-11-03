@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>静かな森</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-03.12';</script>
+<script>window.__BUILD = '2026-11-03.13';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -21,6 +21,9 @@
 <link rel="modulepreload" href="./js/render/sun-glare.js">
 <link rel="modulepreload" href="./js/world/fence.js">
 <link rel="modulepreload" href="./js/world/zones.js">
+<link rel="modulepreload" href="./js/world/ground-cover.js">
+<link rel="preload" as="image" type="image/webp" href="./assets/trees_blender/grass.webp">
+<link rel="preload" as="fetch" href="./assets/trees_blender/bush_lod1.glb" crossorigin>
 <link rel="modulepreload" href="./js/config.js">
 <link rel="modulepreload" href="./js/core/app.js">
 <link rel="modulepreload" href="./js/core/random.js">

@@ -54,7 +54,7 @@ export const CONFIG = {
     drawDistance: 125,      // 木や岩を描く遠さ（m）。霧で 9 割見えなくなる辺り。広い森でも描く数が増えすぎないように
     // 木の本数（Tripo AI の模型を使うとき）。置く順番もこの順（大きい木から）
     // 本数は半径 86m のときの 5.4 倍（広さの比）
-    trees: { fir: 486, red_pine: 173, broadleaf: 205, birch: 173, dead: 76, sapling: 378 },
+    trees: { fir: 486, red_pine: 173, broadleaf: 205, birch: 173, dead: 76, sapling: 378, bush: 1100 },
     conifers: 600,          // 模型が読み込めなかったときの仮の木の本数
     broadleaves: 240,
     rocks: 240,

@@ -87,5 +87,20 @@
   ],
   "bark": "fir",
   "leafAtlas": "needle"
+ },
+ "bush": {
+  "height": 2.88,
+  "trunkRadius": 0.15,
+  "crownRadius": 1.073,
+  "rootRadius": 0.2,
+  "rootJunction": 0,
+  "lod0Triangles": 3124,
+  "lod1Triangles": 1170,
+  "parts": [
+   "bark",
+   "leaves"
+  ],
+  "bark": "oak",
+  "leafAtlas": "broad"
  }
 }

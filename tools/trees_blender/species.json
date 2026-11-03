@@ -112,5 +112,34 @@
     "minBranchRadiusFar": 0.01,
     "farKeep": 0.35,
     "farGrow": 1.5
+  },
+  "bush": {
+    "preset": "small_maple",
+    "seed": 21,
+    "leafAtlas": "broad",
+    "bark": "oak",
+    "override": {
+      "scale": 2.2,
+      "scaleV": 0.6,
+      "baseSize": 0.02,
+      "baseSplits": 3,
+      "leaves": 3,
+      "leafScale": 0.8,
+      "leafScaleX": 1.0,
+      "leafScaleV": 0.3,
+      "horzLeaves": false,
+      "levels": 3,
+      "branches": [
+        0,
+        28,
+        10,
+        0
+      ]
+    },
+    "barkTris": 500,
+    "minBranchRadius": 0.004,
+    "minBranchRadiusFar": 0.012,
+    "farKeep": 0.35,
+    "farGrow": 1.45
   }
 }
