@@ -30,8 +30,9 @@ const lerp = (a, b, t) => a + (b - a) * t;
 /**
  * @param {object} base createEnvironment() の結果（昼の値。空の写真が読めなかったときは daySky が null）
  * @param {object} config CONFIG（空の明るさの倍率など）
+ * @param {pc.Entity} camera カメラ（空のドームをカメラに付いて行かせる）
  */
-export function createTimeOfDay(app, base, config) {
+export function createTimeOfDay(app, base, config, camera = null) {
   const scene = app.scene;
   const atm = config.atmosphere;
   const skies = {};                      // 名前 → prepareSky() の結果
@@ -77,15 +78,69 @@ export function createTimeOfDay(app, base, config) {
     };
   }
 
-  let current = 'day', from = null, to = null, k = 1, duration = 1, shownSky = base.daySky;
+  let current = 'day', from = null, to = null, k = 1, duration = 1;
+  let bgSky = base.daySky;      // 背景（skybox）に出している空
+  let lightSky = base.daySky;   // 空から回り込む光（envAtlas）に使っている空
   const glare = { strength: TIMES.day.glare, color: [...TIMES.day.glareColor] };
   const dir = new pc.Vec3(), color = new pc.Color(), fog = new pc.Color();
+  const intensityOf = (sky, level) => sky.meta.skyScale * atm.skyBrightness * (level * dayIrr) / sky.irradiance;
 
-  function apply(s, sky) {
-    // 背景と、空から回り込む光：今出している写真に、その写真用の倍率をかける
-    if (sky) {
-      if (scene.skybox !== sky.skybox) { scene.skybox = sky.skybox; scene.envAtlas = sky.envAtlas; }
-      scene.skyboxIntensity = sky.meta.skyScale * atm.skyBrightness * (s.level * dayIrr) / sky.irradiance;
+  // 空のドーム：時間帯が変わるとき、次の空を大きな球の内側に描き、だんだん濃くして今の空に重ねる。
+  // 背景の空（skybox）は 1 枚しか出せないので、重ねきってから入れ替える（急にガラッと変わらないように）
+  const domeMat = new pc.StandardMaterial();
+  domeMat.useLighting = false;
+  domeMat.useFog = false;
+  domeMat.useSkybox = false;
+  domeMat.diffuse = new pc.Color(0, 0, 0);
+  domeMat.emissive = new pc.Color(1, 1, 1);
+  domeMat.blendType = pc.BLEND_NORMAL;
+  domeMat.depthWrite = false;
+  domeMat.cull = pc.CULLFACE_FRONT;     // 球の内側から見る
+  domeMat.update();
+  const dome = new pc.Entity('sky-dome');
+  dome.addComponent('render', {
+    meshInstances: [new pc.MeshInstance(pc.Mesh.fromGeometry(app.graphicsDevice, new pc.SphereGeometry({ radius: 1, latitudeBands: 32, longitudeBands: 64 })), domeMat)],
+    castShadows: false, receiveShadows: false,
+  });
+  const domeR = (config.atmosphere.farClip || 160) * 0.9;
+  dome.setLocalScale(-domeR, domeR, domeR);   // 左右を反転して、背景の空と同じ向きにそろえる（画面で確かめた）
+  dome.enabled = false;
+  app.root.addChild(dome);
+  let domeSky = null, domeTex = null;
+  function startDome(sky) {
+    domeTex?.destroy();
+    domeTex = new pc.Texture(app.graphicsDevice, {
+      name: 'sky-dome', width: sky.image.width, height: sky.image.height,
+      format: pc.PIXELFORMAT_RGBA8, srgb: true, mipmaps: true,
+      minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR, magFilter: pc.FILTER_LINEAR,
+      addressU: pc.ADDRESS_REPEAT, addressV: pc.ADDRESS_CLAMP_TO_EDGE,
+    });
+    domeTex.setSource(sky.image);
+    domeMat.emissiveMap = domeTex;
+    domeMat.update();
+    domeSky = sky;
+    dome.enabled = true;
+  }
+  function endDome() {
+    dome.enabled = false;
+    domeSky = null;
+    domeMat.emissiveMap = null;
+    domeTex?.destroy();
+    domeTex = null;
+  }
+
+  function apply(s, fade = 0) {
+    // 背景の空と、空から回り込む光：写真ごとの倍率をかける
+    if (bgSky) {
+      if (scene.skybox !== bgSky.skybox) scene.skybox = bgSky.skybox;
+      if (scene.envAtlas !== lightSky.envAtlas) scene.envAtlas = lightSky.envAtlas;
+      scene.skyboxIntensity = intensityOf(bgSky, s.level);
+      if (domeSky) {
+        domeMat.emissiveIntensity = intensityOf(domeSky, s.level);
+        domeMat.opacity = fade;
+        domeMat.update();
+        if (camera) dome.setPosition(camera.getPosition());
+      }
     } else {
       scene.ambientLight = new pc.Color(...base.ambient.map((c) => c * (0.3 + 0.7 * Math.min(1, s.level))));
     }
@@ -115,27 +170,33 @@ export function createTimeOfDay(app, base, config) {
     get current() { return current; },
     get name() { return TIMES[current].name; },
     /** 今出している空の写真の名前（確認用） */
-    get skyName() { return shownSky?.name ?? null; },
+    get skyName() { return bgSky?.name ?? null; },
     get loadedSkies() { return Object.keys(skies); },
     /** 太陽（夜は月）を見たときのまぶしさ { strength, color } */
     glare,
     /** 時間帯を変える。seconds：変わるのにかける時間（0 ならすぐ） */
     set(key, seconds = 6) {
       if (!TIMES[key]) return;
-      from = to ? mix(from || to, to, k * k * (3 - 2 * k)) : toState(current);
+      // 変わっている途中なら、今の見た目から始める（途中の空は重ねきった扱いにする）
+      if (to && k < 1) { from = mix(from, to, k * k * (3 - 2 * k)); if (domeSky) { bgSky = lightSky = domeSky; } endDome(); }
+      else from = to || toState(current);
       current = key;
       to = toState(key);
       k = 0;
       duration = Math.max(0.001, seconds);
-      if (seconds <= 0) { k = 1; shownSky = to.sky; apply(to, shownSky); }
+      if (to.sky && to.sky !== bgSky && to.sky.image && seconds > 0) startDome(to.sky);
+      if (seconds <= 0) { k = 1; bgSky = lightSky = to.sky || bgSky; endDome(); apply(to); }
     },
+    /** 移り変わりの途中の、ある割合の所へ飛ぶ（確認用） */
+    seek(p) { if (to) { k = Math.min(0.999999, Math.max(0, p)); this.update(0); } },
     update(dt) {
       if (!to || k >= 1) return;
       k = Math.min(1, k + dt / duration);
-      // 空の写真は、明るさが変わる途中で入れ替える（昼 ↔ 夜のように明るさが大きく違っても目立たない）
-      if (k >= 0.5) shownSky = to.sky;
       const t = k * k * (3 - 2 * k);
-      apply(mix(from, to, t), shownSky);
+      // 空から回り込む光は途中で入れ替える。背景の空は、ドームで重ねきってから入れ替える
+      if (k >= 0.5 && to.sky) lightSky = to.sky;
+      if (k >= 1) { if (to.sky) bgSky = to.sky; endDome(); }
+      apply(mix(from, to, t), t);
     },
   };
 }
