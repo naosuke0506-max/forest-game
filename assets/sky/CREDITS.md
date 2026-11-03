@@ -31,7 +31,7 @@ MD5 は Poly Haven の API の値と一致することを確認済み。
 ```
 python3 tools/make_sky.py <元の .hdr> assets/sky kloofendal_48d "sat=1.45,gain=0.92:1.0:1.12,top=0.75:0.85:1.05"
 python3 tools/make_sky.py qwantani_sunrise_puresky_2k.hdr assets/sky qwantani_sunrise
-python3 tools/make_sky.py kloppenheim_06_puresky_2k.hdr assets/sky kloppenheim_06 "sat=1.6,gain=1.35:0.85:0.58,top=0.38:0.42:0.78"
+python3 tools/make_sky.py kloppenheim_06_puresky_2k.hdr assets/sky kloppenheim_06 "sat=1.7,gain=1.4:0.8:0.5,top=0.14:0.16:0.38"
 python3 tools/make_sky.py kloppenheim_02_puresky_2k.hdr assets/sky kloppenheim_02 "sat=1.3,gain=0.55:0.75:1.3,top=0.6:0.7:1.0"
 ```
 

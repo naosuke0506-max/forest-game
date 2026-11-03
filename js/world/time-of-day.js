@@ -19,10 +19,10 @@ export const TIMES = {
              glare: 0.6,  glareColor: [1.0, 0.86, 0.7] },
   day:     { name: '昼',     sky: 'kloofendal_48d',   level: 1.05, sun: 1.6,  sunColor: [1.0, 0.96, 0.88], minElevation: 0, fogDensity: 0.012, fogMax: 1, exposure: 1.08,
              glare: 1.0,  glareColor: [1.0, 0.98, 0.92] },
-  dusk:    { name: '夕暮れ', sky: 'kloppenheim_06',   level: 0.45, sun: 0.75, sunWhite: 0.1,  minElevation: 7,  fogDensity: 0.014, fogMax: 0.4,  exposure: 1.05,
+  dusk:    { name: '夕暮れ', sky: 'kloppenheim_06',   level: 0.09, sun: 0.8,  sunWhite: 0.1,  minElevation: 7,  fogDensity: 0.015, fogMax: 0.22, exposure: 1.1,
              glare: 0.8,  glareColor: [1.0, 0.58, 0.28] },
   night:   { name: '深夜',   sky: 'kloppenheim_02',   level: 0.06, sun: 0.22, sunWhite: 0,    minElevation: 25, fogDensity: 0.02,  fogMax: 1,    exposure: 1.5,
-             glare: 0.22, glareColor: [0.7, 0.8, 1.0] },
+             glare: 0,    glareColor: [0.7, 0.8, 1.0] },   // 月はまぶしくしない
 };
 
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -114,6 +114,9 @@ export function createTimeOfDay(app, base, config) {
   return {
     get current() { return current; },
     get name() { return TIMES[current].name; },
+    /** 今出している空の写真の名前（確認用） */
+    get skyName() { return shownSky?.name ?? null; },
+    get loadedSkies() { return Object.keys(skies); },
     /** 太陽（夜は月）を見たときのまぶしさ { strength, color } */
     glare,
     /** 時間帯を変える。seconds：変わるのにかける時間（0 ならすぐ） */
