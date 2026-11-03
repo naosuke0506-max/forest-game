@@ -1,6 +1,7 @@
 // 練習モードの試合：あなた＋bot 3 体。試合の計算（game/）と、見た目・画面（render/・ui/）をつなぐ
 import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS } from './game/data.js';
 import { createMinimap } from './ui/minimap.js';
+import { ZONE_NAMES } from './world/zones.js';
 import { TIMES } from './world/time-of-day.js';
 import { createFighter, createMatch } from './game/match.js';
 import { createBot } from './game/bot.js';
@@ -19,7 +20,7 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
 /**
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, debug, phaseDuration }
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, debug = false, phaseDuration = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, zones = null, debug = false, phaseDuration = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）
@@ -74,7 +75,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     return [f, m ? createCharacterView(app, f, terrain, m) : createFighterView(app, f, terrain)];
   }));
   const hud = createHud(match, me);
-  const minimap = createMinimap(document.getElementById('minimap'), { obstacles, areaRadius: AREA_RADIUS });
+  const minimap = createMinimap(document.getElementById('minimap'), { obstacles, areaRadius: AREA_RADIUS, zones });
+  // 別のエリアに入ったら、左の知らせに出す
+  let zoneNow = zones ? zones.zoneAt(me.x, me.z) : null, zoneTimer = 0;
   // 右手・左手ボタンの文字をキャラに合わせる（左手：盾持ちは防御、ほかは強攻撃・持ち替え など）
   const leftBtn = document.getElementById('btn-left');
   leftBtn.textContent = CHARACTERS[me.char].leftLabel;
@@ -197,6 +200,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       hud.update(dt);
       hud.updateVitals(me);
       minimap.update(dt, spectating || me);
+      if (zones && me.alive && (zoneTimer -= dt) <= 0) {
+        zoneTimer = 0.5;
+        const z = zones.zoneAt(me.x, me.z);
+        if (z !== zoneNow) { zoneNow = z; hud.addFeed(`${ZONE_NAMES[z]}に入った`); }
+      }
       hud.updateTags(player.camera, fighters, terrain.heightAt);
     },
     get spectating() { return spectating; },

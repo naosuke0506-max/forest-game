@@ -2,7 +2,7 @@
 // 木や岩（ぶつかる物）を点で、歩ける範囲を輪で、自分を矢印で描く。ほかのプレイヤーは描かない（見つけるのは自分の目で）
 // 木や岩は動かないので最初に 1 回だけ描いておき、毎回は自分の矢印だけを重ねる（負荷を抑えるため、1 秒に 10 回まで）
 
-export function createMinimap(canvas, { obstacles, areaRadius, viewRadius = areaRadius + 6 }) {
+export function createMinimap(canvas, { obstacles, areaRadius, viewRadius = areaRadius + 6, zones = null }) {
   const ctx = canvas.getContext('2d');
   const base = document.createElement('canvas');
   let size = 0, timer = 0;
@@ -23,6 +23,27 @@ export function createMinimap(canvas, { obstacles, areaRadius, viewRadius = area
     b.fill();
     b.save();
     b.clip();
+    // エリアの色（中央の森・深い森・大草原・城と村）と道。画素ごとに塗る（最初に 1 回だけ）
+    if (zones) {
+      const img = b.getImageData(0, 0, size, size);
+      const C = { mixed: [44, 62, 38], deep: [20, 38, 24], prairie: [104, 112, 58], castle: [120, 100, 74] };
+      const P = [150, 126, 92];
+      for (let py = 0; py < size; py++) {
+        for (let px = 0; px < size; px++) {
+          const x = ((px + 0.5) / size * 2 - 1) * viewRadius, z = ((py + 0.5) / size * 2 - 1) * viewRadius;
+          if (x * x + z * z > viewRadius * viewRadius) continue;
+          const w = zones.weights(x, z), pw = zones.path(x, z);
+          const i = (py * size + px) * 4;
+          for (let c = 0; c < 3; c++) {
+            let v = w.mixed * C.mixed[c] + w.deep * C.deep[c] + w.prairie * C.prairie[c] + w.castle * C.castle[c];
+            v += (P[c] - v) * pw;
+            img.data[i + c] = v;
+          }
+          img.data[i + 3] = 215;
+        }
+      }
+      b.putImageData(img, 0, 0);
+    }
     // 木や岩
     b.fillStyle = 'rgba(120, 160, 100, .55)';
     for (const o of obstacles.all) {

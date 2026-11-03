@@ -103,7 +103,7 @@ function createTreeMaterial(texture, name, height) {
 /**
  * 木を置いて描く。毎フレーム update(カメラの位置) を呼ぶと、距離で近く用・遠く用を入れ替える
  */
-export function createModelTrees(app, config, seed, terrain, obstacles, models) {
+export function createModelTrees(app, config, seed, terrain, obstacles, models, zones = null) {
   const w = config.world;
   const rnd = createRandom(seed + 1000);
   const device = app.graphicsDevice;
@@ -127,16 +127,34 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models) 
   const trunks = [];
   for (const name of TREE_TYPES) placements[name] = [];
   const order = Object.entries(w.trees); // [[種類, 本数], ...]
-  for (const [name, count] of order) {
+  // エリアごとの木の多さ（中央の森を 1 とした倍率。深い森は 3 倍以上、大草原はまばら、城と道には置かない）。
+  // 本数は「森全体が中央の森と同じ多さ」のときの数なので、平均の多さを掛けて実際の本数にする
+  const densityAt = zones ? zones.treeDensity : () => 1;
+  let avg = 0;
+  if (zones) {
+    const probe = createRandom(seed + 4321);
+    for (let i = 0; i < 4000; i++) {
+      const r = Math.sqrt(probe.next()) * w.forestRadius, a = probe.next() * Math.PI * 2;
+      avg += densityAt(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    avg /= 4000;
+  } else avg = 1;
+  const MAX_D = 3.2;
+  for (const [name, baseCount] of order) {
     const m = models.types[name].meta;
     const isSapling = name === 'sapling';
-    for (let tries = 0, n = 0; n < count && tries < count * 40; tries++) {
+    const count = Math.round(baseCount * avg);
+    for (let tries = 0, n = 0; n < count && tries < count * 60; tries++) {
       const r = Math.sqrt(rnd.next()) * w.forestRadius;
       const a = rnd.range(0, Math.PI * 2);
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
       if (r < w.clearingRadius + (isSapling ? 0 : 2)) continue;
+      const dens = densityAt(x, z);
+      if (rnd.next() * MAX_D > dens) continue;          // 多い所ほど置かれやすい
       const s = rnd.range(0.8, 1.2);
-      const spacing = isSapling ? 1.2 : Math.max(2.0, m.crownRadius * 0.55 * s);
+      // 深い森は木と木の間を詰める（葉が重なって空を覆うように）
+      const tight = 1 - 0.45 * Math.min(1, Math.max(0, dens - 1) / 2.2);
+      const spacing = isSapling ? 1.2 : Math.max(1.6, m.crownRadius * 0.55 * s * tight);
       if (!obstacles.isFree(x, z, spacing)) continue;
       const yaw = rnd.range(0, 360);
       const sy = s * rnd.range(0.92, 1.08);
@@ -192,11 +210,25 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models) 
   // 3. 距離で振り分ける
   let lastX = Infinity, lastZ = Infinity, lastYaw = Infinity, timer = 0, forceUpdate = true;
   // 描かない木：見える遠さ（霧でほぼ見えなくなる所）より遠い木と、カメラの後ろの木（影が届く近さより遠いもの）
-  const drawDist2 = Math.pow(config.world.drawDistance ?? config.atmosphere.farClip, 2);
+  let drawDist2 = Math.pow(config.world.drawDistance ?? config.atmosphere.farClip, 2);
   const keep2 = Math.pow(config.quality.shadowDistance + 8, 2);
   const cosView = Math.cos((72 * Math.PI) / 180);
+  const MAX_NEAR = 30;   // 精細な形で描く木は、近い順に最大 30 本（深い森で増えすぎないように）
+  let ddList = new Float32Array(256);
   function assign(cx, cz, fx, fz) {
-    const d2 = lodDistance * lodDistance;
+    // 精細な形にする距離：lodDistance と、「近い順に 30 本目」の距離の、近い方
+    let d2 = lodDistance * lodDistance, nd = 0;
+    for (const g of groups) {
+      if (!g.near) continue;
+      for (const p of g.list) {
+        const dx = p.x - cx, dz = p.z - cz, dd = dx * dx + dz * dz;
+        if (dd < d2) {
+          if (nd >= ddList.length) { const a = new Float32Array(ddList.length * 2); a.set(ddList); ddList = a; }
+          ddList[nd++] = dd;
+        }
+      }
+    }
+    if (nd > MAX_NEAR) d2 = ddList.subarray(0, nd).sort()[MAX_NEAR - 1];
     let tris = 0;
     for (const g of groups) {
       let nNear = 0, nFar = 0;
@@ -240,6 +272,11 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models) 
       app.root.addChild(entity);
       g.near = { entity, mi, vb, data };
       forceUpdate = true;
+    },
+    /** 木を描く遠さを変える（深い森の中は霧が濃く遠くが見えないので、近くだけ描く） */
+    setDrawDistance(d) {
+      const d2 = d * d;
+      if (Math.abs(d2 - drawDist2) > 25) { drawDist2 = d2; forceUpdate = true; }
     },
     /** 毎フレーム呼ぶ。カメラが 2m 以上動いたか、向きが変わったか、0.5 秒たったら振り分け直す */
     update(dt, camPos, camFwd = null) {
