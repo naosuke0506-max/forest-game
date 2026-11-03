@@ -1,0 +1,116 @@
+{
+  "_説明": "木の種類ごとの設定。preset：Sapling Tree Gen の見本、override：見本に重ねる値（scale：木の高さの目安 m、leaves：枝 1 本あたりの葉の四角の数、leafScale：葉の四角の大きさ m）、leafAtlas：葉の房の画像（broad / needle）、bark：樹皮の画像、barkTris：近く用の枝の三角形の目標、minBranchRadius / minBranchRadiusFar：近く用 / 遠く用で残す枝の太さ（半径 m）、farKeep / farGrow：遠く用で残す葉の割合と大きくする倍率",
+  "broadleaf": {
+    "preset": "small_maple",
+    "seed": 3,
+    "leafAtlas": "broad",
+    "bark": "oak",
+    "override": {
+      "scale": 14.0,
+      "scaleV": 2.0,
+      "baseSize": 0.38,
+      "leaves": 1,
+      "leafScale": 1.5,
+      "leafScaleX": 1.0,
+      "leafScaleV": 0.25,
+      "horzLeaves": false
+    },
+    "barkTris": 4000,
+    "farKeep": 0.22,
+    "farGrow": 1.8
+  },
+  "birch": {
+    "preset": "white_birch",
+    "seed": 5,
+    "leafAtlas": "broad",
+    "bark": "birch",
+    "override": {
+      "scale": 14.0,
+      "scaleV": 2.0,
+      "leaves": 1,
+      "leafScale": 1.1,
+      "leafScaleX": 1.0,
+      "leafScaleV": 0.25,
+      "horzLeaves": false
+    },
+    "barkTris": 3500,
+    "farKeep": 0.25,
+    "farGrow": 1.7
+  },
+  "fir": {
+    "preset": "douglas_fir",
+    "seed": 7,
+    "leafAtlas": "needle",
+    "bark": "fir",
+    "override": {
+      "scale": 17.0,
+      "scaleV": 2.0,
+      "levels": 3,
+      "leaves": 4,
+      "leafScale": 1.25,
+      "leafScaleX": 1.0,
+      "leafScaleV": 0.2,
+      "horzLeaves": false
+    },
+    "barkTris": 3500,
+    "minBranchRadius": 0.02,
+    "minBranchRadiusFar": 0.05,
+    "farKeep": 0.25,
+    "farGrow": 1.7
+  },
+  "red_pine": {
+    "preset": "small_pine",
+    "seed": 11,
+    "leafAtlas": "needle",
+    "bark": "pine",
+    "override": {
+      "scale": 16.0,
+      "scaleV": 2.0,
+      "baseSize": 0.42,
+      "leaves": 14,
+      "leafScale": 1.25,
+      "leafScaleX": 1.0,
+      "leafScaleV": 0.2,
+      "horzLeaves": false
+    },
+    "barkTris": 3500,
+    "minBranchRadius": 0.02,
+    "minBranchRadiusFar": 0.05,
+    "farKeep": 0.25,
+    "farGrow": 1.7
+  },
+  "dead": {
+    "preset": "quaking_aspen",
+    "seed": 13,
+    "leaves": false,
+    "bark": "dead",
+    "override": {
+      "scale": 11.0,
+      "scaleV": 2.0
+    },
+    "barkTris": 3000,
+    "minBranchRadius": 0.015,
+    "minBranchRadiusFar": 0.04
+  },
+  "sapling": {
+    "preset": "douglas_fir",
+    "seed": 17,
+    "leafAtlas": "needle",
+    "bark": "fir",
+    "override": {
+      "scale": 2.6,
+      "scaleV": 0.4,
+      "levels": 2,
+      "leaves": 6,
+      "leafScale": 0.55,
+      "leafScaleX": 1.0,
+      "leafScaleV": 0.2,
+      "horzLeaves": false
+    },
+    "barkTris": 600,
+    "minBranchRadius": 0.004,
+    "minBranchRadiusFar": 0.01,
+    "farKeep": 0.35,
+    "farGrow": 1.5
+  }
+}

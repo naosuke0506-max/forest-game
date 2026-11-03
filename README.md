@@ -33,7 +33,7 @@ iPad の Safari で動く、4 人で戦う対戦ゲームの試作品です（�
 - 外部ライブラリ：PlayCanvas のみ
 - 質感画像：Poly Haven（CC0）の地面・樹皮・岩（`assets/textures/CREDITS.md`）
 - 空：Poly Haven（CC0）の HDR 写真 4 枚（朝・昼・夕暮れ・深夜）から作った背景と照明（`assets/sky/CREDITS.md`）
-- 木：Tripo AI で作った 6 種類の模型（`assets/trees/CREDITS.md`）
+- 木：Blender（Sapling Tree Gen）で作った 6 種類の模型。葉は ambientCG（CC0）の写真、樹皮は Poly Haven（CC0）の写真（`assets/trees_blender/CREDITS.md`）。前の Tripo AI の木は `assets/trees/` に残してある（今は使っていない）
 - 草・シダ・落ち枝・岩・切り株：Poly Haven（CC0）の 3D 模型（`assets/props/CREDITS.md`）
 - キャラ：Tripo AI で作った 6 種類の模型と、魔境争覇から移した動き（`assets/characters/CREDITS.md`）
 - 武器・盾：Tripo AI で作った模型（`assets/weapons/CREDITS.md`）
@@ -82,7 +82,9 @@ assets/textures/         実写の質感画像（読み込むのは軽くした 
 tools/optimize_textures.py 質感画像を WebP に軽くする道具（開発用）
 assets/sky/               空の背景と照明（出典は CREDITS.md）
 tools/make_sky.py        空の HDR 写真から、背景・照明・太陽の向きを作る道具（開発用）
-assets/trees/            木の模型（近く用・遠く用の形と色の画像。出典は CREDITS.md）
+assets/trees_blender/    木の模型（Blender で作成。近く用・遠く用の形、樹皮と葉の房の画像。出典は CREDITS.md）
+tools/trees_blender/     木を Blender で作る道具（葉の房の画像・樹皮の画像・木の形。README.md に手順）
+assets/trees/            前の木の模型（Tripo AI。今は使っていない）
 source_models/trees/     木の元の模型（Tripo AI の GLB。ゲームは読み込まない）
 tools/process_trees.mjs  木の模型をゲーム用に軽くする道具（開発用。cd tools && npm ci）
 assets/props/            森の小物（草・シダ・落ち枝・岩・切り株。出典は CREDITS.md）
@@ -139,7 +141,7 @@ js/
   ui/settings.js         設定（性能表示・テスト用）。この端末に保存
 ```
 
-木は Tripo AI の模型、草・シダ・落ち枝・岩・切り株は Poly Haven の実写スキャンの模型です。地面には実写の質感画像を貼っています。
+木は Blender で作った模型（樹皮と葉の房の 2 つの部分）、草・シダ・落ち枝・岩・切り株は Poly Haven の実写スキャンの模型です。地面には実写の質感画像を貼っています。
 木の模型や質感画像が読み込めなかったときは、その分だけ仮の表示で続けます（画面下に知らせが出ます）。
 新しい木を足すときは、元の GLB を `source_models/trees/` に置き、`tools/process_trees.mjs` の `TREES` と `js/world/trees.js` の `TREE_TYPES`、`js/config.js` の `world.trees` に名前を足します。
 

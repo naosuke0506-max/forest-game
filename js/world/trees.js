@@ -12,13 +12,23 @@ import { createRandom } from '../core/random.js';
 import { sceneBudget } from '../core/mesh-utils.js';
 import { applyWind } from './wind.js';
 
-const ROOT = './assets/trees';
+// 木の模型：Blender（Sapling Tree Gen）で作ったもの。tools/trees_blender/ で作り直せる。
+// 各模型は「樹皮（bark）」と「葉（leaves）」の 2 つの部分を持ち、それぞれ別の画像を貼る
+// （前の Tripo AI の木は assets/trees/ に残してある）
+const ROOT = './assets/trees_blender';
 export const TREE_TYPES = ['fir', 'red_pine', 'broadleaf', 'birch', 'dead', 'sapling'];
 
+/** 模型を読み込み、部分ごとの形（材質の名前 → 形）にする */
 function loadContainer(app, url) {
   return new Promise((resolve, reject) => {
     const asset = new pc.Asset(url, 'container', { url });
-    asset.once('load', () => resolve(asset.resource.renders[0].resource.meshes[0]));
+    asset.once('load', () => {
+      const e = asset.resource.instantiateRenderEntity();
+      const parts = {};
+      for (const r of e.findComponents('render')) for (const mi of r.meshInstances) parts[mi.material.name] = mi.mesh;
+      e.destroy();
+      resolve(parts);
+    });
     asset.once('error', (err) => reject(new Error(`模型を読み込めません: ${url}（${err}）`)));
     app.assets.add(asset);
     app.assets.load(asset);
@@ -41,25 +51,29 @@ function loadImage(url) {
 export async function loadTreeModels(app, quality) {
   try {
     const meta = await (await fetch(`${ROOT}/trees.json`)).json();
-    const types = {};
-    await Promise.all(TREE_TYPES.map(async (name) => {
-      const [lod1, img] = await Promise.all([
-        loadContainer(app, `${ROOT}/${name}_lod1.glb`),
-        loadImage(`${ROOT}/${name}_color.webp`),
-      ]);
+    // 画像：樹皮（繰り返して貼る）と葉の房（透明あり）。同じ画像は 1 回だけ読む
+    const textures = {};
+    const textureOf = (file, repeat) => (textures[file] ||= loadImage(`${ROOT}/${file}`).then((img) => {
       const tex = new pc.Texture(app.graphicsDevice, {
-        name: `${name}_color`,
-        width: img.width,
-        height: img.height,
-        format: pc.PIXELFORMAT_RGBA8,
-        srgb: true,
-        mipmaps: true,
-        minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
-        magFilter: pc.FILTER_LINEAR,
+        name: file, width: img.width, height: img.height,
+        format: pc.PIXELFORMAT_RGBA8, srgb: true, mipmaps: true,
+        minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR, magFilter: pc.FILTER_LINEAR,
+        addressU: repeat ? pc.ADDRESS_REPEAT : pc.ADDRESS_CLAMP_TO_EDGE,
+        addressV: repeat ? pc.ADDRESS_REPEAT : pc.ADDRESS_CLAMP_TO_EDGE,
         anisotropy: quality.anisotropy,
       });
       tex.setSource(img);
-      types[name] = { meta: meta[name], lod1, lod0: null, texture: tex };
+      return tex;
+    }));
+    const types = {};
+    await Promise.all(TREE_TYPES.map(async (name) => {
+      const m = meta[name];
+      const [lod1, bark, leaves] = await Promise.all([
+        loadContainer(app, `${ROOT}/${name}_lod1.glb`),
+        textureOf(`bark_${m.bark}.webp`, true),
+        m.leafAtlas ? textureOf(`leaves_${m.leafAtlas}.webp`, false) : null,
+      ]);
+      types[name] = { meta: m, lod1, lod0: null, textures: { bark, leaves } };
     }));
     return { types };
   } catch (err) {
@@ -73,7 +87,7 @@ export async function loadTreeModels(app, quality) {
 export function startLoadingNear(app, models, onLoaded) {
   for (const name of TREE_TYPES) {
     loadContainer(app, `${ROOT}/${name}_lod0.glb`)
-      .then((mesh) => { models.types[name].lod0 = mesh; onLoaded(name); })
+      .then((parts) => { models.types[name].lod0 = parts; onLoaded(name); })
       .catch((err) => console.warn(err)); // 近く用が無くても遠く用で描けるので、知らせは出さない
   }
 }
@@ -88,16 +102,38 @@ const WIND = {
   sapling:   { bend: 0.080, flutter: 0.06 },
 };
 
-function createTreeMaterial(texture, name, height) {
-  const m = new pc.StandardMaterial();
-  m.diffuseMap = texture;
-  m.useMetalness = true;
-  m.metalness = 0;
-  m.gloss = 0.18;              // 樹皮も葉もほぼつやなし
-  m.cull = pc.CULLFACE_NONE;   // 葉は薄い板なので両面を描く
-  m.twoSidedLighting = true;   // 裏面も正しい向きで光を受ける
-  applyWind(m, { height, ...WIND[name] });
-  return m;
+// 葉の色に掛ける色（葉の房の画像は明るい黄緑なので、種類ごとに落ち着いた色にする）
+const LEAF_TINT = {
+  fir: [0.62, 0.78, 0.6], red_pine: [0.7, 0.82, 0.62], sapling: [0.66, 0.82, 0.62],
+  broadleaf: [0.66, 0.78, 0.5], birch: [0.78, 0.9, 0.55], dead: [1, 1, 1],
+};
+
+/** 樹皮（不透明。画像を繰り返して貼る）と葉（透明な所を切り抜く。両面）の材質 */
+function createTreeMaterials(t, name, antialias) {
+  const wind = { height: t.meta.height, ...WIND[name] };
+  const bark = new pc.StandardMaterial();
+  bark.diffuseMap = t.textures.bark;
+  bark.useMetalness = true;
+  bark.metalness = 0;
+  bark.gloss = 0.15;
+  applyWind(bark, wind);
+  let leaves = null;
+  if (t.textures.leaves) {
+    leaves = new pc.StandardMaterial();
+    leaves.diffuseMap = t.textures.leaves;
+    leaves.diffuse = new pc.Color(...LEAF_TINT[name]);
+    leaves.opacityMap = t.textures.leaves;
+    leaves.opacityMapChannel = 'a';
+    leaves.alphaTest = 0.45;
+    leaves.alphaToCoverage = !!antialias;   // 縁をなめらかに（画面のなめらか処理があるときだけ効く）
+    leaves.useMetalness = true;
+    leaves.metalness = 0;
+    leaves.gloss = 0.25;
+    leaves.cull = pc.CULLFACE_NONE;   // 葉は薄い板なので両面を描く
+    leaves.twoSidedLighting = true;   // 裏面も正しい向きで光を受ける
+    applyWind(leaves, wind);
+  }
+  return { bark, leaves };
 }
 
 /**
@@ -184,23 +220,31 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models, 
     const list = placements[name];
     if (!list.length) continue;
     const t = models.types[name];
-    const material = createTreeMaterial(t.texture, name, t.meta.height);
-    const makeLayer = (mesh, label) => {
+    const material = createTreeMaterials(t, name, config.quality.antialias);
+    // 1 本分の形（樹皮と葉の 2 つ）を、同じ置き場所の入れ物（インスタンス）で描く
+    const makeLayer = (parts, label) => {
       const data = new Float32Array(list.length * 16);
       const vb = new pc.VertexBuffer(device, pc.VertexFormat.getDefaultInstancingFormat(device), list.length, {
         data, usage: pc.BUFFER_DYNAMIC,
       });
-      const mi = new pc.MeshInstance(mesh, material);
-      mi.setInstancing(vb);
-      mi.instancingCount = 0;
-      mi.setCustomAabb(forestBox); // 森全体を囲む箱（影の計算から外されないように）
+      const mis = [];
+      for (const part of ['bark', 'leaves']) {
+        if (!parts[part] || !material[part]) continue;
+        const mi = new pc.MeshInstance(parts[part], material[part]);
+        mi.setInstancing(vb);
+        mi.instancingCount = 0;
+        mi.setCustomAabb(forestBox); // 森全体を囲む箱（影の計算から外されないように）
+        mis.push(mi);
+      }
       const entity = new pc.Entity(`${name}-${label}`);
-      entity.addComponent('render', { meshInstances: [mi], castShadows: true, receiveShadows: true });
+      entity.addComponent('render', { meshInstances: mis, castShadows: true, receiveShadows: true });
       app.root.addChild(entity);
+      // 本数を変えるときは、両方の部分に同じ数を入れる
+      const mi = { set instancingCount(n) { for (const x of mis) x.instancingCount = n; } };
       return { entity, mi, vb, data };
     };
     groups.push({
-      name, list, material,
+      name, list, material, makeLayer,
       far: makeLayer(t.lod1, 'far'),
       near: null,               // 近く用の形が届いたら作る
       tris: { lod0: t.meta.lod0Triangles, lod1: t.meta.lod1Triangles },
@@ -257,20 +301,9 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models, 
     /** 近く用の形が届いた種類の、近く用の描画を作る */
     enableNear(name) {
       const g = groups.find((x) => x.name === name);
-      const mesh = models.types[name].lod0;
-      if (!g || !mesh || g.near) return;
-      const data = new Float32Array(g.list.length * 16);
-      const vb = new pc.VertexBuffer(device, pc.VertexFormat.getDefaultInstancingFormat(device), g.list.length, {
-        data, usage: pc.BUFFER_DYNAMIC,
-      });
-      const mi = new pc.MeshInstance(mesh, g.material);
-      mi.setInstancing(vb);
-      mi.instancingCount = 0;
-      mi.setCustomAabb(forestBox);
-      const entity = new pc.Entity(`${name}-near`);
-      entity.addComponent('render', { meshInstances: [mi], castShadows: true, receiveShadows: true });
-      app.root.addChild(entity);
-      g.near = { entity, mi, vb, data };
+      const parts = models.types[name].lod0;
+      if (!g || !parts || g.near) return;
+      g.near = g.makeLayer(parts, 'near');
       forceUpdate = true;
     },
     /** 木を描く遠さを変える（深い森の中は霧が濃く遠くが見えないので、近くだけ描く） */
