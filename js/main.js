@@ -85,13 +85,15 @@ async function boot() {
     session?.showMyBody(st.view === 'third');
     document.getElementById('stats').hidden = st.stats === 'off';
   };
-  const settings = createSettings(applySettings);
+  const settings = createSettings(applySettings, (act) => session?.debugAction(act));
 
   titleScreen.ready(async (myChar) => {
     input.reset();
     session = await startPracticeMatch({
       app, config: CONFIG, terrain, obstacles, player, myChar,
-      debug: CONFIG.debug, phaseDuration: CONFIG.phaseDuration,
+      debug: CONFIG.debug,
+      // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」
+      phaseDuration: CONFIG.phaseDuration ?? (settings.phaseLen === 'normal' ? null : Number(settings.phaseLen)),
     });
     touchLayer.hidden = false;
     document.getElementById('hud').hidden = false;

@@ -303,3 +303,10 @@ canvas#app {
 /* 攻撃ボタンや体力のバーと重ならない位置へ */
 .stats { right: auto; bottom: auto; left: calc(12px + var(--safe-l)); top: calc(130px + var(--safe-t)); text-align: left; }
 .debug { bottom: auto; top: calc(10px + var(--safe-t)); }
+
+/* 設定画面のテスト用の欄 */
+.settings .test-head { margin: 18px 0 6px; font-size: 14px; opacity: .7; font-weight: normal; letter-spacing: .1em; }
+.settings .test-note { margin: 0 0 4px; font-size: 12px; opacity: .6; text-align: right; }
+.settings .test-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 14px; }
+.settings .test-btns button { flex: 1 1 30%; min-height: 44px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.25); background: rgba(120, 60, 40, .45); color: #fff; font-size: 14px; }
+.settings .test-btns button:disabled { opacity: .35; }

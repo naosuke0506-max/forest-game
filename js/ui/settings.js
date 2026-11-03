@@ -1,6 +1,6 @@
-// 設定：視点（一人称 / 三人称）と性能表示。設定はこの端末に保存する（保存できない環境でも動く）
+// 設定：視点（一人称 / 三人称）と性能表示、テスト用（フェーズの長さ・フェーズを飛ばす など）。設定はこの端末に保存する（保存できない環境でも動く）
 const KEY = 'forest-game.settings';
-const DEFAULTS = { view: 'first', stats: 'on' };
+const DEFAULTS = { view: 'first', stats: 'on', phaseLen: 'normal' };
 
 function load() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -11,8 +11,9 @@ function save(s) {
 
 /**
  * @param {(settings: object) => void} onChange 設定が変わったとき（起動直後にも 1 回呼ぶ）
+ * @param {(action: string) => void} onTest テスト用のボタンを押したとき（skip / kill-bot / die）
  */
-export function createSettings(onChange) {
+export function createSettings(onChange, onTest = () => {}) {
   const panel = document.getElementById('settings');
   const settings = load();
 
@@ -22,6 +23,9 @@ export function createSettings(onChange) {
     }
   }
   panel.addEventListener('click', (e) => {
+    // テスト用のボタン：押したら設定を閉じて試合に戻る
+    const t = e.target.closest('[data-test]');
+    if (t) { onTest(t.dataset.test); panel.hidden = true; return; }
     const b = e.target.closest('.seg button');
     if (!b) return;
     settings[b.closest('.seg').dataset.key] = b.dataset.val;
