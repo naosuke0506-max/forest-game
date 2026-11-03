@@ -74,15 +74,17 @@ export const COMBAT = {
 export const BOT_NAMES = ['玄馬', '志乃', '伊吹', '颯', '朱音', '鉄心'];
 
 /**
- * フェーズ。duration：長さ（秒）、radius：歩ける範囲の半径（m）
+ * フェーズ。duration：長さ（秒）、radius：歩ける範囲の半径（m）、time：時間帯（world/time-of-day.js の TIMES）
+ * 歩ける範囲はフェーズで広げない（最初から森全体）。フェーズが進むと時間帯が変わり、夜に向かう
  * 最後のフェーズの時間が切れたら、生き残りが 1 人になるまで延長する
  */
+export const AREA_RADIUS = 62;
 export const PHASES = [
-  { name: '第一フェーズ', duration: 180, radius: 30, note: '素材を集め、装備を整えよ' },
-  { name: '第二フェーズ', duration: 180, radius: 40, note: '森が広がった。新しいクリーチャーが現れる' },
-  { name: '第三フェーズ', duration: 180, radius: 50, note: '強いクリーチャーが目を覚ました' },
-  { name: '第四フェーズ', duration: 180, radius: 58, note: '森の奥まで開いた' },
-  { name: '最終フェーズ', duration: 240, radius: 62, note: 'ボスが現れる。最後の一人になるまで終わらない' },
+  { name: '第一フェーズ', duration: 180, radius: AREA_RADIUS, time: 'morning', note: '朝の森。素材を集め、装備を整えよ' },
+  { name: '第二フェーズ', duration: 180, radius: AREA_RADIUS, time: 'day',     note: '日が高くなった' },
+  { name: '第三フェーズ', duration: 180, radius: AREA_RADIUS, time: 'dusk',    note: '日が傾き、森が赤く染まる' },
+  { name: '第四フェーズ', duration: 180, radius: AREA_RADIUS, time: 'night',   note: '夜が来た。暗い森に気をつけよ' },
+  { name: '最終フェーズ', duration: 240, radius: AREA_RADIUS, time: 'night',   note: '最後の一人になるまで終わらない' },
 ];
 
 /** ポイント */

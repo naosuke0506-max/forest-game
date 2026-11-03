@@ -39,6 +39,7 @@ export const CONFIG = {
   quality: QUALITY[qualityName],
   showStats: params.get('stats') !== '0',
   debug: params.get('debug') === '1',                          // 確認用のボタンを出す
+  view: params.get('view') === 'third' ? 'third' : 'first',      // 視点（遊ぶときは一人称だけ。三人称は確認用）
   phaseDuration: Number(params.get('phase')) || null,           // フェーズの長さ（秒）を短くして確かめる
 
   // 同じ種からは必ず同じ森ができる（将来のマルチプレイで全員が同じ地形を共有するため）

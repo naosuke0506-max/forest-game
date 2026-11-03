@@ -120,3 +120,41 @@ export function applySky(app, sky, config) {
 
   return { sunDirection: uvToDirection(meta.sunU, meta.sunV), sunIntensity, sunColor, fogColor };
 }
+
+/**
+ * 空の写真に色をかけた背景（立方体マップ）を作る。時間帯（朝・夕暮れ・深夜）の空に使う。
+ * top：真上にかける色、horizon：地平線にかける色（0〜1。1 で元のまま）。下半分は地平線の色
+ */
+export function makeTintedSkybox(app, image, top, horizon) {
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(image, 0, 0);
+  const g = ctx.createLinearGradient(0, 0, 0, canvas.height / 2);
+  const css = (c) => `rgb(${c.map((v) => Math.round(Math.min(1, v) * 255)).join(',')})`;
+  g.addColorStop(0, css(top));
+  g.addColorStop(1, css(horizon));
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, canvas.width, canvas.height / 2);
+  ctx.fillStyle = css(horizon);
+  ctx.fillRect(0, canvas.height / 2, canvas.width, canvas.height / 2);
+  const tex = new pc.Texture(app.graphicsDevice, {
+    name: 'sky-tinted',
+    width: canvas.width,
+    height: canvas.height,
+    format: pc.PIXELFORMAT_RGBA8,
+    srgb: true,
+    mipmaps: false,
+    projection: pc.TEXTUREPROJECTION_EQUIRECT,
+    addressU: pc.ADDRESS_REPEAT,
+    addressV: pc.ADDRESS_CLAMP_TO_EDGE,
+    minFilter: pc.FILTER_LINEAR,
+    magFilter: pc.FILTER_LINEAR,
+  });
+  tex.setSource(canvas);
+  const cube = pc.EnvLighting.generateSkyboxCubemap(tex);
+  tex.destroy();
+  return cube;
+}

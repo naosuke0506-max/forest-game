@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>静かな森</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-03.2';</script>
+<script>window.__BUILD = '2026-11-03.3';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -29,6 +29,7 @@
 <link rel="modulepreload" href="./js/world/vegetation.js">
 <link rel="modulepreload" href="./js/world/trees.js">
 <link rel="modulepreload" href="./js/world/wind.js">
+<link rel="modulepreload" href="./js/world/time-of-day.js">
 <link rel="modulepreload" href="./js/world/props.js">
 <link rel="preload" as="fetch" href="./assets/props/props.json" crossorigin>
 <link rel="modulepreload" href="./js/world/rocks.js">
@@ -173,13 +174,6 @@
 <!-- 設定 -->
 <section id="settings" class="panel settings" hidden>
   <h2>設定</h2>
-  <div class="set-row">
-    <span>視点</span>
-    <div class="seg" data-key="view">
-      <button type="button" data-val="first">一人称</button>
-      <button type="button" data-val="third">三人称</button>
-    </div>
-  </div>
   <div class="set-row">
     <span>性能表示</span>
     <div class="seg" data-key="stats">
