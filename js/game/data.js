@@ -93,7 +93,7 @@ export const BOT_NAMES = ['玄馬', '志乃', '伊吹', '颯', '朱音', '鉄心
  * 歩ける範囲はフェーズで広げない（最初から森全体）。フェーズが進むと時間帯が変わり、夜に向かう
  * 最後のフェーズの時間が切れたら、生き残りが 1 人になるまで延長する
  */
-export const AREA_RADIUS = 62;
+export const AREA_RADIUS = 175;   // js/config.js の world.playRadius と同じ値（端から端まで 350m）
 export const PHASES = [
   { name: '第一フェーズ', duration: 180, radius: AREA_RADIUS, time: 'morning', note: '朝の森。素材を集め、装備を整えよ' },
   { name: '第二フェーズ', duration: 180, radius: AREA_RADIUS, time: 'day',     note: '日が高くなった' },

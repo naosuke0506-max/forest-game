@@ -1,7 +1,8 @@
 // 森の外周の柵（高さ約 10m の丸太の柵）。ここから先へは行けない。
 // 見た目は柵だけで、通れない仕組みは「歩ける範囲（円）の外へ出さない」計算（game/movement.js の keepInside・
 // player/controller.js）が受け持つ。柵より高い所も同じ円で止まるので、見えない壁になる。
-// 丸太（尖った杭）を約 1300 本、横木を 2 段。どちらもインスタンシングで 1 回ずつの描画命令にまとめる
+// 丸太（尖った杭）と横木 2 段。外周を 16 の区間に分け、区間ごとにインスタンシングでまとめる
+// （画面に映らない区間は、エンジンが描かずに済ませる）
 import * as pc from 'playcanvas';
 import { createMesh, geometryToArrays, transformArrays, mergeArrays, createInstancedEntity, createVertexColorMaterial } from '../core/mesh-utils.js';
 
@@ -25,8 +26,10 @@ export function createFence(app, terrain, radius, random, bark) {
   const material = createVertexColorMaterial({ roughness: 0.9, textures: bark });
   const stakeMesh = createMesh(app.graphicsDevice, stake);
 
+  const SECTIONS = 16;
+  const sectionOf = (a) => Math.min(SECTIONS - 1, Math.floor((((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * SECTIONS));
   const count = Math.round((2 * Math.PI * R) / (STAKE_R * 1.9));
-  const stakes = [];
+  const stakes = Array.from({ length: SECTIONS }, () => []);
   const q = new pc.Quat(), pos = new pc.Vec3(), scl = new pc.Vec3();
   for (let i = 0; i < count; i++) {
     const a = (i / count) * Math.PI * 2;
@@ -37,16 +40,16 @@ export function createFence(app, terrain, radius, random, bark) {
     pos.set(x, terrain.heightAt(x, z) - 0.5, z);
     q.setFromEulerAngles((random.next() - 0.5) * 2.5, random.next() * 360, (random.next() - 0.5) * 2.5);
     scl.set(s, h, s);
-    stakes.push(new pc.Mat4().setTRS(pos, q, scl));
+    stakes[sectionOf(a)].push(new pc.Mat4().setTRS(pos, q, scl));
   }
-  createInstancedEntity(app, 'fence-stakes', stakeMesh, material, stakes);
+  stakes.forEach((list, i) => createInstancedEntity(app, `fence-stakes-${i}`, stakeMesh, material, list));
 
   // 横木：柵の内側に、高さ 2m と 6.5m の 2 段。区間ごとに 1 本の角材
   const rail = transformArrays(geometryToArrays(new pc.BoxGeometry({ halfExtents: new pc.Vec3(0.5, 0.5, 0.5) })),
     { scale: [1, 0.22, 0.16], color: [0.62, 0.52, 0.42], uvScale: [3, 0.3] });
   const railMesh = createMesh(app.graphicsDevice, rail);
   const segs = Math.round((2 * Math.PI * R) / 3.2);
-  const rails = [];
+  const rails = Array.from({ length: SECTIONS }, () => []);
   const rr = R - STAKE_R - 0.1;
   const len = (2 * Math.PI * rr) / segs + 0.15;
   for (let i = 0; i < segs; i++) {
@@ -57,8 +60,8 @@ export function createFence(app, terrain, radius, random, bark) {
       pos.set(x, g + y, z);
       q.setFromEulerAngles(0, (-a * 180) / Math.PI + 90, 0);   // 円に沿う向き
       scl.set(len, 1, 1);
-      rails.push(new pc.Mat4().setTRS(pos, q, scl));
+      rails[sectionOf(a)].push(new pc.Mat4().setTRS(pos, q, scl));
     }
   }
-  createInstancedEntity(app, 'fence-rails', railMesh, material, rails);
+  rails.forEach((list, i) => createInstancedEntity(app, `fence-rails-${i}`, railMesh, material, list));
 }

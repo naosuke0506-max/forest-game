@@ -78,8 +78,8 @@ async function boot() {
     const frame = playing ? input.read() : null;
     if (playing) player.update(dt, frame);
     session?.update(dt, frame || { attack: false, left: false, dodge: false, moveX: 0, moveY: 0 });
-    trees?.update(dt, player.camera.getPosition());
-    props?.update(dt, player.camera.getPosition());
+    trees?.update(dt, player.camera.getPosition(), player.camera.forward);
+    props?.update(dt, player.camera.getPosition(), player.camera.forward);
     wind.update(dt);
     timeOfDay.update(dt);
     sunGlare.update(dt);

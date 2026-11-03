@@ -37,7 +37,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const me = fighters[0];
   const match = createMatch({ fighters, rng, phaseDuration });
 
-  // 出現する場所：最初の範囲の中で、互いに 18m 以上離れ、木や岩から離れた所
+  // 出現する場所：最初の範囲の中で、互いに 80m 以上離れ、木や岩から離れた所
   const spots = [];
   for (const f of fighters) {
     let best = null;
@@ -47,7 +47,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       const p = { x: Math.cos(a) * r, z: Math.sin(a) * r };
       if (!obstacles.isFree(p.x, p.z, 3.5, true)) continue; // 木の幹や岩から 3.5m 以上（低い枝の中に出ないように）
       best = p;
-      if (spots.every((s) => Math.hypot(s.x - p.x, s.z - p.z) > 18)) break;
+      if (spots.every((s) => Math.hypot(s.x - p.x, s.z - p.z) > 80)) break;   // 広い森なので、最初は互いに遠く離す
     }
     spots.push(best || { x: 0, z: 0 });
     f.x = spots.at(-1).x; f.z = spots.at(-1).z;

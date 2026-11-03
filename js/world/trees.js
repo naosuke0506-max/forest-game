@@ -190,15 +190,21 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models) 
   }
 
   // 3. 距離で振り分ける
-  let lastX = Infinity, lastZ = Infinity, timer = 0, forceUpdate = true;
-  function assign(cx, cz) {
+  let lastX = Infinity, lastZ = Infinity, lastYaw = Infinity, timer = 0, forceUpdate = true;
+  // 描かない木：見える遠さ（霧でほぼ見えなくなる所）より遠い木と、カメラの後ろの木（影が届く近さより遠いもの）
+  const drawDist2 = Math.pow(config.world.drawDistance ?? config.atmosphere.farClip, 2);
+  const keep2 = Math.pow(config.quality.shadowDistance + 8, 2);
+  const cosView = Math.cos((72 * Math.PI) / 180);
+  function assign(cx, cz, fx, fz) {
     const d2 = lodDistance * lodDistance;
     let tris = 0;
     for (const g of groups) {
       let nNear = 0, nFar = 0;
       for (const p of g.list) {
-        const dx = p.x - cx, dz = p.z - cz;
-        if (g.near && dx * dx + dz * dz < d2) g.near.data.set(p.mat.data, (nNear++) * 16);
+        const dx = p.x - cx, dz = p.z - cz, dd = dx * dx + dz * dz;
+        if (dd > drawDist2) continue;
+        if (dd > keep2 && (dx * fx + dz * fz) / Math.sqrt(dd) < cosView - 8 / Math.sqrt(dd)) continue;
+        if (g.near && dd < d2) g.near.data.set(p.mat.data, (nNear++) * 16);
         else g.far.data.set(p.mat.data, (nFar++) * 16);
       }
       g.far.mi.instancingCount = nFar;
@@ -235,16 +241,20 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models) 
       g.near = { entity, mi, vb, data };
       forceUpdate = true;
     },
-    /** 毎フレーム呼ぶ。カメラが 2m 以上動いたか、0.5 秒たったら振り分け直す */
-    update(dt, camPos) {
+    /** 毎フレーム呼ぶ。カメラが 2m 以上動いたか、向きが変わったか、0.5 秒たったら振り分け直す */
+    update(dt, camPos, camFwd = null) {
       timer += dt;
       const moved = Math.hypot(camPos.x - lastX, camPos.z - lastZ) > 2;
-      if (!forceUpdate && !moved && timer < 0.5) return;
+      const yaw = camFwd ? Math.atan2(camFwd.x, camFwd.z) : 0;
+      const turned = Math.abs(((yaw - lastYaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI) > 0.15;
+      if (!forceUpdate && !moved && !turned && timer < 0.5) return;
       timer = 0;
       forceUpdate = false;
       lastX = camPos.x;
       lastZ = camPos.z;
-      assign(camPos.x, camPos.z);
+      lastYaw = yaw;
+      const fl = camFwd ? Math.hypot(camFwd.x, camFwd.z) || 1 : 1;
+      assign(camPos.x, camPos.z, camFwd ? camFwd.x / fl : 0, camFwd ? camFwd.z / fl : 1);
       sceneBudget.triangles += treeTriangles - counted;
       counted = treeTriangles;
     },
