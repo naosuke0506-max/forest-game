@@ -64,7 +64,7 @@ async function boot() {
   const player = createPlayer(app, CONFIG, terrain, obstacles, env.fogColor);
   // 時間帯（朝・昼・夕暮れ・深夜）。霧の色が変わったら、空の無い所の背景色も合わせる
   env.onFogColor = (c) => { player.camera.camera.clearColor = c; };
-  const timeOfDay = createTimeOfDay(app, env, CONFIG);
+  const timeOfDay = createTimeOfDay(app, env, CONFIG, player.camera);
   const sunGlare = createSunGlare(player.camera, env.sun, timeOfDay, {
     canopies: trees?.canopies || [], trunks: trees?.trunks || [],
     fence: { radius: AREA_RADIUS + 0.4, height: 10 }, heightAt: terrain.heightAt,

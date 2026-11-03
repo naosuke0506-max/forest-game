@@ -138,7 +138,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   hud.centerMsg(`${match.phaseInfo.name}・${TIMES[match.phaseInfo.time].name}`, match.phaseInfo.note);
   // 時間帯：フェーズが進むと変わる（朝 → 昼 → 夕暮れ → 深夜）
   timeOfDay?.set(match.phaseInfo.time, 2);
-  match.on('phaseStart', ({ info }) => timeOfDay?.set(info.time, 8));
+  match.on('phaseStart', ({ info }) => timeOfDay?.set(info.time, 20));   // 20 秒かけてゆっくり移り変わる
 
   // テスト用の操作：設定画面のボタンと、?debug=1 のときの画面上のボタンから使う
   function debugAction(act) {
