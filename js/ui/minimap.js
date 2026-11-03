@@ -11,7 +11,7 @@ const COLORS = {
   mixed: [74, 118, 62],     // 森：緑
   deep: [22, 60, 46],       // 深い森：暗い青緑
   prairie: [184, 176, 96],  // 大草原：明るい黄緑
-  castle: [156, 126, 94],   // 城と村：土色
+  castle: [156, 126, 94],   // 村：土色
 };
 const PATH = [214, 190, 146];
 const RES = 360;            // 地図の絵の大きさ（画素）。1 画素 ≒ 1m
@@ -60,14 +60,20 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     }
   }
   fctx.putImageData(img, 0, 0);
-  // 建物（城の壁・塔・天守・家）
+  // 建物（村の家・井戸）と村の柵
   for (const b of buildings) {
     const [bx, by] = toPx(b.x, b.z);
     const k = RES / (2 * view);
     fctx.fillStyle = b.roof === 'thatch' ? '#c9a464' : b.roof === 'tiles' ? '#b0563a' : '#8c8478';
     fctx.strokeStyle = 'rgba(30, 24, 18, .9)';
     fctx.lineWidth = 1;
-    if (b.type === 'circle') {
+    if (b.type === 'line') {
+      fctx.beginPath();
+      b.pts.forEach(([x, z], i) => { const [px, py] = toPx(x, z); if (i) fctx.lineTo(px, py); else fctx.moveTo(px, py); });
+      fctx.strokeStyle = 'rgba(92, 60, 32, .95)';
+      fctx.lineWidth = 2;
+      fctx.stroke();
+    } else if (b.type === 'circle') {
       fctx.beginPath(); fctx.arc(bx, by, b.r * k, 0, Math.PI * 2); fctx.fill(); fctx.stroke();
     } else {
       fctx.save(); fctx.translate(bx, by); fctx.rotate((-b.yaw * Math.PI) / 180);

@@ -166,7 +166,7 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models, 
   const trunks = [];
   for (const name of TREE_TYPES) placements[name] = [];
   const order = Object.entries(w.trees); // [[種類, 本数], ...]
-  // エリアごとの木の多さ（中央の森を 1 とした倍率。深い森は 3 倍以上、大草原はまばら、城と道には置かない）。
+  // エリアごとの木の多さ（中央の森を 1 とした倍率。深い森は 3 倍以上、大草原はまばら、村と道には置かない）。
   // 本数は「森全体が中央の森と同じ多さ」のときの数なので、平均の多さを掛けて実際の本数にする
   // 茂み（bush）だけは、深い森でも増やしすぎない（下草として森全体にほどよく）
   const densityOf = (name) => {

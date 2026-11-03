@@ -2,7 +2,7 @@
 //   中央・その他：森と草原が混ざる森（mixed）
 //   北：深い森（deep）。木が密で、空がほぼ葉で覆われる。霧も濃い
 //   東：大草原（prairie）。木はまばらで、背の高い草が茂る（草は手順 4）
-//   南西：城と村の場所（castle）。平らにならし、木や岩を置かない（建物は手順 5）
+//   南西：村の場所（castle という名前のまま）。平らにならし、木や岩を置かない（家と柵は castle.js）
 //   中央から各エリアへ土の道（path）
 // 地図の上で北は -Z、東は +X。境目はノイズで少し揺らし、なめらかに混ぜる
 import { fbm } from '../core/random.js';
@@ -10,7 +10,7 @@ import { fbm } from '../core/random.js';
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const DEG = Math.PI / 180;
 
-export const ZONE_NAMES = { mixed: '森', deep: '深い森', prairie: '大草原', castle: '城と村' };
+export const ZONE_NAMES = { mixed: '森', deep: '深い森', prairie: '大草原', castle: '村' };
 
 /**
  * @param {number} seed 種（同じ種なら同じ配置）

@@ -20,11 +20,11 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
     const rim = smoothstep(playRadius - 8, size * 0.5, r) * 7; // 外周は盛り上げて境目を隠す
     const h = (hills * flat + bumps * (0.3 + 0.7 * flat)) + rim;
     if (!zones) return h;
-    // 城と村の場所は平らにならす（建物を建てるため）
+    // 村の場所は平らにならす（建物を建てるため）
     const w = zones.weights(x, z);
     return h + ((castleH ?? h) - h) * w.castle;
   };
-  // 城の場所の高さ：中心の地面の高さ（ならす前の式で求める）
+  // 村の場所の高さ：中心の地面の高さ（ならす前の式で求める）
   let castleH = null;
   if (zones) {
     const { x, z } = zones.castle;
@@ -53,7 +53,7 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
   const tile = textures ? textures.size : size; // 質感画像 1 枚が覆う大きさ（m）
   const deepMoss = textures ? [0.34, 0.40, 0.30] : [0.12, 0.18, 0.08];  // 深い森：暗い苔
   const meadow = textures ? [0.62, 0.74, 0.38] : [0.40, 0.42, 0.18];    // 大草原：明るい草
-  const dirt = textures ? [0.78, 0.64, 0.5] : [0.40, 0.32, 0.22];       // 道・城の場所：土
+  const dirt = textures ? [0.78, 0.64, 0.5] : [0.40, 0.32, 0.22];       // 道・村の場所：土
 
   for (let iz = 0; iz < verts; iz++) {
     for (let ix = 0; ix < verts; ix++) {
@@ -72,7 +72,7 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
       const n2 = fbm(x * 0.25, z * 0.25, seed + 47);
       const tSoil = smoothstep(0.55, 0.78, n1) * 0.7;   // 土の見える所は少なめに
       const tDry = smoothstep(0.55, 0.8, n2) * 0.6;
-      // エリアごとの色味：深い森は暗い苔、大草原は明るい草、城の場所と道は土
+      // エリアごとの色味：深い森は暗い苔、大草原は明るい草、村の場所と道は土
       const zw = zones ? zones.weights(x, z) : null;
       const pw = zones ? zones.path(x, z) : 0;
       for (let c = 0; c < 3; c++) {
