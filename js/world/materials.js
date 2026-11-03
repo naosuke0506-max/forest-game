@@ -94,3 +94,17 @@ export async function loadTextureSet(device, id, quality) {
     return null;
   }
 }
+
+/**
+ * 色の画像 1 枚だけを読み込む（地面に混ぜる草地・落ち葉など）。失敗したら null
+ * @param {string} id assets/textures/ の名前
+ */
+export async function loadDiffuse(device, id, quality) {
+  try {
+    const img = await loadImage(`${ROOT}/${id}/${id}_diff.webp`);
+    return createTexture(device, img, `${id}_diff`, true, quality.anisotropy);
+  } catch (err) {
+    console.warn(err);
+    return null;
+  }
+}

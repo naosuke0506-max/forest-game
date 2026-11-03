@@ -2,6 +2,7 @@
 import * as pc from 'playcanvas';
 import { fbm } from '../core/random.js';
 import { createMesh, createVertexColorMaterial, sceneBudget } from '../core/mesh-utils.js';
+import { applyGroundBlend } from './ground-blend.js';
 
 const smoothstep = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -51,7 +52,7 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
   const soil = textures ? [0.62, 0.53, 0.45] : [0.29, 0.23, 0.16];
   const dryGrass = textures ? [0.66, 0.60, 0.46] : [0.36, 0.34, 0.20];
   const tile = textures ? textures.size : size; // 質感画像 1 枚が覆う大きさ（m）
-  const deepMoss = textures ? [0.34, 0.40, 0.30] : [0.12, 0.18, 0.08];  // 深い森：暗い苔
+  const deepMoss = textures ? [0.56, 0.62, 0.46] : [0.12, 0.18, 0.08];  // 深い森：苔（落ち葉と苔の画像に掛ける）
   const meadow = textures ? [0.62, 0.74, 0.38] : [0.40, 0.42, 0.18];    // 大草原：明るい草
   const dirt = textures ? [0.78, 0.64, 0.5] : [0.40, 0.32, 0.22];       // 道・村の場所：土
 
@@ -75,6 +76,16 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
       // エリアごとの色味：深い森は暗い苔、大草原は明るい草、村の場所と道は土
       const zw = zones ? zones.weights(x, z) : null;
       const pw = zones ? zones.path(x, z) : 0;
+      // 質感の混ぜ方（world/ground-blend.js）：草地は大草原と森の草むら、落ち葉と苔は深い森と森の木の多い所。道と土の見える所は土
+      let grassW = 0.75, litterW = 0;
+      if (zw) {
+        const n3 = fbm(x * 0.045, z * 0.045, seed + 83);
+        const litterPatch = smoothstep(0.5, 0.7, n3);
+        grassW = zw.prairie + zw.mixed * 0.85 * (1 - litterPatch * 0.8) + zw.castle * 0.45;
+        litterW = zw.deep * 0.95 + zw.mixed * litterPatch * 0.6;
+        grassW *= (1 - tSoil * 1.2) * (1 - pw);
+        litterW *= 1 - pw;
+      }
       for (let c = 0; c < 3; c++) {
         let v = moss[c] + (soil[c] - moss[c]) * tSoil;
         v += (dryGrass[c] - v) * tDry;
@@ -86,7 +97,7 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
         }
         colors[i * 4 + c] = Math.min(1, v * (0.85 + 0.3 * n2));
       }
-      colors[i * 4 + 3] = 1;
+      colors[i * 4 + 3] = Math.min(1, Math.max(0, 0.5 + 0.5 * (grassW - litterW)));
     }
   }
 
@@ -101,6 +112,7 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
   const mesh = createMesh(app.graphicsDevice, { positions, colors, uvs, indices });
   sceneBudget.triangles += indices.length / 3;
   const material = createVertexColorMaterial({ roughness: 0.95, textures });
+  const blend = textures ? applyGroundBlend(material, textures.size) : null;
 
   const entity = new pc.Entity('Terrain');
   entity.addComponent('render', {
@@ -110,5 +122,9 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
   });
   app.root.addChild(entity);
 
-  return { entity, heightAt, normalAt };
+  return {
+    entity, heightAt, normalAt,
+    /** 草地と落ち葉の画像を貼る（起動の後に裏で読んだ物） */
+    setGroundTextures: (grass, litter) => blend?.setTextures(grass, litter),
+  };
 }

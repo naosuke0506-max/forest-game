@@ -8,6 +8,8 @@
 | `forrest_ground_01/` | [Forest Ground 01](https://polyhaven.com/a/forrest_ground_01) | Rob Tuytel | 2m 四方 | 地面 |
 | `pine_bark/` | [Pine Bark](https://polyhaven.com/a/pine_bark) | Dimitrios Savva | 2m 四方 | 木の幹 |
 | `mossy_rock/` | [Mossy Rock](https://polyhaven.com/a/mossy_rock) | Rob Tuytel | 3m 四方 | 岩 |
+| `aerial_grass_rock/` | [Aerial Grass Rock](https://polyhaven.com/a/aerial_grass_rock) | Rob Tuytel | 15m 四方（地面では 10m で使う） | 地面に混ぜる草地（大草原・森の草むら）。色だけ |
+| `forest_leaves_02/` | [Forest Leaves 02](https://polyhaven.com/a/forest_leaves_02) | Rob Tuytel | 3m 四方 | 地面に混ぜる落ち葉と苔（深い森）。色だけ |
 
 ## 村の建物（`js/world/castle.js`。起動の後に裏で読み込む）
 

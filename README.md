@@ -127,6 +127,8 @@ js/
   render/pickup-view.js  落ちている素材（丸太の束・石・鉄くず・革と布）と村の箱の見た目
   render/boundary.js     歩ける範囲の光る境界（今は使っていない。外周は world/fence.js の柵）
   render/sun-glare.js    太陽を見たときのまぶしさ（画面に重ねる光）
+  render/sky-lights.js   太陽と月の円盤（木に隠れる）、森の木漏れ日の光の筋
+  render/air-particles.js 空気の中の小さな物：光に舞う塵・舞い落ちる葉・夜の蛍（自分の周りだけ）
   world/fence.js         外周の丸太の柵（高さ約 10m）
   world/ground-cover.js  地面を覆う草（自分の周りだけ。短い草・穂・白い花・大草原の背の高い草。エリアで多さが変わる）
   world/castle.js        村（柵・家・井戸・広場。箱と切妻屋根を組み、Poly Haven の石・しっくい・木・わら・瓦・石畳の質感を貼る。当たり判定も登録）
@@ -137,6 +139,7 @@ js/
   core/mesh-utils.js     仮モデルの組み立てと、インスタンシング（大量の同じ物を 1 回で描く）
   world/materials.js     質感画像の読み込み（色・凹凸・陰影と粗さ）
   world/terrain.js       起伏のある地面と、地点ごとの高さ
+  world/ground-blend.js  地面の質感を 3 枚混ぜる（土・草地・落ち葉と苔。エリアで割合が変わる）
   world/environment.js   太陽光・影・霧
   world/sky.js           空の背景、空全体から回り込む光、写真の太陽に合わせた太陽光の向き
   world/trees.js         木の模型を並べる。距離で近く用・遠く用を切り替える（LOD）

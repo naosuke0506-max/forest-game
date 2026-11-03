@@ -490,6 +490,10 @@ canvas#app {
 }
 .spectate button { min-height: 40px; padding: 4px 12px; font: inherit; color: var(--gold-hi); background: rgba(0, 0, 0, .35); border: 1px solid var(--edge); border-radius: 4px; }
 
+/* 周辺減光：画面の四隅を少し暗く（固定の絵なので軽い） */
+.vignette { position: fixed; inset: 0; z-index: 14; pointer-events: none;
+  background: radial-gradient(ellipse 75% 70% at 50% 48%, rgba(0, 0, 0, 0) 58%, rgba(10, 8, 4, .32) 100%); }
+
 /* 太陽のまぶしさ：太陽の位置の光の輪と光の筋（js/render/sun-glare.js が位置と濃さを決める） */
 .glare {
   position: fixed; left: 0; top: 0; z-index: 15;
