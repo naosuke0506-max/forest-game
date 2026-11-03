@@ -124,6 +124,7 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models) 
   // 1. 置く場所を決める（大きい木 → 若木の順。木どうしは葉の広がりに応じて間をあける）
   const placements = {};
   const canopies = [];
+  const trunks = [];
   for (const name of TREE_TYPES) placements[name] = [];
   const order = Object.entries(w.trees); // [[種類, 本数], ...]
   for (const [name, count] of order) {
@@ -150,6 +151,7 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models) 
       if (!isSapling) {
         const base = mat.getTranslation(new pc.Vec3()).y;
         canopies.push({ x, y: base + m.height * sy * 0.62, z, r: Math.max(1.5, m.crownRadius * s * 0.55) });
+        trunks.push({ x, z, r: Math.max(0.15, m.trunkRadius * s), top: base + m.height * sy * 0.8 });
       }
       // 若木は踏み分けて通れるように当たり判定を小さく、それ以外は幹の太さで
       obstacles.add(x, z, isSapling ? 0.01 : Math.max(0.15, m.trunkRadius * s), !isSapling);
@@ -249,5 +251,6 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models) 
     counts: Object.fromEntries(groups.map((g) => [g.name, g.list.length])),
     placements, // 確認用（自動テストから木の位置を読むため）
     canopies,   // 葉の広がり（だいたいの球）。太陽のまぶしさを葉がさえぎるかの判定に使う
+    trunks,     // 幹（円柱）。同じく太陽をさえぎるかの判定に使う
   };
 }

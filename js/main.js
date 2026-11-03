@@ -65,7 +65,10 @@ async function boot() {
   // 時間帯（朝・昼・夕暮れ・深夜）。霧の色が変わったら、空の無い所の背景色も合わせる
   env.onFogColor = (c) => { player.camera.camera.clearColor = c; };
   const timeOfDay = createTimeOfDay(app, env, CONFIG);
-  const sunGlare = createSunGlare(player.camera, env.sun, timeOfDay, trees?.canopies || []);
+  const sunGlare = createSunGlare(player.camera, env.sun, timeOfDay, {
+    canopies: trees?.canopies || [], trunks: trees?.trunks || [],
+    fence: { radius: AREA_RADIUS + 0.4, height: 10 }, heightAt: terrain.heightAt,
+  });
   const touchLayer = document.getElementById('touch-layer');
   const input = createInput(touchLayer, document.getElementById('stick'), CONFIG);
   const stats = createStats(app, CONFIG.showStats, CONFIG.qualityName);
