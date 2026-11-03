@@ -1,0 +1,91 @@
+{
+ "fir": {
+  "height": 17.89,
+  "trunkRadius": 0.296,
+  "crownRadius": 4.062,
+  "rootRadius": 0.384,
+  "rootJunction": 0,
+  "lod0Triangles": 4058,
+  "lod1Triangles": 636,
+  "parts": [
+   "bark",
+   "leaves"
+  ],
+  "bark": "fir",
+  "leafAtlas": "needle"
+ },
+ "red_pine": {
+  "height": 18.29,
+  "trunkRadius": 0.328,
+  "crownRadius": 5.485,
+  "rootRadius": 0.426,
+  "rootJunction": 0,
+  "lod0Triangles": 5610,
+  "lod1Triangles": 1272,
+  "parts": [
+   "bark",
+   "leaves"
+  ],
+  "bark": "pine",
+  "leafAtlas": "needle"
+ },
+ "broadleaf": {
+  "height": 16.94,
+  "trunkRadius": 0.707,
+  "crownRadius": 6.647,
+  "rootRadius": 0.919,
+  "rootJunction": 0,
+  "lod0Triangles": 9620,
+  "lod1Triangles": 1638,
+  "parts": [
+   "bark",
+   "leaves"
+  ],
+  "bark": "oak",
+  "leafAtlas": "broad"
+ },
+ "birch": {
+  "height": 18.59,
+  "trunkRadius": 0.368,
+  "crownRadius": 6.388,
+  "rootRadius": 0.479,
+  "rootJunction": 0,
+  "lod0Triangles": 7230,
+  "lod1Triangles": 1457,
+  "parts": [
+   "bark",
+   "leaves"
+  ],
+  "bark": "birch",
+  "leafAtlas": "broad"
+ },
+ "dead": {
+  "height": 11.33,
+  "trunkRadius": 0.156,
+  "crownRadius": 2.038,
+  "rootRadius": 0.203,
+  "rootJunction": 0,
+  "lod0Triangles": 2448,
+  "lod1Triangles": 144,
+  "parts": [
+   "bark"
+  ],
+  "bark": "dead",
+  "leafAtlas": null
+ },
+ "sapling": {
+  "height": 3.3,
+  "trunkRadius": 0.2,
+  "crownRadius": 0.901,
+  "rootRadius": 0.26,
+  "rootJunction": 0,
+  "lod0Triangles": 960,
+  "lod1Triangles": 212,
+  "parts": [
+   "bark",
+   "leaves"
+  ],
+  "bark": "fir",
+  "leafAtlas": "needle"
+ }
+}
