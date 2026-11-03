@@ -141,6 +141,11 @@ export function createCombat({ match, heightAt, obstacles }) {
         return false;
       }
     }
+    // 外周の柵（と、その上の見えない壁）：柵の高さまでなら柵に刺さり、それより上は落ちて消える
+    if (Math.hypot(p.x, p.z) > match.areaRadius + 0.5) {
+      if (p.y < heightAt(p.x, p.z) + 10) { p.stuck = 1e-6; emit('projectileStuck', { projectile: p }); return true; }
+      return false;
+    }
     // 地面や木の幹に刺さる
     if (p.y <= heightAt(p.x, p.z) || obstacles.isFree(p.x, p.z, 0.05, true) === false && p.y < heightAt(p.x, p.z) + 8) {
       p.stuck = 0.0001;

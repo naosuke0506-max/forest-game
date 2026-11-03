@@ -1,6 +1,12 @@
 """空の写真（HDR）から、ゲーム用の軽い空のファイルを作る（開発用の道具。ゲームには含まれない）
 
-    python3 tools/make_sky.py <元の .hdr> <出力フォルダ> <名前>
+    python3 tools/make_sky.py <元の .hdr> <出力フォルダ> <名前> [色の調整]
+
+色の調整（省略可）：写真の色を、ゲームで見せたい雰囲気に寄せる。照明と背景の両方にかかる
+    sat=1.4            鮮やかさ（1 で元のまま）
+    gain=1.1:0.8:0.6   赤:緑:青 の倍率
+    top=0.5:0.6:1.0    真上の色の倍率（地平線へ向けて 1 に戻る。夕焼けの上の空を暗い青にする など）
+    例：sat=1.5,gain=1.15:0.85:0.65,top=0.45:0.5:0.8
 
 作るもの
   <名前>_light.f16   照明用：128×64 の半精度浮動小数（RGBA, リトルエンディアン）。
@@ -74,10 +80,30 @@ def to_srgb(x):
     return np.where(x <= 0.0031308, x * 12.92, 1.055 * np.power(x, 1 / 2.4) - 0.055)
 
 
-def main(src, out_dir, name):
+def grade(hdr, spec):
+    """色の調整（鮮やかさ・色の倍率・真上の色）。明るさの感じは保つ"""
+    opt = dict(p.split('=') for p in spec.split(',') if p)
+    H = hdr.shape[0]
+    if 'sat' in opt:
+        L = luminance(hdr)[..., None]
+        hdr = np.maximum(L + (hdr - L) * float(opt['sat']), 0)
+    if 'gain' in opt:
+        hdr = hdr * np.array([float(v) for v in opt['gain'].split(':')], np.float32)
+    if 'top' in opt:
+        top = np.array([float(v) for v in opt['top'].split(':')], np.float32)
+        v = (np.arange(H) + 0.5) / H                  # 0 = 真上、0.5 = 地平線
+        t = np.clip(1 - v / 0.5, 0, 1) ** 1.5         # 真上で 1、地平線で 0
+        mult = 1 + (top[None, :] - 1) * t[:, None]
+        hdr = hdr * mult[:, None, :]
+    return hdr.astype(np.float32)
+
+
+def main(src, out_dir, name, spec=''):
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     hdr = read_hdr(src)
+    if spec:
+        hdr = grade(hdr, spec)
     H, W, _ = hdr.shape
     lum = luminance(hdr)
 
@@ -139,6 +165,7 @@ def main(src, out_dir, name):
 
     meta = {
         'source': Path(src).name,
+        'grade': spec,
         'sunU': round(float(sun_u), 4),
         'sunV': round(float(sun_v), 4),
         'skyScale': round(sky_scale, 5),
@@ -156,4 +183,4 @@ def main(src, out_dir, name):
 
 
 if __name__ == '__main__':
-    main(*sys.argv[1:4])
+    main(*sys.argv[1:5])

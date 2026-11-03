@@ -9,7 +9,6 @@ import { createRandom } from './core/random.js';
 import { createFighterView } from './render/fighter-view.js';
 import { loadCharacterModel, createCharacterView } from './render/character-view.js';
 import { loadWeaponModels } from './render/weapons.js';
-import { createBoundary } from './render/boundary.js';
 import { createViewModel } from './render/viewmodel.js';
 import { createProjectileViews } from './render/projectiles.js';
 import { createHud } from './ui/hud.js';
@@ -74,7 +73,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     const m = models.get(CHARACTERS[f.char].model);
     return [f, m ? createCharacterView(app, f, terrain, m) : createFighterView(app, f, terrain)];
   }));
-  const boundary = createBoundary(app, terrain);
   const hud = createHud(match, me);
   const minimap = createMinimap(document.getElementById('minimap'), { obstacles, areaRadius: AREA_RADIUS });
   // 右手・左手ボタンの文字をキャラに合わせる（左手：盾持ちは防御、ほかは強攻撃・持ち替え など）
@@ -196,7 +194,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         player.setPose(spectating.x, spectating.z, spectating.yaw);
         views.get(me).setVisible(false);
       }
-      boundary.update(dt, match.areaRadius);
       hud.update(dt);
       hud.updateVitals(me);
       minimap.update(dt, spectating || me);

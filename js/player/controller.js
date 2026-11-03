@@ -114,6 +114,8 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       pos.x = x; pos.z = z; yaw = faceYaw;
       if (viewMode !== 'third') { viewMode = 'third'; thirdDist = THIRD_DIST; }
     },
+    /** 向きと上下の角度を直接決める（確認用） */
+    setLook(faceYaw, facePitch) { yaw = faceYaw; pitch = Math.max(-p.pitchLimit, Math.min(p.pitchLimit, facePitch)); },
     /** 出現する場所と向き */
     spawn(x, z, faceYaw) {
       pos.x = x; pos.z = z; yaw = faceYaw; pitch = -2;

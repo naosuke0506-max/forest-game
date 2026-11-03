@@ -4,6 +4,10 @@ import { createApp } from './core/app.js';
 import { createTerrain } from './world/terrain.js';
 import { createEnvironment } from './world/environment.js';
 import { createTimeOfDay } from './world/time-of-day.js';
+import { createFence } from './world/fence.js';
+import { createSunGlare } from './render/sun-glare.js';
+import { createRandom } from './core/random.js';
+import { AREA_RADIUS } from './game/data.js';
 import { createObstacles } from './world/obstacles.js';
 import { createTrees, createGrass } from './world/vegetation.js';
 import { createRocks } from './world/rocks.js';
@@ -42,6 +46,8 @@ async function boot() {
   const env = createEnvironment(app, CONFIG, sky);
   const wind = createWind(app, CONFIG);
   const obstacles = createObstacles();
+  // 外周の柵（高さ約 10m）。ここから先へは行けない
+  createFence(app, terrain, AREA_RADIUS, createRandom(CONFIG.seed + 55), tex.bark);
   // 木：Tripo AI の模型。読み込めなかったときは仮の木
   const trees = treeModels
     ? createModelTrees(app, CONFIG, CONFIG.seed, terrain, obstacles, treeModels)
@@ -59,6 +65,7 @@ async function boot() {
   // 時間帯（朝・昼・夕暮れ・深夜）。霧の色が変わったら、空の無い所の背景色も合わせる
   env.onFogColor = (c) => { player.camera.camera.clearColor = c; };
   const timeOfDay = createTimeOfDay(app, env, CONFIG);
+  const sunGlare = createSunGlare(player.camera, env.sun, timeOfDay, trees?.canopies || []);
   const touchLayer = document.getElementById('touch-layer');
   const input = createInput(touchLayer, document.getElementById('stick'), CONFIG);
   const stats = createStats(app, CONFIG.showStats, CONFIG.qualityName);
@@ -72,6 +79,7 @@ async function boot() {
     props?.update(dt, player.camera.getPosition());
     wind.update(dt);
     timeOfDay.update(dt);
+    sunGlare.update(dt);
     stats.update(dt);
   });
 

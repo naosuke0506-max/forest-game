@@ -1,0 +1,28 @@
+{
+  "source": "kloppenheim_06_puresky.hdr",
+  "grade": "sat=1.6,gain=1.35:0.85:0.58,top=0.38:0.42:0.78",
+  "sunU": 0.6074,
+  "sunV": 0.457,
+  "skyScale": 3.19695,
+  "horizonLinear": [
+    1.48301,
+    0.8236,
+    0.52527
+  ],
+  "lightSize": [
+    128,
+    64
+  ],
+  "groundLinear": [
+    0.06381,
+    0.05311,
+    0.04144
+  ],
+  "sunIrradiance": 0.066,
+  "skyIrradiance": 1.8997,
+  "sunColor": [
+    1.0,
+    0.4078,
+    0.1165
+  ]
+}
