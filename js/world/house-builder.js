@@ -229,8 +229,9 @@ export function buildHouse(B, h, reg) {
   // ===== 家具 =====
   // 隠れ場所への道順（bot が使う）：扉の外 → 扉の内 →（二階なら）階段の下 → 階段の上 → 穴の後ろを右へ
   const W2 = (x, z) => { const p = F.at(x, 0, z); return { x: p[0], z: p[2] }; };
+  // 一階建ては、部屋の真ん中の通り道を奥まで進んでから左右へ（机を避ける）
   const routes = [
-    [W2(0, d / 2 + 1.3), W2(0, id - 0.9)],
+    twoStory ? [W2(0, d / 2 + 1.3), W2(0, id - 0.9)] : [W2(0, d / 2 + 1.3), W2(0, id - 0.9), W2(0, -id + 1.55)],
     [W2(0, d / 2 + 1.3), W2(0, id - 0.9), W2((sx0 + sx1) / 2, zb + 0.45), W2((sx0 + sx1) / 2, zt - 0.45), W2(sx1 + 0.75, zt - 0.45)],
   ];
   const furniture = new Furniture(B, F, y0, yaw, reg, range, routes);
@@ -253,7 +254,7 @@ export function buildHouse(B, h, reg) {
     furniture.bed(-iw + 0.62, -id + 1.08, g, 0, rnd);
     furniture.chest(-iw + 0.62, -id + 2.45, g, 0);
     furniture.wardrobe(iw - 0.3, -id + 0.8, g, -90);
-    furniture.table(iw * 0.35, id * 0.15, g, rnd);
+    furniture.table(iw - 1.05, id * 0.25, g, rnd);   // 右の壁寄り（扉から奥への通り道を空ける）
     furniture.shelf(iw - 1.3, -id + 0.12, g + 1.3, 0);
     furniture.sacks(iw - 0.7, id - 0.55, g, rnd);
     furniture.hearth(-iw + 0.32, id - 1.0, g, chimneyTop, 90);

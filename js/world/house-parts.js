@@ -116,7 +116,8 @@ export function createParts(B, F, yaw, deco) {
 
     /** 隅柱（1 つの階の 4 隅）。前の面 zf・後ろの面 zb・横の面 ±w/2 から 0.1m 出る */
     cornerPosts(w, zf, zb, y, H, tone) {
-      for (const sx of [-1, 1]) for (const z of [zf - 0.05, zb + 0.05]) bxL('wood', sx * (w / 2 - 0.05), y, z, 0.3, 0.3, H, { shade: tone, top: false });
+      // 木目を縦に（柱は縦の木）
+      for (const sx of [-1, 1]) for (const z of [zf - 0.05, zb + 0.05]) lbox('wood', [sx * (w / 2 - 0.05), y + H / 2, z], [0, 1, 0], [1, 0, 0], [0, 0, 1], H, 0.3, 0.3, tone, { skip: '+a-a' });
     },
 
     /** 隅石（石積みの階の 4 隅。長い石と短い石を互い違いに積み、壁から 5cm 出る） */
@@ -126,7 +127,8 @@ export function createParts(B, F, yaw, deco) {
         const long = (k + (sx * sz > 0 ? 0 : 1)) % 2 === 0;
         const lx = long ? 0.62 : 0.34, lz = long ? 0.34 : 0.62;
         const sh = shade * (0.93 + ((k * 7 + sx * 3 + sz + 4) % 5) * 0.035);
-        bxL('stone', sx * (w / 2 + PQ - lx / 2), y + k * qh + 0.012, zc + sz * (PQ - lz / 2), lx, lz, qh - 0.024, { shade: sh });
+        // 外から見える 2 面と、上の段とずれて見える上の面（壁の中に入る面は描かない）
+        bxL('stone', sx * (w / 2 + PQ - lx / 2), y + k * qh + 0.012, zc + sz * (PQ - lz / 2), lx, lz, qh - 0.024, { shade: sh, skip: (sx > 0 ? 'left' : 'right') + (sz > 0 ? 'back' : 'front') });
       }
     },
 
@@ -154,11 +156,12 @@ export function createParts(B, F, yaw, deco) {
     windowDress(fc, c, v0, ww, wh, T, kind, tone, { shutter = [0.8, 0.75, 0.7], flowers = null } = {}) {
       const lin = tone * 1.15;
       // 枠の内張り（壁の厚みの所）と十字の桟
-      fbox(fc, 'wood', c, v0 - 0.02, -T / 2, ww, 0.04, T + 0.02, lin, '');
-      fbox(fc, 'wood', c, v0 + wh - 0.04, -T / 2, ww, 0.05, T + 0.02, lin, '');
-      for (const s of [-1, 1]) fbox(fc, 'wood', c + s * (ww / 2 - 0.025), v0, -T / 2, 0.05, wh, T + 0.02, lin, '');
-      fbox(fc, 'wood', c, v0, -0.07, 0.06, wh, 0.06, tone, '');
-      fbox(fc, 'wood', c, v0 + wh * 0.58, -0.07, ww - 0.04, 0.06, 0.06, tone, '');
+      // （見えない面は描かない：壁に付いた面・ほかの木に隠れる端。材は両面を描くので、裏から見ても抜けない）
+      fbox(fc, 'wood', c, v0 - 0.02, -T / 2, ww, 0.04, T + 0.02, lin, '-b+a-a-n');
+      fbox(fc, 'wood', c, v0 + wh - 0.04, -T / 2, ww, 0.05, T + 0.02, lin, '+b+a-a-n');
+      for (const s of [-1, 1]) fbox(fc, 'wood', c + s * (ww / 2 - 0.025), v0, -T / 2, 0.05, wh, T + 0.02, lin, (s < 0 ? '-a' : '+a') + '+b-b-n');
+      fbox(fc, 'wood', c, v0, -0.07, 0.06, wh, 0.06, tone, '+b-b');
+      fbox(fc, 'wood', c, v0 + wh * 0.58, -0.07, ww - 0.04, 0.06, 0.06, tone, '+a-a');
       if (kind === 'stone') {
         fbox(fc, 'stone', c, v0 - 0.12, 0.05, ww + 0.34, 0.12, 0.22, 1.08, '-n');   // 窓台
         fbox(fc, 'stone', c, v0 + wh, 0.0, ww + 0.46, 0.26, 0.12, 1.1, '-n');        // まぐさ
@@ -170,20 +173,20 @@ export function createParts(B, F, yaw, deco) {
       const timber = kind === 'timber', at = timber ? 0.1 : 0.02, sw = ww / 2;
       for (const s of [-1, 1]) {
         const sc = c + s * (ww / 2 + (timber ? 0.14 : 0.06) + sw / 2);
-        fbox(fc, 'gate', sc, v0 + 0.02, at + 0.0175, sw, wh - 0.04, 0.035, shutter, '');
-        for (const vv of [0.14, wh - 0.18]) beam(fc, sc - sw / 2 + 0.04, v0 + vv, sc + sw / 2 - 0.04, v0 + vv, 0.08, 0.03, shutter.map((x) => x * 0.8), { at: at + 0.035 + EMBED, ends: true });
-        beam(fc, sc - s * (sw / 2 - 0.06), v0 + 0.2, sc + s * (sw / 2 - 0.06), v0 + wh - 0.24, 0.07, 0.025, shutter.map((x) => x * 0.8), { at: at + 0.035 + EMBED, ends: true });
-        for (const vv of [0.16, wh - 0.16]) fbox(fc, 'cloth', c + s * (ww / 2 + 0.02), v0 + vv, at + 0.04, 0.16, 0.035, 0.012, IRON, '');   // 蝶番
+        fbox(fc, 'gate', sc, v0 + 0.02, at + 0.0175, sw, wh - 0.04, 0.035, shutter, '-n');
+        for (const vv of [0.14, wh - 0.18]) beam(fc, sc - sw / 2 + 0.04, v0 + vv, sc + sw / 2 - 0.04, v0 + vv, 0.08, 0.03, shutter.map((x) => x * 0.8), { at: at + 0.035 + EMBED });
+        beam(fc, sc - s * (sw / 2 - 0.06), v0 + 0.2, sc + s * (sw / 2 - 0.06), v0 + wh - 0.24, 0.07, 0.025, shutter.map((x) => x * 0.8), { at: at + 0.035 + EMBED });
+        for (const vv of [0.16, wh - 0.16]) fbox(fc, 'cloth', c + s * (ww / 2 + 0.02), v0 + vv, at + 0.04, 0.16, 0.035, 0.012, IRON, '-n+a-a+b-b');   // 蝶番
       }
       // 花箱：窓台の下の箱と、緑の葉と色とりどりの花
       if (flowers) {
         const fo = kind === 'stone' ? 0.17 : 0.22;
-        fbox(fc, 'wood', c, v0 - 0.3, fo, ww + 0.12, 0.2, 0.22, tone * 0.9, '');
+        fbox(fc, 'wood', c, v0 - 0.3, fo, ww + 0.12, 0.2, 0.22, tone * 0.9, '-n');
         const n = 6;
         for (let i = 0; i < n; i++) {
           const s = c - ww / 2 + 0.02 + ((ww - 0.04) * (i + 0.5)) / n, h = 0.1 + deco.next() * 0.12;
-          fbox(fc, 'cloth', s, v0 - 0.12, fo, (ww / n) * 1.2, h, 0.18, [0.16, 0.3 + deco.next() * 0.1, 0.1], '');
-          if (deco.next() < 0.8) fbox(fc, 'cloth', s + (deco.next() - 0.5) * 0.05, v0 - 0.12 + h - 0.02, fo + (deco.next() - 0.5) * 0.08, 0.07, 0.07, 0.07, flowers[i % flowers.length], '');
+          fbox(fc, 'cloth', s, v0 - 0.12, fo, (ww / n) * 1.2, h, 0.18, [0.16, 0.3 + deco.next() * 0.1, 0.1], '-n-b');
+          if (deco.next() < 0.8) fbox(fc, 'cloth', s + (deco.next() - 0.5) * 0.05, v0 - 0.12 + h - 0.02, fo + (deco.next() - 0.5) * 0.08, 0.07, 0.07, 0.07, flowers[i % flowers.length], '-n-b');
         }
       }
     },
@@ -193,8 +196,8 @@ export function createParts(B, F, yaw, deco) {
      */
     doorDress(fc, dw, dh, T, kind, tone) {
       // 枠の内張り
-      for (const s of [-1, 1]) fbox(fc, 'wood', s * (dw / 2 - 0.025), 0, -T / 2, 0.05, dh, T + 0.04, tone * 1.1, '');
-      fbox(fc, 'wood', 0, dh - 0.05, -T / 2, dw, 0.05, T + 0.04, tone * 1.1, '');
+      for (const s of [-1, 1]) fbox(fc, 'wood', s * (dw / 2 - 0.025), 0, -T / 2, 0.05, dh, T + 0.04, tone * 1.1, (s < 0 ? '-a' : '+a') + '+b-b');
+      fbox(fc, 'wood', 0, dh - 0.05, -T / 2, dw, 0.05, T + 0.04, tone * 1.1, '+b+a-a');
       if (kind === 'stone') {
         // 長い石と短い石を互い違いにした石の枠、まぐさと要石
         const n = 5;

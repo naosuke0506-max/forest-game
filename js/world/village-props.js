@@ -38,14 +38,22 @@ export function woodpile(B, F, yaw, side, wallX, z0, z1, rnd) {
   const D = (d) => F.dir(d[0], d[1], d[2]);
   const len = z1 - z0, rows = 4, r = 0.075;
   const x0 = side * (wallX + 0.22);
-  // 丸太を壁に直角に（切り口が外を向く）、段にずらして積む
+  // 山の体（奥の丸太の側面は見えないので、暗い木の箱）と、外を向いた丸太の切り口（少しずつ出っ張りを変える）
+  const hgt = 0.08 + rows * (2 * r - 0.012);
+  { const q = F.at(x0 + side * 0.26, 0.08, (z0 + z1) / 2); box(B, 'wood', q[0], q[1], q[2], 0.5, len, hgt - 0.08, yaw, { shade: 0.42 }); }
+  const sides = 6, a0 = D([side, 0, 0]);
   for (let row = 0; row < rows; row++) {
     const n = Math.floor(len / (2 * r + 0.01)) - (row % 2);
     for (let i = 0; i < n; i++) {
-      const lz = z0 + r + (row % 2) * r + i * (2 * r + 0.01);
-      const ll = 0.5 + rnd.next() * 0.08;
-      const c = F.at(x0 + side * (ll / 2), 0.08 + r + row * (2 * r - 0.012), lz);
-      prism(B, 'wood', c, D([1, 0, 0]), ll, r * (0.9 + rnd.next() * 0.2), 6, 0.62, { capSurf: 'cloth', capShade: CUT.map((v) => v * (0.85 + rnd.next() * 0.25)) });
+      const lz = z0 + r + (row % 2) * r + i * (2 * r + 0.01), rr = r * (0.88 + rnd.next() * 0.24);
+      const top = row === rows - 1;
+      const cx = x0 + side * (top ? 0.53 + rnd.next() * 0.04 : 0.505 + rnd.next() * 0.025), cy = 0.08 + r + row * (2 * r - 0.012);
+      const c = F.at(cx, cy, lz);
+      // 切り口（六角）。上の段だけ丸太の側面も（上から丸みが見える）。下の段は箱の面にほぼ付いているので側面は要らない
+      if (top) prism(B, 'wood', F.at(cx - side * 0.25, cy, lz), a0, 0.5, rr, sides, 0.55, { caps: false });
+      const ring = (k) => { const t = (k / sides) * Math.PI * 2; return F.at(cx, cy + Math.sin(t) * rr, lz + Math.cos(t) * rr); };
+      const cs = CUT.map((v) => v * (0.85 + rnd.next() * 0.25));
+      for (let k = 0; k < sides; k += 2) B.quad('cloth', c, ring(k), ring(k + 1), ring(k + 2), a0, cs);
     }
   }
   // 下の横木 2 本、柱 2 本、板の屋根（壁から外へ下がる）
