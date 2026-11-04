@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>静かな森</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-04.4';</script>
+<script>window.__BUILD = '2026-11-04.5';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -159,7 +159,7 @@
 <div id="dazzle" class="dazzle"></div>
 <div id="hud" hidden>
   <!-- 隠れている間：隙間から覗く見た目（ベッドの下・タンスの中）。ほかの表示より下に描く -->
-  <div id="hideview" class="hideview" hidden><div class="hv-label">隠れている</div></div>
+  <div id="hideview" class="hideview" hidden><div class="hv-label">潛伏中</div></div>
   <!-- 上の真ん中：フェーズ・時間帯と残り時間 -->
   <div class="hud-top">
     <div class="phase-row"><span id="phase-icon" class="phase-icon"></span><span id="phase-name" class="phase-name"></span></div>
@@ -184,14 +184,14 @@
   </div>
   <!-- 右下：操作ボタン。右手（攻撃）・左手（盾で防御・強攻撃・持ち替え）・回避 -->
   <button id="btn-left" class="act-btn left" type="button">左手</button>
-  <button id="btn-dodge" class="act-btn dodge" type="button">回避</button>
-  <button id="btn-attack" class="act-btn attack" type="button">攻撃</button>
+  <button id="btn-dodge" class="act-btn dodge" type="button">迴避</button>
+  <button id="btn-attack" class="act-btn attack" type="button">攻擊</button>
   <!-- 姿勢：押す＝しゃがむ／立つ、長押し＝伏せる -->
-  <button id="btn-stance" class="act-btn stance" type="button">しゃがむ</button>
+  <button id="btn-stance" class="act-btn stance" type="button">屈身</button>
   <!-- 素材の山・箱の近くで出る：拾う・開ける -->
-  <button id="btn-use" class="act-btn use" type="button" hidden>拾う</button>
+  <button id="btn-use" class="act-btn use" type="button" hidden>拾得</button>
   <!-- ベッド・タンスの近くで出る：探す -->
-  <button id="btn-search" class="act-btn search" type="button" hidden>探す</button>
+  <button id="btn-search" class="act-btn search" type="button" hidden>搜索</button>
 
   <!-- 敵の頭上の体力・与えたダメージの数字 -->
   <div id="tags" class="tags"></div>
@@ -200,12 +200,12 @@
   <!-- 攻撃を受けたときに画面の縁が赤くなる -->
   <div id="hurt" class="hurt"></div>
   <!-- 脱落後の観戦 -->
-  <div id="spectate" class="spectate" hidden><span id="spectate-name"></span><button id="spectate-next" type="button">次の人を見る</button></div>
+  <div id="spectate" class="spectate" hidden><span id="spectate-name"></span><button id="spectate-next" type="button">觀次</button></div>
   <!-- 確認用（?debug=1） -->
   <div id="debug" class="debug" hidden>
-    <button type="button" data-act="kill-bot">bot を 1 体倒す</button>
-    <button type="button" data-act="die">自分が倒れる</button>
-    <button type="button" data-act="skip">次のフェーズへ</button>
+    <button type="button" data-act="kill-bot">斃傀儡</button>
+    <button type="button" data-act="die">自斃</button>
+    <button type="button" data-act="skip">進刻</button>
   </div>
 </div>
 
@@ -218,7 +218,7 @@
 <!-- フェーズ報酬（画面中央） -->
 <section id="reward" class="panel reward" hidden>
   <div class="reward-head"></div>
-  <div class="reward-sub">報酬を 1 つ選ぶ</div>
+  <div class="reward-sub">褒賞擇一</div>
   <div class="reward-cards"></div>
   <div class="reward-time"></div>
 </section>
@@ -227,12 +227,12 @@
 <section id="result" class="panel result" hidden>
   <h2 class="result-head"></h2>
   <ol class="result-list"></ol>
-  <button id="again" class="start" type="button">もう一度</button>
+  <button id="again" class="start" type="button">再戰</button>
 </section>
 
 <!-- クラフト（素材の表示をタップで開く。試合は止まらない） -->
 <section id="craft" class="panel craft" hidden>
-  <div class="craft-head"><h2>クラフト</h2><button class="craft-close icon-btn" type="button" aria-label="閉じる">×</button></div>
+  <div class="craft-head"><h2>鍛冶</h2><button class="craft-close icon-btn" type="button" aria-label="閉じる">×</button></div>
   <div class="craft-mats"></div>
   <div class="craft-list"></div>
   <p class="craft-note">どこでもすぐ作れる（試合は止まらない）。素材は森に落ちている物と、村の家の前の箱から</p>
@@ -245,7 +245,7 @@
     <span>性能表示</span>
     <div class="seg" data-key="stats">
       <button type="button" data-val="on">表示</button>
-      <button type="button" data-val="off">隠す</button>
+      <button type="button" data-val="off">隱</button>
     </div>
   </div>
   <div class="set-row">
@@ -254,34 +254,34 @@
       <button type="button" data-val="high">大</button>
       <button type="button" data-val="mid">中</button>
       <button type="button" data-val="low">小</button>
-      <button type="button" data-val="off">消す</button>
+      <button type="button" data-val="off">消</button>
     </div>
   </div>
-  <h3 class="test-head">テスト用</h3>
+  <h3 class="test-head">試驗用</h3>
   <div class="set-row">
-    <span>フェーズの長さ</span>
+    <span>刻之長</span>
     <div class="seg" data-key="phaseLen">
       <button type="button" data-val="normal">通常</button>
       <button type="button" data-val="60">60 秒</button>
       <button type="button" data-val="30">30 秒</button>
     </div>
   </div>
-  <p class="test-note">フェーズの長さは次の試合から変わります</p>
+  <p class="test-note">刻の長さは次の試合から変わります</p>
   <div class="test-btns">
-    <button type="button" data-test="skip">次のフェーズへ</button>
-    <button type="button" data-test="kill-bot">bot を 1 体倒す</button>
-    <button type="button" data-test="die">自分が倒れる</button>
+    <button type="button" data-test="skip">進刻</button>
+    <button type="button" data-test="kill-bot">斃傀儡</button>
+    <button type="button" data-test="die">自斃</button>
   </div>
-  <button id="settings-close" class="start" type="button">閉じる</button>
+  <button id="settings-close" class="start" type="button">閉</button>
 </section>
 
 <section id="title" class="title">
   <div class="title-inner">
     <h1>静かな森</h1>
-    <p class="sub">練習モード　bot 3 体と対戦</p>
+    <p class="sub">修練之陣　對傀儡 3 騎</p>
     <div id="char-select" class="char-select"></div>
     <p id="char-desc" class="char-desc"></p>
-    <button id="start" class="start" type="button" disabled>読み込み中…</button>
+    <button id="start" class="start" type="button" disabled>讀込中…</button>
     <p class="hint">左下のスティックで移動　／　右側をなぞって見回す　／　右下のボタンで右手・左手・回避（弓は長押しで引く）<br>素材を拾い、左上の素材の表示をタップしてクラフト</p>
   </div>
 </section>

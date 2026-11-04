@@ -91,7 +91,7 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
         killer.kills++;
         const pts = victim.state === 'mutated' ? POINTS.killMutatedPlayer
           : victim.state === 'enhanced' ? POINTS.killEnhancedPlayer : POINTS.killPlayer;
-        const what = victim.state === 'mutated' ? 'クリーチャー状態の' : victim.state === 'enhanced' ? '肉体強化状態の' : '';
+        const what = victim.state === 'mutated' ? '變異した' : victim.state === 'enhanced' ? '剛體化した' : '';
         m.addPoints(killer, pts, `${what}${victim.name}を倒した`);
       }
       emit('eliminated', { victim, killer });
@@ -167,7 +167,7 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
   function finish() {
     const last = m.alive;
     if (last.length === 1) {
-      m.addPoints(last[0], POINTS.lastSurvivor, '最後の生き残り');
+      m.addPoints(last[0], POINTS.lastSurvivor, '最終生存');
     }
     m.state = 'over';
     const ranking = m.ranking();
