@@ -5,6 +5,8 @@
 //   探す：近くの隠れ場所を開けて探す（少し時間がかかる）。誰かいれば、その人は引きずり出されて「無防備」になる
 //     （HELPLESS 秒、何もできない）。その間に、見つけた人は致命の一撃を入れられる（game/combat.js）
 //   すでに誰かが隠れている所に隠れようとしたら、見つけたのと同じ
+import { resetStance } from './stance.js';
+
 export const HIDE_REACH = 1.7;   // 隠れる・探すことができる近さ（m）
 export const SEARCH_TIME = 0.6;  // 探す（開ける）のにかかる時間（秒）
 export const HELPLESS = 2.6;     // 見つかった人が無防備でいる時間（秒）
@@ -72,11 +74,13 @@ export function createHiding(spots) {
     hide(f, s) {
       if (!f.alive || f.hidden || !s) return null;
       if (s.occupant && s.occupant !== f) return m.reveal(f, s);
+      const from = { x: f.x, z: f.z, y: f.y };   // 隠れる前に立っていた所（見られたかどうかは、ここで決める）
       s.occupant = f;
       f.hidden = s;
+      resetStance(f);   // 隠れたら立った姿勢に（出たときも立っている）
       f.x = s.x; f.z = s.z; f.y = s.y;
       f.action = null; f.guarding = false;
-      emit('hide', { fighter: f, spot: s });
+      emit('hide', { fighter: f, spot: s, from });
       return { hidden: true };
     },
 
@@ -97,6 +101,7 @@ export function createHiding(spots) {
       const dx = searcher.x - v.x, dz = searcher.z - v.z;
       v.yaw = (Math.atan2(-dx, -dz) * 180) / Math.PI;
       v.helpless = HELPLESS;
+      resetStance(v);
       v.stun = Math.max(v.stun || 0, HELPLESS);
       v.action = null; v.guarding = false;
       v.foundBy = searcher;

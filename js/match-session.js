@@ -21,6 +21,9 @@ import { createCraftUi } from './ui/craft.js';
 import { ICONS, weaponIconOf } from './ui/icons.js';
 import { MATERIALS } from './game/data.js';
 import { levelOf } from './game/craft.js';
+import { createSenses } from './game/senses.js';
+import { stanceButton, stanceSpeed, canRun, stanceShape } from './game/stance.js';
+import { STANCES } from './game/data.js';
 
 const PLAYER_COLOR = '#ffd75e';
 const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
@@ -28,7 +31,7 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
 /**
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, debug, phaseDuration }
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, zones = null, buildings = [], crateSpots = [], tex = null, trees = [], groundAt = null, insideHouse = null, hides = [], debug = false, phaseDuration = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, zones = null, buildings = [], crateSpots = [], tex = null, trees = [], groundAt = null, insideHouse = null, hides = [], sight = null, debug = false, phaseDuration = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）
@@ -74,6 +77,16 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 戦闘と bot
   const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt, hiding });
   const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => createBot(f, createRandom(config.seed + 100 + i), fighters));
+  // bot の目と耳（game/senses.js）：見える相手・聞こえた音で気づく。音を鳴らす出来事をつなぐ
+  const senses = createSenses({ sight, heightAt: terrain.heightAt });
+  const botOf = new Map(bots.map((b) => [b.fighter, b]));
+  combat.on('swing', ({ fighter }) => senses.noise(fighter, 'swing'));
+  combat.on('hit', ({ attacker, target }) => { senses.noise(attacker, 'hit', target); botOf.get(target)?.alert(attacker); });
+  combat.on('dodge', ({ fighter }) => senses.noise(fighter, 'dodge'));
+  combat.on('fire', ({ fighter }) => senses.noise(fighter, 'bow'));
+  combat.on('searchStart', ({ fighter }) => senses.noise(fighter, 'search'));
+  pickups.on('taken', ({ fighter, item }) => senses.noise(fighter, item.kind === 'crate' ? 'crate' : 'pickup'));
+  hiding.on('hide', ({ fighter }) => senses.noise(fighter, 'hide'));
 
   // 見た目
   // キャラの模型を読み込む。読み込めなかったキャラは、仮の人形で続ける（画面下に知らせを出す）
@@ -117,7 +130,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const useBtn = document.getElementById('btn-use');
   const craftUi = createCraftUi(me, (act, id) => {
     const name = id ? WEAPONS[id].name : CHARACTERS[me.char].armorName;
-    if (act !== 'equip') sfx.craft();
+    if (act !== 'equip') { sfx.craft(); senses.noise(me, 'craft'); }
     if (act === 'make') hud.addFeed(`${name}を作った（クラフト画面の「装備」で持ち替え）`);
     else if (act === 'upgrade') hud.addFeed(`${name}を強化した（強化 ${levelOf(me, id)}）`);
     else if (act === 'armor') hud.addFeed(`${name}を強化した（強化 ${me.armorLevel}）`);
@@ -132,6 +145,18 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   let nearItem = null, nearSpot = null, useTimer = 0;
   const searchBtn = document.getElementById('btn-search');
   setBtn(searchBtn, ICONS.eye, '探す');
+  // 姿勢ボタン：押したときにすること（立っていれば「しゃがむ」、しゃがむ・伏せていれば「立つ」）。長押しで伏せる
+  const stanceBtn = document.getElementById('btn-stance');
+  let stanceShown = '';
+  const refreshStance = () => {
+    const now = me.stanceTo || me.stance;
+    if (now === stanceShown) return;
+    stanceShown = now;
+    if (now === 'stand') setBtn(stanceBtn, ICONS.crouch, 'しゃがむ');
+    else setBtn(stanceBtn, ICONS.stand, now === 'prone' ? '起きる' : '立つ');
+    stanceBtn.classList.toggle('low', now !== 'stand');
+  };
+  refreshStance();
   const hideView = document.getElementById('hideview');
 
   // 効果音（足音・戦闘・拾う・隠れる・鐘など）
@@ -139,15 +164,10 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   wireSounds(sfx, { combat, match, hiding, pickups, me });
 
   // 隠れる・探す：自分が隠れたら隙間から覗く見た目に。近くの bot に見られていたら、その bot は場所を覚えて探しに来る
-  const sees = (b, f) => {
-    const dx = f.x - b.x, dz = f.z - b.z, d = Math.hypot(dx, dz);
-    if (d > 22 || Math.abs((b.y ?? 0) - (f.y ?? 0)) > 2.5) return false;
-    if (d < 3) return true;
-    const yaw = (b.yaw * Math.PI) / 180;
-    return (-Math.sin(yaw) * dx - Math.cos(yaw) * dz) / d > Math.cos((75 * Math.PI) / 180);   // 前の 150 度に入っている
-  };
-  hiding.on('hide', ({ fighter, spot }) => {
-    for (const b of bots) if (b.fighter !== fighter && b.fighter.alive && sees(b.fighter, fighter)) b.knowSpot(spot);
+  // 隠れるところを見たか：隠れる直前に立っていた所が、bot の目（前の 120 度・見える距離・体の半分以上が見える）に入っていたか
+  const sees = (b, f, from) => senses.canSee(b, { ...f, ...from, hidden: null });
+  hiding.on('hide', ({ fighter, spot, from }) => {
+    for (const b of bots) if (b.fighter !== fighter && b.fighter.alive && sees(b.fighter, fighter, from)) b.knowSpot(spot);
     if (fighter !== me) return;
     player.setHide(spot);
     viewModel.setVisible(false);
@@ -214,6 +234,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         document.getElementById('btn-attack').hidden = true;
         document.getElementById('btn-left').hidden = true;
         document.getElementById('btn-dodge').hidden = true;
+        stanceBtn.hidden = true;
         useBtn.hidden = true;
         searchBtn.hidden = true;
         hideView.hidden = true;
@@ -228,7 +249,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   });
   match.on('end', () => { spectateEl.hidden = true; });
 
-  const world = { obstacles, pickups, groundAt, hiding, get areaRadius() { return match.areaRadius; } };
+  const world = { obstacles, pickups, groundAt, hiding, senses, onBotCraft: (f) => senses.noise(f, 'craft'), get areaRadius() { return match.areaRadius; } };
   match.on('eliminated', ({ victim }) => hiding.drop(victim));
   match.on('eliminated', ({ victim }) => { if (victim === me) player.setFrozen(true); });
   match.on('end', (res) => setTimeout(() => hud.showResult(res), 1200));
@@ -280,7 +301,13 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       match.update(dt);
       const running = match.state === 'running';
       player.setAreaRadius(match.areaRadius);
-      player.speedScale = me.stats.speed * (me.moveScale ?? 1);
+      // 姿勢：ボタン（押す＝しゃがむ／立つ、長押し＝伏せる）。しゃがむ・伏せると遅く、走れず、目が低い
+      if (input.stance && running && me.alive && !me.hidden) stanceButton(me, input.stance);
+      player.speedScale = me.stats.speed * (me.moveScale ?? 1) * stanceSpeed(me);
+      player.noRun = !canRun(me);
+      player.setEyeHeight((config.player.eyeHeight * stanceShape(me).eye) / STANCES.stand.eye);
+      me.gait = player.moving > 0.75 && canRun(me) ? 'run' : player.moving > 0.05 ? 'walk' : 'still';   // 足音の大きさ（bot の耳）
+      refreshStance();
       // あなたの位置を、試合の記録へ写す（いずれ人間も試合の計算で動かす）
       // 隠れている間は、隠れ場所が自分の位置（体は動かない）
       if (me.alive && !me.hidden) { me.x = player.position.x; me.z = player.position.z; me.y = player.position.y; me.yaw = player.yaw; me.pitch = player.pitch; }
@@ -294,6 +321,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         nearSpot = free && !me.hidden && !nearItem ? hiding.nearest(me) : null;
         const mode = me.hidden ? 'exit' : nearItem ? (nearItem.kind === 'crate' ? 'crate' : nearItem.kind) : nearSpot ? 'hide' : '';
         useBtn.hidden = !mode;
+        stanceBtn.hidden = !running || !me.alive || !!me.hidden;
         if (mode && useBtn.dataset.label !== mode + (nearItem?.amount ?? '')) {
           useBtn.dataset.label = mode + (nearItem?.amount ?? '');
           if (mode === 'exit') setBtn(useBtn, ICONS.exit, '出る');
@@ -320,6 +348,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         views.get(b.fighter).setVisible(!b.fighter.hidden);   // 隠れている人は見えない
       }
       if (running) combat.update(dt);
+      senses.update(dt);
       sfx.update(dt, fighters);
       // 回避は試合の計算が体を動かすので、その位置をプレイヤーの操作へ戻す
       if (me.alive && (me.action?.kind === 'dodge' || me.action?.kind === 'assassinate')) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
@@ -349,5 +378,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     pickups,
     hiding,
     sfx,
+    senses,
   };
 }

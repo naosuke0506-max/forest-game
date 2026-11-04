@@ -290,7 +290,13 @@ export function createParts(B, F, yaw, deco) {
       const rb = D([SQ, SQ, 0]), rn = D([-SQ, SQ, 0]), ra = D([0, 0, 1]);
       if (tiles) obox(B, 'tiles', W([0, yRt - 0.05, zc]), ra, rb, rn, L + 0.06, 0.26, 0.26, 0.78, { off: off() });
       else obox(B, 'thatch', W([0, yRt - 0.12, zc]), ra, rb, rn, L + 0.12, 0.46, 0.46, 0.8, { off: off() });
-      return { topAt: (x) => top + rh - k * Math.abs(x) + tv, k, tv };
+      // 視線をさえぎる板（家の中の座標）：左右の坂
+      const planes = [-1, 1].map((sx) => {
+        const e = [sx * xe, yEu + tv / 2, zc], r = [0, yRu + tv / 2, zc];
+        const bl = Math.hypot(r[0] - e[0], r[1] - e[1]);
+        return { c: [(e[0] + r[0]) / 2, (e[1] + r[1]) / 2, zc], a: [0, 0, 1], b: [(r[0] - e[0]) / bl, (r[1] - e[1]) / bl, 0], n: [sx * k * cs, cs, 0], la: L, lb: bl, ln: t };
+      });
+      return { topAt: (x) => top + rh - k * Math.abs(x) + tv, k, tv, planes };
     },
 
     /**

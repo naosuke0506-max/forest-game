@@ -3,8 +3,9 @@
 // 模型は tools/characters/build_character.py で作る（assets/characters/<名前>.glb と、動きの長さ・速さの .json）。
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
-import { WEAPONS, DODGE } from '../game/data.js';
+import { WEAPONS, DODGE, STANCE_TIME } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
+import { stanceShape } from '../game/stance.js';
 import { createWeaponModel, createShieldModel } from './weapons.js';
 import { BUILD } from '../version.js';
 
@@ -94,6 +95,8 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   }
   const clip = (name) => meta.clips[name];
   const has = (name) => tracks.has(name);
+  // 姿勢の動き（tools/characters/make_motions.py）：しゃがみ（その場）・しゃがみ歩き・伏せる・伏せ・這う・起き上がる
+  const stanceClips = ['crouch', 'crouch_walk', 'prone_down', 'prone', 'crawl', 'prone_up'].every(has);
   let current = '', lastAction = null, swingIndex = 0, wasStunned = false, deathStarted = false;
   const play = (name, speed = 1, blend = BLEND) => {
     if (!has(name)) return;
@@ -109,6 +112,22 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     body.anim.speed = speed;
     body.anim.baseLayer.transition(name, 0.08, 0);
     current = name;
+  };
+
+  // しゃがむ・伏せる：模型に専用の動き（crouch・prone など）が無いときだけ使う仮の姿勢。しゃがむは体を低く縮め少し前へ傾け、
+  // 伏せるは体を前へ倒して寝かせる（足もとを軸に回し、体の真ん中が立っていた所に来るようにずらす）
+  const qStand = new pc.Quat().setFromEulerAngles(0, 180, 0), qTilt = new pc.Quat(), qPose = new pc.Quat();
+  let posed = false;
+  const pose = (sh) => {
+    const low = sh.prone < 0.01 && sh.height > 1.7;
+    if (low && !posed) return;
+    posed = !low;
+    const sq = sh.prone > 0 ? 1 : Math.min(1, sh.height / 1.75);   // しゃがむ：縦に縮める割合
+    qTilt.setFromEulerAngles(-90 * sh.prone - (1 - sq) * 55, 0, 0);
+    qPose.mul2(qTilt, qStand);
+    body.setLocalRotation(qPose);
+    body.setLocalScale(meta.scale, meta.scale * (sh.prone > 0 ? 1 : 0.25 + 0.75 * sq), meta.scale);
+    body.setLocalPosition(0, 0.22 * sh.prone, 0.95 * sh.prone);
   };
 
   let groundY = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z)), flashOn = false;
@@ -139,7 +158,11 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         fwd += (f - fwd) * k;
       }
       px = fighter.x; pz = fighter.z;
-      if (fighter.action?.kind !== 'dodge') body.setLocalEulerAngles(0, 180, 0);   // 前転で変えた体の向きを戻す
+      if (fighter.action?.kind !== 'dodge') {
+        const sh = stanceShape(fighter);
+        if (fighter.alive && !stanceClips && (sh.prone > 0 || sh.height < 1.7)) pose(sh);
+        else { if (posed) { posed = false; body.setLocalScale(meta.scale, meta.scale, meta.scale); body.setLocalPosition(0, 0, 0); } body.setLocalEulerAngles(0, 180, 0); }   // 前転で変えた体の向きを戻す
+      }
       if (fighter.weapon !== shownWeapon) showWeapon(fighter.weapon);
 
       if (!fighter.alive) {
@@ -189,8 +212,28 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
 
       if (fighter.guarding && has('guard')) { play('guard', 1); return; }
 
-      // 歩き・走り・後ろ歩き。足の運びが地面と合うように、進む速さで動きの速さを変える
       const sc = meta.scale;
+      // しゃがむ・伏せる：伏せる・起き上がる途中はその動きを 1 回。伏せていれば止まって肘をつくか這う、しゃがんでいればその場か歩く
+      if (stanceClips) {
+        if (fighter.stanceT > 0) {
+          const down = fighter.stanceTo === 'prone';
+          const name = down ? 'prone_down' : 'prone_up';
+          if (current !== name) restart(name, clip(name).duration / (down ? STANCE_TIME.down : STANCE_TIME.up));
+          return;
+        }
+        if (fighter.stance === 'prone') {
+          if (vel < 0.08) play('prone', 1, 0.25);
+          else play('crawl', Math.min(2.5, Math.max(0.5, vel / (clip('crawl').speed * sc))), 0.25);
+          return;
+        }
+        if (fighter.stance === 'crouch') {
+          if (vel < 0.15) play('crouch', 1, 0.25);
+          else play('crouch_walk', Math.min(2.5, Math.max(0.5, vel / (clip('crouch_walk').speed * sc))), 0.2);
+          return;
+        }
+      }
+
+      // 歩き・走り・後ろ歩き。足の運びが地面と合うように、進む速さで動きの速さを変える
       if (vel < 0.15) play('idle', 1);
       else if (fwd < -0.3 * vel) play('back', Math.min(2.5, Math.max(0.5, vel / (clip('back').speed * sc))));
       else if (vel > RUN_FROM) play('run', Math.min(2.5, Math.max(0.6, vel / (clip('run').speed * sc))));

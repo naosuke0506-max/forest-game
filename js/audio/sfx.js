@@ -76,7 +76,14 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
   /** 足音 1 歩（録音。地面で選ぶ） */
   function step(f, run) {
     steps++;
-    const d = at(f, run ? 1 : 0.8, { ref: 2, max: 30 });
+    // しゃがむと足音が小さく、伏せていれば体を引きずる布ずれ（bot にも聞こえにくい。game/senses.js）
+    const st = f.stance || 'stand';
+    if (st === 'prone') {
+      const dp = at(f, 0.35, { ref: 2, max: 14 });
+      if (dp) playSample(dp, 'roll_cloth', { rate: 0.75 * jitter(0.08), gain: 0.5 });
+      return;
+    }
+    const d = at(f, (run ? 1 : 0.8) * (st === 'crouch' ? 0.42 : 1), { ref: 2, max: st === 'crouch' ? 16 : 30 });
     if (!d) return;
     const s = surfaceAt(f), r = jitter(0.07) * (run ? 1.04 : 1);
     if (s === 'grass') playSample(d, 'step_grass', { rate: r, gain: 0.7 });
@@ -161,10 +168,10 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
         if (moved > 3) { w.d = 0; continue; }   // 一瞬で移った（出現・隠れ場所から出た）
         const speed = moved / Math.max(dt, 1e-3);
         // 止まった：0.25 秒以上動かなければ、歩いた距離を数え直す（1 フレームだけ動かなかったときは続ける）
-        if (speed < 0.4 || f.action?.kind === 'dodge') { w.still = (w.still || 0) + dt; if (w.still > 0.25) w.d = Math.min(w.d, 0.4); continue; }
+        if (speed < (f.stance === 'prone' ? 0.2 : 0.4) || f.action?.kind === 'dodge') { w.still = (w.still || 0) + dt; if (w.still > 0.25) w.d = Math.min(w.d, 0.4); continue; }
         w.still = 0;
         w.d += moved;
-        const stride = speed > 4.2 ? 0.95 : 0.72;
+        const stride = f.stance === 'prone' ? 0.45 : f.stance === 'crouch' ? 0.55 : speed > 4.2 ? 0.95 : 0.72;
         if (w.d >= stride) { w.d -= stride; step(f, speed > 4.2); }
       }
     },

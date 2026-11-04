@@ -7,9 +7,13 @@
 //     隠れている間に相手がすぐそばを通れば、飛び出して暗殺する。しばらくしたら出る
 //   ・探す：誰かが隠れるところを見たら、その場所へ行って探す。見つけたら致命の一撃
 //   ・暗殺されそうになったら、ときどき回避する
+//   ・目と耳（game/senses.js）：前の 120 度で、体の半分以上が直接見える相手にだけ気づく。音が聞こえても気づく。
+//     見失ったら（聞こえただけのときも）、最後に分かった所へ行って見回し、見つからなければ元の行動に戻る。
+//     近づくときはしゃがんで忍び寄る（足音が小さい）。相手が見えたら立って戦う
 // 後で、逃走・アイテムの使用を足す
 import { moveFighter } from './movement.js';
-import { WEAPONS, COMBAT } from './data.js';
+import { canRun, setStance } from './stance.js';
+import { WEAPONS, COMBAT, SENSES } from './data.js';
 import { botCraft } from './craft.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
 
@@ -36,6 +40,9 @@ export function createBot(fighter, rng, fighters) {
     hideCooldown: 0,     // 次に隠れようとするまで
     knownSpot: null,     // 誰かが隠れるのを見た場所
     seenAssassin: null,  // 回避するか決めた暗殺
+    known: new Map(),    // 気づいた相手 → { x, y, z, age（分かってからの秒）, seen（今見えているか） }
+    look: null,          // 最後に分かった所へ探しに行っている { t（相手）, x, z, arrived, timer, base（見回しの中心の向き）, stuck }
+    lastThink: 0,
     input: { forward: 0, strafe: 0, run: false, yaw: fighter.yaw, pitch: 0, attack: false, guard: false, left: false, dodge: false, dodgeX: 0, dodgeY: 0, search: false },
   };
   const f = fighter;
@@ -47,13 +54,34 @@ export function createBot(fighter, rng, fighters) {
     b.goal = { x: Math.cos(a) * r, z: Math.sin(a) * r };
   }
 
-  /** 狙う相手：近い人。体力の少ない相手は少し狙いやすい */
+  /**
+   * 目と耳：見える相手・聞こえた相手を覚える（world.senses が無いときは、40m 以内の全員が分かる）
+   * @param {number} dt 前に考えてからの時間
+   */
+  function perceive(world, dt) {
+    const S = world.senses;
+    for (const [t, k] of b.known) { k.age += dt; if (!t.alive || k.age > SENSES.memory) b.known.delete(t); }
+    for (const t of fighters) {
+      if (t === f || !t.alive) continue;
+      const see = S ? S.canSee(f, t) : !t.hidden && Math.hypot(t.x - f.x, t.z - f.z) <= 40;
+      const k = b.known.get(t);
+      if (see) b.known.set(t, { x: t.x, y: t.y, z: t.z, age: 0, seen: true });
+      else if (k) k.seen = false;
+    }
+    if (!S) return;
+    for (const n of S.hear(f, fighters)) {
+      const k = b.known.get(n.f);
+      if (k?.seen) continue;
+      b.known.set(n.f, { x: n.x, y: n.y, z: n.z, age: 0, seen: false });
+    }
+  }
+
+  /** 狙う相手：今見えている人のうち、近い人。体力の少ない相手は少し狙いやすい */
   function pickTarget() {
     let best = null, bestScore = Infinity;
-    for (const t of fighters) {
-      if (t === f || !t.alive || t.hidden) continue;   // 隠れている人は見えない
+    for (const [t, k] of b.known) {
+      if (!k.seen || !t.alive || t.hidden) continue;   // 見えている人だけ（隠れている人は見えない）
       const d = Math.hypot(t.x - f.x, t.z - f.z);
-      if (d > 40) continue;
       const score = d * (0.7 + 0.3 * (t.stats.hp / t.stats.maxHp)) * (t.helpless > 0 ? 0.3 : 1);   // 無防備な相手は真っ先に
       if (score < bestScore) { bestScore = score; best = t; }
     }
@@ -147,6 +175,41 @@ export function createBot(fighter, rng, fighters) {
     return { pts, i: inside ? pts.length - 1 : 0, why, spot };
   };
 
+  /**
+   * 最後に分かった所へ探しに行く：着いたら見回し、見つからなければ忘れる。行けなければ（壁などで）諦める
+   * @returns {boolean} 探しに行っているか
+   */
+  function investigate(world) {
+    // 一番新しく分かった相手（見えていない人）
+    if (!b.look || !b.known.has(b.look.t)) {
+      let best = null;
+      for (const [t, k] of b.known) if (!k.seen && (!best || k.age < best[1].age)) best = [t, k];
+      if (!best) { b.look = null; return false; }
+      b.look = { t: best[0], x: best[1].x, z: best[1].z, arrived: false, timer: 0, base: f.yaw, stuck: 0, lx: f.x, lz: f.z };
+    }
+    const L = b.look, k = b.known.get(L.t);
+    if (k.age < 0.5) { L.x = k.x; L.z = k.z; L.arrived = false; }   // 新しく分かった（音がまた聞こえた）
+    b.input.attack = false; b.input.guard = false; b.input.left = false;
+    const d = Math.hypot(L.x - f.x, L.z - f.z);
+    setStance(f, d < 12 || L.arrived ? 'crouch' : 'stand');   // 近くまで来たら、しゃがんで忍び寄る
+    if (!L.arrived && d > 1.6) {
+      // 歩いて近づく（遠ければ走る）。動けていなければ諦める
+      if (Math.hypot(f.x - L.lx, f.z - L.lz) < 0.12) L.stuck += 0.25; else L.stuck = 0;
+      L.lx = f.x; L.lz = f.z;
+      if (L.stuck > 2.5) { b.known.delete(L.t); b.look = null; return false; }
+      b.input.yaw = yawTo(f, L.x, L.z);
+      b.input.forward = 1; b.input.strafe = 0; b.input.run = d > 12;
+      return true;
+    }
+    // 着いた：その場で左右を見回す
+    if (!L.arrived) { L.arrived = true; L.timer = 0; L.base = f.yaw; }
+    L.timer += 0.25;
+    b.input.forward = 0; b.input.strafe = 0; b.input.run = false;
+    b.input.yaw = L.base + Math.sin(L.timer * 1.3) * 95;
+    if (L.timer > SENSES.lookAround) { b.known.delete(L.t); b.look = null; }
+    return true;
+  }
+
   /** 考えて入力を決める（0.15〜0.3 秒ごと） */
   function think(world) {
     b.input.search = false;
@@ -170,7 +233,10 @@ export function createBot(fighter, rng, fighters) {
         return;
       }
     }
+    perceive(world, b.lastThink || 0.2);
     b.target = pickTarget();
+    if (b.target) b.look = null;
+    if (!b.look) setStance(f, 'stand');   // 探しに行っていなければ立つ（相手が見えたら立って戦う）
     // 近くに隠れている人の息遣いが聞こえたら、その場所を覚えて探す（息が荒いほど気づきやすい）
     if (!b.knownSpot) {
       for (const t of fighters) {
@@ -192,7 +258,7 @@ export function createBot(fighter, rng, fighters) {
     if (H && !b.route && b.knownSpot && !b.target) b.route = routeTo(b.knownSpot, 'search');
     b.lastX = f.x; b.lastZ = f.z;
     if (b.route) { followRoute(world); if (b.route?.why !== 'leave' || !b.target) return; b.route = null; }
-    if (!b.target) { wander(world); return; }
+    if (!b.target) { if (!investigate(world)) wander(world); return; }
     const t = b.target, d = Math.hypot(t.x - f.x, t.z - f.z), weapon = w();
     const lowHp = f.stats.hp < f.stats.maxHp * 0.35;
     b.input.run = d > 9;
@@ -278,7 +344,7 @@ export function createBot(fighter, rng, fighters) {
       b.dodgeCooldown -= dt;
       b.strafeTimer -= dt;
       if (b.strafeTimer <= 0) { b.strafeTimer = 1 + rng.next() * 2; b.strafeDir = rng.next() < 0.5 ? -1 : 1; }
-      if (b.thinkTimer <= 0) { b.thinkTimer = 0.15 + rng.next() * 0.15; think(world); }
+      if (b.thinkTimer <= 0) { b.lastThink = b.thinkTimer = 0.15 + rng.next() * 0.15; think(world); }
 
       // 隠れている・無防備なときは動かない
       if (f.hidden || f.helpless > 0) return 0;
@@ -301,8 +367,21 @@ export function createBot(fighter, rng, fighters) {
       // 向きはなめらかに変える（1 秒に 300 度まで）
       const dYaw = wrap(b.input.yaw - f.yaw);
       const turned = { ...b.input, yaw: f.yaw + Math.sign(dYaw) * Math.min(Math.abs(dYaw), 300 * dt) };
-      return moveFighter(f, turned, dt, world);
+      const mag = moveFighter(f, turned, dt, world);
+      f.gait = mag > 0.05 ? (turned.run && canRun(f) ? 'run' : 'walk') : 'still';   // 足音の大きさ（game/senses.js）
+      return mag;
     },
+    /** 攻撃された：攻撃した人の居場所が分かる（見えていなくても。遠くから射られたときなど） */
+    alert(attacker) {
+      if (!attacker || attacker === f || !attacker.alive) return;
+      const k = b.known.get(attacker);
+      if (!k?.seen) b.known.set(attacker, { x: attacker.x, y: attacker.y, z: attacker.z, age: 0, seen: false });
+    },
+    /** 確認用：気づいたことを全部忘れる */
+    forget() { b.known.clear(); b.look = null; b.target = null; },
+    /** 確認用：気づいている相手 */
+    get knows() { return [...b.known].map(([t, k]) => ({ name: t.name, seen: k.seen, age: +k.age.toFixed(1) })); },
+    get looking() { return b.look && { name: b.look.t.name, arrived: b.look.arrived }; },
     /** 戦闘の入力（combat.control に渡す） */
     get combatInput() {
       const i = b.input;

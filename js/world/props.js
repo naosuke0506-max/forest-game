@@ -185,6 +185,7 @@ export function createProps(app, config, seed, terrain, obstacles, types, zones 
     return { v, x, z, mat, width, yaw, s, size: vm.size };
   }
 
+  const blockers = [];   // 視線をさえぎる物（岩・切り株・倒木・焚き火）：{ x, z, r, y0, y1 }
   for (const id of PROP_TYPES) {
     const type = types[id];
     if (!type) continue;
@@ -204,6 +205,16 @@ export function createProps(app, config, seed, terrain, obstacles, types, zones 
         if (!p) continue;
         lists[p.v].push(p);
         // 岩と切り株は当たり判定。それ以外は場所の重なりを避けるためだけに小さく登録する
+        // ぶつかる物は、視線もさえぎる（bot の目。game/sight.js）：縦の円柱として覚えておく
+        if (rule.collide) {
+          const g = terrain.heightAt(p.x, p.z), hh = p.size[1] * p.s * (1 - rule.sink);
+          if (rule.collideAlong) {
+            const [sx, , sz] = p.size, a = (p.yaw * Math.PI) / 180;
+            const long = Math.max(sx, sz) * p.s, rad = Math.max(0.2, p.size[1] * p.s * 0.4);
+            const dir = sz >= sx ? [Math.sin(a), Math.cos(a)] : [Math.cos(a), -Math.sin(a)];
+            for (let t = -long / 2 + rad; t <= long / 2 - rad + 0.01; t += rad) blockers.push({ x: p.x + dir[0] * t, z: p.z + dir[1] * t, r: rad, y0: g - 0.2, y1: g + hh });
+          } else blockers.push({ x: p.x, z: p.z, r: p.width * rule.collide, y0: g - 0.2, y1: g + hh });
+        }
         if (rule.collideAlong) {
           // 細長い物：長い向き（模型の x か z の長い方）に沿って円を並べる
           const [sx, , sz] = p.size, a = (p.yaw * Math.PI) / 180;
@@ -335,6 +346,7 @@ export function createProps(app, config, seed, terrain, obstacles, types, zones 
       updateStreams(camPos.x, camPos.z);
       assign(camPos.x, camPos.z, camFwd ? camFwd.x / fl : 0, camFwd ? camFwd.z / fl : 1);
     },
+    blockers,
     /** 確認用：置いた場所の一覧（stream でない物） */
     positions: (id) => groups.filter((g) => g.id === id).flatMap((g) => g.list.map((q) => ({ x: q.x, z: q.z }))),
     counts: Object.fromEntries(PROP_TYPES.map((id) => [id, groups.filter((g) => g.id === id).reduce((s, g) => s + g.list.length, 0)])),

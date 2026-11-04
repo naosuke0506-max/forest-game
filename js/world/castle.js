@@ -14,16 +14,17 @@ import { well, barrel, bench, hay, woodpile } from './village-props.js';
 /**
  * 木の柵（杭と 2 本の横木）を a から b へ。杭の間は約 2.4m
  */
-function fenceRun(B, terrain, a, b, solidLine) {
+function fenceRun(B, terrain, a, b, solidLine, sight) {
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
   const n = Math.max(1, Math.round(len / 2.4));
   const yaw = (Math.atan2(b[0] - a[0], b[1] - a[1]) * 180) / Math.PI;
   for (let i = 0; i <= n; i++) {
     const x = a[0] + ((b[0] - a[0]) * i) / n, z = a[1] + ((b[1] - a[1]) * i) / n;
     box(B, 'wood', x, terrain.heightAt(x, z) - 0.2, z, 0.2, 0.2, 1.65, yaw + ((i * 37) % 11) - 5);
+    sight?.addCyl(x, z, 0.11, terrain.heightAt(x, z) - 0.2, terrain.heightAt(x, z) + 1.45);
   }
   const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2, y = terrain.heightAt(mx, mz);
-  for (const h of [0.45, 1.05]) box(B, 'wood', mx, y + h, mz, 0.08, len, 0.13, yaw);
+  for (const h of [0.45, 1.05]) { box(B, 'wood', mx, y + h, mz, 0.08, len, 0.13, yaw); sight?.addYawBox(mx, y + h, mz, 0.08, len, 0.13, yaw); }
   solidLine(a[0], a[1], b[0], b[1], 0.45);
 }
 
@@ -33,7 +34,7 @@ function fenceRun(B, terrain, a, b, solidLine) {
  * @param {object} obstacles 当たり判定（柵や家を通れないように円を並べる）
  * @param {object} floors 歩ける床（world/floors.js。家の床と階段を登録する）
  */
-export function createVillage(app, config, terrain, obstacles, zones, floors) {
+export function createVillage(app, config, terrain, obstacles, zones, floors, sight = null) {
   const B = builder();
   const C = zones.castle;
   const footprints = [];   // 地図に描く形：{ type: 'rect', x, z, w, d, yaw } / { type: 'circle', x, z, r } / { type: 'line', pts }
@@ -58,11 +59,15 @@ export function createVillage(app, config, terrain, obstacles, zones, floors) {
     const n = Math.max(1, Math.round(Math.hypot(a1 - a0, b1 - b0) / 12));   // 12m ほどごとに区切り、地面に沿わせる
     for (let k = i ? 1 : 0; k <= n; k++) pts.push(at(a0 + ((a1 - a0) * k) / n, b0 + ((b1 - b0) * k) / n));
   }
-  for (let i = 0; i < pts.length - 1; i++) fenceRun(B, terrain, pts[i], pts[i + 1], solidLine);
+  for (let i = 0; i < pts.length - 1; i++) fenceRun(B, terrain, pts[i], pts[i + 1], solidLine, sight);
   footprints.push({ type: 'line', pts });
   // 入り口の門：太く高い門柱 2 本（高さ 5m）、上の横木（4.4m）と、わらぶきの小さな屋根
   const gL = pts[pts.length - 1], gR = pts[0];
-  for (const p of [gL, gR]) { box(B, 'wood', p[0], terrain.heightAt(p[0], p[1]) - 0.3, p[1], 0.42, 0.42, 5.0, yawF); solid(p[0], p[1], 0.5); }
+  for (const p of [gL, gR]) {
+    const gy0 = terrain.heightAt(p[0], p[1]);
+    box(B, 'wood', p[0], gy0 - 0.3, p[1], 0.42, 0.42, 5.0, yawF); solid(p[0], p[1], 0.5);
+    sight?.addCyl(p[0], p[1], 0.4, gy0 - 0.3, gy0 + 4.7);
+  }
   { const mx = (gL[0] + gR[0]) / 2, mz = (gL[1] + gR[1]) / 2, len = Math.hypot(gR[0] - gL[0], gR[1] - gL[1]);
     const gy = terrain.heightAt(mx, mz);
     box(B, 'wood', mx, gy + 4.35, mz, len + 1.2, 0.34, 0.3, yawF);
@@ -90,7 +95,7 @@ export function createVillage(app, config, terrain, obstacles, zones, floors) {
   //      奥と入り口の側にもう一列ずつ。扉は通りの側へ向ける。幅・奥行き・階の数・屋根・壁の色は家ごとに違う ----
   const houses = [];
   const hides = [];   // 隠れ場所（ベッドの下・タンスの中）
-  const reg = { floors, solid, hides };
+  const reg = { floors, solid, hides, sight };
   // 列：front は扉のある面の位置（表通りからの前後 fx）、face は扉の向き（+1 は入り口側、-1 は奥側）、from は表通りから空ける幅
   const rows = [
     { front: 4.6, face: -1, from: 6.0, maxD: 8.6 },    // 横の通りの入り口側（扉は奥へ向く）
@@ -113,8 +118,12 @@ export function createVillage(app, config, terrain, obstacles, zones, floors) {
     if (k < 0.4) {
       // 扉の横に樽 1〜2 つ
       const q = put(ps * (w / 2 - 0.45), d / 2 + 0.55, 0.36);
-      barrel(B, q[0], terrain.heightAt(q[0], q[2]) - 0.02, q[2]);
-      if (rndProp.next() < 0.5) { const q2 = put(ps * (w / 2 - 1.1), d / 2 + 0.5, 0.33); barrel(B, q2[0], terrain.heightAt(q2[0], q2[2]) - 0.02, q2[2], 0.27, 0.74); }
+      const by = terrain.heightAt(q[0], q[2]);
+      barrel(B, q[0], by - 0.02, q[2]); sight?.addCyl(q[0], q[2], 0.32, by - 0.02, by + 0.84);
+      if (rndProp.next() < 0.5) {
+        const q2 = put(ps * (w / 2 - 1.1), d / 2 + 0.5, 0.33), by2 = terrain.heightAt(q2[0], q2[2]);
+        barrel(B, q2[0], by2 - 0.02, q2[2], 0.27, 0.74); sight?.addCyl(q2[0], q2[2], 0.28, by2 - 0.02, by2 + 0.72);
+      }
     } else if (k < 0.75 && w >= 5.4) {
       // 壁に沿った長椅子
       const lx = ps * (w / 2 - 1.15);
@@ -127,7 +136,9 @@ export function createVillage(app, config, terrain, obstacles, zones, floors) {
       const ss = rndProp.next() < 0.5 ? -1 : 1, z0 = -d / 2 + 0.6, z1 = Math.min(d / 2 - 1.0, z0 + 1.6 + rndProp.next() * 0.8);
       for (let lz = z0 + 0.3; lz <= z1 - 0.2; lz += 0.55) put(ss * (w / 2 + 0.6), lz, 0.42);
       const gp = F.at(ss * (w / 2 + 0.5), 0, (z0 + z1) / 2);
-      woodpile(B, frame(x, terrain.heightAt(gp[0], gp[2]), z, yaw), yaw, ss, w / 2, z0, z1, rndProp);
+      const wy = terrain.heightAt(gp[0], gp[2]);
+      woodpile(B, frame(x, wy, z, yaw), yaw, ss, w / 2, z0, z1, rndProp);
+      { const c = F.at(ss * (w / 2 + 0.5), 0, (z0 + z1) / 2); sight?.addYawBox(c[0], wy, c[2], 0.6, z1 - z0, 0.68, yaw); }
     }
     // 裏に干し草
     if (rndProp.next() < 0.3) {
@@ -135,6 +146,7 @@ export function createVillage(app, config, terrain, obstacles, zones, floors) {
       put(lx, -d / 2 - 0.85, 0.6);
       const q = F.at(lx, 0, -d / 2 - 0.85);
       hay(B, frame(q[0], terrain.heightAt(q[0], q[2]) - 0.03, q[2], yaw), yaw, 0, 0, rndProp);
+      sight?.addYawBox(q[0], terrain.heightAt(q[0], q[2]) - 0.03, q[2], 1.6, 0.5, 0.46, yaw);
     }
   }
   for (const row of rows) for (const side of [-1, 1]) {
@@ -180,6 +192,7 @@ export function createVillage(app, config, terrain, obstacles, zones, floors) {
     const [wx, wz] = at(-1.5, 2);
     well(B, wx, terrain.heightAt(wx, wz), wz);
     solid(wx, wz, 1.3);
+    sight?.addCyl(wx, wz, 1.15, terrain.heightAt(wx, wz) - 0.2, terrain.heightAt(wx, wz) + 0.85);
     footprints.push({ type: 'circle', x: wx, z: wz, r: 1.1 });
   }
 
