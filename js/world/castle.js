@@ -8,20 +8,8 @@ import * as pc from 'playcanvas';
 import { createMesh, sceneBudget } from '../core/mesh-utils.js';
 import { loadTextureSet } from './materials.js';
 import { createRandom } from '../core/random.js';
-import { SURFACES, builder, frame, box, buildHouse } from './house-builder.js';
-
-/** 井戸：石の丸い縁と、木の柱と小さな屋根 */
-function well(B, cx, y0, cz) {
-  const sides = 12;
-  for (let i = 0; i < sides; i++) {
-    const a = ((i + 0.5) / sides) * Math.PI * 2;
-    box(B, 'stone', cx + Math.cos(a) * 0.9, y0, cz + Math.sin(a) * 0.9, 0.5, 0.55, 0.85, (-a * 180) / Math.PI);
-  }
-  for (const s of [-1, 1]) box(B, 'wood', cx + s * 0.95, y0, cz, 0.16, 0.16, 2.2, 0);
-  box(B, 'wood', cx, y0 + 2.1, cz, 2.3, 0.14, 0.14, 0);
-  B.slope('thatch', [cx - 1.3, y0 + 2.0, cz + 0.9], [cx + 1.3, y0 + 2.0, cz + 0.9], [cx + 1.3, y0 + 2.6, cz], [cx - 1.3, y0 + 2.6, cz], [0, 0.83, 0.55]);
-  B.slope('thatch', [cx + 1.3, y0 + 2.0, cz - 0.9], [cx - 1.3, y0 + 2.0, cz - 0.9], [cx - 1.3, y0 + 2.6, cz], [cx + 1.3, y0 + 2.6, cz], [0, 0.83, -0.55]);
-}
+import { SURFACES, builder, frame, box, obox, buildHouse } from './house-builder.js';
+import { well, barrel, bench, hay, woodpile } from './village-props.js';
 
 /**
  * 木の柵（杭と 2 本の横木）を a から b へ。杭の間は約 2.4m
@@ -82,8 +70,20 @@ export function createVillage(app, config, terrain, obstacles, zones, floors) {
     for (const s of [-1, 1]) { const q = [mx + r[0] * s * (len / 2 - 0.5), mz + r[1] * s * (len / 2 - 0.5)]; box(B, 'wood', q[0], gy + 3.6, q[1], 0.14, 0.14, 0.75, yawF + s * 40); }   // 方杖
     const G = frame(mx, gy, mz, yawF), hw = len / 2 + 1.0;   // x は門の幅の向き、z は門をくぐる向き
     const R = (x, y, z) => G.at(x, y, z);
-    B.slope('thatch', R(-hw, 4.55, 0.85), R(hw, 4.55, 0.85), R(hw, 5.45, 0), R(-hw, 5.45, 0), G.dir(0, 0.69, 0.72));
-    B.slope('thatch', R(hw, 4.55, -0.85), R(-hw, 4.55, -0.85), R(-hw, 5.45, 0), R(hw, 5.45, 0), G.dir(0, 0.69, -0.72));
+    // わらぶきの屋根（厚み付き）と太い棟
+    for (const s of [-1, 1]) {
+      const a = G.dir(0, -0.9, s * 0.86), nn = G.dir(0, 0.69, s * 0.72), al = Math.hypot(0.9, 0.86);
+      const c = R(0, 5.0, s * 0.43);
+      obox(B, 'thatch', [c[0] + nn[0] * 0.1, c[1] + nn[1] * 0.1, c[2] + nn[2] * 0.1], G.dir(1, 0, 0), [a[0] / al, a[1] / al, a[2] / al], nn, hw * 2, Math.hypot(0.85, 0.9) + 0.1, 0.22, 1);
+    }
+    { const q = R(0, 5.64, 0), Q = Math.SQRT1_2; obox(B, 'thatch', q, G.dir(1, 0, 0), G.dir(0, Q, Q), G.dir(0, Q, -Q), hw * 2 + 0.1, 0.34, 0.34, 0.8); }
+    // 門柱の根元の石と、鉄の帯
+    for (const p of [gL, gR]) {
+      const y = terrain.heightAt(p[0], p[1]);
+      box(B, 'stone', p[0], y - 0.3, p[1], 0.78, 0.78, 0.75, yawF, { shade: 0.95, grad: [0.75, 1] });
+      box(B, 'stone', p[0], y + 0.45, p[1], 0.86, 0.86, 0.1, yawF, { shade: 1.1, bottom: true });
+      for (const hh of [1.2, 3.2]) box(B, 'cloth', p[0], y + hh, p[1], 0.45, 0.45, 0.08, yawF, { shade: [0.11, 0.1, 0.095] });
+    }
   }
 
   // ---- 家：入り口からまっすぐ奥へ向かう表通りと、真ん中で交わる横の通り。横の通りの両側に家を並べ、
@@ -103,6 +103,40 @@ export function createVillage(app, config, terrain, obstacles, zones, floors) {
   // 箱を置く場所（家の扉の横。中身は game/pickups.js が決める）。家の並びを変えないよう、別の乱数で選ぶ
   const crateSpots = [];
   const rndCrate = createRandom(config.seed + 334);
+  // 家の周りの小物（樽・長椅子・薪の山・干し草）。家の並びと箱の場所を変えないよう、別の乱数で選ぶ
+  const rndProp = createRandom(config.seed + 335);
+  function houseProps(x, y0, z, yaw, w, d, crateSide) {
+    const F = frame(x, y0, z, yaw);
+    const ps = crateSide ? -crateSide : rndProp.next() < 0.5 ? -1 : 1;   // 箱の無い側
+    const put = (lx, lz, r) => { const q = F.at(lx, 0, lz); solid(q[0], q[2], r); return q; };
+    const k = rndProp.next();
+    if (k < 0.4) {
+      // 扉の横に樽 1〜2 つ
+      const q = put(ps * (w / 2 - 0.45), d / 2 + 0.55, 0.36);
+      barrel(B, q[0], terrain.heightAt(q[0], q[2]) - 0.02, q[2]);
+      if (rndProp.next() < 0.5) { const q2 = put(ps * (w / 2 - 1.1), d / 2 + 0.5, 0.33); barrel(B, q2[0], terrain.heightAt(q2[0], q2[2]) - 0.02, q2[2], 0.27, 0.74); }
+    } else if (k < 0.75 && w >= 5.4) {
+      // 壁に沿った長椅子
+      const lx = ps * (w / 2 - 1.15);
+      for (const dx of [-0.45, 0.45]) put(lx + dx, d / 2 + 0.42, 0.28);
+      const q = F.at(lx, 0, d / 2 + 0.42);
+      bench(B, frame(q[0], terrain.heightAt(q[0], q[2]), q[2], yaw), yaw, 0, 0);
+    }
+    // 横の壁に薪の山（屋根付き）
+    if (rndProp.next() < 0.45) {
+      const ss = rndProp.next() < 0.5 ? -1 : 1, z0 = -d / 2 + 0.6, z1 = Math.min(d / 2 - 1.0, z0 + 1.6 + rndProp.next() * 0.8);
+      for (let lz = z0 + 0.3; lz <= z1 - 0.2; lz += 0.55) put(ss * (w / 2 + 0.6), lz, 0.42);
+      const gp = F.at(ss * (w / 2 + 0.5), 0, (z0 + z1) / 2);
+      woodpile(B, frame(x, terrain.heightAt(gp[0], gp[2]), z, yaw), yaw, ss, w / 2, z0, z1, rndProp);
+    }
+    // 裏に干し草
+    if (rndProp.next() < 0.3) {
+      const lx = (rndProp.next() - 0.5) * (w - 2.4);
+      put(lx, -d / 2 - 0.85, 0.6);
+      const q = F.at(lx, 0, -d / 2 - 0.85);
+      hay(B, frame(q[0], terrain.heightAt(q[0], q[2]) - 0.03, q[2], yaw), yaw, 0, 0, rndProp);
+    }
+  }
   for (const row of rows) for (const side of [-1, 1]) {
     let s = row.from;
     for (;;) {
@@ -116,16 +150,19 @@ export function createVillage(app, config, terrain, obstacles, zones, floors) {
       const yaw = yawF + (row.face > 0 ? 0 : 180) + (rnd.next() - 0.5) * 3;
       const roof = rnd.next() < 0.55 ? 'thatch' : 'tiles';
       const y0 = terrain.heightAt(x, z);
-      buildHouse(B, { cx: x, cz: z, y0, yaw, w, d, stories: two ? 2 : 1, roof, wall: walls[i++ % walls.length], rnd }, reg);
+      buildHouse(B, { cx: x, cz: z, y0, yaw, w, d, stories: two ? 2 : 1, roof, wall: walls[i++ % walls.length], rnd, deco: createRandom(config.seed + 1000 + houses.length) }, reg);
       houses.push({ x, z, w, d, yaw, stories: two ? 2 : 1 });
       footprints.push({ type: 'rect', x, z, w, d, yaw, roof });
+      let crateSide = 0;
       if (rndCrate.next() < 0.5) {
         const F = frame(x, 0, z, yaw);
         const cs = rndCrate.next() < 0.5 ? -1 : 1;
         const q = F.at(cs * (w / 2 - 0.6), 0, d / 2 + 0.95);
         crateSpots.push({ x: q[0], z: q[2], yaw: yaw + (rndCrate.next() - 0.5) * 30 });
         solid(q[0], q[2], 0.45);
+        crateSide = cs;
       }
+      houseProps(x, y0, z, yaw, w, d, crateSide);
       s += w + 2.0 + rnd.next() * 2.6;
     }
   }
