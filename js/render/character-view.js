@@ -138,7 +138,9 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     update(dt) {
       const target = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z));
       groundY += (target - groundY) * Math.min(1, dt * 12);
-      root.setPosition(fighter.x, groundY, fighter.z);
+      // 壁裏隠れ：背中が壁に付くように、壁の側へ少し寄せて描く（位置の計算は壁から離れた所）
+      const cv = fighter.cover?.seg;
+      root.setPosition(fighter.x - (cv ? cv.nx * 0.14 : 0), groundY, fighter.z - (cv ? cv.nz * 0.14 : 0));
       root.setEulerAngles(0, fighter.yaw, 0);
 
       // 質感の画像を消さない程度に、うっすら赤くする。倒れた後は光らせない
@@ -213,6 +215,8 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       if (fighter.guarding && has('guard')) { play('guard', 1); return; }
 
       const sc = meta.scale;
+      // 壁裏隠れ：壁に背を付けて、覗く向き（左・右）の動き
+      if (fighter.cover && has('cover_l')) { play(fighter.cover.side === 'r' ? 'cover_r' : 'cover_l', 1, 0.25); return; }
       // しゃがむ・伏せる：伏せる・起き上がる途中はその動きを 1 回。伏せていれば止まって肘をつくか這う、しゃがんでいればその場か歩く
       if (stanceClips) {
         if (fighter.stanceT > 0) {

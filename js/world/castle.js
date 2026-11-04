@@ -95,7 +95,8 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
   //      奥と入り口の側にもう一列ずつ。扉は通りの側へ向ける。幅・奥行き・階の数・屋根・壁の色は家ごとに違う ----
   const houses = [];
   const hides = [];   // 隠れ場所（ベッドの下・タンスの中）
-  const reg = { floors, solid, hides, sight };
+  const covers = [];  // 壁裏隠れの線（家の外の壁と中の壁。game/cover.js）
+  const reg = { floors, solid, hides, sight, covers };
   // 列：front は扉のある面の位置（表通りからの前後 fx）、face は扉の向き（+1 は入り口側、-1 は奥側）、from は表通りから空ける幅
   const rows = [
     { front: 4.6, face: -1, from: 6.0, maxD: 8.6 },    // 横の通りの入り口側（扉は奥へ向く）
@@ -231,5 +232,5 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
       m.update();
     });
   }
-  return { houses, triangles: tris, footprints, crateSpots, hides, insideHouse };
+  return { houses, triangles: tris, footprints, crateSpots, hides, covers, insideHouse };
 }
