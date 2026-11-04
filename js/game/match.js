@@ -2,6 +2,7 @@
 // PlayCanvas に依存しない「計算だけ」の部分（後でオンライン化するとき、サーバーにそのまま移せるように）
 import { PHASES, POINTS, REWARDS, REWARD_PICK_TIME, CHARACTERS, COMBAT } from './data.js';
 import { initInventory } from './craft.js';
+import { initStance, resetStance } from './stance.js';
 
 /** 戦う人（人間・bot 共通の記録） */
 export function createFighter({ id, name, char, isPlayer, color }) {
@@ -34,6 +35,7 @@ export function createFighter({ id, name, char, isPlayer, color }) {
     rewards: [],             // 選んだ報酬
   };
   initInventory(f);          // 素材・持っている武器・強化の段階（game/craft.js）
+  initStance(f);             // 立つ・しゃがむ・伏せる（game/stance.js）
   return f;
 }
 
@@ -83,6 +85,7 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
     eliminate(victim, killer = null) {
       if (m.state !== 'running' || !victim.alive) return;
       victim.alive = false;
+      resetStance(victim);
       victim.pendingReward = null;
       if (killer && killer !== victim) {
         killer.kills++;

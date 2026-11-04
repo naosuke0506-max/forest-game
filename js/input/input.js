@@ -34,13 +34,42 @@ export function createInput(layer, stickEl, config) {
     el.addEventListener('pointercancel', up);
     el.addEventListener('lostpointercapture', up);
   }
+  // しゃがむボタン（と PC の X）：押して離す＝しゃがむ／立つ、長押し＝伏せる。押した・長押しした瞬間を 1 回だけ伝える
+  const HOLD = 0.45;   // 長押しと見なす時間（秒。game/data.js の STANCE_TIME.hold と同じ）
+  const stance = { held: false, fired: false, tap: false, hold: false, downAt: 0 };
+  // 長押しは時計で決める（押したまま 0.45 秒で伏せる。離さなくてよい）。毎フレームの読み取りでも時間を見る
+  // （画面がとても忙しいと時計が遅れるため）。どちらより先に離したら「押した」
+  let holdTimer = 0;
+  const stanceDown = () => {
+    if (stance.held) return;
+    stance.held = true; stance.fired = false; stance.downAt = performance.now();
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(() => { if (stance.held && !stance.fired) { stance.fired = true; stance.hold = true; } }, HOLD * 1000);
+  };
+  const stanceUp = () => {
+    if (!stance.held) return;
+    stance.held = false; clearTimeout(holdTimer);
+    if (!stance.fired) stance.tap = true;
+  };
+  {
+    const el = document.getElementById('btn-stance');
+    if (el) {
+      el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.classList.add('down'); try { el.setPointerCapture?.(e.pointerId); } catch { /* 指がもう離れていたら何もしない */ } stanceDown(); });
+      const up = () => { el.classList.remove('down'); stanceUp(); };
+      el.addEventListener('pointerup', up);
+      el.addEventListener('pointercancel', up);
+      el.addEventListener('lostpointercapture', up);
+    }
+    window.addEventListener('keydown', (e) => { if (e.code === 'KeyX' && !e.repeat) stanceDown(); });
+    window.addEventListener('keyup', (e) => { if (e.code === 'KeyX') stanceUp(); });
+  }
   const keyOf = { KeyJ: 'attack', KeyK: 'left', KeyL: 'dodge', Space: 'dodge', KeyE: 'use', KeyF: 'search' };
   window.addEventListener('keydown', (e) => { if (keyOf[e.code] && !e.repeat) { keys[keyOf[e.code]] = true; latched[keyOf[e.code]] = true; } });
   window.addEventListener('keyup', (e) => { if (keyOf[e.code]) keys[keyOf[e.code]] = false; });
-  const resetButtons = () => { for (const o of [held, keys]) o.attack = o.left = o.dodge = o.use = o.search = false; };
+  const resetButtons = () => { for (const o of [held, keys]) o.attack = o.left = o.dodge = o.use = o.search = false; stance.held = false; stance.tap = stance.hold = false; };
   document.addEventListener('visibilitychange', resetButtons);
 
-  const frame = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, attack: false, left: false, dodge: false, use: false, search: false };
+  const frame = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, attack: false, left: false, dodge: false, use: false, search: false, stance: null };
 
   /** 1 フレーム分の入力を取り出す（向きの変化量はここで 0 に戻す） */
   function read() {
@@ -59,6 +88,10 @@ export function createInput(layer, stickEl, config) {
     frame.use = held.use || keys.use || latched.use;
     frame.search = held.search || keys.search || latched.search;
     latched.attack = latched.left = latched.dodge = latched.use = latched.search = false;
+    // しゃがむボタン：'tap'（押して離した）・'hold'（長押しになった）・null
+    if (stance.held && !stance.fired && performance.now() - stance.downAt >= HOLD * 1000) { stance.fired = true; stance.hold = true; }
+    frame.stance = stance.hold ? 'hold' : stance.tap ? 'tap' : null;
+    stance.tap = stance.hold = false;
     return frame;
   }
 

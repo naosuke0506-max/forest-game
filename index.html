@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>静かな森</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-04.1';</script>
+<script>window.__BUILD = '2026-11-04.2';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -31,6 +31,7 @@
 <link rel="modulepreload" href="./js/world/furniture.js">
 <link rel="modulepreload" href="./js/world/village-props.js">
 <link rel="modulepreload" href="./js/world/floors.js">
+<link rel="modulepreload" href="./js/game/sight.js">
 <link rel="modulepreload" href="./js/world/ground-cover.js">
 <link rel="preload" as="image" type="image/webp" href="./assets/trees_blender/grass.webp">
 <link rel="preload" as="fetch" href="./assets/trees_blender/bush_lod1.glb" crossorigin>
@@ -184,6 +185,8 @@
   <button id="btn-left" class="act-btn left" type="button">左手</button>
   <button id="btn-dodge" class="act-btn dodge" type="button">回避</button>
   <button id="btn-attack" class="act-btn attack" type="button">攻撃</button>
+  <!-- 姿勢：押す＝しゃがむ／立つ、長押し＝伏せる -->
+  <button id="btn-stance" class="act-btn stance" type="button">しゃがむ</button>
   <!-- 素材の山・箱の近くで出る：拾う・開ける -->
   <button id="btn-use" class="act-btn use" type="button" hidden>拾う</button>
   <!-- ベッド・タンスの近くで出る：探す -->

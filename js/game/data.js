@@ -14,20 +14,21 @@
  *   sidearm    ：持ち替える近接武器（left が switch のとき）
  *   crafts     ：クラフトで作れる・強化できる武器（WEAPONS の名前。今ある武器のうち、そのキャラが扱える物）
  *   armorName  ：専用の防具の名前（防具は 1 つだけ。クラフトで強化する）
+ *   sight      ：見える距離（m）。bot がこの距離まで目で気づける（兜の覗き穴が狭いほど短い。game/senses.js）
  * 防具はキャラごとに 1 つ（強化は手順 4）。扱える武器の全体は docs/DESIGN.md
  */
 export const CHARACTERS = {
-  shield:  { name: '盾剣騎士', model: 'shield', weight: 'medium', left: 'guard', leftLabel: '防御',  weaponClass: 'shieldsword', weapon: 'armingsword', crafts: ['armingsword', 'mace'], armorName: '青鋼の板金鎧', shield: true,  armor: 0.85, speed: 1.0,  maxHp: 105,
+  shield:  { name: '盾剣騎士', model: 'shield', weight: 'medium', left: 'guard', leftLabel: '防御',  weaponClass: 'shieldsword', weapon: 'armingsword', crafts: ['armingsword', 'mace'], armorName: '青鋼の板金鎧', shield: true,  armor: 0.85, speed: 1.0,  maxHp: 105, sight: 40,
              desc: '盾と片手武器。受けが固く、攻守のつり合いがよい（中装より少し軽い鎧）' },
-  sword:   { name: '剣騎士',   model: 'sword', weight: 'medium', left: 'heavy', leftLabel: '強攻撃',   weaponClass: 'sword',       weapon: 'longsword',   crafts: ['longsword', 'armingsword'], armorName: '十字兜の鎧', shield: false, armor: 0.8,  speed: 0.97, maxHp: 110,
+  sword:   { name: '剣騎士',   model: 'sword', weight: 'medium', left: 'heavy', leftLabel: '強攻撃',   weaponClass: 'sword',       weapon: 'longsword',   crafts: ['longsword', 'armingsword'], armorName: '十字兜の鎧', shield: false, armor: 0.8,  speed: 0.97, maxHp: 110, sight: 35,
              desc: '両手の剣と二刀流。振りが大きく、広く斬れる（中装より少し重い鎧）' },
-  polearm: { name: '長柄騎士', model: 'polearm', weight: 'heavy', left: 'heavy', leftLabel: 'なぎ払い', weaponClass: 'polearm',     weapon: 'spear',       crafts: ['spear'], armorName: '鋲打ちの重鎧', shield: false, armor: 0.7,  speed: 0.9,  maxHp: 120,
+  polearm: { name: '長柄騎士', model: 'polearm', weight: 'heavy', left: 'heavy', leftLabel: 'なぎ払い', weaponClass: 'polearm',     weapon: 'spear',       crafts: ['spear'], armorName: '鋲打ちの重鎧', shield: false, armor: 0.7,  speed: 0.9,  maxHp: 120, sight: 35,
              desc: '長柄の武器。間合いが一番長く、近づく前に突ける（重めの重装）' },
-  blunt:   { name: '打撃騎士', model: 'blunt', weight: 'heavy', left: 'heavy', leftLabel: '叩きつけ',   weaponClass: 'blunt',       weapon: 'mace',        crafts: ['mace'], armorName: '大兜の鎧', shield: false, armor: 0.75, speed: 0.92, maxHp: 120,
+  blunt:   { name: '打撃騎士', model: 'blunt', weight: 'heavy', left: 'heavy', leftLabel: '叩きつけ',   weaponClass: 'blunt',       weapon: 'mace',        crafts: ['mace'], armorName: '大兜の鎧', shield: false, armor: 0.75, speed: 0.92, maxHp: 120, sight: 30,
              desc: '打撃武器。一撃が重く、防御の上からも響く（重装より少し軽い鎧）' },
-  archer:  { name: '弓兵',     model: 'archer', weight: 'light', left: 'switch', leftLabel: '持ち替え',  weaponClass: 'bow',         weapon: 'longbow', sidearm: 'dagger', crafts: ['longbow', 'dagger'], armorName: '革と鎖の軽鎧', shield: false, armor: 0.95, speed: 1.05, maxHp: 90,
+  archer:  { name: '弓兵',     model: 'archer', weight: 'light', left: 'switch', leftLabel: '持ち替え',  weaponClass: 'bow',         weapon: 'longbow', sidearm: 'dagger', crafts: ['longbow', 'dagger'], armorName: '革と鎖の軽鎧', shield: false, armor: 0.95, speed: 1.05, maxHp: 90, sight: 55,
              desc: '弓で遠くから射る。引くほど強い。近寄られると弱い（軽装より少し重い）' },
-  cleric:  { name: '聖職者',   model: 'cleric', weight: 'light', left: 'heavy', leftLabel: '強攻撃',  weaponClass: 'cleric',      weapon: 'mace',        crafts: ['mace'], armorName: '聖職者の衣', shield: false, armor: 1.0,  speed: 1.08, maxHp: 95,
+  cleric:  { name: '聖職者',   model: 'cleric', weight: 'light', left: 'heavy', leftLabel: '強攻撃',  weaponClass: 'cleric',      weapon: 'mace',        crafts: ['mace'], armorName: '聖職者の衣', shield: false, armor: 1.0,  speed: 1.08, maxHp: 95, sight: 45,
              desc: '聖なる奇跡を扱う（奇跡は後で追加）。今はメイスで戦う（軽装）' },
 };
 
@@ -44,6 +45,35 @@ export const WEAPONS = {
   spear:     { name: 'スピア',       kind: 'melee', damage: 22, reach: 3.1, arc: 34,  windup: 0.22, recovery: 0.30, stamina: 12, guardPierce: 0.0 },
   dagger:    { name: 'ダガー',       kind: 'melee', damage: 14, reach: 1.5, arc: 90,  windup: 0.16, recovery: 0.26, stamina: 8,  guardPierce: 0.0 },
   longbow:   { name: 'ロングボウ',   kind: 'bow',   damage: 30, drawTime: 0.75, minDraw: 0.2, speed: 48, stamina: 8, reach: 1.2 },
+};
+
+/**
+ * 姿勢：立つ・しゃがむ・伏せる（1 つのボタン：押す＝しゃがむ／立つ、長押し＝伏せる）
+ *   eye：目の高さ（m）、height：体の高さ（bot から見える割合を数えるのに使う）、speed：歩く速さの倍率（走れない）
+ *   noise：足音の大きさの倍率（bot に聞こえる距離）
+ */
+export const STANCES = {
+  stand:  { name: '立つ',     eye: 1.6,  height: 1.75, speed: 1,    noise: 1 },
+  crouch: { name: 'しゃがむ', eye: 1.05, height: 1.15, speed: 0.5,  noise: 0.35 },
+  prone:  { name: '伏せる',   eye: 0.32, height: 0.45, speed: 0.22, noise: 0.15 },
+};
+/** 伏せる・起き上がるのにかかる時間（秒。その間は動けない）。長押しと見なす時間 */
+export const STANCE_TIME = { down: 0.7, up: 0.7, hold: 0.45 };
+
+/**
+ * bot の目と耳（game/senses.js）
+ *   目：前の fov 度の中で、キャラの見える距離（CHARACTERS の sight）まで。体の visible 以上が直接見えれば気づく
+ *   耳：音が届く距離（m）の中にいれば気づき、音のした所を覚える。足音は歩き方・姿勢・鎧の重さで変わる
+ *   見失ったら：最後に見た（聞いた）所へ行き、lookAround 秒見回す。memory 秒たったら忘れる
+ */
+export const SENSES = {
+  fov: 120,
+  visible: 0.5,
+  memory: 25,
+  lookAround: 4,
+  steps: { run: 22, walk: 10 },
+  weight: { light: 0.8, medium: 1, heavy: 1.3 },
+  noise: { swing: 12, hit: 25, dodge: 9, bow: 10, crate: 10, pickup: 5, craft: 6, search: 8, hide: 4 },
 };
 
 /**

@@ -5,6 +5,7 @@ import { WEAPONS, COMBAT, DODGE, HEAVY } from './data.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 import { upgradeOf } from './craft.js';
 import { SEARCH_TIME } from './hiding.js';
+import { setStance, updateStance, stanceShape } from './stance.js';
 
 // 隠れる・探すに関わる動き
 const FINISH_REACH = 2.4;   // 致命の一撃が届く近さ（無防備な相手まで m）
@@ -177,7 +178,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     for (const t of fighters) {
       if (t === p.owner || !t.alive || t.hidden) continue;
       const g = yOf(t);
-      if (p.y < g || p.y > g + COMBAT.bodyHeight) continue;
+      if (p.y < g || p.y > g + stanceShape(t).height) continue;   // しゃがむ・伏せると体が低い
       const sx = p.x - ox, sz = p.z - oz, len2 = sx * sx + sz * sz || 1e-6;
       const k = Math.max(0, Math.min(1, ((t.x - ox) * sx + (t.z - oz) * sz) / len2));
       if (Math.hypot(ox + sx * k - t.x, oz + sz * k - t.z) <= COMBAT.bodyRadius) {
@@ -236,6 +237,15 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         }
         return;
       }
+      // 姿勢：伏せる・起き上がる途中は何もできない。伏せているときは、攻撃・左手・回避を押すと起き上がる（その押下では何もしない）。
+      // しゃがんでいれば、すぐ立って、そのまま攻撃・防御・回避する（game/stance.js）
+      if (f.stanceT > 0) { f.guarding = false; return; }
+      if (f.stance === 'prone') {
+        if (pressed || leftPressed || dodgePressed) setStance(f, 'stand');
+        f.guarding = false;
+        return;
+      }
+      if (f.stance === 'crouch' && (pressed || leftPressed || dodgePressed || (leftHeld && f.left === 'guard'))) setStance(f, 'stand');
       // 探す：近くのベッドやタンスを開ける
       if (searchPressed && !f.action && hiding) {
         const spot = hiding.nearest(f);
@@ -299,6 +309,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     update(dt) {
       for (const f of fighters) {
         if (!f.alive) continue;
+        updateStance(f, dt);
         f.stun = Math.max(0, f.stun - dt);
         f.hitFlash = Math.max(0, f.hitFlash - dt);
         if (f.helpless > 0) f.helpless = Math.max(0, f.helpless - dt);

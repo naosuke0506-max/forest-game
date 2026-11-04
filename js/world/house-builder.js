@@ -21,6 +21,8 @@ const LANDING = 1.0;  // 階段の下の踊り場（前の壁との間。扉か�
 const JETTY = 0.4;    // 二階が前へ張り出す長さ
 const INSIDE = 0.78;  // 家の中の面は少し暗く（外の光が入りにくい感じ）
 // 鎧戸の色（木のまま・緑・赤・青・茶）と、花箱の花の色
+/** 家の一番上（棟の上）までの高さの目安（視線の判定で家をまとめる箱に使う） */
+const top0 = (stories, w) => FOUND + stories * STORY + w * 0.76 + 0.6;
 const SHUTTERS = [[0.82, 0.76, 0.7], [0.5, 0.64, 0.46], [0.74, 0.42, 0.34], [0.46, 0.56, 0.72], [0.6, 0.5, 0.4]];
 const FLOWERS = [[[0.82, 0.12, 0.1], [0.95, 0.8, 0.2]], [[0.62, 0.28, 0.72], [0.95, 0.95, 0.9]], [[0.92, 0.45, 0.15], [0.85, 0.2, 0.32]]];
 
@@ -46,6 +48,15 @@ export function buildHouse(B, h, reg) {
   const range = (floor) => ({ y0: y0 + fy[floor] - 0.6, y1: y0 + fy[floor] + 0.7 });   // その階にいる人だけがぶつかる高さ
   /** 家の中の座標で箱を置く */
   const bx = (surf, x, y, z, bw, bd, bh, opt = {}, rot = 0) => { const p = F.at(x, 0, z); box(B, surf, p[0], y0 + y, p[2], bw, bd, bh, yaw + rot, opt); };
+  // 視線をさえぎる物（bot の目。game/sight.js）：壁・床・屋根・妻壁・階段・大きな家具。家ごとにまとめる（外側の箱で先にふるう）
+  const S = reg.sight || null;
+  const blk = (x, y, z, bw, bd, bh, rot = 0) => { if (!S) return; const p = F.at(x, 0, z); S.addYawBox(p[0], y0 + y, p[2], bw, bd, bh, yaw + rot); };
+  reg.block = blk;
+  if (S) {
+    const hTop = top0(stories, w);
+    const c = F.at(0, hTop / 2 - 0.6, (twoStory ? JETTY : 0) / 2);
+    S.beginGroup(c, F.dir(1, 0, 0), [0, 1, 0], F.dir(0, 0, 1), w + 1.6, hTop + 1.2, d + (twoStory ? JETTY : 0) + 1.6);
+  }
 
   // ===== 見た目の選び方（家ごと） =====
   const stoneGround = deco.next() < (twoStory ? 0.4 : 0.3);   // 一階が石積み
@@ -59,6 +70,7 @@ export function buildHouse(B, h, reg) {
 
   // ===== 土台・床・扉の前の段 =====
   bx('stone', 0, -0.6, 0, w + 0.24, d + 0.24, FOUND + 0.46, { grad: [0.78, 0.95] });
+  blk(0, -0.6, 0, w + 0.24, d + 0.24, FOUND + 0.6);
   bx('stone', 0, FOUND - 0.14, 0, w + 0.36, d + 0.36, 0.14, { shade: 1.02, bottom: true });   // 土台の上の張り出した段
   bx('wood', 0, FOUND, 0, iw * 2, id * 2, 0.05, { shade: INSIDE });              // 一階の板の床
   const zs = d / 2 + 0.18;
@@ -78,8 +90,8 @@ export function buildHouse(B, h, reg) {
     const piece = (c, l, py, ph) => {
       if (l <= 0.01 || ph <= 0.01) return;
       const o = { shade, grad: [g(py), g(py + ph)] };
-      if (axis === 'x') bx(surf, mid + c, py, at, l, T, ph, o);
-      else bx(surf, at, py, mid + c, T, l, ph, o);
+      if (axis === 'x') { bx(surf, mid + c, py, at, l, T, ph, o); blk(mid + c, py, at, l, T, ph); }
+      else { bx(surf, at, py, mid + c, T, l, ph, o); blk(at, py, mid + c, T, l, ph); }
     };
     const ops = openings.map((o) => ({ ...o, c: o.c - mid })).sort((a, b) => a.c - b.c);
     let s = -len / 2;
@@ -144,6 +156,7 @@ export function buildHouse(B, h, reg) {
 
   // 開いた扉（扉口の内側で、壁に沿って開いている）と鉄の帯
   bx('gate', DOOR_W / 2 + 0.05, FOUND + 0.05, d / 2 - T - 0.55, 0.06, 1.1, DOOR_H - 0.05, {}, 0);
+  blk(DOOR_W / 2 + 0.05, FOUND + 0.05, d / 2 - T - 0.55, 0.06, 1.1, DOOR_H - 0.05);
   P.doorStraps(DOOR_W / 2 + 0.05 - 0.037, FOUND + 0.05, d / 2 - T - 0.55, 1.1, DOOR_H - 0.05);
   for (const z of [d / 2 - T - 0.3, d / 2 - T - 0.8]) { const [x, zz] = wpos(DOOR_W / 2 + 0.05, z); reg.solid(x, zz, 0.1, range(0)); }
   // 当たり判定：壁に沿って円を並べる（扉口は空ける）。二階建ては、一階の前の壁と、張り出した二階の前の壁を高さで分ける
@@ -175,6 +188,11 @@ export function buildHouse(B, h, reg) {
     bx('wood', (sx1 + iw) / 2, y2 - 0.12, (idF - id) / 2, iw - sx1, id + idF, 0.17, { bottom: true, shade: INSIDE });
     bx('wood', (sx0 + sx1) / 2, y2 - 0.12, (zt - id) / 2, STAIR_W, zt + id, 0.17, { bottom: true, shade: INSIDE });
     bx('wood', (sx0 + sx1) / 2, y2 - 0.12, (zb + idF) / 2, STAIR_W, idF - zb, 0.17, { bottom: true, shade: INSIDE });
+    blk((sx1 + iw) / 2, y2 - 0.12, (idF - id) / 2, iw - sx1, id + idF, 0.17);
+    blk((sx0 + sx1) / 2, y2 - 0.12, (zt - id) / 2, STAIR_W, zt + id, 0.17);
+    blk((sx0 + sx1) / 2, y2 - 0.12, (zb + idF) / 2, STAIR_W, idF - zb, 0.17);
+    // 階段の下の詰めた箱（4 つに分けて、段の高さの低い方で）
+    for (let k = 0; k < 4; k++) blk((sx0 + sx1) / 2, FOUND + 0.05, zb - (k + 0.5) * (STAIR_L / 4), STAIR_W, STAIR_L / 4, (k * STORY) / 4 + 0.05);
     { const [x, z] = wpos((sx1 + iw) / 2, (idF - id) / 2); reg.floors.addFloor({ cx: x, cz: z, yaw, hw: (iw - sx1) / 2 + 0.02, hd: (id + idF) / 2 + 0.02, y: y0 + fy[1] }); }
     { const [x, z] = wpos((sx0 + sx1) / 2, (zt - id) / 2); reg.floors.addFloor({ cx: x, cz: z, yaw, hw: STAIR_W / 2 + 0.02, hd: (zt + id) / 2 + 0.02, y: y0 + fy[1] }); }
     { const [x, z] = wpos((sx0 + sx1) / 2, (zb + idF) / 2); reg.floors.addFloor({ cx: x, cz: z, yaw, hw: STAIR_W / 2 + 0.02, hd: (idF - zb) / 2 + 0.02, y: y0 + fy[1] }); }
@@ -217,6 +235,10 @@ export function buildHouse(B, h, reg) {
   const rh = w * (0.55 + rnd.next() * 0.2);       // 棟の高さ（急な屋根）
   const zFr = zf(stories - 1);
   const R = P.roof({ w, zF: zFr + 0.42, zB: -d / 2 - 0.42, top, rh, over: 0.5, t: roof === 'thatch' ? 0.34 : 0.13, surf: roof, tone });
+  if (S) {
+    for (const pl of R.planes) S.addBox(F.at(...pl.c), F.dir(...pl.a), F.dir(...pl.b), F.dir(...pl.n), pl.la, pl.lb, pl.ln);
+    for (const z of [zFr, -d / 2]) S.addTri(F.at(-w / 2, top, z), F.at(w / 2, top, z), F.at(0, top + rh, z));
+  }
   const kindTop = kindOf(stories - 1);
   P.gable({ o: [0, top, zFr], u: [1, 0, 0], n: [0, 0, 1] }, w, rh, T, kindTop, wallShade, tone, { window: true });
   P.gable({ o: [0, top, -d / 2], u: [1, 0, 0], n: [0, 0, -1] }, w, rh, T, kindTop, wallShade, tone, { window: deco.next() < 0.5 });
@@ -259,5 +281,6 @@ export function buildHouse(B, h, reg) {
     furniture.sacks(iw - 0.7, id - 0.55, g, rnd);
     furniture.hearth(-iw + 0.32, id - 1.0, g, chimneyTop, 90);
   }
+  S?.endGroup();
   return { top: top + rh };
 }

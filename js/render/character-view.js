@@ -5,6 +5,7 @@
 import * as pc from 'playcanvas';
 import { WEAPONS, DODGE } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
+import { stanceShape } from '../game/stance.js';
 import { createWeaponModel, createShieldModel } from './weapons.js';
 import { BUILD } from '../version.js';
 
@@ -111,6 +112,22 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     current = name;
   };
 
+  // しゃがむ・伏せる：専用の動き（Rokoko で作る）が入るまでの仮の姿勢。しゃがむは体を低く縮め少し前へ傾け、
+  // 伏せるは体を前へ倒して寝かせる（足もとを軸に回し、体の真ん中が立っていた所に来るようにずらす）
+  const qStand = new pc.Quat().setFromEulerAngles(0, 180, 0), qTilt = new pc.Quat(), qPose = new pc.Quat();
+  let posed = false;
+  const pose = (sh) => {
+    const low = sh.prone < 0.01 && sh.height > 1.7;
+    if (low && !posed) return;
+    posed = !low;
+    const sq = sh.prone > 0 ? 1 : Math.min(1, sh.height / 1.75);   // しゃがむ：縦に縮める割合
+    qTilt.setFromEulerAngles(-90 * sh.prone - (1 - sq) * 55, 0, 0);
+    qPose.mul2(qTilt, qStand);
+    body.setLocalRotation(qPose);
+    body.setLocalScale(meta.scale, meta.scale * (sh.prone > 0 ? 1 : 0.25 + 0.75 * sq), meta.scale);
+    body.setLocalPosition(0, 0.22 * sh.prone, 0.95 * sh.prone);
+  };
+
   let groundY = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z)), flashOn = false;
   let px = fighter.x, pz = fighter.z, vel = 0, fwd = 0;
 
@@ -139,7 +156,11 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         fwd += (f - fwd) * k;
       }
       px = fighter.x; pz = fighter.z;
-      if (fighter.action?.kind !== 'dodge') body.setLocalEulerAngles(0, 180, 0);   // 前転で変えた体の向きを戻す
+      if (fighter.action?.kind !== 'dodge') {
+        const sh = stanceShape(fighter);
+        if (fighter.alive && (sh.prone > 0 || sh.height < 1.7)) pose(sh);
+        else { if (posed) { posed = false; body.setLocalScale(meta.scale, meta.scale, meta.scale); body.setLocalPosition(0, 0, 0); } body.setLocalEulerAngles(0, 180, 0); }   // 前転で変えた体の向きを戻す
+      }
       if (fighter.weapon !== shownWeapon) showWeapon(fighter.weapon);
 
       if (!fighter.alive) {

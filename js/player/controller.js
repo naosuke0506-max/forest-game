@@ -33,8 +33,10 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   let hide = null;                      // 隠れている所（ベッドの下・タンスの中）。動けず、目の位置と見回せる範囲が決まる
   let thirdDist = THIRD_DIST;           // 三人称のカメラの距離（地面に当たると縮める）
 
+  let eyeH = p.eyeHeight, eyeWant = p.eyeHeight;   // 目の高さ（しゃがむ・伏せると低い。なめらかに変える）
   function speedFor(mag) {
-    // 半分ほど倒すと歩き、端まで倒すと走る
+    // 半分ほど倒すと歩き、端まで倒すと走る（しゃがむ・伏せているときは走れない：歩きの速さまで）
+    if (api.noRun) return p.walkSpeed * Math.min(1, mag / 0.75);
     if (mag <= 0.75) return p.walkSpeed * (mag / 0.75);
     return p.walkSpeed + (p.runSpeed - p.walkSpeed) * ((mag - 0.75) / 0.25);
   }
@@ -46,7 +48,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       return;
     }
     if (viewMode === 'first') {
-      eye.setLocalPosition(0, p.eyeHeight + Math.sin(bob) * 0.025 * Math.min(1, mag * 1.5), 0);
+      eye.setLocalPosition(0, eyeH + Math.sin(bob) * 0.025 * Math.min(1, mag * 1.5), 0);
       eye.setLocalEulerAngles(pitch, 0, 0);
       return;
     }
@@ -74,6 +76,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
 
     yaw -= input.lookX;
     pitch = Math.max(-p.pitchLimit, Math.min(p.pitchLimit, pitch - input.lookY));
+    eyeH += (eyeWant - eyeH) * Math.min(1, dt * 9);
     if (hide) {
       // 隠れている間は、覗く向きの左右 40 度・上下の決まった範囲だけ見回せる。動かない
       const c = hide.yaw + 180;   // 外を見る向き（プレイヤーの向きの約束は -Z が前）
@@ -122,6 +125,9 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     update,
     position: pos,
     speedScale: 1,
+    noRun: false,   // しゃがむ・伏せているときは走れない
+    /** 目の高さ（m。しゃがむ・伏せると低い。なめらかに移る） */
+    setEyeHeight(h) { eyeWant = h; },
     get yaw() { return yaw; },
     get pitch() { return pitch; },
     get moving() { return lastMag; },
