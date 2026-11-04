@@ -76,21 +76,9 @@ for s in 'LR':
                     f'{s}_Hand': f'{s}_Mid1', f'{s}_Thigh': f'{s}_Calf', f'{s}_Calf': f'{s}_Foot', f'{s}_Foot': f'{s}_ToeBase'})
     for f in ('Index', 'Mid', 'Ring', 'Pinky'): nxt_tgt[f'{s}_{f}1'] = f'{s}_{f}2'
 
-SB, TB = S.data.bones, T.data.bones
+TB = T.data.bones
 def rest_dir(bones, n, nxt):
     return (bones[nxt[n]].head_local - bones[n].head_local).normalized() if n in nxt else None
-corr = {}
-for t, s in tgt2src.items():
-    if t not in TB: continue
-    ds, dt = rest_dir(SB, s, nxt_src), rest_dir(TB, t, nxt_tgt)
-    corr[t] = dt.rotation_difference(ds) if (ds and dt) else None
-def get_corr(t):
-    b = TB[t]
-    while b is not None:
-        if corr.get(b.name) is not None: return corr[b.name]
-        b = b.parent
-    return Quaternion()
-scale = TB['Hip'].head_local.z / SB['hips'].head_local.z
 
 order = []
 def walk(b):
@@ -99,67 +87,128 @@ def walk(b):
 for b in TB:
     if b.parent is None: walk(b)
 
-T.animation_data_create(); S.animation_data_create()
-for tr in list(S.animation_data.nla_tracks): S.animation_data.nla_tracks.remove(tr)
+T.animation_data_create()
 info = {}
 made = []
-for game_name, clip in CLIPS.items():
-    act = src_actions.get(clip + '_rig') or src_actions.get(clip)
-    if not act: raise SystemExit(f'動きが見つからない: {clip}')
-    S.animation_data.action = act
-    f0, f1 = map(int, act.frame_range)
-    new = bpy.data.actions.new(game_name); new.use_fake_user = True
-    T.animation_data.action = new
-    hip_start = hip_end = None
-    keys = []
-    foot_v = []; prev = None
-    for f in range(f0, f1 + 1):
-        scn.frame_set(f)
-        Mw = {}
-        for b in order:
-            R_b = b.matrix_local
-            base = Mw[b.parent.name] @ (b.parent.matrix_local.inverted() @ R_b) if b.parent else R_b.copy()
-            s = tgt2src.get(b.name)
-            if s:
-                sp = S.pose.bones[s]
-                q = sp.matrix.to_quaternion() @ SB[s].matrix_local.to_quaternion().inverted() @ get_corr(b.name) @ R_b.to_quaternion()
-                loc = base.to_translation()
+
+def retarget(S, actions, clips, tgt2src, nxt_src, hips_src, loop, inplace):
+    """S の骨の動き（actions の中の clips：ゲームの名前 → 元の名前）を、Tripo の骨 T へ移す。
+    元と Tripo で、骨の休みの姿勢の向きが違う分は、骨ごとの補正（休みの向きの差）で吸収する。
+    返り値：元の骨・大きさの比・補正（武器を持たせる位置を決めるのに使う）"""
+    SB = S.data.bones
+    corr = {}
+    for t, s in tgt2src.items():
+        if t not in TB or s not in SB: continue
+        ds, dt = rest_dir(SB, s, nxt_src), rest_dir(TB, t, nxt_tgt)
+        corr[t] = dt.rotation_difference(ds) if (ds and dt) else None
+    def get_corr(t):
+        b = TB[t]
+        while b is not None:
+            if corr.get(b.name) is not None: return corr[b.name]
+            b = b.parent
+        return Quaternion()
+    scale = TB['Hip'].head_local.z / SB[hips_src].head_local.z
+    S.animation_data_create()
+    for tr in list(S.animation_data.nla_tracks): S.animation_data.nla_tracks.remove(tr)
+    for game_name, clip in clips.items():
+        act = actions.get(clip + '_rig') or actions.get(clip)
+        if not act: raise SystemExit(f'動きが見つからない: {clip}')
+        S.animation_data.action = act
+        f0, f1 = map(int, act.frame_range)
+        new = bpy.data.actions.new(game_name); new.use_fake_user = True
+        T.animation_data.action = new
+        hip_start = hip_end = None
+        keys = []
+        foot_v = []; prev = None
+        for f in range(f0, f1 + 1):
+            scn.frame_set(f)
+            Mw = {}
+            for b in order:
+                R_b = b.matrix_local
+                base = Mw[b.parent.name] @ (b.parent.matrix_local.inverted() @ R_b) if b.parent else R_b.copy()
+                s = tgt2src.get(b.name)
+                if s and s in SB:
+                    sp = S.pose.bones[s]
+                    q = sp.matrix.to_quaternion() @ SB[s].matrix_local.to_quaternion().inverted() @ get_corr(b.name) @ R_b.to_quaternion()
+                    loc = base.to_translation()
+                    if b.name == 'Hip':
+                        off = (sp.matrix.to_translation() - SB[s].matrix_local.to_translation()) * scale
+                        if hip_start is None: hip_start = off.copy()
+                        hip_end = off.copy()
+                        if game_name in inplace:   # その場で動くようにする（上下の揺れは残す）
+                            off.x = 0; off.y = 0
+                        loc = R_b.to_translation() + off
+                    Mb = Matrix.Translation(loc) @ q.to_matrix().to_4x4()
+                else:
+                    Mb = base
+                Mw[b.name] = Mb
+            keys.append({b.name: Mw[b.name] for b in order})
+            # 地面に着いている方の足（低い方）が後ろへ滑る速さ ＝ その場の動きで進むはずの速さ
+            feet = [Mw[n].to_translation() - Mw['Hip'].to_translation() * Vector((0, 0, 0)) for n in ('L_Foot', 'R_Foot')]
+            low = min(range(2), key=lambda k: feet[k].z)
+            if prev is not None and prev[0] == low:
+                d = feet[low] - prev[1]; d.z = 0
+                foot_v.append(d.length * scn.render.fps)
+            prev = (low, feet[low])
+        for i, frame in enumerate(keys):
+            for b in order:
+                pb = T.pose.bones[b.name]
+                Mb = frame[b.name]
+                basis = ((b.parent.matrix_local.inverted() @ b.matrix_local).inverted() @ frame[b.parent.name].inverted() @ Mb) if b.parent else (b.matrix_local.inverted() @ Mb)
+                pb.rotation_mode = 'QUATERNION'
+                pb.rotation_quaternion = basis.to_quaternion()
+                pb.keyframe_insert('rotation_quaternion', frame=i, group=b.name)
                 if b.name == 'Hip':
-                    off = (sp.matrix.to_translation() - SB[s].matrix_local.to_translation()) * scale
-                    if hip_start is None: hip_start = off.copy()
-                    hip_end = off.copy()
-                    if game_name in INPLACE:   # その場で動くようにする（上下の揺れは残す）
-                        off.x = 0; off.y = 0
-                    loc = R_b.to_translation() + off
-                Mb = Matrix.Translation(loc) @ q.to_matrix().to_4x4()
-            else:
-                Mb = base
-            Mw[b.name] = Mb
-        keys.append({b.name: Mw[b.name] for b in order})
-        # 地面に着いている方の足（低い方）が後ろへ滑る速さ ＝ その場の動きで進むはずの速さ
-        feet = [Mw[n].to_translation() - Mw['Hip'].to_translation() * Vector((0, 0, 0)) for n in ('L_Foot', 'R_Foot')]
-        low = min(range(2), key=lambda k: feet[k].z)
-        if prev is not None and prev[0] == low:
-            d = feet[low] - prev[1]; d.z = 0
-            foot_v.append(d.length * scn.render.fps)
-        prev = (low, feet[low])
-    for i, frame in enumerate(keys):
-        for b in order:
-            pb = T.pose.bones[b.name]
-            Mb = frame[b.name]
-            basis = ((b.parent.matrix_local.inverted() @ b.matrix_local).inverted() @ frame[b.parent.name].inverted() @ Mb) if b.parent else (b.matrix_local.inverted() @ Mb)
-            pb.rotation_mode = 'QUATERNION'
-            pb.rotation_quaternion = basis.to_quaternion()
-            pb.keyframe_insert('rotation_quaternion', frame=i, group=b.name)
-            if b.name == 'Hip':
-                pb.location = basis.to_translation()
-                pb.keyframe_insert('location', frame=i, group=b.name)
-    dur = (f1 - f0) / scn.render.fps
-    travel = (hip_end - hip_start); travel.z = 0
-    info[game_name] = {'duration': round(dur, 4), 'loop': game_name in LOOP,
-                       'speed': round(max(travel.length / dur if dur > 0 else 0, float(np.median(foot_v)) if (foot_v and game_name in ('walk', 'back', 'run')) else 0), 4)}   # 1 秒あたりに進む量（模型の大きさのまま）
-    made.append(new)
-    print('動き', game_name, '←', clip, f1 - f0 + 1, 'フレーム', info[game_name])
+                    pb.location = basis.to_translation()
+                    pb.keyframe_insert('location', frame=i, group=b.name)
+        dur = (f1 - f0) / scn.render.fps
+        travel = (hip_end - hip_start); travel.z = 0
+        if act.get('speed') is not None:   # 手で付けた動き：進む速さを動きに書いてある（元の骨の大きさのまま）
+            speed = float(act['speed']) * scale
+        else:
+            speed = max(travel.length / dur if dur > 0 else 0, float(np.median(foot_v)) if (foot_v and game_name in ('walk', 'back', 'run')) else 0)
+        info[game_name] = {'duration': round(dur, 4), 'loop': game_name in loop, 'speed': round(speed, 4)}   # 1 秒あたりに進む量（模型の大きさのまま）
+        made.append(new)
+        print('動き', game_name, '←', clip, f1 - f0 + 1, 'フレーム', info[game_name])
+    return SB, scale, get_corr
+
+# 魔境争覇の剣士の動き（歩き・走り・攻撃・防御・回避など）
+SB, scale, get_corr = retarget(S, src_actions, CLIPS, tgt2src, nxt_src, 'hips', LOOP, INPLACE)
+
+# 追加の動き（source_models/motions/motions.blend。tools/characters/make_motions.py で作る。骨は Mixamo 式）
+#   しゃがみ（利用者が Meshy AI で作った動き）・しゃがみ歩き・伏せる・伏せ・這う・起き上がる・壁に背を付けて覗う（左・右）
+motions_path = os.path.join(here, '..', '..', 'source_models', 'motions', 'motions.blend')
+if os.path.exists(motions_path):
+    with bpy.data.libraries.load(motions_path) as (lib_from, lib_to):
+        lib_to.objects = ['motions']
+        lib_to.actions = list(lib_from.actions)
+    MX = lib_to.objects[0]
+    scn.collection.objects.link(MX)
+    # 元の動きの名前を変えておく（ゲームの動きと同じ名前だと、作る動きが「crouch.001」のようになるため）
+    for a in lib_to.actions: a.name = 'mx_' + a.name
+    mx_actions = {a.name[3:]: a for a in lib_to.actions}
+    P = 'mixamorig:'
+    MXM = {'Hip': 'Hips', 'Waist': 'Spine', 'Spine01': 'Spine1', 'Spine02': 'Spine2', 'NeckTwist01': 'Neck', 'Head': 'Head'}
+    for s, side in (('L', 'Left'), ('R', 'Right')):
+        MXM.update({f'{s}_Clavicle': f'{side}Shoulder', f'{s}_Upperarm': f'{side}Arm', f'{s}_Forearm': f'{side}ForeArm', f'{s}_Hand': f'{side}Hand',
+                    f'{s}_Thigh': f'{side}UpLeg', f'{s}_Calf': f'{side}Leg', f'{s}_Foot': f'{side}Foot', f'{s}_ToeBase': f'{side}ToeBase',
+                    f'{s}_Thumb1': f'{side}HandThumb1', f'{s}_Thumb2': f'{side}HandThumb2', f'{s}_Thumb3': f'{side}HandThumb3'})
+        for f, mf in (('Index', 'Index'), ('Mid', 'Middle'), ('Ring', 'Ring'), ('Pinky', 'Pinky')):
+            for k in (1, 2, 3): MXM[f'{s}_{f}{k}'] = f'{side}Hand{mf}{k}'
+    mx_t2s = {t: P + s for t, s in MXM.items()}
+    mx_nxt = {P + a: P + b for a, b in (('Hips', 'Spine'), ('Spine', 'Spine1'), ('Spine1', 'Spine2'), ('Spine2', 'Neck'), ('Neck', 'Head'))}
+    for side in ('Left', 'Right'):
+        mx_nxt.update({P + a: P + b for a, b in ((f'{side}Shoulder', f'{side}Arm'), (f'{side}Arm', f'{side}ForeArm'), (f'{side}ForeArm', f'{side}Hand'),
+                                                   (f'{side}Hand', f'{side}HandMiddle1'), (f'{side}UpLeg', f'{side}Leg'), (f'{side}Leg', f'{side}Foot'),
+                                                   (f'{side}Foot', f'{side}ToeBase'))})
+        for mf in ('Index', 'Middle', 'Ring', 'Pinky', 'Thumb'):
+            mx_nxt[P + f'{side}Hand{mf}1'] = P + f'{side}Hand{mf}2'; mx_nxt[P + f'{side}Hand{mf}2'] = P + f'{side}Hand{mf}3'
+    EXTRA = {n: n for n in ('crouch', 'crouch_walk', 'prone_down', 'prone', 'crawl', 'prone_up', 'cover_l', 'cover_r')}
+    EX_LOOP = {'crouch', 'crouch_walk', 'prone', 'crawl', 'cover_l', 'cover_r'}
+    retarget(MX, mx_actions, EXTRA, mx_t2s, mx_nxt, P + 'Hips', EX_LOOP, set(EXTRA))
+    bpy.data.objects.remove(MX, do_unlink=True)
+else:
+    print('追加の動きが無い:', motions_path)
 
 # 武器を持たせる位置
 S.animation_data.action = None; T.animation_data.action = None

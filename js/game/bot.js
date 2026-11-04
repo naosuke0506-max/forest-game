@@ -8,10 +8,11 @@
 //   ・探す：誰かが隠れるところを見たら、その場所へ行って探す。見つけたら致命の一撃
 //   ・暗殺されそうになったら、ときどき回避する
 //   ・目と耳（game/senses.js）：前の 120 度で、体の半分以上が直接見える相手にだけ気づく。音が聞こえても気づく。
-//     見失ったら（聞こえただけのときも）、最後に分かった所へ行って見回し、見つからなければ元の行動に戻る
+//     見失ったら（聞こえただけのときも）、最後に分かった所へ行って見回し、見つからなければ元の行動に戻る。
+//     近づくときはしゃがんで忍び寄る（足音が小さい）。相手が見えたら立って戦う
 // 後で、逃走・アイテムの使用を足す
 import { moveFighter } from './movement.js';
-import { canRun } from './stance.js';
+import { canRun, setStance } from './stance.js';
 import { WEAPONS, COMBAT, SENSES } from './data.js';
 import { botCraft } from './craft.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
@@ -190,6 +191,7 @@ export function createBot(fighter, rng, fighters) {
     if (k.age < 0.5) { L.x = k.x; L.z = k.z; L.arrived = false; }   // 新しく分かった（音がまた聞こえた）
     b.input.attack = false; b.input.guard = false; b.input.left = false;
     const d = Math.hypot(L.x - f.x, L.z - f.z);
+    setStance(f, d < 12 || L.arrived ? 'crouch' : 'stand');   // 近くまで来たら、しゃがんで忍び寄る
     if (!L.arrived && d > 1.6) {
       // 歩いて近づく（遠ければ走る）。動けていなければ諦める
       if (Math.hypot(f.x - L.lx, f.z - L.lz) < 0.12) L.stuck += 0.25; else L.stuck = 0;
@@ -234,6 +236,7 @@ export function createBot(fighter, rng, fighters) {
     perceive(world, b.lastThink || 0.2);
     b.target = pickTarget();
     if (b.target) b.look = null;
+    if (!b.look) setStance(f, 'stand');   // 探しに行っていなければ立つ（相手が見えたら立って戦う）
     // 近くに隠れている人の息遣いが聞こえたら、その場所を覚えて探す（息が荒いほど気づきやすい）
     if (!b.knownSpot) {
       for (const t of fighters) {

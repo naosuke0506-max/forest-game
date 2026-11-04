@@ -72,6 +72,46 @@
    "duration": 0.6667,
    "loop": false,
    "speed": 0.0
+  },
+  "crouch": {
+   "duration": 5.9667,
+   "loop": true,
+   "speed": 0.0
+  },
+  "crouch_walk": {
+   "duration": 1.1,
+   "loop": true,
+   "speed": 0.362
+  },
+  "prone_down": {
+   "duration": 1.0,
+   "loop": false,
+   "speed": 0.0
+  },
+  "prone": {
+   "duration": 2.4,
+   "loop": true,
+   "speed": 0.0
+  },
+  "crawl": {
+   "duration": 1.3,
+   "loop": true,
+   "speed": 0.234
+  },
+  "prone_up": {
+   "duration": 1.0,
+   "loop": false,
+   "speed": 0.0
+  },
+  "cover_l": {
+   "duration": 3.0,
+   "loop": true,
+   "speed": 0.0
+  },
+  "cover_r": {
+   "duration": 3.0,
+   "loop": true,
+   "speed": 0.0
   }
  }
 }
