@@ -15,6 +15,7 @@ import { createProjectileViews } from './render/projectiles.js';
 import { createHud } from './ui/hud.js';
 import { createPickups } from './game/pickups.js';
 import { createHiding } from './game/hiding.js';
+import { createCover } from './game/cover.js';
 import { createSfx, wireSounds } from './audio/sfx.js';
 import { createPickupViews } from './render/pickup-view.js';
 import { createCraftUi } from './ui/craft.js';
@@ -31,7 +32,7 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
 /**
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, debug, phaseDuration }
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, zones = null, buildings = [], crateSpots = [], tex = null, trees = [], groundAt = null, insideHouse = null, hides = [], sight = null, debug = false, phaseDuration = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, zones = null, buildings = [], crateSpots = [], tex = null, trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], sight = null, debug = false, phaseDuration = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）
@@ -75,7 +76,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 隠れ場所（村の家のベッドの下・タンスの中）
   const hiding = createHiding(hides);
   // 戦闘と bot
-  const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt, hiding });
+  // 壁裏隠れ（村の家の外の壁と中の壁に背を付ける）
+  const cover = createCover(covers, { isFree: obstacles.isFree, groundAt: groundAt || ((x, z) => terrain.heightAt(x, z)) });
+  const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt, hiding, cover });
   const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => createBot(f, createRandom(config.seed + 100 + i), fighters));
   // bot の目と耳（game/senses.js）：見える相手・聞こえた音で気づく。音を鳴らす出来事をつなぐ
   const senses = createSenses({ sight, heightAt: terrain.heightAt });
@@ -142,7 +145,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     hud.addFeed(item.kind === 'crate' ? `箱を開けた：${what}` : what);
     craftUi.update();
   });
-  let nearItem = null, nearSpot = null, useTimer = 0;
+  let nearItem = null, nearSpot = null, nearWall = null, useTimer = 0;
   const searchBtn = document.getElementById('btn-search');
   setBtn(searchBtn, ICONS.eye, '探す');
   // 姿勢ボタン：押したときにすること（立っていれば「しゃがむ」、しゃがむ・伏せていれば「立つ」）。長押しで伏せる
@@ -170,9 +173,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     for (const b of bots) if (b.fighter !== fighter && b.fighter.alive && sees(b.fighter, fighter, from)) b.knowSpot(spot);
     if (fighter !== me) return;
     player.setHide(spot);
-    viewModel.setVisible(false);
-    hideView.className = `hideview ${spot.kind}`;
-    hideView.hidden = false;
+    viewModel.setVisible(false);   // 隠れている間は三人称（家具の上の少し後ろから見る）。手元の武器は出さない
     hud.addFeed(spot.kind === 'bed' ? 'ベッドの下に隠れた' : 'タンスの中に隠れた');
   });
   const leaveHideView = () => {
@@ -249,8 +250,21 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   });
   match.on('end', () => { spectateEl.hidden = true; });
 
-  const world = { obstacles, pickups, groundAt, hiding, senses, onBotCraft: (f) => senses.noise(f, 'craft'), get areaRadius() { return match.areaRadius; } };
-  match.on('eliminated', ({ victim }) => hiding.drop(victim));
+  const world = { obstacles, pickups, groundAt, hiding, cover, sight, senses, onBotCraft: (f) => senses.noise(f, 'craft'), get areaRadius() { return match.areaRadius; } };
+  match.on('eliminated', ({ victim }) => { hiding.drop(victim); cover.drop(victim); });
+  hiding.on('hide', ({ fighter }) => cover.drop(fighter));
+  // 壁裏隠れ：自分が壁に背を付けたら三人称（体を見せ、手元の武器を隠す）。離れたら元に戻す
+  cover.on('enter', ({ fighter }) => {
+    if (fighter !== me) return;
+    views.get(me).setVisible(true); viewModel.setVisible(false);
+    hud.addFeed('壁に隠れた（左右で横歩き、前へ倒すと離れる）');
+  });
+  cover.on('exit', ({ fighter }) => {
+    if (fighter !== me) return;
+    player.setCover(null);
+    me.x = player.position.x; me.z = player.position.z; me.yaw = player.yaw;
+    views.get(me).setVisible(thirdPerson); viewModel.setVisible(!thirdPerson);
+  });
   match.on('eliminated', ({ victim }) => { if (victim === me) player.setFrozen(true); });
   match.on('end', (res) => setTimeout(() => hud.showResult(res), 1200));
   match.on('rewardChosen', ({ fighter }) => { if (fighter === me) player.speedScale = me.stats.speed; });
@@ -302,7 +316,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       const running = match.state === 'running';
       player.setAreaRadius(match.areaRadius);
       // 姿勢：ボタン（押す＝しゃがむ／立つ、長押し＝伏せる）。しゃがむ・伏せると遅く、走れず、目が低い
-      if (input.stance && running && me.alive && !me.hidden) stanceButton(me, input.stance);
+      if (input.stance && running && me.alive && !me.hidden && !me.cover) stanceButton(me, input.stance);
       player.speedScale = me.stats.speed * (me.moveScale ?? 1) * stanceSpeed(me);
       player.noRun = !canRun(me);
       player.setEyeHeight((config.player.eyeHeight * stanceShape(me).eye) / STANCES.stand.eye);
@@ -310,36 +324,60 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       refreshStance();
       // あなたの位置を、試合の記録へ写す（いずれ人間も試合の計算で動かす）
       // 隠れている間は、隠れ場所が自分の位置（体は動かない）
-      if (me.alive && !me.hidden) { me.x = player.position.x; me.z = player.position.z; me.y = player.position.y; me.yaw = player.yaw; me.pitch = player.pitch; }
+      if (me.alive && !me.hidden && !me.cover) { me.x = player.position.x; me.z = player.position.z; me.y = player.position.y; me.yaw = player.yaw; me.pitch = player.pitch; }
+      // 壁裏隠れ：移動スティックの左右で壁に沿って横歩き、前へ倒すと壁から離れる。カメラは三人称で覗く向きを見る
+      if (me.cover && running) {
+        if (input.moveY > 0.6) cover.exit(me);
+        else {
+          const mv = cover.slide(me, input.moveX, dt);
+          me.gait = mv > 0 ? 'walk' : 'still';
+          const pd = cover.peekDir(me), sg = me.cover.seg;
+          player.setCover({ x: me.x, y: me.y, z: me.z, nx: sg.nx, nz: sg.nz, px: pd.x, pz: pd.z });
+        }
+      }
       if (me.hidden) { me.yaw = player.yaw; me.pitch = player.pitch; }
       if (running) combat.control(me, input);
       // 右のボタン：隠れている間は「出る」。近くに素材の山か箱があれば「拾う・開ける」、ベッドやタンスがあれば「隠れる」と「探す」
       if ((useTimer -= dt) <= 0) {
         useTimer = 0.12;
         const free = running && me.alive && !(me.helpless > 0) && !me.action;
-        nearItem = free && !me.hidden ? pickups.nearest(me) : null;
-        nearSpot = free && !me.hidden && !nearItem ? hiding.nearest(me) : null;
-        const mode = me.hidden ? 'exit' : nearItem ? (nearItem.kind === 'crate' ? 'crate' : nearItem.kind) : nearSpot ? 'hide' : '';
+        nearItem = free && !me.hidden && !me.cover ? pickups.nearest(me) : null;
+        nearSpot = free && !me.hidden && !me.cover && !nearItem ? hiding.nearest(me) : null;
+        nearWall = free && !me.hidden && !me.cover && !nearItem && !nearSpot ? cover.nearest(me) : null;
+        const mode = me.hidden ? 'exit' : me.cover ? 'leave' : nearItem ? (nearItem.kind === 'crate' ? 'crate' : nearItem.kind) : nearSpot ? 'hide' : nearWall ? 'wall' : '';
         useBtn.hidden = !mode;
-        stanceBtn.hidden = !running || !me.alive || !!me.hidden;
+        stanceBtn.hidden = !running || !me.alive || !!me.hidden || !!me.cover;
         if (mode && useBtn.dataset.label !== mode + (nearItem?.amount ?? '')) {
           useBtn.dataset.label = mode + (nearItem?.amount ?? '');
           if (mode === 'exit') setBtn(useBtn, ICONS.exit, '出る');
           else if (mode === 'hide') setBtn(useBtn, ICONS.hood, '隠れる');
+          else if (mode === 'wall') setBtn(useBtn, ICONS.wall, '壁に隠れる');
+          else if (mode === 'leave') setBtn(useBtn, ICONS.exit, '離れる');
           else if (mode === 'crate') setBtn(useBtn, ICONS.crate, '開ける');
           else setBtn(useBtn, ICONS[mode], `${MATERIALS[mode].name}<small>×${nearItem.amount}</small>`);
         }
         searchBtn.hidden = !nearSpot;
-        // 攻撃ボタン：隠れている間は「暗殺」、無防備な相手が近くにいれば「とどめ」
+        // 攻撃ボタン：隠れている間と、壁に隠れていて近くに相手がいるときは「暗殺」、無防備な相手が近くにいれば「とどめ」
         const helplessNear = fighters.some((f) => f !== me && f.alive && f.helpless > 0 && Math.hypot(f.x - me.x, f.z - me.z) < 2.6);
-        const want = me.hidden ? 'assassinate' : helplessNear ? 'finisher' : '';
+        const foeNear = me.cover && fighters.some((f) => f !== me && f.alive && !f.hidden && Math.hypot(f.x - me.x, f.z - me.z) < 3.2 && Math.abs((f.y ?? 0) - (me.y ?? 0)) < 1.3);
+        const want = me.hidden || foeNear ? 'assassinate' : helplessNear ? 'finisher' : '';
         if (want !== attackMode) refreshAttack(want);
       }
       if (input.use && running && me.alive) {
         if (me.hidden) hiding.exit(me);
+        else if (me.cover) cover.exit(me);
         else if (nearItem) pickups.take(me, nearItem);
         else if (nearSpot) hiding.hide(me, nearSpot);   // 誰かがいれば、その人を見つける
-        nearItem = nearSpot = null; useTimer = 0;
+        else if (nearWall) {
+          // 覗く向き：今見ている向きが、壁に背を付けたときの右か左か
+          const sg = nearWall.seg, a = (player.yaw * Math.PI) / 180;
+          const right = (-Math.sin(a)) * -sg.nz + (-Math.cos(a)) * sg.nx;
+          if (cover.enter(me, nearWall, right > 0 ? 'r' : 'l')) {
+            const pd = cover.peekDir(me);
+            player.setCover({ x: me.x, y: me.y, z: me.z, nx: sg.nx, nz: sg.nz, px: pd.x, pz: pd.z });
+          }
+        }
+        nearItem = nearSpot = nearWall = null; useTimer = 0;
       }
       for (const b of bots) {
         const moving = running ? b.update(dt, world) : 0;
@@ -379,5 +417,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     hiding,
     sfx,
     senses,
+    cover,
   };
 }

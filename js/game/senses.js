@@ -71,7 +71,7 @@ export function createSenses({ sight = null, heightAt }) {
   /** 足音が届く距離（m）。止まっていれば 0 */
   function stepRadius(t) {
     if (!t.alive || t.hidden || !t.gait || t.gait === 'still') return 0;
-    return (SENSES.steps[t.gait] || 0) * STANCES[t.stance || 'stand'].noise * (SENSES.weight[t.weight] ?? 1);
+    return (SENSES.steps[t.gait] || 0) * STANCES[t.stance || 'stand'].noise * (SENSES.weight[t.weight] ?? 1) * (t.cover ? 0.35 : 1);   // 壁に沿った横歩きは静か
   }
 
   return {

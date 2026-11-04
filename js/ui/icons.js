@@ -45,6 +45,8 @@ export const ICONS = {
   dusk: svg(`<path fill="currentColor" d="M6.5 16a5.5 5.5 0 0 1 11 0z"/><g stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2.5 19.5h19M12 6.5V9M4.6 9.6l1.7 1.7M19.4 9.6l-1.7 1.7"/></g>`),
   moon: svg(`<path fill="currentColor" d="M14.5 2.5a9.5 9.5 0 1 0 7 15.6A8 8 0 0 1 14.5 2.5z"/>`),
   // 探す（目）・隠れる（頭巾）・出る（扉から出る矢印）・致命の一撃（髑髏）
+  // 壁裏隠れ：壁（左の縦の帯）に背を付けて立つ人
+  wall: svg(`<path fill="currentColor" d="M3 2h4v20H3z" opacity=".85"/><circle cx="11" cy="5" r="2.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M10.4 8v7l-1 6M10.4 15l2.4 6M10.4 9.6l4.2 2.4M17 12h4m-1.6-1.8L21 12l-1.6 1.8"/>`),
   // 姿勢ボタン：立つ・しゃがむ・伏せる（今の姿勢を描く）
   stand: svg(`<circle cx="12" cy="4" r="2.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M12 7v7.5l-2.6 6.5M12 14.5l2.6 6.5M8.6 12.2 12 8.6l3.4 3.6"/>`),
   crouch: svg(`<circle cx="14" cy="5.5" r="2.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M13 8.5 9.5 13.5l5 1.8-1.8 5M9.5 13.5l-2.2 4.2 2.4 2.3M12.4 9.6l3.6 2.4"/><path stroke="currentColor" stroke-width="1.2" d="M3 21.5h18"/>`),

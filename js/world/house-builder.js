@@ -31,7 +31,7 @@ const FLOWERS = [[[0.82, 0.12, 0.1], [0.95, 0.8, 0.2]], [[0.62, 0.28, 0.72], [0.
  * @param {object} B builder()
  * @param {object} h { cx, cz, y0（地面の高さ）, yaw, w（横）, d（奥行き）, stories（1 か 2）, roof（'thatch' | 'tiles'）, wall（しっくいの色）,
  *                     rnd（村の乱数。家の並びと同じ流れ）, deco（飾りの乱数。家ごと） }
- * @param {object} reg 登録先 { floors, solid(x, z, r, range?), hides: [] }
+ * @param {object} reg 登録先 { floors, solid(x, z, r, range?), hides: [], covers: [], sight }
  */
 export function buildHouse(B, h, reg) {
   const { cx, cz, y0, yaw, w, d, stories, roof, rnd } = h;
@@ -229,6 +229,35 @@ export function buildHouse(B, h, reg) {
     for (let z = zt + 0.6; z <= zb + 0.05; z += 0.6) bx('wood', sx1 + 0.04, ry, z, 0.07, 0.07, 0.85, { shade: tone });
     for (let z = zt + 0.3; z <= zb; z += 0.3) { const [x, zz] = wpos(sx1 + 0.17, z); reg.solid(x, zz, 0.15, range(1)); }
     for (let x = sx0 + 0.15; x <= sx1 + 0.1; x += 0.3) { const [xx, zz] = wpos(x, zb + 0.17); reg.solid(xx, zz, 0.15, range(1)); }
+  }
+
+  // ===== 壁裏隠れの線（game/cover.js）：外の壁（一階）と、各階の中の壁。人の真ん中が来る線を、壁の面から少し離して引く =====
+  //   扉と石段の所・開いた扉の所・階段と穴の所は除く。家具や小物のある所は、入るときと横歩きのときに game/cover.js が避ける
+  if (reg.covers) {
+    const seg = (x0, z0, x1, z1, nx, nz, y, inside) => {
+      if (Math.hypot(x1 - x0, z1 - z0) < 0.6) return;
+      const [ax, az] = wpos(x0, z0), [bx2, bz2] = wpos(x1, z1), n = F.dir(nx, 0, nz);
+      reg.covers.push({ ax, az, bx: bx2, bz: bz2, nx: n[0], nz: n[2], y, inside });
+    };
+    const OUT = 0.38, IN = 0.3, E = 0.4, hw = w / 2, hd = d / 2;   // 外は土台の張り出しの分だけ離す
+    seg(-hw + E, hd + OUT, -1.05, hd + OUT, 0, 1, null, false);
+    seg(1.05, hd + OUT, hw - E, hd + OUT, 0, 1, null, false);
+    seg(hw - E, -hd - OUT, -hw + E, -hd - OUT, 0, -1, null, false);
+    seg(hw + OUT, hd - E, hw + OUT, -hd + E, 1, 0, null, false);
+    seg(-hw - OUT, -hd + E, -hw - OUT, hd - E, -1, 0, null, false);
+    for (let fl = 0; fl < stories; fl++) {
+      const y = y0 + fy[fl], zF = fl === 0 ? id : idF;
+      if (fl === 0) {
+        seg(-iw + 0.35, zF - IN, -(DOOR_W / 2 + 0.35), zF - IN, 0, -1, y, true);
+        seg(DOOR_W / 2 + 0.55, zF - IN, iw - 0.35, zF - IN, 0, -1, y, true);
+      } else seg(-iw + 0.35, zF - IN, iw - 0.35, zF - IN, 0, -1, y, true);
+      seg(iw - 0.35, -id + IN, -iw + 0.35, -id + IN, 0, 1, y, true);
+      seg(iw - IN, zF - 0.35, iw - IN, -id + 0.35, -1, 0, y, true);
+      if (twoStory) {
+        seg(-iw + IN, -id + 0.35, -iw + IN, zt - 0.35, 1, 0, y, true);
+        seg(-iw + IN, zb + 0.35, -iw + IN, zF - 0.35, 1, 0, y, true);
+      } else seg(-iw + IN, -id + 0.35, -iw + IN, zF - 0.35, 1, 0, y, true);
+    }
   }
 
   // ===== 屋根（切妻。棟は奥行きの向き）と妻壁 =====

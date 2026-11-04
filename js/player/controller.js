@@ -30,7 +30,9 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   let viewMode = 'first';               // first / third
   let areaRadius = config.world.playRadius;
   let frozen = false;                   // 脱落したら動かない
-  let hide = null;                      // 隠れている所（ベッドの下・タンスの中）。動けず、目の位置と見回せる範囲が決まる
+  let hide = null;                      // 隠れている所（ベッドの下・タンスの中）。動けず、家具の上の少し後ろから見る（三人称）
+  let cover = null;                     // 壁裏隠れ：{ x, y, z（足もと）, nx, nz（壁から外への向き）, px, pz（覗く向き） }。三人称で壁に沿って見る
+  let coverYaw = 0, coverPitch = 0;     // 壁裏隠れの間に見回した分（度）
   let thirdDist = THIRD_DIST;           // 三人称のカメラの距離（地面に当たると縮める）
 
   let eyeH = p.eyeHeight, eyeWant = p.eyeHeight;   // 目の高さ（しゃがむ・伏せると低い。なめらかに変える）
@@ -41,10 +43,26 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     return p.walkSpeed + (p.runSpeed - p.walkSpeed) * ((mag - 0.75) / 0.25);
   }
 
+  const camV = new pc.Vec3(), lookV = new pc.Vec3();
   function placeCamera(mag) {
-    if (hide) {   // 隠れている：隙間の目の高さから覗く
-      eye.setLocalPosition(0, hide.eyeH, 0);
+    if (hide) {   // 隠れている：家具の上の少し後ろから、外の向きを見る（三人称）
+      eye.setLocalPosition(0, hide.camH, 0);
       eye.setLocalEulerAngles(pitch, 0, 0);
+      return;
+    }
+    if (cover) {
+      // 壁裏隠れ：体の前の斜め（覗く向きの反対側）から、覗く向きへ壁に沿って見る。見回した分だけ回す
+      // （体が画面の端寄りに入るよう、覗く向きの反対側の斜め前に置き、体の横を通して覗く向きを見る）
+      const c = cover, up = 1.5;
+      camV.set(c.x + c.nx * 1.2 - c.px * 1.6, c.y + up, c.z + c.nz * 1.2 - c.pz * 1.6);
+      let lx = c.px * 3.1 - c.nx * 0.8, lz = c.pz * 3.1 - c.nz * 0.8, ly = 1.0 - up;
+      const a = (coverYaw * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
+      const rx = lx * ca + lz * sa, rz = -lx * sa + lz * ca;
+      const hl = Math.hypot(rx, rz);
+      ly += Math.tan((coverPitch * Math.PI) / 180) * hl;
+      lookV.set(camV.x + rx, camV.y + ly, camV.z + rz);
+      eye.setPosition(camV);
+      eye.lookAt(lookV);
       return;
     }
     if (viewMode === 'first') {
@@ -78,13 +96,22 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     pitch = Math.max(-p.pitchLimit, Math.min(p.pitchLimit, pitch - input.lookY));
     eyeH += (eyeWant - eyeH) * Math.min(1, dt * 9);
     if (hide) {
-      // 隠れている間は、覗く向きの左右 40 度・上下の決まった範囲だけ見回せる。動かない
+      // 隠れている間は、外を見る向きの左右 50 度・上下の決まった範囲だけ見回せる。動かない
       const c = hide.yaw + 180;   // 外を見る向き（プレイヤーの向きの約束は -Z が前）
       const dy = ((yaw - c + 540) % 360) - 180;
-      yaw = c + Math.max(-40, Math.min(40, dy));
+      yaw = c + Math.max(-50, Math.min(50, dy));
       pitch = Math.max(hide.pitchMin, Math.min(hide.pitchMax, pitch));
-      body.setPosition(hide.eyeX, hide.y, hide.eyeZ);
+      body.setPosition(hide.camX, hide.y, hide.camZ);
       body.setEulerAngles(0, yaw, 0);
+      placeCamera(0);
+      return;
+    }
+    if (cover) {
+      // 壁裏隠れ：体は動かさない（壁に沿った横歩きは試合の計算が動かす）。見回すのはカメラだけ
+      coverYaw = Math.max(-55, Math.min(55, coverYaw - input.lookX));
+      coverPitch = Math.max(-35, Math.min(20, coverPitch - input.lookY));
+      pos.x = cover.x; pos.z = cover.z; pos.y = cover.y; groundY = cover.y;
+      body.setPosition(cover.x, cover.y, cover.z);
       placeCamera(0);
       return;
     }
@@ -134,12 +161,14 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     get viewMode() { return viewMode; },
     setViewMode(mode) { viewMode = mode === 'third' ? 'third' : 'first'; thirdDist = THIRD_DIST; placeCamera(0); },
     setAreaRadius(r) { areaRadius = r; },
-    /** 隠れる（ベッドの下・タンスの中）：その場所の隙間から覗く。null で解除 */
+    /** 隠れる（ベッドの下・タンスの中）：三人称。家具の上の少し後ろから、外を見る向きを見る。null で解除 */
     setHide(spot) {
       if (!spot) { hide = null; return; }
-      hide = { ...spot, pitchMin: spot.kind === 'bed' ? -8 : -30, pitchMax: spot.kind === 'bed' ? 18 : 20 };
+      const a = (spot.yaw * Math.PI) / 180;   // 外を見る向き（0 で +Z）
+      hide = { ...spot, camX: spot.x - Math.sin(a) * 0.15, camZ: spot.z - Math.cos(a) * 0.15, camH: spot.kind === 'bed' ? 1.35 : 2.35,
+        pitchMin: -55, pitchMax: 8 };
       pos.x = spot.x; pos.z = spot.z; pos.y = spot.y; groundY = spot.y;
-      yaw = spot.yaw + 180; pitch = 0;
+      yaw = spot.yaw + 180; pitch = -20;
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
     },
     /** 隠れ場所から出た：x, z, y に立ち、yaw を向く */
@@ -150,6 +179,22 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
     },
     get hidden() { return !!hide; },
+    /**
+     * 壁裏隠れ（三人称）：c = { x, y, z, nx, nz, px, pz }。毎フレーム今の位置と覗く向きを渡す。null で解除（そのとき、壁から離れた所に立つ）
+     */
+    setCover(c) {
+      if (!c) {
+        if (!cover) return;
+        const was = cover; cover = null;
+        pos.x = was.x + was.nx * 0.2; pos.z = was.z + was.nz * 0.2;
+        yaw = (Math.atan2(-was.nx, -was.nz) * 180) / Math.PI; pitch = -2;
+        update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
+        return;
+      }
+      if (!cover) { coverYaw = 0; coverPitch = -6; }
+      cover = c;
+    },
+    get inCover() { return !!cover; },
     /** 立てる高さを決める仕組み（家の床と階段）を使う */
     setGround(fn) { groundAt = fn; pos.y = fn(pos.x, pos.z, null); groundY = pos.y; },
     setFrozen(v) { frozen = v; },

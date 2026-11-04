@@ -10,6 +10,8 @@
 //   ・目と耳（game/senses.js）：前の 120 度で、体の半分以上が直接見える相手にだけ気づく。音が聞こえても気づく。
 //     見失ったら（聞こえただけのときも）、最後に分かった所へ行って見回し、見つからなければ元の行動に戻る。
 //     近づくときはしゃがんで忍び寄る（足音が小さい）。相手が見えたら立って戦う
+//   ・壁裏隠れ（game/cover.js）：見えない相手の足音が近づいてくると、ときどき近くの家の壁に背を付けて待ち伏せし、
+//     近くに来た相手を暗殺する。しばらくしても来なければ、または見えている相手が離れていれば、壁から離れる
 // 後で、逃走・アイテムの使用を足す
 import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
@@ -42,6 +44,9 @@ export function createBot(fighter, rng, fighters) {
     seenAssassin: null,  // 回避するか決めた暗殺
     known: new Map(),    // 気づいた相手 → { x, y, z, age（分かってからの秒）, seen（今見えているか） }
     look: null,          // 最後に分かった所へ探しに行っている { t（相手）, x, z, arrived, timer, base（見回しの中心の向き）, stuck }
+    ambush: null,        // 待ち伏せする壁へ向かっている { spot, side, wait, stuck, lx, lz }
+    coverTimer: 0,       // 壁に隠れている残りの時間
+    ambushCooldown: 8,   // 次に待ち伏せしようとするまで
     lastThink: 0,
     input: { forward: 0, strafe: 0, run: false, yaw: fighter.yaw, pitch: 0, attack: false, guard: false, left: false, dodge: false, dodgeX: 0, dodgeY: 0, search: false },
   };
@@ -210,6 +215,45 @@ export function createBot(fighter, rng, fighters) {
     return true;
   }
 
+  /**
+   * 待ち伏せ：見えない相手（音で分かった）が近いとき、近くの壁へ行って背を付ける
+   * @returns {boolean} 壁へ向かっている（または着いて隠れた）か
+   */
+  function ambush(world) {
+    const C = world.cover;
+    if (!C) return false;
+    if (!b.ambush) {
+      if (b.ambushCooldown > 0) return false;
+      let foe = null;
+      for (const [t, k] of b.known) if (!k.seen && k.age < 1 && Math.hypot(k.x - f.x, k.z - f.z) < 16) { foe = k; break; }
+      if (!foe) return false;
+      b.ambushCooldown = 12;
+      if (rng.next() > 0.55) return false;
+      const spot = C.nearest(f, 7);
+      if (!spot) return false;
+      const p = { x: spot.seg.ax + spot.seg.tx * spot.t, z: spot.seg.az + spot.seg.tz * spot.t };
+      const y = (f.y ?? 0) + 0.5;
+      if (world.sight?.blocked([f.x, y, f.z], [p.x, y, p.z])) return false;   // 壁の向こう側など、まっすぐ行けない所は選ばない
+      // 覗く向き：相手が来る側（背を付けたときの右か左か）
+      const rx = -spot.seg.nz, rz = spot.seg.nx;
+      b.ambush = { spot, p, side: (foe.x - p.x) * rx + (foe.z - p.z) * rz > 0 ? 'r' : 'l', wait: 12 + rng.next() * 10, stuck: 0, lx: f.x, lz: f.z };
+    }
+    const A = b.ambush, d = Math.hypot(A.p.x - f.x, A.p.z - f.z);
+    if (d < 0.45) {
+      b.ambush = null;
+      if (C.enter(f, A.spot, A.side)) { b.coverTimer = A.wait; b.ambushCooldown = 30; return true; }
+      return false;
+    }
+    if (Math.hypot(f.x - A.lx, f.z - A.lz) < 0.1) A.stuck += 0.25; else A.stuck = 0;
+    A.lx = f.x; A.lz = f.z;
+    if (A.stuck > 2) { b.ambush = null; return false; }
+    setStance(f, 'stand');
+    b.input.yaw = yawTo(f, A.p.x, A.p.z);
+    b.input.forward = Math.min(1, d / 1.5 + 0.3); b.input.strafe = 0; b.input.run = false;
+    b.input.attack = false; b.input.guard = false; b.input.left = false;
+    return true;
+  }
+
   /** 考えて入力を決める（0.15〜0.3 秒ごと） */
   function think(world) {
     b.input.search = false;
@@ -221,6 +265,17 @@ export function createBot(fighter, rng, fighters) {
       const near = fighters.some((t) => t !== f && t.alive && !t.hidden && Math.hypot(t.x - s.outX, t.z - s.outZ) < 2.6 && Math.abs((t.y ?? 0) - s.y) < 1.2);
       b.input.attack = near && !b.input.attack && rng.next() < 0.7;
       if (!near && b.hideTimer <= 0) { world.hiding?.exit(f); b.route = { pts: [...s.route].reverse(), i: 0, why: 'leave' }; b.hideCooldown = 20; }
+      return;
+    }
+    // 壁に隠れている：近くに来た相手を暗殺（近くに来たらいつでも）。時間が来たら、または見えている相手が離れていれば壁から離れる
+    if (f.cover) {
+      b.coverTimer -= 0.25;
+      b.input.forward = 0; b.input.strafe = 0; b.input.left = false; b.input.dodge = false; b.input.guard = false;
+      perceive(world, b.lastThink || 0.2);
+      const near = fighters.some((t) => t !== f && t.alive && !t.hidden && Math.hypot(t.x - f.x, t.z - f.z) < 3.0 && Math.abs((t.y ?? 0) - (f.y ?? 0)) < 1.2);
+      b.input.attack = near && !b.input.attack && rng.next() < 0.75;
+      const seen = pickTarget();
+      if (!near && (b.coverTimer <= 0 || (seen && Math.hypot(seen.x - f.x, seen.z - f.z) > 7 && rng.next() < 0.15))) world.cover?.exit(f);
       return;
     }
     // 暗殺されそう：ときどき回避する（猶予は短い）
@@ -258,7 +313,9 @@ export function createBot(fighter, rng, fighters) {
     if (H && !b.route && b.knownSpot && !b.target) b.route = routeTo(b.knownSpot, 'search');
     b.lastX = f.x; b.lastZ = f.z;
     if (b.route) { followRoute(world); if (b.route?.why !== 'leave' || !b.target) return; b.route = null; }
-    if (!b.target) { if (!investigate(world)) wander(world); return; }
+    b.ambushCooldown -= 0.25;
+    if (!b.target) { if (!ambush(world) && !investigate(world)) wander(world); return; }
+    b.ambush = null;
     const t = b.target, d = Math.hypot(t.x - f.x, t.z - f.z), weapon = w();
     const lowHp = f.stats.hp < f.stats.maxHp * 0.35;
     b.input.run = d > 9;
@@ -346,8 +403,8 @@ export function createBot(fighter, rng, fighters) {
       if (b.strafeTimer <= 0) { b.strafeTimer = 1 + rng.next() * 2; b.strafeDir = rng.next() < 0.5 ? -1 : 1; }
       if (b.thinkTimer <= 0) { b.lastThink = b.thinkTimer = 0.15 + rng.next() * 0.15; think(world); }
 
-      // 隠れている・無防備なときは動かない
-      if (f.hidden || f.helpless > 0) return 0;
+      // 隠れている・壁に隠れている・無防備なときは動かない
+      if (f.hidden || f.cover || f.helpless > 0) return 0;
       // 相手がいれば、毎フレーム相手の方を向く（弓は矢が落ちる分だけ上を狙う）。道順を歩いている間は道の方
       const t = b.target;
       if (t && t.alive && !b.route) {

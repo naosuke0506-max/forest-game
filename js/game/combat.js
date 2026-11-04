@@ -46,9 +46,10 @@ export function attackStats(weaponId, heavy = false) {
  * @param {(x: number, z: number) => number} opt.heightAt 地面の高さ
  * @param {(x: number, z: number, y?: number) => number} [opt.groundAt] 立てる高さ（家の床・階段。無ければ地面）
  * @param {object} [opt.hiding] 隠れ場所（game/hiding.js）。隠れている人には攻撃が当たらない
+ * @param {object} [opt.cover] 壁裏隠れ（game/cover.js）。壁に背を付けた所から暗殺できる
  * @param {object} opt.obstacles 木の幹や岩（矢が刺さる）
  */
-export function createCombat({ match, heightAt, obstacles, groundAt = null, hiding = null }) {
+export function createCombat({ match, heightAt, obstacles, groundAt = null, hiding = null, cover = null }) {
   const floorAt = groundAt || ((x, z) => heightAt(x, z));
   const yOf = (f) => f.y ?? heightAt(f.x, f.z);   // 足の高さ（家の二階にいれば高い）
   const projectiles = [];
@@ -89,6 +90,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     }
     target.stats.hp -= amount;
     target.hitFlash = 0.25;
+    if (target.cover) cover?.exit(target);   // 攻撃を受けたら壁から離れる
     target.lastHitBy = attacker;
     if (!guarded) {                             // まともに受けるとひるむ（振りかぶりも止まる）
       target.stun = Math.max(target.stun, COMBAT.hitStun);
@@ -236,6 +238,22 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
           emit('assassinate', { attacker: f, target: t });
         }
         return;
+      }
+      // 壁裏隠れ：攻撃ボタンで、近くの相手へ飛びかかって暗殺（近くに来たらいつでも。猶予の間に相手が回避すると失敗）。
+      // 近くに相手がいなければ、壁から離れてふつうに攻撃する。左手・回避を押しても壁から離れて、そのまま動く
+      if (f.cover) {
+        f.guarding = false;
+        if (pressed) {
+          const t = nearestFoe(f, ASSN_REACH);
+          cover?.exit(f);
+          if (t) {
+            faceTo(f, t);
+            f.action = { kind: 'assassinate', t: 0, target: t, dodged: false };
+            emit('assassinate', { attacker: f, target: t });
+            return;
+          }
+        } else if (leftPressed || dodgePressed) cover?.exit(f);
+        else return;
       }
       // 姿勢：伏せる・起き上がる途中は何もできない。伏せているときは、攻撃・左手・回避を押すと起き上がる（その押下では何もしない）。
       // しゃがんでいれば、すぐ立って、そのまま攻撃・防御・回避する（game/stance.js）
