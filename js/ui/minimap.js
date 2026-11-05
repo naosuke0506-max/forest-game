@@ -316,7 +316,7 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     g.font = `700 ${Math.round(s / 20)}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
     g.fillStyle = '#3b2a17';
     g.textAlign = 'left';
-    g.fillText('静かな森', s * 0.04, s * 0.055);
+    g.fillText(L.title, s * 0.04, s * 0.055);
     g.font = `${Math.round(s / 42)}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
     g.fillText(L.span, s * 0.045, s * 0.1);
     // 方位（右上）
