@@ -6,6 +6,7 @@
 //   1. エリアの色に、地面の起伏の陰影（北西から光が当たる）と細かなむらを重ねる（1 画素 ≒ 1m）
 //   2. 2 倍の細かさの絵に広げ、木の葉の広がり（上から見た丸）・道・村の家と柵・外周の柵を描く
 // 毎回は、自分の矢印と見ている向きだけを重ねる。ほかのプレイヤーは描かない（見つけるのは自分の目で）
+import { L } from './labels.js';
 import { ZONE_NAMES } from '../world/zones.js';
 import { fbm } from '../core/random.js';
 
@@ -245,9 +246,9 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     ctx.font = `700 ${Math.round(size / 11)}px "Hiragino Mincho ProN", serif`;
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(0,0,0,.7)';
-    ctx.strokeText('北', size / 2, size / 10);
+    ctx.strokeText(L.north, size / 2, size / 10);
     ctx.fillStyle = '#f3dc9a';
-    ctx.fillText('北', size / 2, size / 10);
+    ctx.fillText(L.north, size / 2, size / 10);
     if (zoneNow) {
       ctx.font = `700 ${Math.round(size / 10)}px "Hiragino Mincho ProN", serif`;
       ctx.strokeText(ZONE_NAMES[zoneNow], size / 2, size - size / 9);
@@ -315,9 +316,9 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     g.font = `700 ${Math.round(s / 20)}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
     g.fillStyle = '#3b2a17';
     g.textAlign = 'left';
-    g.fillText('静かな森', s * 0.04, s * 0.055);
+    g.fillText(L.title, s * 0.04, s * 0.055);
     g.font = `${Math.round(s / 42)}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
-    g.fillText('端から端まで 350m', s * 0.045, s * 0.1);
+    g.fillText(L.span, s * 0.045, s * 0.1);
     // 方位（右上）
     {
       const ox = s * 0.89, oy = s * 0.11, r = s * 0.055;
@@ -332,7 +333,7 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       }
       g.font = `700 ${Math.round(s / 34)}px "Hiragino Mincho ProN", serif`;
       g.textAlign = 'center'; g.fillStyle = '#8a2a1a';
-      g.fillText('北', 0, -r - s * 0.018);
+      g.fillText(L.north, 0, -r - s * 0.018);
       g.restore();
     }
     // 縮尺（左下）：50m
@@ -342,17 +343,17 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       g.fillRect(x0, y0 - s * 0.006, len / 2, s * 0.008);
       g.strokeRect(x0, y0 - s * 0.006, len, s * 0.008);
       g.font = `${Math.round(s / 42)}px "Hiragino Mincho ProN", serif`;
-      g.textAlign = 'left'; g.fillText('50m', x0 + len + s * 0.01, y0 - s * 0.002);
+      g.textAlign = 'left'; g.fillText(`50 ${L.meter}`, x0 + len + s * 0.01, y0 - s * 0.002);
     }
     // 凡例（右下）
     {
       const x0 = s * 0.74, y0 = s * 0.85, lh = s * 0.032;
       g.font = `${Math.round(s / 44)}px "Hiragino Mincho ProN", serif`;
       g.textAlign = 'left';
-      const items = [['道', (x, y) => { g.fillStyle = '#c4aa7a'; g.fillRect(x, y - 3, 20, 6); }],
-        ['家', (x, y) => { g.fillStyle = '#a9543a'; g.fillRect(x + 4, y - 6, 12, 12); }],
-        ['木', (x, y) => { g.fillStyle = '#3a5a32'; g.beginPath(); g.arc(x + 10, y, 7, 0, Math.PI * 2); g.fill(); }],
-        ['あなた', (x, y) => drawArrow(g, x + 10, y, 0, 6, true)]];
+      const items = [[L.road, (x, y) => { g.fillStyle = '#c4aa7a'; g.fillRect(x, y - 3, 20, 6); }],
+        [L.house, (x, y) => { g.fillStyle = '#a9543a'; g.fillRect(x + 4, y - 6, 12, 12); }],
+        [L.tree, (x, y) => { g.fillStyle = '#3a5a32'; g.beginPath(); g.arc(x + 10, y, 7, 0, Math.PI * 2); g.fill(); }],
+        [L.you, (x, y) => drawArrow(g, x + 10, y, 0, 6, true)]];
       items.forEach(([name, mark], k) => {
         const y = y0 + k * lh;
         mark(x0, y);

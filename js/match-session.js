@@ -16,6 +16,7 @@ import { createHud } from './ui/hud.js';
 import { createPickups } from './game/pickups.js';
 import { createHiding } from './game/hiding.js';
 import { createCover } from './game/cover.js';
+import { L } from './ui/labels.js';
 import { createSfx, wireSounds } from './audio/sfx.js';
 import { createPickupViews } from './render/pickup-view.js';
 import { createCraftUi } from './ui/craft.js';
@@ -42,7 +43,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     [others[i], others[j]] = [others[j], others[i]];
   }
   const names = [...BOT_NAMES];
-  const fighters = [createFighter({ id: 0, name: 'あなた', char: myChar, isPlayer: true, color: PLAYER_COLOR })];
+  const fighters = [createFighter({ id: 0, name: L.you, char: myChar, isPlayer: true, color: PLAYER_COLOR })];
   for (let i = 0; i < 3; i++) {
     const name = names.splice(Math.floor(rng.next() * names.length), 1)[0];
     fighters.push(createFighter({ id: i + 1, name, char: others[i % others.length], isPlayer: false, color: BOT_COLORS[i] }));
@@ -115,15 +116,15 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const leftBtn = document.getElementById('btn-left');
   setBtn(leftBtn, me.left === 'guard' ? ICONS.shield : me.left === 'switch' ? ICONS.switch : ICONS.heavy, CHARACTERS[me.char].leftLabel);
   leftBtn.classList.toggle('guard', me.left === 'guard');
-  setBtn(document.getElementById('btn-dodge'), ICONS.dodge, '回避');
+  setBtn(document.getElementById('btn-dodge'), ICONS.dodge, L.dodge);
   document.getElementById('settings-btn').innerHTML = ICONS.gear;
   const attackBtn = document.getElementById('btn-attack');
-  const attackLabel = () => (WEAPONS[me.weapon].kind === 'bow' ? '射る' : me.weapon === 'spear' ? '突き' : '攻撃');
+  const attackLabel = () => (WEAPONS[me.weapon].kind === 'bow' ? L.shoot : me.weapon === 'spear' ? L.thrust : L.attack);
   let attackMode = '';   // 攻撃ボタンの今の表示（ふつう / 暗殺 / とどめ）
   const refreshAttack = (mode = attackMode) => {
     attackMode = mode;
-    if (mode === 'assassinate') setBtn(attackBtn, ICONS.dagger, '暗殺');
-    else if (mode === 'finisher') setBtn(attackBtn, ICONS.skull, 'とどめ');
+    if (mode === 'assassinate') setBtn(attackBtn, ICONS.dagger, L.assassinate);
+    else if (mode === 'finisher') setBtn(attackBtn, ICONS.skull, L.finisher);
     else setBtn(attackBtn, weaponIconOf(me.weapon), attackLabel());
   };
   refreshAttack();
@@ -134,7 +135,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const craftUi = createCraftUi(me, (act, id) => {
     const name = id ? WEAPONS[id].name : CHARACTERS[me.char].armorName;
     if (act !== 'equip') { sfx.craft(); senses.noise(me, 'craft'); }
-    if (act === 'make') hud.addFeed(`${name}を作った（クラフト画面の「装備」で持ち替え）`);
+    if (act === 'make') hud.addFeed(`${name}を作った（${L.craft}の「${L.equip}」で持ち替え）`);
     else if (act === 'upgrade') hud.addFeed(`${name}を強化した（強化 ${levelOf(me, id)}）`);
     else if (act === 'armor') hud.addFeed(`${name}を強化した（強化 ${me.armorLevel}）`);
     else if (act === 'equip') { hud.addFeed(`${name}に持ち替えた`); refreshAttack(); }
@@ -147,7 +148,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   });
   let nearItem = null, nearSpot = null, nearWall = null, useTimer = 0;
   const searchBtn = document.getElementById('btn-search');
-  setBtn(searchBtn, ICONS.eye, '探す');
+  setBtn(searchBtn, ICONS.eye, L.search);
   // 姿勢ボタン：押したときにすること（立っていれば「しゃがむ」、しゃがむ・伏せていれば「立つ」）。長押しで伏せる
   const stanceBtn = document.getElementById('btn-stance');
   let stanceShown = '';
@@ -155,8 +156,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     const now = me.stanceTo || me.stance;
     if (now === stanceShown) return;
     stanceShown = now;
-    if (now === 'stand') setBtn(stanceBtn, ICONS.crouch, 'しゃがむ');
-    else setBtn(stanceBtn, ICONS.stand, now === 'prone' ? '起きる' : '立つ');
+    if (now === 'stand') setBtn(stanceBtn, ICONS.crouch, L.crouch);
+    else setBtn(stanceBtn, ICONS.stand, now === 'prone' ? L.getUp : L.stand);
     stanceBtn.classList.toggle('low', now !== 'stand');
   };
   refreshStance();
@@ -214,7 +215,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (attacker === me) hud.showDamage(player.camera, target.x, (target.y ?? terrain.heightAt(target.x, target.z)) + 1.6, target.z, amount, guarded);
     if (target === me) hud.hurt(amount / 25);
   });
-  combat.on('guardBreak', ({ fighter }) => { if (fighter === me) hud.addFeed('防御が崩れた'); });
+  combat.on('guardBreak', ({ fighter }) => { if (fighter === me) hud.addFeed('防禦が崩れた'); });
 
   // 脱落したら、生き残りを肩越しに観戦する
   let spectating = null;
@@ -224,7 +225,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (!alive.length) return;
     const i = alive.indexOf(spectating);
     spectating = alive[(i + 1) % alive.length];
-    document.getElementById('spectate-name').textContent = `観戦中：${spectating.name}`;
+    document.getElementById('spectate-name').textContent = `${L.spectating}：${spectating.name}`;
   };
   document.getElementById('spectate-next').addEventListener('click', nextSpectate);
   match.on('eliminated', ({ victim }) => {
@@ -257,7 +258,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   cover.on('enter', ({ fighter }) => {
     if (fighter !== me) return;
     views.get(me).setVisible(true); viewModel.setVisible(false);
-    hud.addFeed('壁に隠れた（左右で横歩き、前へ倒すと離れる）');
+    hud.addFeed('壁に背を付けた（左右で横歩き、前へ倒すと離れる）');
   });
   cover.on('exit', ({ fighter }) => {
     if (fighter !== me) return;
@@ -349,11 +350,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         stanceBtn.hidden = !running || !me.alive || !!me.hidden || !!me.cover;
         if (mode && useBtn.dataset.label !== mode + (nearItem?.amount ?? '')) {
           useBtn.dataset.label = mode + (nearItem?.amount ?? '');
-          if (mode === 'exit') setBtn(useBtn, ICONS.exit, '出る');
-          else if (mode === 'hide') setBtn(useBtn, ICONS.hood, '隠れる');
-          else if (mode === 'wall') setBtn(useBtn, ICONS.wall, '壁に隠れる');
-          else if (mode === 'leave') setBtn(useBtn, ICONS.exit, '離れる');
-          else if (mode === 'crate') setBtn(useBtn, ICONS.crate, '開ける');
+          if (mode === 'exit') setBtn(useBtn, ICONS.exit, L.exit);
+          else if (mode === 'hide') setBtn(useBtn, ICONS.hood, L.hide);
+          else if (mode === 'wall') setBtn(useBtn, ICONS.wall, L.wall);
+          else if (mode === 'leave') setBtn(useBtn, ICONS.exit, L.leave);
+          else if (mode === 'crate') setBtn(useBtn, ICONS.crate, L.crate);
           else setBtn(useBtn, ICONS[mode], `${MATERIALS[mode].name}<small>×${nearItem.amount}</small>`);
         }
         searchBtn.hidden = !nearSpot;

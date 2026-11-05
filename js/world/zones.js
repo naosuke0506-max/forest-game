@@ -10,7 +10,7 @@ import { fbm } from '../core/random.js';
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const DEG = Math.PI / 180;
 
-export const ZONE_NAMES = { mixed: '森', deep: '深い森', prairie: '大草原', castle: '村' };
+export const ZONE_NAMES = { mixed: '混淆林', deep: '幽邃林', prairie: '大曠野', castle: '邑' };   // 場所の名前（漢字だけ・旧字体）
 
 /**
  * @param {number} seed 種（同じ種なら同じ配置）

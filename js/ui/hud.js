@@ -1,5 +1,6 @@
 // 試合中の画面表示：フェーズと残り時間、右上のランキング、ポイントの知らせ、
 // 画面中央の大きな知らせ、フェーズ報酬の選択、試合の結果
+import { L } from './labels.js';
 import * as pc from 'playcanvas';
 import { CHARACTERS, PHASES } from '../game/data.js';
 import { TIMES } from '../world/time-of-day.js';
@@ -54,7 +55,7 @@ export function createHud(match, me) {
   function showReward() {
     const r = me.pendingReward;
     shownReward = r;
-    reward.querySelector('.reward-head').textContent = `${PHASES[r.phase].name} 突破`;
+    reward.querySelector('.reward-head').textContent = `${PHASES[r.phase].name} ${L.cleared}`;
     const cards = reward.querySelector('.reward-cards');
     cards.innerHTML = '';
     r.options.forEach((o, i) => {
@@ -74,10 +75,10 @@ export function createHud(match, me) {
   });
   match.on('eliminated', ({ victim, killer }) => {
     addFeed(killer ? `${killer.name} が ${victim.name} を倒した` : `${victim.name} が脱落した`);
-    if (victim === me) centerMsg('脱落', '残りの戦いを見届ける', 4);
+    if (victim === me) centerMsg(L.out, '残りの戦いを見届ける', 4);
   });
   match.on('phaseStart', ({ info }) => centerMsg(`${info.name}・${TIMES[info.time]?.name ?? ''}`, info.note));
-  match.on('overtime', () => centerMsg('延長戦', '最後の一人になるまで終わらない'));
+  match.on('overtime', () => centerMsg(L.overtime, '最後の一人になるまで終わらない'));
   match.on('rewardChosen', ({ fighter, option }) => {
     if (fighter !== me) return;
     reward.hidden = true;
@@ -153,7 +154,7 @@ export function createHud(match, me) {
       phaseName.textContent = `${match.phaseInfo.name}・${TIMES[match.phaseInfo.time]?.name ?? ''}`;
       if (shownTime !== match.phaseInfo.time) { shownTime = match.phaseInfo.time; phaseIcon.innerHTML = timeIcon(shownTime); }
       if (match.overtime) {
-        phaseTime.textContent = '延長戦';
+        phaseTime.textContent = L.overtime;
         phaseTime.classList.add('overtime');
       } else {
         phaseTime.textContent = formatTime(match.timeLeft);
@@ -173,10 +174,10 @@ export function createHud(match, me) {
     showResult({ ranking: list, winner, survivor }) {
       reward.hidden = true;
       const res = $('#result');
-      res.querySelector('.result-head').textContent = winner === me ? '勝利' : `${winner.name} の勝利`;
+      res.querySelector('.result-head').textContent = winner === me ? L.victory : `${winner.name} ${L.victory}`;
       res.querySelector('.result-list').innerHTML = list.map((f, i) => {
-        const tags = [CHARACTERS[f.char]?.name, f === survivor ? '最後の生き残り' : (f.alive ? '' : '脱落')].filter(Boolean).join('・');
-        return `<li class="${f === me ? 'me' : ''}"><span>${i + 1}</span><span>${esc(f.name)}</span><span>${f.points} 点</span><span class="why">${esc(tags)}　撃破 ${f.kills}</span></li>`;
+        const tags = [CHARACTERS[f.char]?.name, f === survivor ? L.survivor : (f.alive ? '' : L.out)].filter(Boolean).join('・');
+        return `<li class="${f === me ? 'me' : ''}"><span>${i + 1}</span><span>${esc(f.name)}</span><span>${f.points} ${L.points}</span><span class="why">${esc(tags)}　${L.kills} ${f.kills}</span></li>`;
       }).join('');
       res.hidden = false;
     },

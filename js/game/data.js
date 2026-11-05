@@ -18,17 +18,17 @@
  * 防具はキャラごとに 1 つ（強化は手順 4）。扱える武器の全体は docs/DESIGN.md
  */
 export const CHARACTERS = {
-  shield:  { name: '盾剣騎士', model: 'shield', weight: 'medium', left: 'guard', leftLabel: '防御',  weaponClass: 'shieldsword', weapon: 'armingsword', crafts: ['armingsword', 'mace'], armorName: '青鋼の板金鎧', shield: true,  armor: 0.85, speed: 1.0,  maxHp: 105, sight: 40,
+  shield:  { name: '楯劍騎士', model: 'shield', weight: 'medium', left: 'guard', leftLabel: '防禦',  weaponClass: 'shieldsword', weapon: 'armingsword', crafts: ['armingsword', 'mace'], armorName: '青鋼板金鎧', shield: true,  armor: 0.85, speed: 1.0,  maxHp: 105, sight: 40,
              desc: '盾と片手武器。受けが固く、攻守のつり合いがよい（中装より少し軽い鎧）' },
-  sword:   { name: '剣騎士',   model: 'sword', weight: 'medium', left: 'heavy', leftLabel: '強攻撃',   weaponClass: 'sword',       weapon: 'longsword',   crafts: ['longsword', 'armingsword'], armorName: '十字兜の鎧', shield: false, armor: 0.8,  speed: 0.97, maxHp: 110, sight: 35,
+  sword:   { name: '劍騎士',   model: 'sword', weight: 'medium', left: 'heavy', leftLabel: '重擊',   weaponClass: 'sword',       weapon: 'longsword',   crafts: ['longsword', 'armingsword'], armorName: '十字兜鎧', shield: false, armor: 0.8,  speed: 0.97, maxHp: 110, sight: 35,
              desc: '両手の剣と二刀流。振りが大きく、広く斬れる（中装より少し重い鎧）' },
-  polearm: { name: '長柄騎士', model: 'polearm', weight: 'heavy', left: 'heavy', leftLabel: 'なぎ払い', weaponClass: 'polearm',     weapon: 'spear',       crafts: ['spear'], armorName: '鋲打ちの重鎧', shield: false, armor: 0.7,  speed: 0.9,  maxHp: 120, sight: 35,
+  polearm: { name: '長柄騎士', model: 'polearm', weight: 'heavy', left: 'heavy', leftLabel: '薙拂', weaponClass: 'polearm',     weapon: 'spear',       crafts: ['spear'], armorName: '鋲打重鎧', shield: false, armor: 0.7,  speed: 0.9,  maxHp: 120, sight: 35,
              desc: '長柄の武器。間合いが一番長く、近づく前に突ける（重めの重装）' },
-  blunt:   { name: '打撃騎士', model: 'blunt', weight: 'heavy', left: 'heavy', leftLabel: '叩きつけ',   weaponClass: 'blunt',       weapon: 'mace',        crafts: ['mace'], armorName: '大兜の鎧', shield: false, armor: 0.75, speed: 0.92, maxHp: 120, sight: 30,
+  blunt:   { name: '打擊騎士', model: 'blunt', weight: 'heavy', left: 'heavy', leftLabel: '擊碎',   weaponClass: 'blunt',       weapon: 'mace',        crafts: ['mace'], armorName: '大兜鎧', shield: false, armor: 0.75, speed: 0.92, maxHp: 120, sight: 30,
              desc: '打撃武器。一撃が重く、防御の上からも響く（重装より少し軽い鎧）' },
-  archer:  { name: '弓兵',     model: 'archer', weight: 'light', left: 'switch', leftLabel: '持ち替え',  weaponClass: 'bow',         weapon: 'longbow', sidearm: 'dagger', crafts: ['longbow', 'dagger'], armorName: '革と鎖の軽鎧', shield: false, armor: 0.95, speed: 1.05, maxHp: 90, sight: 55,
+  archer:  { name: '弓兵',     model: 'archer', weight: 'light', left: 'switch', leftLabel: '持替',  weaponClass: 'bow',         weapon: 'longbow', sidearm: 'dagger', crafts: ['longbow', 'dagger'], armorName: '革鎖輕鎧', shield: false, armor: 0.95, speed: 1.05, maxHp: 90, sight: 55,
              desc: '弓で遠くから射る。引くほど強い。近寄られると弱い（軽装より少し重い）' },
-  cleric:  { name: '聖職者',   model: 'cleric', weight: 'light', left: 'heavy', leftLabel: '強攻撃',  weaponClass: 'cleric',      weapon: 'mace',        crafts: ['mace'], armorName: '聖職者の衣', shield: false, armor: 1.0,  speed: 1.08, maxHp: 95, sight: 45,
+  cleric:  { name: '祓魔僧',   model: 'cleric', weight: 'light', left: 'heavy', leftLabel: '重擊',  weaponClass: 'cleric',      weapon: 'mace',        crafts: ['mace'], armorName: '祓魔法衣', shield: false, armor: 1.0,  speed: 1.08, maxHp: 95, sight: 45,
              desc: '聖なる奇跡を扱う（奇跡は後で追加）。今はメイスで戦う（軽装）' },
 };
 
@@ -39,12 +39,12 @@ export const CHARACTERS = {
  * 弓は押している間に引き（drawTime で満タン）、離すと放つ。引いた割合で威力と速さが変わる
  */
 export const WEAPONS = {
-  armingsword: { name: 'アーミングソード', kind: 'melee', damage: 22, reach: 2.1, arc: 110, windup: 0.22, recovery: 0.34, stamina: 12, guardPierce: 0.0 },
-  longsword: { name: 'ロングソード', kind: 'melee', damage: 28, reach: 2.5, arc: 120, windup: 0.28, recovery: 0.38, stamina: 16, guardPierce: 0.0 },
-  mace:      { name: 'メイス',       kind: 'melee', damage: 32, reach: 1.9, arc: 90,  windup: 0.36, recovery: 0.44, stamina: 18, guardPierce: 0.35 },
-  spear:     { name: 'スピア',       kind: 'melee', damage: 22, reach: 3.1, arc: 34,  windup: 0.22, recovery: 0.30, stamina: 12, guardPierce: 0.0 },
-  dagger:    { name: 'ダガー',       kind: 'melee', damage: 14, reach: 1.5, arc: 90,  windup: 0.16, recovery: 0.26, stamina: 8,  guardPierce: 0.0 },
-  longbow:   { name: 'ロングボウ',   kind: 'bow',   damage: 30, drawTime: 0.75, minDraw: 0.2, speed: 48, stamina: 8, reach: 1.2 },
+  armingsword: { name: '片手劍', kind: 'melee', damage: 22, reach: 2.1, arc: 110, windup: 0.22, recovery: 0.34, stamina: 12, guardPierce: 0.0 },
+  longsword: { name: '長劍', kind: 'melee', damage: 28, reach: 2.5, arc: 120, windup: 0.28, recovery: 0.38, stamina: 16, guardPierce: 0.0 },
+  mace:      { name: '鎚矛',         kind: 'melee', damage: 32, reach: 1.9, arc: 90,  windup: 0.36, recovery: 0.44, stamina: 18, guardPierce: 0.35 },
+  spear:     { name: '槍',           kind: 'melee', damage: 22, reach: 3.1, arc: 34,  windup: 0.22, recovery: 0.30, stamina: 12, guardPierce: 0.0 },
+  dagger:    { name: '短劍',         kind: 'melee', damage: 14, reach: 1.5, arc: 90,  windup: 0.16, recovery: 0.26, stamina: 8,  guardPierce: 0.0 },
+  longbow:   { name: '長弓',         kind: 'bow',   damage: 30, drawTime: 0.75, minDraw: 0.2, speed: 48, stamina: 8, reach: 1.2 },
 };
 
 /**
@@ -53,9 +53,9 @@ export const WEAPONS = {
  *   noise：足音の大きさの倍率（bot に聞こえる距離）
  */
 export const STANCES = {
-  stand:  { name: '立つ',     eye: 1.6,  height: 1.75, speed: 1,    noise: 1 },
-  crouch: { name: 'しゃがむ', eye: 1.05, height: 1.15, speed: 0.5,  noise: 0.35 },
-  prone:  { name: '伏せる',   eye: 0.32, height: 0.45, speed: 0.22, noise: 0.15 },
+  stand:  { name: '立',       eye: 1.6,  height: 1.75, speed: 1,    noise: 1 },
+  crouch: { name: '屈身',     eye: 1.05, height: 1.15, speed: 0.5,  noise: 0.35 },
+  prone:  { name: '伏臥',     eye: 0.32, height: 0.45, speed: 0.22, noise: 0.15 },
 };
 /** 伏せる・起き上がるのにかかる時間（秒。その間は動けない）。長押しと見なす時間 */
 export const STANCE_TIME = { down: 0.7, up: 0.7, hold: 0.45 };
@@ -83,9 +83,9 @@ export const SENSES = {
  *   invuln：攻撃が当たらない時間 [始め, 終わり]（秒）、stamina：使うスタミナ
  */
 export const DODGE = {
-  light:  { name: '軽やかな前転', anim: 'roll', duration: 0.55, distance: 4.5, invuln: [0.04, 0.38], stamina: 16 },
-  medium: { name: '前転',         anim: 'roll', duration: 0.75, distance: 3.8, invuln: [0.08, 0.42], stamina: 20 },
-  heavy:  { name: '回避ステップ', anim: 'step', duration: 0.5,  distance: 2.4, invuln: [0.04, 0.2],  stamina: 24 },
+  light:  { name: '輕身前轉', anim: 'roll', duration: 0.55, distance: 4.5, invuln: [0.04, 0.38], stamina: 16 },
+  medium: { name: '前轉',         anim: 'roll', duration: 0.75, distance: 3.8, invuln: [0.08, 0.42], stamina: 20 },
+  heavy:  { name: '跳避',         anim: 'step', duration: 0.5,  distance: 2.4, invuln: [0.04, 0.2],  stamina: 24 },
 };
 
 /**
@@ -105,9 +105,9 @@ export const HEAVY = {
  */
 export const MATERIALS = {
   wood:  { name: '木材' },
-  stone: { name: '石' },
-  iron:  { name: '鉄くず' },
-  cloth: { name: '革・布' },
+  stone: { name: '石塊' },
+  iron:  { name: '屑鐵' },
+  cloth: { name: '皮革' },
 };
 export const MATERIAL_KEYS = Object.keys(MATERIALS);
 /** 最初に持っている素材（全キャラ同じ） */
@@ -171,7 +171,7 @@ export const COMBAT = {
 };
 
 /** bot の名前（練習モードの相手） */
-export const BOT_NAMES = ['玄馬', '志乃', '伊吹', '颯', '朱音', '鉄心'];
+export const BOT_NAMES = ['玄馬', '志乃', '伊吹', '颯', '朱音', '鐵心'];
 
 /**
  * フェーズ。duration：長さ（秒）、radius：歩ける範囲の半径（m）、time：時間帯（world/time-of-day.js の TIMES）
@@ -180,11 +180,11 @@ export const BOT_NAMES = ['玄馬', '志乃', '伊吹', '颯', '朱音', '鉄心
  */
 export const AREA_RADIUS = 175;   // js/config.js の world.playRadius と同じ値（端から端まで 350m）
 export const PHASES = [
-  { name: '第一フェーズ', duration: 180, radius: AREA_RADIUS, time: 'morning', note: '朝の森。素材を集め、装備を整えよ' },
-  { name: '第二フェーズ', duration: 180, radius: AREA_RADIUS, time: 'day',     note: '日が高くなった' },
-  { name: '第三フェーズ', duration: 180, radius: AREA_RADIUS, time: 'dusk',    note: '日が傾き、森が赤く染まる' },
-  { name: '第四フェーズ', duration: 180, radius: AREA_RADIUS, time: 'night',   note: '夜が来た。暗い森に気をつけよ' },
-  { name: '最終フェーズ', duration: 240, radius: AREA_RADIUS, time: 'night',   note: '最後の一人になるまで終わらない' },
+  { name: '第壹刻', duration: 180, radius: AREA_RADIUS, time: 'morning', note: '朝の森。素材を集め、装備を整えよ' },
+  { name: '第貳刻', duration: 180, radius: AREA_RADIUS, time: 'day',     note: '日が高くなった' },
+  { name: '第參刻', duration: 180, radius: AREA_RADIUS, time: 'dusk',    note: '日が傾き、森が赤く染まる' },
+  { name: '第肆刻', duration: 180, radius: AREA_RADIUS, time: 'night',   note: '夜が来た。暗い森に気をつけよ' },
+  { name: '終刻', duration: 240, radius: AREA_RADIUS, time: 'night',   note: '最後の一人になるまで終わらない' },
 ];
 
 /** ポイント */
@@ -205,9 +205,9 @@ export const REWARD_PICK_TIME = 15;
  * スキルは、戦闘ができてから（手順 2 以降）足す
  */
 export const REWARDS = [
-  { id: 'maxHp',   name: '体力の上限',   unit: '',  values: [10, 15, 20, 30, 40],  apply: (f, v) => { f.stats.maxHp += v; f.stats.hp += v; } },
-  { id: 'attack',  name: '攻撃力',       unit: '%', values: [5, 8, 10, 14, 18],    apply: (f, v) => { f.stats.attack *= 1 + v / 100; } },
-  { id: 'defense', name: '防御力',       unit: '%', values: [5, 8, 10, 14, 18],    apply: (f, v) => { f.stats.defense *= 1 + v / 100; } },
-  { id: 'speed',   name: '移動の速さ',   unit: '%', values: [3, 4, 5, 6, 8],       apply: (f, v) => { f.stats.speed *= 1 + v / 100; } },
-  { id: 'stamina', name: 'スタミナ',     unit: '',  values: [10, 15, 20, 25, 30],  apply: (f, v) => { f.stats.maxStamina += v; } },
+  { id: 'maxHp',   name: '體力上限',     unit: '',  values: [10, 15, 20, 30, 40],  apply: (f, v) => { f.stats.maxHp += v; f.stats.hp += v; } },
+  { id: 'attack',  name: '攻擊力',       unit: '%', values: [5, 8, 10, 14, 18],    apply: (f, v) => { f.stats.attack *= 1 + v / 100; } },
+  { id: 'defense', name: '防禦力',       unit: '%', values: [5, 8, 10, 14, 18],    apply: (f, v) => { f.stats.defense *= 1 + v / 100; } },
+  { id: 'speed',   name: '迅速',         unit: '%', values: [3, 4, 5, 6, 8],       apply: (f, v) => { f.stats.speed *= 1 + v / 100; } },
+  { id: 'stamina', name: '氣力',         unit: '',  values: [10, 15, 20, 25, 30],  apply: (f, v) => { f.stats.maxStamina += v; } },
 ];
