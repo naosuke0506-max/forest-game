@@ -251,6 +251,7 @@ blender -b --python tools/characters/make_motions.py -- source_models/motions/cr
 次の動きは、Tripo の骨に直接付けています。手（剣の持ち手・楯）の位置と向き、足の位置、腰の位置と向きを何か所かの時刻で決め、その間をなめらかにつなぎます。腕と脚は、手と足が届くように関節を曲げます（道具は `tools/characters/ik_rig.py`）。
 
 - `tools/characters/onehand_moves.py`：片手劍の技（踏込突・逆袈裟・袈裟斬（溜めに入る・溜め・放つ）・旋風斬）。`characters.json` で `"onehand": true` のキャラ（楯劍騎士・劍騎士）
+- `tools/characters/longsword_moves.py`：長劍の技（唐竹・横薙・長突・斬返。両手で持ち、左手を柄に添える）。`characters.json` で `"longsword": true` のキャラ（劍騎士）
 - `tools/characters/body_moves.py`：全キャラの体の動き
   - しゃがみ歩き（深くしゃがむ）・伏せから起き上がる（今までの物と入れ替え）
   - 被弾（軽い・重い）とよろめき。それぞれ前・後ろ・左・右から

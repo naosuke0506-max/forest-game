@@ -3,7 +3,7 @@
 | ファイル | 武器 | 出典 |
 |---|---|---|
 | `armingsword.glb` | アーミングソード | 利用者が Tripo AI で作成 |
-| `longsword.glb` | ロングソード | 同上 |
+| `longsword.glb` | 長劍（ロングソード） | 同上（2026-11-08 に作り直した物へ入れ替え） |
 | `spear.glb` | スピア | 同上 |
 | `kite_shield.glb` | カイトシールド | 同上 |
 

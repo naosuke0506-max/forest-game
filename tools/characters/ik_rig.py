@@ -80,7 +80,8 @@ class Rig:
 
         def walk(b):
             self.order.append(b)
-            for c in b.children:
+            # 右腕を左腕より先に解く（両手で持つときは、右手の持ち手の点を見て左手を添えるため）
+            for c in sorted(b.children, key=lambda c: 0 if c.name.startswith('R_') else 1):
                 walk(c)
         for b in bones:
             if b.parent is None:
@@ -168,8 +169,15 @@ class Rig:
                     wrist = (hh + V(*spec['wrist']) * AR).lerp(self.world(spec['wrist_w']), spec['w_mix'])
                 elif 'wrist_w' in spec:
                     wrist = self.world(spec['wrist_w'])
+                elif s == 'L' and 'hilt' in spec:
+                    # 両手持ち：右手の持ち手の点から刃と反対（柄頭）の側へ hilt m の所を左手で握る（手首は肩の側へ少し戻した所）
+                    sp_r, q_r = side_targets['R_sock']
+                    hp = sp_r + (q_r @ Vector((0, 0, 1))) * (spec['hilt'] * self.K)
+                    wrist = hp + (hh - hp).normalized() * (0.055 * self.K)
                 else:
                     wrist = hh + V(*spec['wrist']) * AR
+                if s == 'R' and Wh is not None:
+                    side_targets['R_sock'] = (wrist + Wh @ self.sR.translation, Wh @ self.sR.to_quaternion())
                 Whr = Wh @ self.rest_q[f'{s}_Hand'].inverted() if Wh is not None else None
                 l1, l2 = self.arm[s]
                 elbow, wrist = two_bone(hh, wrist, l1, l2, V(*spec['pole']))

@@ -263,6 +263,23 @@ if ch.get('onehand'):
     for gname, act, meta_c in onehand_moves.build(rig1, g == '1hs'):
         made.append(act); info[gname] = meta_c
 
+# 長劍の技（唐竹・横薙・長突・斬返）：両手で持つ。Tripo の骨に直接付ける（tools/characters/longsword_moves.py）
+if ch.get('longsword'):
+    sys.path.insert(0, here)
+    import ik_rig, longsword_moves
+    if 'K' not in globals():
+        body = max((o for o in bpy.data.objects if o.type == 'MESH' and o not in src_objs), key=lambda o: len(o.data.polygons))
+        zs0 = [(body.matrix_world @ v.co).z for v in body.data.vertices]
+        K = (max(zs0) - min(zs0)) / cfg['height']
+    T.animation_data.action = None
+    for pb in T.pose.bones:
+        pb.rotation_mode = 'QUATERNION'; pb.rotation_quaternion = (1, 0, 0, 0); pb.location = (0, 0, 0)
+    bpy.context.view_layer.update()
+    rig2 = ik_rig.Rig(T, bpy.data.objects['socket_R'], bpy.data.objects['socket_L'], K)
+    rig2.take_fingers(next(a for a in made if a.name == 'idle'))
+    for gname, act, meta_c in longsword_moves.build(rig2):
+        made.append(act); info[gname] = meta_c
+
 # 全キャラの体の動き（しゃがみ歩き・起き上がり・被弾・よろめき、楯を持つキャラは防禦の受けと楯の技）：
 # Tripo の骨に直接付ける（tools/characters/body_moves.py）。同じ名前の動きがあれば入れ替える。這う・伏せの顔の向きも直す
 sys.path.insert(0, here)
