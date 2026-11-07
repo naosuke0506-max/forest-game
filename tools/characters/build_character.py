@@ -257,11 +257,35 @@ if ch.get('onehand'):
     body = max((o for o in bpy.data.objects if o.type == 'MESH' and o not in src_objs), key=lambda o: len(o.data.polygons))
     zs0 = [(body.matrix_world @ v.co).z for v in body.data.vertices]
     K = (max(zs0) - min(zs0)) / cfg['height']   # 1m あたりの模型の大きさ
-    idle = next(a for a in made if a.name == 'idle')
-    for gname, act, meta_c in onehand_moves.build(T, bpy.data.objects['socket_R'], bpy.data.objects['socket_L'], K, idle, scn):
+    import ik_rig
+    rig1 = ik_rig.Rig(T, bpy.data.objects['socket_R'], bpy.data.objects['socket_L'], K)
+    rig1.take_fingers(next(a for a in made if a.name == 'idle'))
+    for gname, act, meta_c in onehand_moves.build(rig1):
         made.append(act); info[gname] = meta_c
-    for pb in T.pose.bones:
-        pb.rotation_quaternion = (1, 0, 0, 0); pb.location = (0, 0, 0)
+
+# 全キャラの体の動き（しゃがみ歩き・起き上がり・被弾・よろめき、楯を持つキャラは防禦の受けと楯の技）：
+# Tripo の骨に直接付ける（tools/characters/body_moves.py）。同じ名前の動きがあれば入れ替える。這う・伏せの顔の向きも直す
+sys.path.insert(0, here)
+import ik_rig, body_moves
+if 'K' not in globals():
+    body = max((o for o in bpy.data.objects if o.type == 'MESH' and o not in src_objs), key=lambda o: len(o.data.polygons))
+    zs0 = [(body.matrix_world @ v.co).z for v in body.data.vertices]
+    K = (max(zs0) - min(zs0)) / cfg['height']
+# 骨を休みの姿勢へ戻してから測る（武器の付け位置 socket は骨に付いて動くので、姿勢が残っていると向きを間違える）
+T.animation_data.action = None
+for pb in T.pose.bones:
+    pb.rotation_mode = 'QUATERNION'; pb.rotation_quaternion = (1, 0, 0, 0); pb.location = (0, 0, 0)
+bpy.context.view_layer.update()
+rig = ik_rig.Rig(T, bpy.data.objects['socket_R'], bpy.data.objects['socket_L'], K)
+rig.take_fingers(next(a for a in made if a.name == 'idle'))
+for gname, act, meta_c in body_moves.build(rig, g == '1hs', {a.name: a for a in made}, g):
+    old = next((a for a in made if a.name == gname), None)
+    if old:
+        made.remove(old); bpy.data.actions.remove(old)
+        act.name = gname
+    made.append(act); info[gname] = meta_c
+for pb in T.pose.bones:
+    pb.rotation_quaternion = (1, 0, 0, 0); pb.location = (0, 0, 0)
 for o in src_objs: bpy.data.objects.remove(o, do_unlink=True)
 for a in list(bpy.data.actions):
     if a not in made: bpy.data.actions.remove(a)
