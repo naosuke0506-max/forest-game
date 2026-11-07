@@ -7,6 +7,7 @@ import { WEAPONS, DODGE, STANCE_TIME } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { stanceShape } from '../game/stance.js';
 import { createWeaponModel, createShieldModel } from './weapons.js';
+import { COVER_SPEED } from '../game/cover.js';
 import { BUILD } from '../version.js';
 
 const cache = new Map();
@@ -215,8 +216,13 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       if (fighter.guarding && has('guard')) { play('guard', 1); return; }
 
       const sc = meta.scale;
-      // 壁裏隠れ：壁に背を付けて、覗く向き（左・右）の動き
-      if (fighter.cover && has('cover_l')) { play(fighter.cover.side === 'r' ? 'cover_r' : 'cover_l', 1, 0.25); return; }
+      // 壁裏隠れ：壁に背を付けて、覗く向き（左・右）の動き。壁際を歩いている間は、その向きへ歩く動き（足の運びを進む速さに合わせる）
+      if (fighter.cover && has('cover_l')) {
+        const side = fighter.cover.side === 'r' ? 'r' : 'l', mv = fighter.cover.moving || 0, walk = `cover_walk_${side}`;
+        if (mv > 0 && has(walk)) play(walk, Math.min(2.5, Math.max(0.5, (COVER_SPEED * mv) / (clip(walk).speed * sc))), 0.15);
+        else play(side === 'r' ? 'cover_r' : 'cover_l', 1, 0.25);
+        return;
+      }
       // しゃがむ・伏せる：伏せる・起き上がる途中はその動きを 1 回。伏せていれば止まって肘をつくか這う、しゃがんでいればその場か歩く
       if (stanceClips) {
         if (fighter.stanceT > 0) {

@@ -124,6 +124,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 右のボタン（出る・隠れる・壁に背を付ける・壁から離れる）
   const useBtn = document.getElementById('btn-use');
   let nearSpot = null, nearWall = null, useTimer = 0;
+  let coverStick = null;   // 壁際を歩く向きの見方（スティックを倒し始めたときのカメラの右と前）
   const searchBtn = document.getElementById('btn-search');
   setBtn(searchBtn, ICONS.eye, L.search);
   // 姿勢ボタン：押したときにすること（立っていれば「しゃがむ」、しゃがむ・伏せていれば「立つ」）。長押しで伏せる
@@ -233,7 +234,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   cover.on('enter', ({ fighter }) => {
     if (fighter !== me) return;
     views.get(me).setVisible(true); viewModel.setVisible(false);
-    hud.addFeed('壁に背を付けた（左右で横歩き、前へ倒すと離れる）');
+    hud.addFeed('壁に背を付けた（スティックで壁際を歩く。離れるときは「離壁」）');
   });
   cover.on('exit', ({ fighter }) => {
     if (fighter !== me) return;
@@ -301,15 +302,25 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // あなたの位置を、試合の記録へ写す（いずれ人間も試合の計算で動かす）
       // 隠れている間は、隠れ場所が自分の位置（体は動かない）
       if (me.alive && !me.hidden && !me.cover) { me.x = player.position.x; me.z = player.position.z; me.y = player.position.y; me.yaw = player.yaw; me.pitch = player.pitch; }
-      // 壁裏隠れ：移動スティックの左右で壁に沿って横歩き、前へ倒すと壁から離れる。カメラは三人称で覗く向きを見る
+      // 壁裏隠れ：離れるのは「離壁」か暗殺のときだけ。移動スティックを倒すと、壁に背を付けたまま壁際を歩く
+      // （スティックの向きを画面の向きで地面の向きにし、壁に沿った分だけ進む）。カメラは三人称で覗く向きを見る
+      // 歩く向きの見方（カメラの右と前）は、スティックを倒し始めたときのものを、離すまで使う
+      // （壁際を逆へ歩くと覗く向きが変わってカメラが振り向くため、その度に向きが入れ替わらないように）
+      const stickOn = Math.hypot(input.moveX, input.moveY) > 0.15;
+      if (!me.cover || !stickOn) coverStick = null;
       if (me.cover && running) {
-        if (input.moveY > 0.6) cover.exit(me);
-        else {
-          const mv = cover.slide(me, input.moveX, dt);
-          me.gait = mv > 0 ? 'walk' : 'still';
-          const pd = cover.peekDir(me), sg = me.cover.seg;
-          player.setCover({ x: me.x, y: me.y, z: me.z, nx: sg.nx, nz: sg.nz, px: pd.x, pz: pd.z });
+        if (stickOn && !coverStick) {
+          const cr = player.camera.right, cf = player.camera.forward, fl = Math.hypot(cf.x, cf.z) || 1;
+          coverStick = { rx: cr.x, rz: cr.z, fx: cf.x / fl, fz: cf.z / fl };
         }
+        const k = coverStick || { rx: 0, rz: 0, fx: 0, fz: 0 };
+        const mx = k.rx * input.moveX + k.fx * input.moveY, mz = k.rz * input.moveX + k.fz * input.moveY;
+        const sg = me.cover.seg;
+        const along = mx * -sg.nz + mz * sg.nx;   // 壁から外を向いた体の右へ進む量
+        const mv = cover.slide(me, Math.max(-1, Math.min(1, along)), dt);
+        me.gait = mv > 0 ? 'walk' : 'still';
+        const pd = cover.peekDir(me);
+        player.setCover({ x: me.x, y: me.y, z: me.z, nx: sg.nx, nz: sg.nz, px: pd.x, pz: pd.z });
       }
       if (me.hidden) { me.yaw = player.yaw; me.pitch = player.pitch; }
       if (running) combat.control(me, input);

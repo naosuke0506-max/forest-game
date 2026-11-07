@@ -260,7 +260,7 @@ if ch.get('onehand'):
     import ik_rig
     rig1 = ik_rig.Rig(T, bpy.data.objects['socket_R'], bpy.data.objects['socket_L'], K)
     rig1.take_fingers(next(a for a in made if a.name == 'idle'))
-    for gname, act, meta_c in onehand_moves.build(rig1):
+    for gname, act, meta_c in onehand_moves.build(rig1, g == '1hs'):
         made.append(act); info[gname] = meta_c
 
 # 全キャラの体の動き（しゃがみ歩き・起き上がり・被弾・よろめき、楯を持つキャラは防禦の受けと楯の技）：

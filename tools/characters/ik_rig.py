@@ -160,6 +160,8 @@ class Rig:
                 # 手首の位置：持ち手の点（肩から・腕の長さの割合）／楯の真ん中（地面の上の点・m）／地面の上の点（m）／肩から（割合）
                 if 'grip' in spec:
                     wrist = hh + V(*spec['grip']) * AR - Wh @ self.sR.translation
+                elif 'grip_w' in spec:   # 持ち手の点を、地面の上の点（m）で
+                    wrist = self.world(spec['grip_w']) - Wh @ self.sR.translation
                 elif 'center_w' in spec:
                     wrist = self.world(spec['center_w']) - Wh @ self.sL.translation
                 elif 'w_mix' in spec:     # 肩からの位置と、地面の上の点の間（手を地面に着く・離すをなめらかに）
@@ -405,3 +407,15 @@ def level_head(rig, action, look_pitch=0.0, k=1.0):
             pb.keyframe_insert('rotation_quaternion', frame=f, group=n)
             Mp, Wp, Hp, prev = Mb, Wr, hh, n
     T.animation_data.action = None
+
+
+def at(origin, yaw, off):
+    """origin（右 m, 前 m）に立って右へ yaw 度向いた人から見た off（右, 上, 前）を、動きの始まりの座標へ"""
+    r, u, f = rot_y(off, yaw)
+    return (origin[0] + r, u, origin[1] + f)
+
+
+def foot_at(origin, yaw, ft):
+    """足の書き方（右, 前, 向き, かかと, 浮き）を、origin・yaw の人の足として、動きの始まりの座標へ"""
+    r, _, f = rot_y((ft[0], 0, ft[1]), yaw)
+    return (origin[0] + r, origin[1] + f, ft[2] + yaw) + tuple(ft[3:])

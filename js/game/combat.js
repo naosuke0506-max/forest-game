@@ -238,21 +238,19 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         }
         return;
       }
-      // 壁裏隠れ：攻撃ボタンで、近くの相手へ飛びかかって暗殺（近くに来たらいつでも。猶予の間に相手が回避すると失敗）。
-      // 近くに相手がいなければ、壁から離れてふつうに攻撃する。左手・回避を押しても壁から離れて、そのまま動く
+      // 壁裏隠れ：壁から離れるのは、暗殺したとき・「離壁」で離れたとき（攻撃を受けたとき・倒れたときも）だけ。
+      // 攻撃ボタンは、近くに相手がいれば飛びかかって暗殺（近くに来たらいつでも。猶予の間に相手が回避すると失敗）。
+      // 近くに相手がいなければ何もしない。左手・回避も、壁に隠れている間は何もしない
       if (f.cover) {
         f.guarding = false;
-        if (pressed) {
-          const t = nearestFoe(f, ASSN_REACH);
+        const t = pressed ? nearestFoe(f, ASSN_REACH) : null;
+        if (t) {
           cover?.exit(f);
-          if (t) {
-            faceTo(f, t);
-            f.action = { kind: 'assassinate', t: 0, target: t, dodged: false };
-            emit('assassinate', { attacker: f, target: t });
-            return;
-          }
-        } else if (leftPressed || dodgePressed) cover?.exit(f);
-        else return;
+          faceTo(f, t);
+          f.action = { kind: 'assassinate', t: 0, target: t, dodged: false };
+          emit('assassinate', { attacker: f, target: t });
+        }
+        return;
       }
       // 姿勢：伏せる・起き上がる途中は何もできない。伏せているときは、攻撃・左手・回避を押すと起き上がる（その押下では何もしない）。
       // しゃがんでいれば、すぐ立って、そのまま攻撃・防御・回避する（game/stance.js）
