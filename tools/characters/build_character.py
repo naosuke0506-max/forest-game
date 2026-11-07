@@ -265,7 +265,7 @@ def new_rig():
     for pb in T.pose.bones:
         pb.rotation_mode = 'QUATERNION'; pb.rotation_quaternion = (1, 0, 0, 0); pb.location = (0, 0, 0)
     bpy.context.view_layer.update()
-    r = ik_rig.Rig(T, bpy.data.objects['socket_R'], bpy.data.objects['socket_L'], K)
+    r = ik_rig.Rig(T, bpy.data.objects['socket_R'], bpy.data.objects['socket_L'], K, bpy.data.objects.get('socket_bow'))
     r.set_body(body)
     r.take_fingers(next(a for a in made if a.name == 'idle'))
     return r
@@ -293,6 +293,10 @@ for gname, act, meta_c in body_moves.build(rig, g == '1hs', {a.name: a for a in 
     if old:
         made.remove(old); bpy.data.actions.remove(old)
         act.name = gname
+    made.append(act); info[gname] = meta_c; ik_made.add(gname)
+# タンス・ベッドに隠れる・出る・探す・引きずり出される（全キャラ）と、引きずり出して止めを刺す（片手劍を持つキャラ）
+import hide_moves
+for gname, act, meta_c in hide_moves.build(rig, g == '1hs', bool(ch.get('onehand'))):
     made.append(act); info[gname] = meta_c; ik_made.add(gname)
 # 腕が胴に埋もれる動きを直す（characters.json の "fixArms"：魔境争覇から移した動き・Mixamo 式の骨から移した動き）
 if ch.get('fixArms'):

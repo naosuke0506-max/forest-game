@@ -17,5 +17,6 @@
   どちらも `source_models/motions/motions.blend` にまとめ、`tools/characters/build_character.py` で Tripo の骨へ移す
 - 長劍の技（唐竹・横薙・長突・斬返。劍騎士）は、`tools/characters/longsword_moves.py` で Blender で手で付けた動き
 - 片手劍の技（踏込突・逆袈裟・袈裟斬・旋風斬）と暗殺（背刺・滑斬）（楯劍騎士と劍騎士）は、利用者の指示した形を `tools/characters/onehand_moves.py` で Blender で手で付けた動き
+- タンス・ベッドに隠れる・出る・探す・引きずり出して止めを刺す（される側も）は、`tools/characters/hide_moves.py` で Blender で手で付けた動き（利用者の指示による）
 - しゃがみ歩き・伏せから起き上がる・被弾（軽い・重い）・よろめき（前後左右）・防禦で受ける・楯の技・壁際を歩く・暗殺される側（背刺・滑斬）は、`tools/characters/body_moves.py` で Blender で手で付けた動き（利用者の指示による）
 - 各 `.json` は、動きの長さ・繰り返すか・その場の動きで進むはずの速さ（模型の大きさのまま）と、ゲームでの縮尺

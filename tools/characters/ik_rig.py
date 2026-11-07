@@ -31,9 +31,9 @@ def yawq(deg):
     return Quaternion(UP, -math.radians(deg))
 
 
-def body_q(yaw=0.0, pitch=0.0, roll=0.0):
-    """体の回し方：右へ yaw・前へ pitch・右へ roll（度）"""
-    return yawq(yaw) @ Quaternion(LEFT, math.radians(pitch)) @ Quaternion(FWD, math.radians(roll))
+def body_q(yaw=0.0, pitch=0.0, roll=0.0, spin=0.0):
+    """体の回し方：右へ yaw・前へ pitch・右へ roll（度）。spin：背骨のまわりに先に回す（寝返り。伏せから仰向けへは 180）"""
+    return yawq(yaw) @ Quaternion(LEFT, math.radians(pitch)) @ Quaternion(FWD, math.radians(roll)) @ Quaternion(UP, -math.radians(spin))
 
 
 def rot_y(v, deg):
@@ -76,7 +76,7 @@ def two_bone(a, target, l1, l2, pole):
 
 
 class Rig:
-    def __init__(self, T, sock_r, sock_l, K):
+    def __init__(self, T, sock_r, sock_l, K, sock_bow=None):
         self.T = T
         self.K = K
         bones = T.data.bones
@@ -97,6 +97,7 @@ class Rig:
         inv = T.matrix_world.inverted()
         self.sR = bones['R_Hand'].matrix_local.inverted() @ (inv @ sock_r.matrix_world)
         self.sL = bones['L_Hand'].matrix_local.inverted() @ (inv @ sock_l.matrix_world)
+        self.sB = bones['L_Hand'].matrix_local.inverted() @ (inv @ sock_bow.matrix_world) if sock_bow else None
         h = self.rest_h
         self.arm = {s: ((h[f'{s}_Forearm'] - h[f'{s}_Upperarm']).length, (h[f'{s}_Hand'] - h[f'{s}_Forearm']).length) for s in 'LR'}
         self.leg = {s: ((h[f'{s}_Calf'] - h[f'{s}_Thigh']).length, (h[f'{s}_Foot'] - h[f'{s}_Calf']).length) for s in 'LR'}
@@ -234,7 +235,7 @@ class Rig:
                 frac = {'NeckTwist01': 0.35, 'NeckTwist02': 0.65, 'Head': 1.0}[n]
                 want = body_q(look[0], look[1], 0)
                 qn = want @ W['Spine02'].inverted()
-                Wr = IDENT.slerp(IDENT.slerp(qn, P.get('look_k', 0.85)), frac) @ W['Spine02']
+                Wr = IDENT.slerp(IDENT.slerp(qn, min(1.0, max(0.0, P.get('look_k', 0.85)))), frac) @ W['Spine02']
             elif n in ('L_Clavicle', 'R_Clavicle'):
                 s = n[0]
                 raise_deg = P.get(s + '_clav', 0.0)
@@ -251,6 +252,8 @@ class Rig:
                     Wh = frame_from(V(*spec['blade']), V(*spec['edge'])) @ self.sR.to_quaternion().inverted()
                 elif s == 'L' and 'normal' in spec:
                     Wh = frame_from(V(*spec['up']), V(*spec['normal'])) @ self.sL.to_quaternion().inverted()
+                elif s == 'L' and 'bow_up' in spec and self.sB is not None:   # 弓：socket_bow の +Z 上の弓の先・+X 弦の側
+                    Wh = frame_from(V(*spec['bow_up']), V(*spec['bow_x'])) @ self.sB.to_quaternion().inverted()
                 # 手首の位置：持ち手の点（肩から・腕の長さの割合）／楯の真ん中（地面の上の点・m）／地面の上の点（m）／肩から（割合）
                 if 'grip' in spec:
                     wrist = hh + V(*spec['grip']) * AR - Wh @ self.sR.translation
@@ -259,7 +262,7 @@ class Rig:
                 elif 'center_w' in spec:
                     wrist = self.world(spec['center_w']) - Wh @ self.sL.translation
                 elif 'w_mix' in spec:     # 肩からの位置と、地面の上の点の間（手を地面に着く・離すをなめらかに）
-                    wrist = (hh + V(*spec['wrist']) * AR).lerp(self.world(spec['wrist_w']), spec['w_mix'])
+                    wrist = (hh + V(*spec['wrist']) * AR).lerp(self.world(spec['wrist_w']), min(1.0, max(0.0, spec['w_mix'])))
                 elif 'wrist_w' in spec:
                     wrist = self.world(spec['wrist_w'])
                 elif s == 'L' and 'hilt' in spec:
