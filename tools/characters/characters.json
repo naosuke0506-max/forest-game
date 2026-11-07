@@ -14,7 +14,8 @@
       "source": "sword_knight.glb",
       "group": "2h",
       "onehand": true,
-      "longsword": true
+      "longsword": true,
+      "fixArms": true
     },
     "polearm": {
       "source": "polearm_knight.glb",
