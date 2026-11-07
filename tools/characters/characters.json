@@ -7,11 +7,13 @@
     "shield": {
       "source": "shield_knight.glb",
       "group": "1hs",
-      "guard": "1hs_sguard"
+      "guard": "1hs_sguard",
+      "onehand": true
     },
     "sword": {
       "source": "sword_knight.glb",
-      "group": "2h"
+      "group": "2h",
+      "onehand": true
     },
     "polearm": {
       "source": "polearm_knight.glb",

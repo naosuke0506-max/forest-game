@@ -249,6 +249,19 @@ def make_socket(sname, side, weapon, kind):
 make_socket('socket_R', 'R', 'w_1h', 'blade')
 make_socket('socket_L', 'L', 's_mid', 'shield')
 make_socket('socket_bow', 'L', 'w_bow', 'bow')
+
+# 片手劍の技（踏込突・逆袈裟・袈裟斬・旋風斬）：Tripo の骨に直接付ける（tools/characters/onehand_moves.py）
+if ch.get('onehand'):
+    sys.path.insert(0, here)
+    import onehand_moves
+    body = max((o for o in bpy.data.objects if o.type == 'MESH' and o not in src_objs), key=lambda o: len(o.data.polygons))
+    zs0 = [(body.matrix_world @ v.co).z for v in body.data.vertices]
+    K = (max(zs0) - min(zs0)) / cfg['height']   # 1m あたりの模型の大きさ
+    idle = next(a for a in made if a.name == 'idle')
+    for gname, act, meta_c in onehand_moves.build(T, bpy.data.objects['socket_R'], bpy.data.objects['socket_L'], K, idle, scn):
+        made.append(act); info[gname] = meta_c
+    for pb in T.pose.bones:
+        pb.rotation_quaternion = (1, 0, 0, 0); pb.location = (0, 0, 0)
 for o in src_objs: bpy.data.objects.remove(o, do_unlink=True)
 for a in list(bpy.data.actions):
     if a not in made: bpy.data.actions.remove(a)

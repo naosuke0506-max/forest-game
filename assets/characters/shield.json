@@ -112,6 +112,36 @@
    "duration": 3.0,
    "loop": true,
    "speed": 0.0
+  },
+  "oh_thrust": {
+   "duration": 0.7,
+   "loop": false,
+   "speed": 0.0
+  },
+  "oh_rise": {
+   "duration": 0.7333,
+   "loop": false,
+   "speed": 0.0
+  },
+  "oh_c1_in": {
+   "duration": 0.3333,
+   "loop": false,
+   "speed": 0.0
+  },
+  "oh_c1_hold": {
+   "duration": 1.0,
+   "loop": true,
+   "speed": 0.0
+  },
+  "oh_c1_out": {
+   "duration": 0.8,
+   "loop": false,
+   "speed": 0.0
+  },
+  "oh_c2": {
+   "duration": 1.6667,
+   "loop": false,
+   "speed": 0.0
   }
  }
 }

@@ -245,6 +245,11 @@ blender -b --python tools/characters/make_motions.py -- source_models/motions/cr
 
 作り直したら、上の手順で 6 キャラの模型を作り直します。
 
+### 片手劍の技の動き
+
+踏込突・逆袈裟・袈裟斬（溜めに入る・溜め・放つ）・旋風斬は、`tools/characters/onehand_moves.py` で Tripo の骨に直接付けています（剣を持つ手の位置・刃の向き・足の位置・腰の向きを何か所かの時刻で決め、その間をなめらかにつなぐ。腕と脚は、手と足が届くように関節を曲げる）。
+`tools/characters/characters.json` で `"onehand": true` のキャラ（楯劍騎士・劍騎士）を、上の手順で作り直すと入ります。形を直すときは、`onehand_moves.py` の「技」の所の数字を変えます。
+
 ## GitHub Pages で公開する手順（iPad の Safari で）
 
 1. このリポジトリのページを開き、上の **Settings** を押す
