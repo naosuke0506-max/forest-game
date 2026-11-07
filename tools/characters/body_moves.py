@@ -304,6 +304,98 @@ def charge_fn():
     return fn, end, stride * 2 / cyc
 
 
+# ======================= 壁際を歩く（壁に背を付けたまま横へ） =======================
+def cover_walk_fn(side, shield, step=0.40, dur=0.70):
+    """壁に背を付けたまま、体の右（side='r'）か左（'l'）へ、足を寄せては開いて進む（その場）。顔は進む向き"""
+    s = 1 if side == 'r' else -1
+    held = ((0.0, 1.0, 0.12), (1, 0, 0)) if CARRY_NOW[0] else None   # 武器は体の前で立てる（壁に当たらない）
+
+    def foot(ph, r0, lead):
+        # 先の足（進む側）は 0〜0.4 で踏み出し、あとの足は 0.5〜0.9 で寄せる。体はずっと同じ速さで進む
+        a = 0.0 if lead else 0.5
+        q = (ph - a) % 1.0
+        amp = 0.6 * step
+        if q < 0.4:
+            u = q / 0.4
+            e = u * u * (3 - 2 * u)
+            return (r0 + s * amp * (e - 0.5), 0.04, 0, 0, 0.05 * math.sin(math.pi * u), 0.0)
+        u = (q - 0.4) / 0.6
+        return (r0 + s * amp * (0.5 - u), 0.04, 0, 0, 0.0, 0.0)
+
+    def fn(t):
+        ph = (t / dur) % 1.0
+        sway = s * 0.015 * math.sin(2 * math.pi * ph)
+        p = {'hip': (sway, -0.07 - 0.01 * math.cos(4 * math.pi * ph), -0.02), 'hip_rot': (0, -2, 0), 'chest': (0, -4, 0),
+             'look': (s * 62, 4), 'look_k': 0.9, 'R_clav': 0.0, 'L_clav': 0.0,
+             'R': carry({'wrist': (0.12, -0.40, 0.32), 'pole': (0.9, -1, 0.1)}, held),
+             'L': {'wrist': (-0.18, -0.66, 0.12), 'pole': (-0.9, -1, 0)},
+             'L_foot': foot(ph, -0.13, s < 0), 'R_foot': foot(ph, 0.13, s > 0)}
+        if shield:
+            p['L'] = {'wrist': (-0.04, -0.46, 0.42), 'normal': (-0.3, 0, 1), 'up': (0, 1, 0), 'pole': (-1, -0.7, 0)}
+        return p
+    return fn, dur, step / dur
+
+
+# ======================= 暗殺される側 =======================
+AS_BACK_GAP, AS_SLIDE_GAP = 0.64, 2.2   # onehand_moves.py と同じ並び（暗殺する側から見た、相手の立つ所）
+
+
+def as_back_v_keys(shield):
+    """背刺をされる：後ろからつかまれ、背中を刺されてのけぞる。体が崩れかけたところを蹴り飛ばされ、うつ伏せに倒れる"""
+    S = ready(shield)
+    calm = P(S, hip=(0.0, -0.02, 0.0), hip_rot=(4, 3, 0), chest=(0, 2, 0), look=(10, 4))
+    grabbed = P(calm, hip=(0.0, -0.03, -0.02), chest=(0, -6, 0), look=(4, -16), L_clav=8.0, R_clav=8.0,
+                R=dict(calm['R'], wrist=add(calm['R']['wrist'], (0.10, 0.20, -0.10))),
+                L=dict(calm['L'], wrist=add(calm['L']['wrist'], (-0.10, 0.20, -0.10))))
+    stabbed = P(calm, hip=(0.0, -0.08, 0.06), hip_rot=(0, -10, 0), chest=(0, -24, 0), look=(0, -30), R_clav=12.0, L_clav=12.0,
+                R=dict(calm['R'], wrist=add(calm['R']['wrist'], (0.35, 0.40, -0.15))),
+                L=dict(calm['L'], wrist=add(calm['L']['wrist'], (-0.35, 0.40, -0.15))),
+                L_foot=add(S['L_foot'], (0, 0, 0, 25, 0, 0)), R_foot=add(S['R_foot'], (0, 0, 0, 20, 0, 0)))
+    sag = P(stabbed, hip=(0.0, -0.16, 0.04), hip_rot=(0, 4, 0), chest=(0, 12, 0), look=(0, 25), R_clav=0.0, L_clav=0.0,
+            R=dict(calm['R'], wrist=add(calm['R']['wrist'], (0.10, -0.10, -0.20))),
+            L=dict(calm['L'], wrist=add(calm['L']['wrist'], (-0.10, -0.10, -0.20))))
+    kicked = P(sag, hip=(0.0, -0.18, 0.45), hip_rot=(0, 45, 0), chest=(0, 20, 0), look=(0, 10),
+               R=dict(calm['R'], wrist=add(calm['R']['wrist'], (0.30, 0.20, -0.45))),
+               L=dict(calm['L'], wrist=add(calm['L']['wrist'], (-0.30, 0.20, -0.45))),
+               L_foot=(-0.16, 0.45, 6, 30, 0.08, 0), R_foot=(0.17, -0.05, 22, 50, 0.0, 0))
+    falling = P(kicked, hip=(0.0, -0.58, 0.95), hip_rot=(0, 72, 0), chest=(0, 5, 0), look=(0, -10),
+                L_foot=(-0.16, 0.30, 6, 70, 0.0, 0), R_foot=(0.17, 0.10, 22, 70, 0.0, 0))
+    lying = P(falling, hip=(0.0, -0.87, 1.10), hip_rot=(-6, 88, 4), chest=(0, 0, -6), look=(65, 40),
+              R=dict(calm['R'], wrist=add(calm['R']['wrist'], (0.30, 0.05, 0.60))),
+              L=dict(calm['L'], wrist=add(calm['L']['wrist'], (-0.25, 0.10, 0.20))),
+              L_foot=(-0.16, 0.18, 0, 80, 0.0, 0), R_foot=(0.17, 0.22, 10, 80, 0.0, 0))
+    return [(0.0, calm, None), (0.25, grabbed, 'o'), (0.40, stabbed, 'o'), (0.95, sag, 'io'), (1.20, P(sag, hip=(0.0, -0.18, 0.08)), 'io'),
+            (1.32, kicked, 'o'), (1.62, falling, 'i'), (1.85, lying, 'o'), (2.20, lying, 'l')]
+
+
+def as_slide_v_keys(shield):
+    """滑斬をされる：滑り込んだ相手に足を斬られて両膝をつき、後ろから首を斬られて前へ倒れる"""
+    S = ready(shield)
+    alert = P(S, look=(0, 12))
+    see = P(S, hip=(0.0, -0.08, 0.0), chest=(-6, 6, 0), look=(-14, 30),
+            R=dict(S['R'], wrist=add(S['R']['wrist'], (0.0, 0.15, 0.10))))
+    cut = P(S, hip=(0.04, -0.30, -0.02), hip_rot=(-10, 18, -8), chest=(0, 10, -6), look=(10, 20), R_clav=10.0, L_clav=10.0,
+            R=dict(S['R'], wrist=add(S['R']['wrist'], (0.30, 0.35, -0.10))),
+            L=dict(S['L'], wrist=add(S['L']['wrist'], (-0.30, 0.35, -0.10))),
+            L_foot=(-0.16, 0.05, 6, 30, 0, 0), R_foot=(0.20, -0.10, 22, 45, 0, 0))
+    knees = {'L_knee': (0, -0.2, 1), 'R_knee': (0, -0.2, 1)}
+    kneel = P(S, hip=(0.0, -0.52, 0.02), hip_rot=(0, 8, 0), chest=(0, 12, 0), look=(0, 28), R_clav=0.0, L_clav=0.0,
+              R=dict(S['R'], wrist=add(S['R']['wrist'], (-0.05, -0.15, -0.05))),
+              L=dict(S['L'], wrist=add(S['L']['wrist'], (0.05, -0.15, -0.05))),
+              L_foot=(-0.13, -0.42, 0, 80, 0, 0), R_foot=(0.13, -0.42, 0, 80, 0, 0), **knees)
+    sway = P(kneel, hip_rot=(4, 10, 3), look=(6, 32))
+    struck = P(kneel, chest=(0, 32, 0), look=(0, 75), hip=(0.0, -0.54, 0.05))
+    slump = P(struck, hip=(0.0, -0.60, 0.15), hip_rot=(0, 40, 0), chest=(0, 30, 0))
+    lying = P(kneel, hip=(0.0, -0.87, 0.40), hip_rot=(5, 86, -4), chest=(0, 0, 4), look=(-60, 40),
+              R=dict(S['R'], wrist=add(S['R']['wrist'], (0.25, 0.10, 0.50))),
+              L=dict(S['L'], wrist=add(S['L']['wrist'], (-0.30, 0.10, 0.30))),
+              L_foot=(-0.13, -0.50, 0, 82, 0, 0), R_foot=(0.15, -0.48, 6, 82, 0, 0), L_knee=(0, -1, 0.1), R_knee=(0, -1, 0.1))
+    base_k = {'L_knee': (-0.12, 0, 1), 'R_knee': (0.12, 0, 1)}
+    alert, see, cut = P(alert, **base_k), P(see, **base_k), P(cut, **knees)
+    return [(0.0, alert, None), (0.45, see, 'io'), (0.62, cut, 'o'), (0.95, kneel, 'io'), (1.45, sway, 'io'), (1.58, struck, 'o'),
+            (1.88, slump, 'io'), (2.30, lying, 'i'), (2.60, lying, 'l')]
+
+
 # ======================= まとめて作る =======================
 def build(rig, has_shield, made_by_name, group=None):
     """返り値：[(ゲームの名前, action, 情報)]。made_by_name：今までに作った動き（名前 → action）"""
@@ -341,6 +433,13 @@ def build(rig, has_shield, made_by_name, group=None):
             out.append(make_clip(rig, name, lambda t, k=k: sample(k, t), k[-1][0]))
         fn, dur, spd = charge_fn()
         out.append(make_clip(rig, 'sb_charge', fn, dur, speed=spd * rig.K))
+    # 壁際を歩く（右へ・左へ）
+    for side in ('r', 'l'):
+        fn, dur, spd = cover_walk_fn(side, has_shield)
+        out.append(make_clip(rig, f'cover_walk_{side}', fn, dur, loop=True, speed=spd * rig.K))
+    # 暗殺される側（背刺・滑斬）
+    for name, k in (('as_back_v', as_back_v_keys(has_shield)), ('as_slide_v', as_slide_v_keys(has_shield))):
+        out.append(make_clip(rig, name, lambda t, k=k: sample(k, t), k[-1][0]))
     # 這う・伏せ・伏せる：顔をまっすぐ前（水平）へ
     for n in ('crawl', 'prone', 'prone_down'):
         if n in made_by_name:

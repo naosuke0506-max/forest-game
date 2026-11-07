@@ -15,6 +15,6 @@
 - 姿勢の動き：しゃがみ（その場）は、利用者が Meshy AI で作った動き（`source_models/motions/crouch_meshy.fbx`）。
   しゃがみ歩き・伏せる・伏せ・這う・起き上がる・壁に背を付けて覗う（左右）は、`tools/characters/make_motions.py` で Blender で手で付けた動き。
   どちらも `source_models/motions/motions.blend` にまとめ、`tools/characters/build_character.py` で Tripo の骨へ移す
-- 片手劍の技（踏込突・逆袈裟・袈裟斬・旋風斬。楯劍騎士と劍騎士）は、利用者の指示した形を `tools/characters/onehand_moves.py` で Blender で手で付けた動き
-- しゃがみ歩き・伏せから起き上がる・被弾（軽い・重い）・よろめき（前後左右）・防禦で受ける・楯の技は、`tools/characters/body_moves.py` で Blender で手で付けた動き（利用者の指示による）
+- 片手劍の技（踏込突・逆袈裟・袈裟斬・旋風斬）と暗殺（背刺・滑斬）（楯劍騎士と劍騎士）は、利用者の指示した形を `tools/characters/onehand_moves.py` で Blender で手で付けた動き
+- しゃがみ歩き・伏せから起き上がる・被弾（軽い・重い）・よろめき（前後左右）・防禦で受ける・楯の技・壁際を歩く・暗殺される側（背刺・滑斬）は、`tools/characters/body_moves.py` で Blender で手で付けた動き（利用者の指示による）
 - 各 `.json` は、動きの長さ・繰り返すか・その場の動きで進むはずの速さ（模型の大きさのまま）と、ゲームでの縮尺

@@ -180,6 +180,26 @@
    "loop": false,
    "speed": 0.0,
    "shift": 0.3665
+  },
+  "cover_walk_r": {
+   "duration": 0.7,
+   "loop": true,
+   "speed": 0.3173
+  },
+  "cover_walk_l": {
+   "duration": 0.7,
+   "loop": true,
+   "speed": 0.3173
+  },
+  "as_back_v": {
+   "duration": 2.2,
+   "loop": false,
+   "speed": 0.0
+  },
+  "as_slide_v": {
+   "duration": 2.6,
+   "loop": false,
+   "speed": 0.0
   }
  }
 }
