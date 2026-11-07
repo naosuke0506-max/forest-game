@@ -180,9 +180,19 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       if (stunned) return;
 
       const a = fighter.action;
+      // 溜め：溜めに入る動きの後は、溜めている動きを繰り返す
+      if (a?.kind === 'charge' && a === lastAction && a.t >= (clip(a.tech.in)?.duration ?? 0)) play(a.tech.hold, 1, 0.1);
       if (a && a !== lastAction) {
         lastAction = a;
-        if (a.kind === 'attack') {
+        if (a.kind === 'attack' && a.tech) {
+          // 技（片手劍・長劍）：動きを作った速さのまま流す（data.js の TECHNIQUES の time が動きの長さ）
+          const name = a.tech.clip;
+          if (has(name)) restart(name, clip(name).duration / a.tech.time);
+        } else if (a.kind === 'charge') {
+          if (has(a.tech.in)) restart(a.tech.in, 1);
+        } else if (a.kind === 'charge2') {
+          // 溜攻撃 2 を待つ：溜攻撃 1 の振り終わりの姿のまま（動きは最後の姿で止まる）
+        } else if (a.kind === 'attack') {
           // 攻撃のたびに、3 種類の斬り（a1 → a2 → a3）を順に使う。長さは武器の振りの時間に合わせる
           // 強攻撃（左手）は heavy の動き。ふつうは 3 種類の斬りを順に。持ち替えた近接武器は ma1〜ma3
           const st = attackStats(fighter.weapon, a.heavy);

@@ -44,6 +44,45 @@ export const WEAPONS = {
 };
 
 /**
+ * 武器の技（片手劍・長劍。docs/DESIGN.md の「片手劍の技」「長劍の技」）。動きは模型に入っている
+ * （tools/characters/onehand_moves.py・longsword_moves.py）。技の流れは game/techniques.js
+ *   combo：通常攻撃（攻擊ボタンを短く押す）。1 段目 → 2 段目 → また 1 段目
+ *   charge：溜攻撃 1（長押しで溜め、離して放つ）。in・hold は溜めに入る・溜めている間の動き。溜めた長さ（full 秒で満タン）で damage [最小, 最大] の間
+ *   charge2：溜攻撃 2（溜攻撃 1 の後、すぐもう一度長押しして離す）
+ * 技ごとに：clip 動き、time 長さ（秒。動きを作った速さのまま）、hits 当たる時刻（秒）、damage 武器の damage に掛ける倍率、
+ *   reach 間合い（m）、arc 当たる角度（度。当たりが 2 回ある技は 1 回ごと）、stamina、chain 次の技へ移れる時刻（秒。先に押しておけばこの時刻に移る）、
+ *   power 威力（l 軽い / h 重い。被弾・防禦の受け方を変える）
+ * 数値は仮（遊んで調整する）
+ */
+export const TECHNIQUES = {
+  armingsword: {
+    combo: [
+      { name: '踏込突', clip: 'oh_thrust', time: 0.7, hits: [0.24], damage: 1.0, reach: 2.3, arc: 40, stamina: 12, chain: 0.4, power: 'l' },
+      { name: '逆袈裟', clip: 'oh_rise', time: 0.73, hits: [0.24], damage: 1.05, reach: 2.0, arc: 120, stamina: 12, chain: 0.42, power: 'l' },
+    ],
+    charge: { name: '袈裟斬', in: 'oh_c1_in', hold: 'oh_c1_hold', clip: 'oh_c1_out', time: 0.8, hits: [0.16], damage: [1.4, 2.0], full: 1.0,
+      reach: 2.2, arc: 110, stamina: 20, chain: 0.45, power: 'h' },
+    charge2: { name: '旋風斬', clip: 'oh_c2', time: 1.67, hits: [0.54, 1.2], damage: [1.0, 1.5], reach: 2.2, arc: [360, 140], stamina: 24,
+      chain: 1.4, power: ['l', 'h'] },
+  },
+  longsword: {   // 片手劍より振りが大きく、隙も少し大きい
+    combo: [
+      { name: '唐竹', clip: 'ls_cut1', time: 0.93, hits: [0.34], damage: 1.0, reach: 2.6, arc: 50, stamina: 16, chain: 0.58, power: 'l' },
+      { name: '横薙', clip: 'ls_cut2', time: 0.97, hits: [0.36], damage: 1.0, reach: 2.5, arc: 150, stamina: 16, chain: 0.6, power: 'l' },
+    ],
+    charge: { name: '長突', in: 'ls_c1_in', hold: 'ls_c1_hold', clip: 'ls_c1_out', time: 0.93, hits: [0.16], damage: [1.4, 2.0], full: 1.1,
+      reach: 3.2, arc: 30, stamina: 26, chain: 0.55, power: 'h' },
+    charge2: { name: '斬返', clip: 'ls_c2', time: 1.47, hits: [0.3, 0.78], damage: [1.0, 1.5], reach: 2.6, arc: [110, 110], stamina: 30,
+      chain: 1.05, power: ['l', 'h'] },
+  },
+};
+/**
+ * 技の操作：hold 長押しと見なす時間（秒。これより早く離せば通常攻撃）、comboWindow 通常攻撃の後に次の段へつながる時間（秒）、
+ * followWindow 溜攻撃 1 の後に溜攻撃 2 へつながる時間（秒。放った一撃が当たる時刻から、動きの終わりのこの秒後まで）
+ */
+export const TECH = { hold: 0.25, comboWindow: 0.4, followWindow: 0.5 };
+
+/**
  * 試合の前に選ぶ武器（キャラごと）。鍛冶・強化は無い。試合の途中では替えられない
  *   main：右手（主の武器）、side：持替で持つ近接武器（弓兵）、shield：左手の楯（楯劍騎士）
  *   並びの最初が、選ばなかったときの物。WEAPONS・SHIELDS に無い物（PLANNED）は、模型と動きができるまで「未完」で選べない

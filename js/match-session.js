@@ -324,6 +324,12 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       }
       if (me.hidden) { me.yaw = player.yaw; me.pitch = player.pitch; }
       if (running) combat.control(me, input);
+      // 攻撃ボタン：溜めている間は縁が光り、溜めるほど強く光る（溜攻撃 2 を待つ間は満タンの光）
+      {
+        const a = me.action, k = a?.kind === 'charge' ? Math.min(1, a.t / a.tech.full) : a?.kind === 'charge2' ? 1 : -1;
+        attackBtn.classList.toggle('charging', k >= 0);
+        if (k >= 0) attackBtn.style.setProperty('--charge', k.toFixed(2));
+      }
       // 右のボタン：隠れている間は「出る」。近くにベッドやタンスがあれば「隠れる」と「探す」、家の壁があれば「壁に背を付ける」
       if ((useTimer -= dt) <= 0) {
         useTimer = 0.12;

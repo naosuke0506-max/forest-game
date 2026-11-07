@@ -175,13 +175,18 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
         if (w.d >= stride) { w.d -= stride; step(f, speed > 4.2); }
       }
     },
-    /** 振り始め：刃が通る時に風の音。スタミナが 4 割以下なら声も */
-    swing(f, heavy) {
-      const st = attackStats(f.weapon, heavy);
+    /** 振り始め：刃が通る時に風の音（技は当たる時刻ごとに。game/data.js の TECHNIQUES）。スタミナが 4 割以下なら声も */
+    swing(f, heavy, tech = null) {
+      const hits = tech ? tech.hits : [attackStats(f.weapon, heavy).windup];
       const sw = SWING[f.weapon] || SWING.armingsword;
       const d = at(f, 1);
-      if (d) playSample(d, heavy ? 'swing_heavy' : sw.set, { t: Math.max(0, st.windup - 0.09), rate: sw.rate * (heavy ? 0.85 : 1) * jitter(0.05), gain: sw.gain * (heavy ? 1.15 : 1) });
-      if (f.stamina / (f.stats?.maxStamina || 100) <= 0.4 && R() < 0.8) voice(f, 'v_attack', 0.75, { t: Math.max(0, st.windup - 0.15) });
+      if (d) {
+        hits.forEach((h, i) => {
+          const big = tech ? [].concat(tech.power)[Math.min(i, [].concat(tech.power).length - 1)] === 'h' : heavy;
+          playSample(d, big ? 'swing_heavy' : sw.set, { t: Math.max(0, h - 0.09), rate: sw.rate * (big ? 0.85 : 1) * jitter(0.05), gain: sw.gain * (big ? 1.15 : 1) });
+        });
+      }
+      if (f.stamina / (f.stats?.maxStamina || 100) <= 0.4 && R() < 0.8) voice(f, 'v_attack', 0.75, { t: Math.max(0, hits[0] - 0.15) });
     },
     /** 攻撃が当たった：斬る・突く・打つ × 当たった物（盾・金属の鎧・革や布） */
     hit(attacker, target, guarded, kind) {
@@ -322,7 +327,7 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
 
 /** 試合の出来事に、効果音をつなぐ */
 export function wireSounds(sfx, { combat, match, hiding, me }) {
-  combat.on('swing', ({ fighter, heavy }) => sfx.swing(fighter, heavy));
+  combat.on('swing', ({ fighter, heavy, tech }) => sfx.swing(fighter, heavy, tech));
   combat.on('hit', ({ attacker, target, guarded, kind }) => { if (kind === 'melee' || kind === 'arrow') sfx.hit(attacker, target, guarded, kind); });
   combat.on('strike', ({ fighter, hits, blocked }) => { if (!hits && blocked) sfx.strikeObstacle(fighter); });
   combat.on('guardBreak', ({ fighter }) => sfx.guardBreak(fighter));

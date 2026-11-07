@@ -437,6 +437,9 @@ canvas#app {
 @keyframes usePulse { 0%, 100% { box-shadow: inset 0 2px 0 rgba(255, 255, 255, .18), inset 0 -6px 12px rgba(0, 0, 0, .45), 0 0 0 2px rgba(0, 0, 0, .45), 0 0 6px rgba(243, 220, 154, .3); }
   50% { box-shadow: inset 0 2px 0 rgba(255, 255, 255, .18), inset 0 -6px 12px rgba(0, 0, 0, .45), 0 0 0 2px rgba(0, 0, 0, .45), 0 0 20px rgba(243, 220, 154, .75); } }
 .act-btn.down { transform: scale(.93); filter: brightness(1.35); }
+/* 溜めている間の攻撃ボタン：金の光が溜めるほど強く広がる（--charge は 0〜1） */
+.act-btn.charging { box-shadow: inset 0 2px 0 rgba(255, 255, 255, .18), inset 0 -6px 12px rgba(0, 0, 0, .45), 0 0 0 calc(2px + 2px * var(--charge, 0)) rgba(243, 220, 154, calc(.35 + .6 * var(--charge, 0))),
+  0 0 calc(8px + 22px * var(--charge, 0)) rgba(243, 220, 154, calc(.25 + .6 * var(--charge, 0))); }
 
 /* 敵の頭上：名前と体力・与えたダメージの数字 */
 .tags { position: absolute; inset: 0; pointer-events: none; }

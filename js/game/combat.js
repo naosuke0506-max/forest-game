@@ -5,6 +5,7 @@ import { WEAPONS, COMBAT, DODGE, HEAVY } from './data.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 import { SEARCH_TIME } from './hiding.js';
 import { setStance, updateStance, stanceShape } from './stance.js';
+import { techSetOf, controlTech, updateTech, interruptTech } from './techniques.js';
 
 // 隠れる・探すに関わる動き
 const FINISH_REACH = 2.4;   // 致命の一撃が届く近さ（無防備な相手まで m）
@@ -55,6 +56,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   const listeners = {};
   const emit = (type, data) => (listeners[type] || []).forEach((fn) => fn(data));
   const fighters = match.fighters;
+  let clock = 0;   // 試合の時計（秒）。技の長押し・つながる時間を数える
 
   function spendStamina(f, n) {
     f.stamina = Math.max(0, f.stamina - n);
@@ -62,7 +64,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   }
 
   /** ダメージを与える。from：攻撃した人（向きの判定に使う） */
-  function damage(target, raw, attacker, { pierce = 0, fromX, fromZ, kind = 'melee' } = {}) {
+  function damage(target, raw, attacker, { pierce = 0, fromX, fromZ, kind = 'melee', power = 'l' } = {}) {
     if (!target.alive || match.state !== 'running') return;
     // 回避中の、攻撃が当たらない時間
     const a = target.action;
@@ -91,11 +93,13 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     target.hitFlash = 0.25;
     if (target.cover) cover?.exit(target);   // 攻撃を受けたら壁から離れる
     target.lastHitBy = attacker;
-    if (!guarded) {                             // まともに受けるとひるむ（振りかぶりも止まる）
+    if (!guarded) {                             // まともに受けるとひるむ（振りかぶり・溜めも止まる）
       target.stun = Math.max(target.stun, COMBAT.hitStun);
-      if (target.action && target.action.kind === 'attack' && !target.action.hit) target.action = null;
+      const ta = target.action;
+      if (ta && ((ta.kind === 'attack' && !ta.hit) || ta.kind === 'charge' || ta.kind === 'charge2')) target.action = null;
+      interruptTech(target);
     }
-    emit('hit', { attacker, target, amount, guarded, kind });
+    emit('hit', { attacker, target, amount, guarded, kind, power });
     if (target.stats.hp <= 0) {
       target.stats.hp = 0;
       target.action = null;
@@ -138,7 +142,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (d > w.reach + COMBAT.bodyRadius) continue;
       if (Math.abs(yOf(t) - fy) > 1.6) continue;
       if (d > 0.6 && angleTo(f.yaw, dx, dz) > w.arc / 2) continue;
-      damage(t, w.damage, f, { pierce: w.guardPierce, fromX: f.x, fromZ: f.z });
+      damage(t, w.damage, f, { pierce: w.guardPierce, fromX: f.x, fromZ: f.z, power: w.power || 'l' });
       hits++;
     }
     // 振り終わり：誰にも当たらなければ、前に木の幹や壁があるか（当たった音を変える）
@@ -300,7 +304,11 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         const heavy = f.left === 'heavy' && leftPressed;
         const a = attackStats(f.weapon, heavy);
         const cost = a.stamina;
-        if ((pressed || heavy) && !f.action && f.stamina >= cost * 0.5) {
+        // 技のある武器（片手劍・長劍）：短く押す＝通常攻撃、長押し＝溜め（game/techniques.js）。左手の強攻撃は今までどおり
+        const set = techSetOf(f.weapon);
+        if (set && !(heavy && !f.action)) {
+          controlTech(f, set, input, clock, { pressed, released, spend: spendStamina, emit });
+        } else if ((pressed || heavy) && !f.action && f.stamina >= cost * 0.5) {
           f.action = { kind: 'attack', t: 0, hit: false, heavy };
           spendStamina(f, cost);
           emit('swing', { fighter: f, heavy });
@@ -322,6 +330,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     },
 
     update(dt) {
+      clock += dt;
       for (const f of fighters) {
         if (!f.alive) continue;
         updateStance(f, dt);
@@ -336,7 +345,9 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         const w = WEAPONS[f.weapon];
         if (a) {
           a.t += dt;
-          if (a.kind === 'attack') {
+          if (a.kind === 'attack' && a.tech) {
+            updateTech(f, a, clock, { strike: meleeHit, spend: spendStamina, emit });
+          } else if (a.kind === 'attack') {
             const st = attackStats(f.weapon, a.heavy);
             if (!a.hit && a.t >= st.windup) { a.hit = true; meleeHit(f, st); }
             if (a.t >= st.windup + st.recovery) f.action = null;
