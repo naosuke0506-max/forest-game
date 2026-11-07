@@ -250,57 +250,56 @@ make_socket('socket_R', 'R', 'w_1h', 'blade')
 make_socket('socket_L', 'L', 's_mid', 'shield')
 make_socket('socket_bow', 'L', 'w_bow', 'bow')
 
-# 片手劍の技（踏込突・逆袈裟・袈裟斬・旋風斬）：Tripo の骨に直接付ける（tools/characters/onehand_moves.py）
-if ch.get('onehand'):
-    sys.path.insert(0, here)
-    import onehand_moves
-    body = max((o for o in bpy.data.objects if o.type == 'MESH' and o not in src_objs), key=lambda o: len(o.data.polygons))
-    zs0 = [(body.matrix_world @ v.co).z for v in body.data.vertices]
-    K = (max(zs0) - min(zs0)) / cfg['height']   # 1m あたりの模型の大きさ
-    import ik_rig
-    rig1 = ik_rig.Rig(T, bpy.data.objects['socket_R'], bpy.data.objects['socket_L'], K)
-    rig1.take_fingers(next(a for a in made if a.name == 'idle'))
-    for gname, act, meta_c in onehand_moves.build(rig1, g == '1hs'):
-        made.append(act); info[gname] = meta_c
+# 手と足の位置で付ける動き（tools/characters/ik_rig.py）の用意：体の模型・1m あたりの大きさ
+sys.path.insert(0, here)
+import ik_rig
+body = max((o for o in bpy.data.objects if o.type == 'MESH' and o not in src_objs), key=lambda o: len(o.data.polygons))
+zs0 = [(body.matrix_world @ v.co).z for v in body.data.vertices]
+K = (max(zs0) - min(zs0)) / cfg['height']   # 1m あたりの模型の大きさ
+ik_made = set()                              # 手と足の位置で付けた動き（腕は作るときに胴を避けている）
 
-# 長劍の技（唐竹・横薙・長突・斬返）：両手で持つ。Tripo の骨に直接付ける（tools/characters/longsword_moves.py）
-if ch.get('longsword'):
-    sys.path.insert(0, here)
-    import ik_rig, longsword_moves
-    if 'K' not in globals():
-        body = max((o for o in bpy.data.objects if o.type == 'MESH' and o not in src_objs), key=lambda o: len(o.data.polygons))
-        zs0 = [(body.matrix_world @ v.co).z for v in body.data.vertices]
-        K = (max(zs0) - min(zs0)) / cfg['height']
+def new_rig():
+    """骨を休みの姿勢へ戻してから測る（武器の付け位置 socket は骨に付いて動くので、姿勢が残っていると向きを間違える）。
+    胴の太さも測り、腕が胴に埋もれないようにする"""
     T.animation_data.action = None
     for pb in T.pose.bones:
         pb.rotation_mode = 'QUATERNION'; pb.rotation_quaternion = (1, 0, 0, 0); pb.location = (0, 0, 0)
     bpy.context.view_layer.update()
-    rig2 = ik_rig.Rig(T, bpy.data.objects['socket_R'], bpy.data.objects['socket_L'], K)
-    rig2.take_fingers(next(a for a in made if a.name == 'idle'))
+    r = ik_rig.Rig(T, bpy.data.objects['socket_R'], bpy.data.objects['socket_L'], K)
+    r.set_body(body)
+    r.take_fingers(next(a for a in made if a.name == 'idle'))
+    return r
+
+# 片手劍の技（踏込突・逆袈裟・袈裟斬・旋風斬）：Tripo の骨に直接付ける（tools/characters/onehand_moves.py）
+if ch.get('onehand'):
+    import onehand_moves
+    rig1 = new_rig()
+    for gname, act, meta_c in onehand_moves.build(rig1, g == '1hs'):
+        made.append(act); info[gname] = meta_c; ik_made.add(gname)
+
+# 長劍の技（唐竹・横薙・長突・斬返）：両手で持つ。Tripo の骨に直接付ける（tools/characters/longsword_moves.py）
+if ch.get('longsword'):
+    import longsword_moves
+    rig2 = new_rig()
     for gname, act, meta_c in longsword_moves.build(rig2):
-        made.append(act); info[gname] = meta_c
+        made.append(act); info[gname] = meta_c; ik_made.add(gname)
 
 # 全キャラの体の動き（しゃがみ歩き・起き上がり・被弾・よろめき、楯を持つキャラは防禦の受けと楯の技）：
 # Tripo の骨に直接付ける（tools/characters/body_moves.py）。同じ名前の動きがあれば入れ替える。這う・伏せの顔の向きも直す
-sys.path.insert(0, here)
-import ik_rig, body_moves
-if 'K' not in globals():
-    body = max((o for o in bpy.data.objects if o.type == 'MESH' and o not in src_objs), key=lambda o: len(o.data.polygons))
-    zs0 = [(body.matrix_world @ v.co).z for v in body.data.vertices]
-    K = (max(zs0) - min(zs0)) / cfg['height']
-# 骨を休みの姿勢へ戻してから測る（武器の付け位置 socket は骨に付いて動くので、姿勢が残っていると向きを間違える）
-T.animation_data.action = None
-for pb in T.pose.bones:
-    pb.rotation_mode = 'QUATERNION'; pb.rotation_quaternion = (1, 0, 0, 0); pb.location = (0, 0, 0)
-bpy.context.view_layer.update()
-rig = ik_rig.Rig(T, bpy.data.objects['socket_R'], bpy.data.objects['socket_L'], K)
-rig.take_fingers(next(a for a in made if a.name == 'idle'))
+import body_moves
+rig = new_rig()
 for gname, act, meta_c in body_moves.build(rig, g == '1hs', {a.name: a for a in made}, g):
     old = next((a for a in made if a.name == gname), None)
     if old:
         made.remove(old); bpy.data.actions.remove(old)
         act.name = gname
-    made.append(act); info[gname] = meta_c
+    made.append(act); info[gname] = meta_c; ik_made.add(gname)
+# 腕が胴に埋もれる動きを直す（characters.json の "fixArms"：魔境争覇から移した動き・Mixamo 式の骨から移した動き）
+if ch.get('fixArms'):
+    for a in made:
+        if a.name not in ik_made:
+            n = ik_rig.fix_arms(rig, a, two_handed=(g == '2h'))
+            if n: print('腕を胴の外へ', a.name, n, 'フレーム')
 for pb in T.pose.bones:
     pb.rotation_quaternion = (1, 0, 0, 0); pb.location = (0, 0, 0)
 for o in src_objs: bpy.data.objects.remove(o, do_unlink=True)

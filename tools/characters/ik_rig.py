@@ -9,6 +9,10 @@
 import math
 from mathutils import Vector, Quaternion, Matrix
 
+
+def h_add(a, b):
+    return a + b
+
 FPS = 30
 UP = Vector((0, 0, 1))
 LEFT = Vector((1, 0, 0))      # Tripo の骨（glTF を読み込んだ Blender）：体の左が +X、前が -Y、上が +Z
@@ -101,6 +105,95 @@ class Rig:
         self.fingers = [b.name for b in bones if any(k in b.name for k in ('Thumb', 'Index', 'Mid', 'Ring', 'Pinky'))]
         self.finger_basis = {}
 
+    # ---- 胴の形（腕が胴に埋もれないように） ----
+    def set_body(self, mesh):
+        """体の模型から、胴（腰・腹・胸）の太さを高さごとに測る（休みの姿勢。Spine01 の頭を通る縦の線から、左・右・前・後ろへの張り出し）"""
+        import numpy as np
+        torso = {'Hip', 'Pelvis', 'Waist', 'Spine01', 'Spine02'}
+        names = {g.index: g.name for g in mesh.vertex_groups}
+        Mw = self.T.matrix_world.inverted() @ mesh.matrix_world
+        pts = []
+        for v in mesh.data.vertices:
+            if not v.groups:
+                continue
+            g = max(v.groups, key=lambda e: e.weight)
+            if names.get(g.group) in torso:
+                pts.append((Mw @ v.co)[:])
+        P_ = np.array(pts)
+        h = self.rest_h
+        self.ax = h['Spine01'].copy()
+        z0, z1 = h['Hip'].z - 0.12 * self.K * 1.8, h['R_Upperarm'].z + 0.02 * self.K * 1.8
+        step = (z1 - z0) / 10
+        bands = []
+        for i in range(10):
+            sel = P_[(P_[:, 2] >= z0 + i * step) & (P_[:, 2] < z0 + (i + 1) * step)]
+            if len(sel) < 8:
+                bands.append(None); continue
+            dx, dy = sel[:, 0] - self.ax.x, sel[:, 1] - self.ax.y
+            q = lambda a: float(np.percentile(a, 96)) if len(a) else 0.0
+            bands.append((q(dx[dx > 0]), q(-dx[dx < 0]), q(-dy[dy < 0]), q(dy[dy > 0])))   # 左・右・前・後ろ
+        for i in range(10):                              # 測れなかった高さは、隣の高さで埋める
+            if bands[i] is None:
+                bands[i] = next((bands[j] for j in sorted(range(10), key=lambda j: abs(j - i)) if bands[j] is not None), (0.1, 0.1, 0.1, 0.1))
+        self.body = (z0, step, bands)
+
+    def _band(self, z):
+        z0, step, bands = self.body
+        i = int((z - z0) // step)
+        return bands[i] if 0 <= i < len(bands) else None
+
+    def to_rest(self, p, W, H):
+        """今の姿勢の点を、胴（Spine01）に対する休みの姿勢の点へ"""
+        return h_add(self.rest_h['Spine01'], W['Spine01'].inverted() @ (p - H['Spine01']))
+
+    def from_rest(self, q, W, H):
+        return H['Spine01'] + W['Spine01'] @ (q - self.rest_h['Spine01'])
+
+    def depth_in(self, q, margin):
+        """休みの姿勢の点 q が胴（margin だけ太らせた形）の中なら、外まで出す倍率（>1）。外なら 0"""
+        b = self._band(q.z)
+        if b is None:
+            return 0.0
+        dx, df = q.x - self.ax.x, -(q.y - self.ax.y)
+        hx = (b[0] if dx > 0 else b[1]) + margin
+        hf = (b[2] if df > 0 else b[3]) + margin
+        v = (dx / hx) ** 2 + (df / hf) ** 2
+        return 1 / math.sqrt(max(v, 1e-6)) if v < 1 else 0.0
+
+    def push_out(self, p, W, H, margin):
+        """点 p が胴に埋もれていれば、胴の外（真ん中から外へ向かう向き）まで出す"""
+        if not getattr(self, 'body', None):
+            return p
+        q = self.to_rest(p, W, H)
+        k = self.depth_in(q, margin)
+        if not k:
+            return p
+        dx, dy = q.x - self.ax.x, q.y - self.ax.y
+        if abs(dx) + abs(dy) < 1e-5:
+            dy = -1e-3                                    # 真ん中なら前へ
+        q2 = Vector((self.ax.x + dx * k * 1.02, self.ax.y + dy * k * 1.02, q.z))
+        return self.from_rest(q2, W, H)
+
+    def elbow_out(self, sh, elbow, wrist, W, H):
+        """肘・上腕・前腕のどこかが胴に埋もれていれば、肩と手首を結ぶ線のまわりで肘を外へ回す（いちばん少ない回し方）"""
+        if not getattr(self, 'body', None):
+            return elbow
+        m_e, m_a = 0.06 * self.K, 0.05 * self.K
+
+        def bad(e):
+            return (self.depth_in(self.to_rest(e, W, H), m_e) or self.depth_in(self.to_rest((sh + e) / 2, W, H), m_a)
+                    or self.depth_in(self.to_rest((e + wrist) / 2, W, H), m_a))
+        if not bad(elbow):
+            return elbow
+        axis = (wrist - sh).normalized()
+        base = elbow - sh
+        for deg in range(12, 181, 12):
+            for sgn in (1, -1):
+                e = sh + Quaternion(axis, math.radians(deg * sgn)) @ base
+                if not bad(e):
+                    return e
+        return elbow
+
     def take_fingers(self, action):
         """指の握り方を、ある動き（待機）の最初のフレームから写す"""
         import bpy
@@ -176,11 +269,14 @@ class Rig:
                     wrist = hp + (hh - hp).normalized() * (0.055 * self.K)
                 else:
                     wrist = hh + V(*spec['wrist']) * AR
+                # 手首が胴に埋もれないように（前腕の太さだけ離す）。両手持ちの左手は、押し出した右手の持ち手の点に添う
+                wrist = self.push_out(wrist, W, H, 0.05 * self.K)
                 if s == 'R' and Wh is not None:
                     side_targets['R_sock'] = (wrist + Wh @ self.sR.translation, Wh @ self.sR.to_quaternion())
                 Whr = Wh @ self.rest_q[f'{s}_Hand'].inverted() if Wh is not None else None
                 l1, l2 = self.arm[s]
                 elbow, wrist = two_bone(hh, wrist, l1, l2, V(*spec['pole']))
+                elbow = self.elbow_out(hh, elbow, wrist, W, H)
                 v = Wr @ (h[f'{s}_Forearm'] - h[n])
                 Wr = v.rotation_difference(elbow - hh) @ Wr
                 # 肘の曲がる向き：休みの姿勢で前腕が曲がっている向き（前）が、今の前腕の側になるよう、上腕をねじる
@@ -427,3 +523,65 @@ def foot_at(origin, yaw, ft):
     """足の書き方（右, 前, 向き, かかと, 浮き）を、origin・yaw の人の足として、動きの始まりの座標へ"""
     r, _, f = rot_y((ft[0], 0, ft[1]), yaw)
     return (origin[0] + r, origin[1] + f, ft[2] + yaw) + tuple(ft[3:])
+
+
+def fix_arms(rig, action, two_handed=False):
+    """できている動きの腕が胴に埋もれていれば、手首を胴の外へ出し、肘を外へ回して、腕を解き直す（手の向きはそのまま）。
+    two_handed：両手で持つ武器。右手を押し出したら、近くにある左手も同じだけ動かす（柄から手が離れないように）"""
+    import bpy
+    T = rig.T
+    T.animation_data.action = action
+    f0, f1 = map(int, action.frame_range)
+    scn = bpy.context.scene
+    fixed = 0
+    for f in range(f0, f1 + 1):
+        scn.frame_set(f)
+        pb = T.pose.bones
+        W = {n: pb[n].matrix.to_quaternion() @ rig.rest_q[n].inverted() for n in ('Spine01',)}
+        H = {n: pb[n].head.copy() for n in ('Spine01',)}
+        hand_r = pb['R_Hand'].head.copy()
+        moves = {}
+        for s in 'RL':
+            sh, wr = pb[f'{s}_Upperarm'].head.copy(), pb[f'{s}_Hand'].head.copy()
+            el = pb[f'{s}_Forearm'].head.copy()
+            nw = rig.push_out(wr, W, H, 0.05 * rig.K)
+            if s == 'L' and two_handed and 'R' in moves and (wr - hand_r).length < 0.25 * rig.K:
+                nw = rig.push_out(wr + moves['R'][1] - hand_r, W, H, 0.05 * rig.K)
+            l1, l2 = rig.arm[s]
+            if (nw - wr).length < 1e-6:
+                ne = rig.elbow_out(sh, el, wr, W, H)
+                if (ne - el).length < 1e-6:
+                    continue
+                nw = wr
+            else:
+                ne, nw = two_bone(sh, nw, l1, l2, el - (sh + wr) / 2)
+                ne = rig.elbow_out(sh, ne, nw, W, H)
+            moves[s] = (ne, nw)
+        if not moves:
+            continue
+        fixed += 1
+        for s, (ne, nw) in moves.items():
+            names = (f'{s}_Upperarm', f'{s}_Forearm', f'{s}_Hand')
+            Mp = {n: pb[n].matrix.copy() for n in names + (f'{s}_Clavicle',)}
+            hand_rot = Mp[f'{s}_Hand'].to_quaternion()
+            # 上腕：肘へ向け、ねじれは今の向きに近いまま
+            Mu = Mp[f'{s}_Upperarm']
+            q_u = Mu.to_quaternion()
+            v = q_u @ (rig.rest_q[names[0]].inverted() @ (rig.rest_h[names[1]] - rig.rest_h[names[0]]))
+            q_u = v.rotation_difference(ne - Mu.translation) @ q_u
+            Mu2 = Matrix.Translation(Mu.translation) @ q_u.to_matrix().to_4x4()
+            # 前腕：手首へ向ける
+            q_f = (q_u @ Mp[names[0]].to_quaternion().inverted() @ Mp[names[1]].to_quaternion())
+            v = q_f @ (rig.rest_q[names[1]].inverted() @ (rig.rest_h[names[2]] - rig.rest_h[names[1]]))
+            q_f = v.rotation_difference(nw - ne) @ q_f
+            Mf2 = Matrix.Translation(ne) @ q_f.to_matrix().to_4x4()
+            Mh2 = Matrix.Translation(nw) @ hand_rot.to_matrix().to_4x4()
+            for n, M_new, par in ((names[0], Mu2, Mp[f'{s}_Clavicle']), (names[1], Mf2, Mu2), (names[2], Mh2, Mf2)):
+                p_name = rig.parent[n]
+                basis = (rig.rest_M[p_name].inverted() @ rig.rest_M[n]).inverted() @ par.inverted() @ M_new
+                b = pb[n]
+                b.rotation_mode = 'QUATERNION'
+                b.rotation_quaternion = basis.to_quaternion()
+                b.keyframe_insert('rotation_quaternion', frame=f, group=n)
+    T.animation_data.action = None
+    return fixed
