@@ -403,6 +403,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     get spectating() { return spectating; },
     debugAction,
     views,   // 確認用（自動テストから見た目の状態を読むため）
+    combat,  // 確認用（自動テストから戦闘の出来事を数えるため）
     hiding,
     sfx,
     senses,

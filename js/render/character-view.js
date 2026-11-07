@@ -5,6 +5,7 @@
 import * as pc from 'playcanvas';
 import { WEAPONS, DODGE, STANCE_TIME } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
+import { techSetOf } from '../game/techniques.js';
 import { stanceShape } from '../game/stance.js';
 import { createWeaponModel, createShieldModel } from './weapons.js';
 import { COVER_SPEED } from '../game/cover.js';
@@ -191,7 +192,14 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         } else if (a.kind === 'charge') {
           if (has(a.tech.in)) restart(a.tech.in, 1);
         } else if (a.kind === 'charge2') {
-          // 溜攻撃 2 を待つ：溜攻撃 1 の振り終わりの姿のまま（動きは最後の姿で止まる）
+          // 溜攻撃 2 を待つ：溜攻撃 1 の振り終わりの姿のまま（動きは最後の姿で止まる）。
+          // 振り終わってから長押ししたとき（もう別の動きに戻っていれば）は、振り終わりの姿へ戻す
+          const out = techSetOf(fighter.weapon)?.charge.clip;
+          if (out && current !== out && has(out)) {
+            body.anim.speed = 1;
+            body.anim.baseLayer.transition(out, 0.15, clip(out).duration * 0.98);
+            current = out;
+          }
         } else if (a.kind === 'attack') {
           // 攻撃のたびに、3 種類の斬り（a1 → a2 → a3）を順に使う。長さは武器の振りの時間に合わせる
           // 強攻撃（左手）は heavy の動き。ふつうは 3 種類の斬りを順に。持ち替えた近接武器は ma1〜ma3

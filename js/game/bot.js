@@ -361,10 +361,10 @@ export function createBot(fighter, rng, fighters) {
         } else if (a?.kind === 'attack' && a.name === 'combo' && a.hit && !b.chained && rng.next() < 0.6) {
           b.tap = true; b.chained = true;
         } else if (ready && b.hold <= 0) {
-          const chargeChance = t.guarding || t.stun > 0 ? 0.45 : 0.15;
-          if (f.stamina > set.charge.stamina + 10 && rng.next() < chargeChance) {
+          const chargeChance = t.guarding || t.stun > 0 ? 0.5 : 0.25;
+          if (f.stamina >= set.charge.stamina * 0.5 && rng.next() < chargeChance) {
             b.hold = TECH.hold + 0.1 + rng.next() * 0.7;
-            b.wantC2 = f.stamina > set.charge.stamina + set.charge2.stamina && rng.next() < 0.5;
+            b.wantC2 = rng.next() < 0.5;   // 溜攻撃 2 を出すときにスタミナが足りなければ、出ない（game/techniques.js）
             b.attackCooldown = 0.6 + rng.next() * 0.6;
           } else if (f.stamina > set.combo[0].stamina) {
             b.tap = true; b.chained = false;
