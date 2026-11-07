@@ -105,7 +105,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // ボタン：絵と文字。右手・左手の文字をキャラに合わせる（左手：盾持ちは防御、ほかは強攻撃・持ち替え など）
   const setBtn = (el, icon, label) => { el.innerHTML = `<span class="ab-icon">${icon}</span><span class="ab-label">${label}</span>`; };
   const leftBtn = document.getElementById('btn-left');
-  setBtn(leftBtn, me.left === 'guard' ? ICONS.shield : me.left === 'switch' ? ICONS.switch : ICONS.heavy, CHARACTERS[me.char].leftLabel);
+  // 左手ボタンの無いキャラ（劍騎士）は、ボタンを出さない
+  leftBtn.hidden = !me.left;
+  if (me.left) setBtn(leftBtn, me.left === 'guard' ? ICONS.shield : me.left === 'switch' ? ICONS.switch : ICONS.heavy, CHARACTERS[me.char].leftLabel);
   leftBtn.classList.toggle('guard', me.left === 'guard');
   setBtn(document.getElementById('btn-dodge'), ICONS.dodge, L.dodge);
   document.getElementById('settings-btn').innerHTML = ICONS.gear;

@@ -8,7 +8,8 @@
  *   armor      ：鎧の硬さ（受けるダメージの倍率。小さいほど硬い）
  *   speed      ：移動の速さの倍率（鎧が重いほど遅い）
  *   weight     ：装備の重さ（light 軽装 / medium 中装 / heavy 重装）。回避の仕方が変わる（DODGE）
- *   left       ：左手ボタンでできること（guard 盾で防御 / heavy 強攻撃 / switch 近接武器と持ち替え）、leftLabel：ボタンの文字
+ *   left       ：左手ボタンでできること（guard 盾で防御 / heavy 強攻撃 / switch 近接武器と持ち替え / null 無し）、leftLabel：ボタンの文字
+ *                劍騎士は左手ボタンが無い（重擊は無くした。強い一撃は攻擊ボタンの長押しの溜攻撃）
  *   armorName  ：専用の防具の名前（防具は 1 つだけ）
  *   sight      ：見える距離（m）。bot がこの距離まで目で気づける（兜の覗き穴が狭いほど短い。game/senses.js）
  * 防具はキャラごとに 1 つ（強化は無い）。扱える武器の全体は docs/DESIGN.md
@@ -16,7 +17,7 @@
 export const CHARACTERS = {
   shield:  { name: '楯劍騎士', model: 'shield', weight: 'medium', left: 'guard', leftLabel: '防禦',  armorName: '青鋼板金鎧', armor: 0.85, speed: 1.0,  maxHp: 105, sight: 40,
              desc: '盾と片手武器。受けが固く、攻守のつり合いがよい（中装より少し軽い鎧）' },
-  sword:   { name: '劍騎士',   model: 'sword', weight: 'medium', left: 'heavy', leftLabel: '重擊',   armorName: '十字兜鎧', armor: 0.8,  speed: 0.97, maxHp: 110, sight: 35,
+  sword:   { name: '劍騎士',   model: 'sword', weight: 'medium', left: null, leftLabel: null,     armorName: '十字兜鎧', armor: 0.8,  speed: 0.97, maxHp: 110, sight: 35,
              desc: '両手の剣と二刀流。振りが大きく、広く斬れる（中装より少し重い鎧）' },
   polearm: { name: '長柄騎士', model: 'polearm', weight: 'heavy', left: 'heavy', leftLabel: '薙拂', armorName: '鋲打重鎧', armor: 0.7,  speed: 0.9,  maxHp: 120, sight: 35,
              desc: '長柄の武器。間合いが一番長く、近づく前に突ける（重めの重装）' },
