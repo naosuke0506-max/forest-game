@@ -105,7 +105,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // ボタン：絵と文字。右手・左手の文字をキャラに合わせる（左手：盾持ちは防御、ほかは強攻撃・持ち替え など）
   const setBtn = (el, icon, label) => { el.innerHTML = `<span class="ab-icon">${icon}</span><span class="ab-label">${label}</span>`; };
   const leftBtn = document.getElementById('btn-left');
-  setBtn(leftBtn, me.left === 'guard' ? ICONS.shield : me.left === 'switch' ? ICONS.switch : ICONS.heavy, CHARACTERS[me.char].leftLabel);
+  // 左手ボタンの無いキャラ（劍騎士）は、ボタンを出さない
+  leftBtn.hidden = !me.left;
+  if (me.left) setBtn(leftBtn, me.left === 'guard' ? ICONS.shield : me.left === 'switch' ? ICONS.switch : ICONS.heavy, CHARACTERS[me.char].leftLabel);
   leftBtn.classList.toggle('guard', me.left === 'guard');
   setBtn(document.getElementById('btn-dodge'), ICONS.dodge, L.dodge);
   document.getElementById('settings-btn').innerHTML = ICONS.gear;
@@ -324,6 +326,12 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       }
       if (me.hidden) { me.yaw = player.yaw; me.pitch = player.pitch; }
       if (running) combat.control(me, input);
+      // 攻撃ボタン：溜めている間は縁が光り、溜めるほど強く光る（溜攻撃 2 を待つ間は満タンの光）
+      {
+        const a = me.action, k = a?.kind === 'charge' ? Math.min(1, a.t / a.tech.full) : a?.kind === 'charge2' ? 1 : -1;
+        attackBtn.classList.toggle('charging', k >= 0);
+        if (k >= 0) attackBtn.style.setProperty('--charge', k.toFixed(2));
+      }
       // 右のボタン：隠れている間は「出る」。近くにベッドやタンスがあれば「隠れる」と「探す」、家の壁があれば「壁に背を付ける」
       if ((useTimer -= dt) <= 0) {
         useTimer = 0.12;
@@ -395,6 +403,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     get spectating() { return spectating; },
     debugAction,
     views,   // 確認用（自動テストから見た目の状態を読むため）
+    combat,  // 確認用（自動テストから戦闘の出来事を数えるため）
     hiding,
     sfx,
     senses,

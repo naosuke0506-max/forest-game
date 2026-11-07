@@ -8,7 +8,8 @@
  *   armor      ：鎧の硬さ（受けるダメージの倍率。小さいほど硬い）
  *   speed      ：移動の速さの倍率（鎧が重いほど遅い）
  *   weight     ：装備の重さ（light 軽装 / medium 中装 / heavy 重装）。回避の仕方が変わる（DODGE）
- *   left       ：左手ボタンでできること（guard 盾で防御 / heavy 強攻撃 / switch 近接武器と持ち替え）、leftLabel：ボタンの文字
+ *   left       ：左手ボタンでできること（guard 盾で防御 / heavy 強攻撃 / switch 近接武器と持ち替え / null 無し）、leftLabel：ボタンの文字
+ *                劍騎士は左手ボタンが無い（重擊は無くした。強い一撃は攻擊ボタンの長押しの溜攻撃）
  *   armorName  ：専用の防具の名前（防具は 1 つだけ）
  *   sight      ：見える距離（m）。bot がこの距離まで目で気づける（兜の覗き穴が狭いほど短い。game/senses.js）
  * 防具はキャラごとに 1 つ（強化は無い）。扱える武器の全体は docs/DESIGN.md
@@ -16,7 +17,7 @@
 export const CHARACTERS = {
   shield:  { name: '楯劍騎士', model: 'shield', weight: 'medium', left: 'guard', leftLabel: '防禦',  armorName: '青鋼板金鎧', armor: 0.85, speed: 1.0,  maxHp: 105, sight: 40,
              desc: '盾と片手武器。受けが固く、攻守のつり合いがよい（中装より少し軽い鎧）' },
-  sword:   { name: '劍騎士',   model: 'sword', weight: 'medium', left: 'heavy', leftLabel: '重擊',   armorName: '十字兜鎧', armor: 0.8,  speed: 0.97, maxHp: 110, sight: 35,
+  sword:   { name: '劍騎士',   model: 'sword', weight: 'medium', left: null, leftLabel: null,     armorName: '十字兜鎧', armor: 0.8,  speed: 0.97, maxHp: 110, sight: 35,
              desc: '両手の剣と二刀流。振りが大きく、広く斬れる（中装より少し重い鎧）' },
   polearm: { name: '長柄騎士', model: 'polearm', weight: 'heavy', left: 'heavy', leftLabel: '薙拂', armorName: '鋲打重鎧', armor: 0.7,  speed: 0.9,  maxHp: 120, sight: 35,
              desc: '長柄の武器。間合いが一番長く、近づく前に突ける（重めの重装）' },
@@ -42,6 +43,45 @@ export const WEAPONS = {
   dagger:    { name: '短劍',         kind: 'melee', damage: 14, reach: 1.5, arc: 90,  windup: 0.16, recovery: 0.26, stamina: 8,  guardPierce: 0.0 },
   longbow:   { name: '長弓',         kind: 'bow',   damage: 30, drawTime: 0.75, minDraw: 0.2, speed: 48, stamina: 8, reach: 1.2 },
 };
+
+/**
+ * 武器の技（片手劍・長劍。docs/DESIGN.md の「片手劍の技」「長劍の技」）。動きは模型に入っている
+ * （tools/characters/onehand_moves.py・longsword_moves.py）。技の流れは game/techniques.js
+ *   combo：通常攻撃（攻擊ボタンを短く押す）。1 段目 → 2 段目 → また 1 段目
+ *   charge：溜攻撃 1（長押しで溜め、離して放つ）。in・hold は溜めに入る・溜めている間の動き。溜めた長さ（full 秒で満タン）で damage [最小, 最大] の間
+ *   charge2：溜攻撃 2（溜攻撃 1 の後、すぐもう一度長押しして離す）
+ * 技ごとに：clip 動き、time 長さ（秒。動きを作った速さのまま）、hits 当たる時刻（秒）、damage 武器の damage に掛ける倍率、
+ *   reach 間合い（m）、arc 当たる角度（度。当たりが 2 回ある技は 1 回ごと）、stamina、chain 次の技へ移れる時刻（秒。先に押しておけばこの時刻に移る）、
+ *   power 威力（l 軽い / h 重い。被弾・防禦の受け方を変える）
+ * 数値は仮（遊んで調整する）
+ */
+export const TECHNIQUES = {
+  armingsword: {
+    combo: [
+      { name: '踏込突', clip: 'oh_thrust', time: 0.7, hits: [0.24], damage: 1.0, reach: 2.3, arc: 40, stamina: 12, chain: 0.4, power: 'l' },
+      { name: '逆袈裟', clip: 'oh_rise', time: 0.73, hits: [0.24], damage: 1.05, reach: 2.0, arc: 120, stamina: 12, chain: 0.42, power: 'l' },
+    ],
+    charge: { name: '袈裟斬', in: 'oh_c1_in', hold: 'oh_c1_hold', clip: 'oh_c1_out', time: 0.8, hits: [0.16], damage: [1.4, 2.0], full: 1.0,
+      reach: 2.2, arc: 110, stamina: 20, chain: 0.45, power: 'h' },
+    charge2: { name: '旋風斬', clip: 'oh_c2', time: 1.67, hits: [0.54, 1.2], damage: [1.0, 1.5], reach: 2.2, arc: [360, 140], stamina: 24,
+      chain: 1.4, power: ['l', 'h'] },
+  },
+  longsword: {   // 片手劍より振りが大きく、隙も少し大きい
+    combo: [
+      { name: '唐竹', clip: 'ls_cut1', time: 0.93, hits: [0.34], damage: 1.0, reach: 2.6, arc: 50, stamina: 16, chain: 0.58, power: 'l' },
+      { name: '横薙', clip: 'ls_cut2', time: 0.97, hits: [0.36], damage: 1.0, reach: 2.5, arc: 150, stamina: 16, chain: 0.6, power: 'l' },
+    ],
+    charge: { name: '長突', in: 'ls_c1_in', hold: 'ls_c1_hold', clip: 'ls_c1_out', time: 0.93, hits: [0.16], damage: [1.4, 2.0], full: 1.1,
+      reach: 3.2, arc: 30, stamina: 26, chain: 0.55, power: 'h' },
+    charge2: { name: '斬返', clip: 'ls_c2', time: 1.47, hits: [0.3, 0.78], damage: [1.0, 1.5], reach: 2.6, arc: [110, 110], stamina: 30,
+      chain: 1.05, power: ['l', 'h'] },
+  },
+};
+/**
+ * 技の操作：hold 長押しと見なす時間（秒。これより早く離せば通常攻撃）、comboWindow 通常攻撃の後に次の段へつながる時間（秒）、
+ * followWindow 溜攻撃 1 の後に溜攻撃 2 へつながる時間（秒。放った一撃が当たる時刻から、動きの終わりのこの秒後まで）
+ */
+export const TECH = { hold: 0.25, comboWindow: 0.4, followWindow: 0.5 };
 
 /**
  * 試合の前に選ぶ武器（キャラごと）。鍛冶・強化は無い。試合の途中では替えられない

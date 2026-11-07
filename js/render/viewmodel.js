@@ -8,6 +8,40 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const ease = (t) => t * t * (3 - 2 * t);
 const lerp3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 
+// 技（片手劍・長劍。game/data.js の TECHNIQUES）の手元の通り道：[時刻（秒）, 位置, 角度]。最初は構え（REST）から、最後は構えへ戻る。
+// 当たる時刻に振り抜いた所へ来るようにしてある。溜めは CHARGE の姿で止め、溜攻撃 2 を待つ間は C2_READY の姿で止める
+const P = {
+  lowLeft: [[-0.28, -0.44, -0.55], [58, -32, 32]],    // 左下へ振り抜いた所
+  upRight: [[0.42, 0.06, -0.45], [-50, 20, -40]],     // 右上へ振り上げた所
+  left: [[-0.45, -0.2, -0.5], [10, -60, 82]],         // 左へ水平に
+  right: [[0.5, -0.15, -0.45], [10, 65, -82]],        // 右へ水平に
+  overhead: [[0.12, 0.26, -0.32], [-82, 4, -6]],      // 頭上
+};
+const PATHS = {
+  oh_thrust: [[0.14, [0.34, -0.3, -0.3], [6, 6, -4]], [0.24, [0.17, -0.24, -0.74], [7, 15, 0]], [0.4, [0.2, -0.25, -0.68], [8, 14, -2]]],   // 右下から画面の真ん中へ斜めに突く（真っ直ぐ奥へ伸ばすと柄しか見えない）
+  oh_rise: [[0.13, ...P.lowLeft], [0.26, ...P.upRight], [0.4, [0.38, 0.0, -0.48], [-40, 18, -36]]],
+  oh_c1_out: [[0.16, ...P.lowLeft], [0.4, ...P.lowLeft]],
+  oh_c2: [[0.4, ...P.left], [0.54, ...P.right], [0.85, [0.45, 0.02, -0.4], [-22, 70, -60]], [1.2, ...P.left], [1.35, ...P.lowLeft]],
+  ls_cut1: [[0.22, ...P.overhead], [0.34, [0.05, -0.45, -0.72], [72, 0, 0]], [0.55, [0.06, -0.42, -0.7], [66, 0, 0]]],
+  ls_cut2: [[0.22, ...P.right], [0.36, ...P.left], [0.55, [-0.4, -0.22, -0.55], [14, -55, 80]]],
+  ls_c1_out: [[0.16, [0.17, -0.12, -0.8], [5, 14, -88]], [0.4, [0.19, -0.13, -0.74], [6, 13, -88]]],
+  ls_c2: [[0.15, ...P.lowLeft], [0.3, ...P.upRight], [0.55, ...P.overhead], [0.78, ...P.lowLeft], [0.95, ...P.lowLeft]],
+};
+const CHARGE = { oh_c1_hold: [[0.46, 0.14, -0.3], [-72, 24, -44]], ls_c1_hold: [[0.3, 0.06, -0.3], [4, 8, -88]] };   // 溜めている姿（溜攻撃 1 はここから放つ）
+const C2_READY = { armingsword: P.lowLeft, longsword: [[0.19, -0.13, -0.74], [6, 13, -88]] };   // 溜攻撃 2 を待つ姿（溜攻撃 1 の振り終わり）
+/** 通り道の時刻 t の位置と角度（構え rest から始まり、終わり end に構えへ戻る） */
+function onPath(keys, t, end, rest, from = rest) {
+  const pts = [[0, ...from], ...keys, [end, ...rest]];
+  for (let i = 1; i < pts.length; i++) {
+    if (t <= pts[i][0] || i === pts.length - 1) {
+      const [t0, p0, r0] = pts[i - 1], [t1, p1, r1] = pts[i];
+      const k = ease(Math.min(1, Math.max(0, (t - t0) / Math.max(1e-3, t1 - t0))));
+      return [lerp3(p0, p1, k), lerp3(r0, r1, k)];
+    }
+  }
+  return [rest[0], rest[1]];
+}
+
 export function createViewModel(camera, fighter) {
   let w = WEAPONS[fighter.weapon];
   const root = new pc.Entity('viewmodel');
@@ -67,7 +101,20 @@ export function createViewModel(camera, fighter) {
           pos = lerp3(pos, [0.05, -0.2, -0.5], guardBlend);
           rot = lerp3(rot, [10, 75, 80], guardBlend);
         }
-        if (a?.kind === 'attack') {
+        if (a?.kind === 'attack' && a.tech && PATHS[a.tech.clip]) {
+          // 技：決めた通り道を通る（溜攻撃 1 は溜めた姿から、溜攻撃 2 は待っていた姿から始める）
+          const from = a.name === 'charge' ? CHARGE[a.tech.hold] : a.name === 'charge2' ? C2_READY[fighter.weapon] : null;
+          [pos, rot] = onPath(PATHS[a.tech.clip], a.t, a.tech.time, [pos, rot], from || [pos, rot]);
+        } else if (a?.kind === 'charge' && CHARGE[a.tech.hold]) {
+          // 溜め：振りかぶって止め、力を込めて小さく震える
+          const [cp, cr] = CHARGE[a.tech.hold];
+          const k = ease(Math.min(1, a.t / 0.33)), q = Math.sin(a.t * 47) * 0.004 * Math.min(1, a.t);
+          pos = lerp3(pos, [cp[0] + q, cp[1] + q, cp[2]], k); rot = lerp3(rot, cr, k);
+        } else if (a?.kind === 'charge2' && C2_READY[fighter.weapon]) {
+          const [cp, cr] = C2_READY[fighter.weapon];
+          const q = Math.sin(a.t * 47) * 0.004;
+          pos = [cp[0] + q, cp[1] + q, cp[2]]; rot = [...cr];
+        } else if (a?.kind === 'attack') {
           const t = a.t;
           const ws = attackStats(fighter.weapon, a.heavy);   // 強攻撃は振りかぶりが長い
           if (fighter.weapon === 'spear') {

@@ -14,7 +14,8 @@
 // 後で、逃走・アイテムの使用を足す
 import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
-import { WEAPONS, COMBAT, SENSES } from './data.js';
+import { WEAPONS, COMBAT, SENSES, TECH } from './data.js';
+import { techSetOf } from './techniques.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
 
 const DEG = Math.PI / 180;
@@ -46,6 +47,9 @@ export function createBot(fighter, rng, fighters) {
     coverTimer: 0,       // 壁に隠れている残りの時間
     ambushCooldown: 8,   // 次に待ち伏せしようとするまで
     lastThink: 0,
+    // 技のある武器（game/techniques.js）：tap＝次のフレームに 1 回だけ短く押す、hold＝残りこの秒だけ押し続ける（溜め）、
+    // wantC2＝溜攻撃 1 の後に溜攻撃 2 も出す、chained＝この攻撃の次の段をもう押した
+    tap: false, hold: 0, wantC2: false, chained: false,
     input: { forward: 0, strafe: 0, run: false, yaw: fighter.yaw, pitch: 0, attack: false, guard: false, left: false, dodge: false, dodgeX: 0, dodgeY: 0, search: false },
   };
   const f = fighter;
@@ -284,7 +288,7 @@ export function createBot(fighter, rng, fighters) {
     b.lastX = f.x; b.lastZ = f.z;
     if (b.route) { followRoute(world); if (b.route?.why !== 'leave' || !b.target) return; b.route = null; }
     b.ambushCooldown -= 0.25;
-    if (!b.target) { if (!ambush(world) && !investigate(world)) wander(world); return; }
+    if (!b.target) { b.hold = 0; if (!ambush(world) && !investigate(world)) wander(world); return; }
     b.ambush = null;
     const t = b.target, d = Math.hypot(t.x - f.x, t.z - f.z), weapon = w();
     const lowHp = f.stats.hp < f.stats.maxHp * 0.35;
@@ -318,7 +322,7 @@ export function createBot(fighter, rng, fighters) {
 
     // 近接
     const reach = weapon.reach;
-    const threat = t.action && t.action.kind === 'attack' && !t.action.hit && d < WEAPONS[t.weapon].reach + 1;
+    const threat = t.action && ((t.action.kind === 'attack' && !t.action.hit) || t.action.kind === 'charge') && d < WEAPONS[t.weapon].reach + 1;
     if (f.shield && b.guardTimer <= 0 && threat && f.stamina > 20 && rng.next() < (lowHp ? 0.75 : 0.45)) b.guardTimer = 0.5 + rng.next() * 0.4;
     b.input.guard = b.guardTimer > 0;
     // 回避：相手の振りかぶりが見えたら、ときどき後ろか横へ避ける（盾があれば防御の方を多く使う）
@@ -344,10 +348,29 @@ export function createBot(fighter, rng, fighters) {
       const ready = facing && !f.action && !b.input.guard && b.attackCooldown <= 0;
       // 強攻撃（左手）：相手が防御している・ひるんでいるときに多く使う。スタミナが多く要る
       const heavyChance = t.guarding || t.stun > 0 ? 0.55 : 0.18;
-      if (f.left === 'heavy' && ready && !b.input.attack && f.stamina > weapon.stamina * 2 && rng.next() < heavyChance) {
+      const set = techSetOf(f.weapon), a = f.action;
+      if (f.left === 'heavy' && ready && !b.input.attack && b.hold <= 0 && f.stamina > weapon.stamina * 2 && rng.next() < heavyChance * (set ? 0.4 : 1)) {
         b.input.left = true;
         b.input.attack = false;
         b.attackCooldown = 0.5 + rng.next() * 0.8;
+      } else if (set) {
+        // 技：短く押す（振っている途中にもう一度押して次の段へ）・長押しで溜める（相手が防禦・ひるんでいると多く）・溜攻撃 1 の後にもう一度長押し
+        b.input.attack = false;
+        if (a?.kind === 'attack' && a.name === 'charge' && a.hit && b.wantC2 && b.hold <= 0) {
+          b.hold = TECH.hold + 0.15 + rng.next() * 0.3; b.wantC2 = false;
+        } else if (a?.kind === 'attack' && a.name === 'combo' && a.hit && !b.chained && rng.next() < 0.6) {
+          b.tap = true; b.chained = true;
+        } else if (ready && b.hold <= 0) {
+          const chargeChance = t.guarding || t.stun > 0 ? 0.5 : 0.25;
+          if (f.stamina >= set.charge.stamina * 0.5 && rng.next() < chargeChance) {
+            b.hold = TECH.hold + 0.1 + rng.next() * 0.7;
+            b.wantC2 = rng.next() < 0.5;   // 溜攻撃 2 を出すときにスタミナが足りなければ、出ない（game/techniques.js）
+            b.attackCooldown = 0.6 + rng.next() * 0.6;
+          } else if (f.stamina > set.combo[0].stamina) {
+            b.tap = true; b.chained = false;
+            b.attackCooldown = 0.25 + rng.next() * 0.7;
+          }
+        }
       } else {
         b.input.attack = !b.input.attack && ready && f.stamina > weapon.stamina;
         if (b.input.attack) b.attackCooldown = 0.25 + rng.next() * 0.7;
@@ -367,6 +390,7 @@ export function createBot(fighter, rng, fighters) {
       b.waitTimer -= dt;
       b.thinkTimer -= dt;
       b.attackCooldown -= dt;
+      b.hold = Math.max(0, b.hold - dt);
       b.guardTimer -= dt;
       b.dodgeCooldown -= dt;
       b.strafeTimer -= dt;
@@ -412,8 +436,12 @@ export function createBot(fighter, rng, fighters) {
     /** 戦闘の入力（combat.control に渡す） */
     get combatInput() {
       const i = b.input;
+      // 技のある武器は、短く押す（1 フレームだけ）と長押しを分ける（押したままだと溜めになるため）
+      // （隠れ場所・壁裏からの暗殺は、今までどおり押した瞬間だけを見る）
+      const attack = techSetOf(f.weapon) && !f.hidden && !f.cover ? (b.tap || b.hold > 0) : i.attack;
+      b.tap = false;
       // 左手ボタン：盾持ちは防御、ほかは強攻撃・持ち替え
-      return { attack: i.attack, left: f.left === 'guard' ? i.guard : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
+      return { attack, left: f.left === 'guard' ? i.guard : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
     },
   };
 }
