@@ -3,7 +3,6 @@
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
 import { WEAPONS, COMBAT, DODGE, HEAVY } from './data.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
-import { upgradeOf } from './craft.js';
 import { SEARCH_TIME } from './hiding.js';
 import { setStance, updateStance, stanceShape } from './stance.js';
 
@@ -139,7 +138,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (d > w.reach + COMBAT.bodyRadius) continue;
       if (Math.abs(yOf(t) - fy) > 1.6) continue;
       if (d > 0.6 && angleTo(f.yaw, dx, dz) > w.arc / 2) continue;
-      damage(t, w.damage * upgradeOf(f, f.weapon).damage, f, { pierce: w.guardPierce, fromX: f.x, fromZ: f.z });   // 強化で威力が増える
+      damage(t, w.damage, f, { pierce: w.guardPierce, fromX: f.x, fromZ: f.z });
       hits++;
     }
     // 振り終わり：誰にも当たらなければ、前に木の幹や壁があるか（当たった音を変える）
@@ -160,7 +159,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       owner: f,
       x: f.x + dir[0] * 0.5, y: yOf(f) + 1.5, z: f.z + dir[2] * 0.5,
       vx: dir[0] * speed, vy: dir[1] * speed, vz: dir[2] * speed,
-      damage: w.damage * upgradeOf(f, f.weapon).damage * (0.35 + 0.65 * power),
+      damage: w.damage * (0.35 + 0.65 * power),
       life: 5,
       stuck: 0,               // 刺さってからの時間（見た目用。刺さった矢は少し残す）
       id: Math.random(),
@@ -302,7 +301,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         // 強攻撃（左手）を先に見る：両方押したときは重い方
         const heavy = f.left === 'heavy' && leftPressed;
         const a = attackStats(f.weapon, heavy);
-        const cost = a.stamina * upgradeOf(f, f.weapon).stamina;   // 強化でスタミナの減りが少なくなる
+        const cost = a.stamina;
         if ((pressed || heavy) && !f.action && f.stamina >= cost * 0.5) {
           f.action = { kind: 'attack', t: 0, hit: false, heavy };
           spendStamina(f, cost);
@@ -314,7 +313,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         if (released && f.action?.kind === 'draw') {
           if (f.action.t >= w.minDraw) {
             fire(f, w, Math.min(1, f.action.t / w.drawTime));
-            spendStamina(f, w.stamina * upgradeOf(f, f.weapon).stamina);
+            spendStamina(f, w.stamina);
             f.action = { kind: 'release', t: 0 };
           } else {
             f.action = null;

@@ -2,7 +2,6 @@
 //   ・相手がいないとき：森を歩き回る
 //   ・近接キャラ：一番近い相手に詰めて、間合いに入ったら攻撃。相手の振りかぶりが見えたら、ときどき防御
 //   ・弓兵：近すぎると下がり、中距離で横に動きながら、引いて射る（矢が落ちる分だけ上を狙う）
-//   ・素材：相手がいないとき、近くの素材の山や村の箱へ行って拾い、素材がそろえば強化する（game/craft.js の botCraft）
 //   ・隠れる：体力が少ないとき、近くの家のベッドやタンスへ逃げ込む（扉 →（階段）→ 隠れ場所の道順で歩く）。
 //     隠れている間に相手がすぐそばを通れば、飛び出して暗殺する。しばらくしたら出る
 //   ・探す：誰かが隠れるところを見たら、その場所へ行って探す。見つけたら致命の一撃
@@ -16,7 +15,6 @@
 import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
 import { WEAPONS, COMBAT, SENSES } from './data.js';
-import { botCraft } from './craft.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
 
 const DEG = Math.PI / 180;
@@ -93,42 +91,14 @@ export function createBot(fighter, rng, fighters) {
     return best;
   }
 
-  /** 近くの素材の山・箱へ向かい、着いたら拾ってクラフトする（相手がいないとき） */
-  function gather(world) {
-    const p = world.pickups;
-    if (!p) return false;
-    const here = p.nearest(f);
-    if (here) {
-      if (p.take(f, here)) {
-        const made = botCraft(f);
-        if (made) world.onBotCraft?.(f, made);
-      }
-      return false;
-    }
-    if (!b.loot || b.loot.taken) {
-      b.loot = null;
-      let bd = 28;
-      for (const o of p.items) {
-        if (o.taken || o.botSkip) continue;   // 行けなかった物は諦める
-        const d = Math.hypot(o.x - f.x, o.z - f.z);
-        if (d < bd) { bd = d; b.loot = o; }
-      }
-    }
-    if (!b.loot) return false;
-    b.goal = { x: b.loot.x, z: b.loot.z };
-    return true;
-  }
-
   function wander(world) {
-    const gathering = gather(world);
-    if (gathering) b.waitTimer = 0;
-    if (!b.goal || (!gathering && Math.hypot(b.goal.x - f.x, b.goal.z - f.z) < 2)) {
+    if (!b.goal || Math.hypot(b.goal.x - f.x, b.goal.z - f.z) < 2) {
       if (b.goal && b.waitTimer <= 0) b.waitTimer = 1 + rng.next() * 3;
       pickGoal(world.areaRadius);
     }
     if (Math.hypot(f.x - b.lastX, f.z - b.lastZ) < 0.15 && b.input.forward > 0) b.stuckTimer += 0.3;
     else b.stuckTimer = 0;
-    if (b.stuckTimer > 1.2) { pickGoal(world.areaRadius); b.stuckTimer = 0; if (b.loot) { b.loot.botSkip = true; b.loot = null; } }
+    if (b.stuckTimer > 1.2) { pickGoal(world.areaRadius); b.stuckTimer = 0; }
     b.input.yaw = yawTo(f, b.goal.x, b.goal.z);
     b.input.forward = b.waitTimer > 0 ? 0 : 1;
     b.input.strafe = 0;

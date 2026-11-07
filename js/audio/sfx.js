@@ -262,22 +262,6 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
       const d = at(f, 0.8);
       if (d) playSample(d, 'pick_metal', { rate: jitter(0.08), gain: 0.6 });
     },
-    pickup(kind, isMe = true) {
-      if (!isMe) return;
-      const d = at(null, 1);
-      if (!d) return;
-      if (kind === 'wood') playSample(d, 'pick_wood', { rate: jitter(0.06), gain: 0.9 });
-      else if (kind === 'stone') playSample(d, 'pick_stone', { rate: jitter(0.06), gain: 0.8 });
-      else if (kind === 'iron') playSample(d, 'pick_metal', { rate: jitter(0.06), gain: 0.8 });
-      else if (kind === 'cloth') playSample(d, 'pick_cloth', { rate: jitter(0.06), gain: 0.9 });
-      else { playSample(d, 'crate_open', { gain: 0.9 }); playSample(d, 'wood_close', { t: 0.45, gain: 0.6 }); }   // 箱：蓋を開けて置く
-    },
-    craft() {
-      const d = at(null, 1);
-      if (!d) return;
-      playSample(d, 'hammer', { gain: 0.9 });
-      playSample(d, 'hammer', { t: 0.3, rate: 1.05, gain: 0.8 });
-    },
     hide(f, kind) {
       const d = at(f, f.isPlayer ? 0.9 : 0.6, { ref: 2, max: 18 });
       if (!d) return;
@@ -337,7 +321,7 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
 }
 
 /** 試合の出来事に、効果音をつなぐ */
-export function wireSounds(sfx, { combat, match, hiding, pickups, me }) {
+export function wireSounds(sfx, { combat, match, hiding, me }) {
   combat.on('swing', ({ fighter, heavy }) => sfx.swing(fighter, heavy));
   combat.on('hit', ({ attacker, target, guarded, kind }) => { if (kind === 'melee' || kind === 'arrow') sfx.hit(attacker, target, guarded, kind); });
   combat.on('strike', ({ fighter, hits, blocked }) => { if (!hits && blocked) sfx.strikeObstacle(fighter); });
@@ -356,5 +340,4 @@ export function wireSounds(sfx, { combat, match, hiding, pickups, me }) {
   hiding.on('hide', ({ fighter, spot }) => sfx.hide(fighter, spot.kind));
   hiding.on('exit', ({ fighter, spot }) => sfx.hide(fighter, spot.kind));
   hiding.on('found', ({ searcher, victim }) => { if (searcher === me || victim === me) sfx.found(); });
-  pickups.on('taken', ({ fighter, item }) => sfx.pickup(item.kind, fighter === me));
 }

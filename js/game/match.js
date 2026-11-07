@@ -1,12 +1,41 @@
 // 試合の流れ：フェーズ・残り時間・延長・歩ける範囲・ポイント・脱落・終了。
 // PlayCanvas に依存しない「計算だけ」の部分（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { PHASES, POINTS, REWARDS, REWARD_PICK_TIME, CHARACTERS, COMBAT } from './data.js';
-import { initInventory } from './craft.js';
+import { PHASES, POINTS, REWARDS, REWARD_PICK_TIME, CHARACTERS, COMBAT, LOADOUTS, WEAPONS, SHIELDS } from './data.js';
 import { initStance, resetStance } from './stance.js';
 
-/** 戦う人（人間・bot 共通の記録） */
-export function createFighter({ id, name, char, isPlayer, color }) {
+/** 選べる物か（武器・楯の模型と動きがある） */
+const usable = (slot, id) => (slot === 'shield' ? !!SHIELDS[id] && !SHIELDS[id].planned : !!WEAPONS[id]);
+
+/**
+ * キャラの武器を決める（題の画面で選んだ物。選べない物・無い物は、そのキャラの最初の物）
+ * @returns {{ main: string, side: string | null, shield: string | null }}
+ */
+export function resolveLoadout(char, want = null) {
+  const lo = LOADOUTS[char], out = { main: null, side: null, shield: null };
+  for (const slot of ['main', 'side', 'shield']) {
+    const opts = (lo[slot] || []).filter((id) => usable(slot, id));
+    if (opts.length) out[slot] = opts.includes(want?.[slot]) ? want[slot] : opts[0];
+  }
+  return out;
+}
+
+/** bot の武器：選べる物から乱数で選ぶ。rnd：0〜1 の数を返す関数 */
+export function randomLoadout(char, rnd) {
+  const lo = LOADOUTS[char], out = {};
+  for (const slot of ['main', 'side', 'shield']) {
+    const opts = (lo[slot] || []).filter((id) => usable(slot, id));
+    if (opts.length) out[slot] = opts[Math.floor(rnd() * opts.length)];
+  }
+  return resolveLoadout(char, out);
+}
+
+/**
+ * 戦う人（人間・bot 共通の記録）
+ * @param {object} opt loadout：試合の前に選んだ武器 { main, side, shield }（resolveLoadout で、選べない物はキャラの最初の物にする）
+ */
+export function createFighter({ id, name, char, isPlayer, color, loadout = null }) {
   const c = CHARACTERS[char];
+  const lo = resolveLoadout(char, loadout);
   const f = {
     id, name, char, isPlayer, color,
     x: 0, z: 0, yaw: 0, pitch: 0,
@@ -17,12 +46,12 @@ export function createFighter({ id, name, char, isPlayer, color }) {
     state: 'normal',         // normal / enhanced（肉体強化）/ mutated（変異）… 手順 6 で使う
     stats: { maxHp: c.maxHp, hp: c.maxHp, attack: 1, defense: 1, speed: c.speed, maxStamina: COMBAT.maxStamina },
     // 戦闘（game/combat.js が動かす）
-    weapon: c.weapon,        // 手に持っている武器（WEAPONS の名前）
-    primary: c.weapon,       // 主の武器
-    sidearm: c.sidearm || null, // 持ち替える近接武器（弓兵のダガー）
+    weapon: lo.main,         // 手に持っている武器（WEAPONS の名前）
+    primary: lo.main,        // 主の武器（右手）
+    sidearm: lo.side,        // 持替で持つ近接武器（弓兵の短劍）
     left: c.left,            // 左手ボタンでできること（guard / heavy / switch）
     weight: c.weight,        // 装備の重さ（回避の仕方が変わる）
-    shield: c.shield,
+    shield: lo.shield,       // 左手の楯（SHIELDS の名前。無ければ null）
     armor: c.armor,
     stamina: COMBAT.maxStamina,
     staminaDelay: 0,         // スタミナが戻り始めるまでの残り時間
@@ -34,7 +63,6 @@ export function createFighter({ id, name, char, isPlayer, color }) {
     pendingReward: null,     // 選んでいる途中のフェーズ報酬 { phase, options, timeLeft }
     rewards: [],             // 選んだ報酬
   };
-  initInventory(f);          // 素材・持っている武器・強化の段階（game/craft.js）
   initStance(f);             // 立つ・しゃがむ・伏せる（game/stance.js）
   return f;
 }
