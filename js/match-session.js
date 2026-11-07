@@ -3,7 +3,7 @@ import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS } from './game/data.js';
 import { createMinimap } from './ui/minimap.js';
 import { ZONE_NAMES } from './world/zones.js';
 import { TIMES } from './world/time-of-day.js';
-import { createFighter, createMatch } from './game/match.js';
+import { createFighter, createMatch, randomLoadout } from './game/match.js';
 import { createBot } from './game/bot.js';
 import { createCombat } from './game/combat.js';
 import { createRandom } from './core/random.js';
@@ -13,16 +13,11 @@ import { loadWeaponModels } from './render/weapons.js';
 import { createViewModel } from './render/viewmodel.js';
 import { createProjectileViews } from './render/projectiles.js';
 import { createHud } from './ui/hud.js';
-import { createPickups } from './game/pickups.js';
 import { createHiding } from './game/hiding.js';
 import { createCover } from './game/cover.js';
 import { L } from './ui/labels.js';
 import { createSfx, wireSounds } from './audio/sfx.js';
-import { createPickupViews } from './render/pickup-view.js';
-import { createCraftUi } from './ui/craft.js';
 import { ICONS, weaponIconOf } from './ui/icons.js';
-import { MATERIALS } from './game/data.js';
-import { levelOf } from './game/craft.js';
 import { createSenses } from './game/senses.js';
 import { stanceButton, stanceSpeed, canRun, stanceShape } from './game/stance.js';
 import { STANCES } from './game/data.js';
@@ -31,22 +26,24 @@ const PLAYER_COLOR = '#ffd75e';
 const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
 
 /**
- * @param {object} ctx { app, config, terrain, obstacles, player, myChar, debug, phaseDuration }
+ * @param {object} ctx { app, config, terrain, obstacles, player, myChar, loadout, debug, phaseDuration }
+ *   loadout：試合の前に選んだ武器 { main, side, shield }（game/data.js の LOADOUTS から。無ければキャラの最初の物）
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, timeOfDay = null, zones = null, buildings = [], crateSpots = [], tex = null, trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], sight = null, debug = false, phaseDuration = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], sight = null, debug = false, phaseDuration = null }) {
   const rng = createRandom(config.seed + 9000);
 
-  // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）
+  // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）。bot の武器は、選べる物から乱数で選ぶ
   const others = Object.keys(CHARACTERS).filter((c) => c !== myChar);
   for (let i = others.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [others[i], others[j]] = [others[j], others[i]];
   }
   const names = [...BOT_NAMES];
-  const fighters = [createFighter({ id: 0, name: L.you, char: myChar, isPlayer: true, color: PLAYER_COLOR })];
+  const fighters = [createFighter({ id: 0, name: L.you, char: myChar, isPlayer: true, color: PLAYER_COLOR, loadout })];
   for (let i = 0; i < 3; i++) {
     const name = names.splice(Math.floor(rng.next() * names.length), 1)[0];
-    fighters.push(createFighter({ id: i + 1, name, char: others[i % others.length], isPlayer: false, color: BOT_COLORS[i] }));
+    const char = others[i % others.length];
+    fighters.push(createFighter({ id: i + 1, name, char, isPlayer: false, color: BOT_COLORS[i], loadout: randomLoadout(char, () => rng.next()) }));
   }
   const me = fighters[0];
   const match = createMatch({ fighters, rng, phaseDuration });
@@ -69,11 +66,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   }
   player.spawn(me.x, me.z, me.yaw);
 
-  // 落ちている素材と村の箱。フェーズが始まるたびに少し足す
-  const pickups = createPickups({ rng: createRandom(config.seed + 7700), zones, isFree: obstacles.isFree, areaRadius: AREA_RADIUS, crateSpots, blocked: insideHouse });
-  const pickupViews = createPickupViews(app, pickups, terrain, tex, config.quality);
-  match.on('phaseStart', () => pickups.refill());
-
   // 隠れ場所（村の家のベッドの下・タンスの中）
   const hiding = createHiding(hides);
   // 戦闘と bot
@@ -89,14 +81,13 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   combat.on('dodge', ({ fighter }) => senses.noise(fighter, 'dodge'));
   combat.on('fire', ({ fighter }) => senses.noise(fighter, 'bow'));
   combat.on('searchStart', ({ fighter }) => senses.noise(fighter, 'search'));
-  pickups.on('taken', ({ fighter, item }) => senses.noise(fighter, item.kind === 'crate' ? 'crate' : 'pickup'));
   hiding.on('hide', ({ fighter }) => senses.noise(fighter, 'hide'));
 
   // 見た目
   // キャラの模型を読み込む。読み込めなかったキャラは、仮の人形で続ける（画面下に知らせを出す）
   const models = new Map();
-  // 武器の模型：みんなの今の武器と、自分がクラフトで作れる武器
-  const weaponsLoaded = loadWeaponModels(app, [...fighters.flatMap((f) => (f.shield ? [f.weapon, 'shield'] : [f.weapon])), ...CHARACTERS[me.char].crafts]);
+  // 武器の模型：みんなの武器（持替の武器も）と楯
+  const weaponsLoaded = loadWeaponModels(app, fighters.flatMap((f) => [f.primary, ...(f.sidearm ? [f.sidearm] : []), ...(f.shield ? ['shield'] : [])]));
   const charIds = [...new Set(fighters.map((f) => CHARACTERS[f.char].model))];
   await Promise.all([weaponsLoaded, ...charIds.map((id) =>
     loadCharacterModel(app, id).then((m) => models.set(id, m)).catch((err) => {
@@ -130,23 +121,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   refreshAttack();
   combat.on('switch', ({ fighter }) => { if (fighter === me) refreshAttack(); });
 
-  // 素材とクラフト：拾ったら左に知らせ、素材の表示を更新する
+  // 右のボタン（出る・隠れる・壁に背を付ける・壁から離れる）
   const useBtn = document.getElementById('btn-use');
-  const craftUi = createCraftUi(me, (act, id) => {
-    const name = id ? WEAPONS[id].name : CHARACTERS[me.char].armorName;
-    if (act !== 'equip') { sfx.craft(); senses.noise(me, 'craft'); }
-    if (act === 'make') hud.addFeed(`${name}を作った（${L.craft}の「${L.equip}」で持ち替え）`);
-    else if (act === 'upgrade') hud.addFeed(`${name}を強化した（強化 ${levelOf(me, id)}）`);
-    else if (act === 'armor') hud.addFeed(`${name}を強化した（強化 ${me.armorLevel}）`);
-    else if (act === 'equip') { hud.addFeed(`${name}に持ち替えた`); refreshAttack(); }
-  });
-  pickups.on('taken', ({ fighter, item, got }) => {
-    if (fighter !== me) return;
-    const what = Object.entries(got).filter(([, n]) => n).map(([k, n]) => `${MATERIALS[k].name} +${n}`).join('　');
-    hud.addFeed(item.kind === 'crate' ? `箱を開けた：${what}` : what);
-    craftUi.update();
-  });
-  let nearItem = null, nearSpot = null, nearWall = null, useTimer = 0;
+  let nearSpot = null, nearWall = null, useTimer = 0;
   const searchBtn = document.getElementById('btn-search');
   setBtn(searchBtn, ICONS.eye, L.search);
   // 姿勢ボタン：押したときにすること（立っていれば「しゃがむ」、しゃがむ・伏せていれば「立つ」）。長押しで伏せる
@@ -163,9 +140,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   refreshStance();
   const hideView = document.getElementById('hideview');
 
-  // 効果音（足音・戦闘・拾う・隠れる・鐘など）
+  // 効果音（足音・戦闘・隠れる・鐘など）
   const sfx = createSfx({ terrain, zones, insideHouse, villageCenter: zones?.castle });
-  wireSounds(sfx, { combat, match, hiding, pickups, me });
+  wireSounds(sfx, { combat, match, hiding, me });
 
   // 隠れる・探す：自分が隠れたら隙間から覗く見た目に。近くの bot に見られていたら、その bot は場所を覚えて探しに来る
   // 隠れるところを見たか：隠れる直前に立っていた所が、bot の目（前の 120 度・見える距離・体の半分以上が見える）に入っていたか
@@ -240,8 +217,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         useBtn.hidden = true;
         searchBtn.hidden = true;
         hideView.hidden = true;
-        document.getElementById('mats').hidden = true;
-        craftUi.close();
         spectateEl.hidden = false;
         nextSpectate();
       }, 2500);
@@ -251,7 +226,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   });
   match.on('end', () => { spectateEl.hidden = true; });
 
-  const world = { obstacles, pickups, groundAt, hiding, cover, sight, senses, onBotCraft: (f) => senses.noise(f, 'craft'), get areaRadius() { return match.areaRadius; } };
+  const world = { obstacles, groundAt, hiding, cover, sight, senses, get areaRadius() { return match.areaRadius; } };
   match.on('eliminated', ({ victim }) => { hiding.drop(victim); cover.drop(victim); });
   hiding.on('hide', ({ fighter }) => cover.drop(fighter));
   // 壁裏隠れ：自分が壁に背を付けたら三人称（体を見せ、手元の武器を隠す）。離れたら元に戻す
@@ -338,24 +313,21 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       }
       if (me.hidden) { me.yaw = player.yaw; me.pitch = player.pitch; }
       if (running) combat.control(me, input);
-      // 右のボタン：隠れている間は「出る」。近くに素材の山か箱があれば「拾う・開ける」、ベッドやタンスがあれば「隠れる」と「探す」
+      // 右のボタン：隠れている間は「出る」。近くにベッドやタンスがあれば「隠れる」と「探す」、家の壁があれば「壁に背を付ける」
       if ((useTimer -= dt) <= 0) {
         useTimer = 0.12;
         const free = running && me.alive && !(me.helpless > 0) && !me.action;
-        nearItem = free && !me.hidden && !me.cover ? pickups.nearest(me) : null;
-        nearSpot = free && !me.hidden && !me.cover && !nearItem ? hiding.nearest(me) : null;
-        nearWall = free && !me.hidden && !me.cover && !nearItem && !nearSpot ? cover.nearest(me) : null;
-        const mode = me.hidden ? 'exit' : me.cover ? 'leave' : nearItem ? (nearItem.kind === 'crate' ? 'crate' : nearItem.kind) : nearSpot ? 'hide' : nearWall ? 'wall' : '';
+        nearSpot = free && !me.hidden && !me.cover ? hiding.nearest(me) : null;
+        nearWall = free && !me.hidden && !me.cover && !nearSpot ? cover.nearest(me) : null;
+        const mode = me.hidden ? 'exit' : me.cover ? 'leave' : nearSpot ? 'hide' : nearWall ? 'wall' : '';
         useBtn.hidden = !mode;
         stanceBtn.hidden = !running || !me.alive || !!me.hidden || !!me.cover;
-        if (mode && useBtn.dataset.label !== mode + (nearItem?.amount ?? '')) {
-          useBtn.dataset.label = mode + (nearItem?.amount ?? '');
+        if (mode && useBtn.dataset.label !== mode) {
+          useBtn.dataset.label = mode;
           if (mode === 'exit') setBtn(useBtn, ICONS.exit, L.exit);
           else if (mode === 'hide') setBtn(useBtn, ICONS.hood, L.hide);
           else if (mode === 'wall') setBtn(useBtn, ICONS.wall, L.wall);
           else if (mode === 'leave') setBtn(useBtn, ICONS.exit, L.leave);
-          else if (mode === 'crate') setBtn(useBtn, ICONS.crate, L.crate);
-          else setBtn(useBtn, ICONS[mode], `${MATERIALS[mode].name}<small>×${nearItem.amount}</small>`);
         }
         searchBtn.hidden = !nearSpot;
         // 攻撃ボタン：隠れている間と、壁に隠れていて近くに相手がいるときは「暗殺」、無防備な相手が近くにいれば「とどめ」
@@ -367,7 +339,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       if (input.use && running && me.alive) {
         if (me.hidden) hiding.exit(me);
         else if (me.cover) cover.exit(me);
-        else if (nearItem) pickups.take(me, nearItem);
         else if (nearSpot) hiding.hide(me, nearSpot);   // 誰かがいれば、その人を見つける
         else if (nearWall) {
           // 覗く向き：今見ている向きが、壁に背を付けたときの右か左か
@@ -378,7 +349,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
             player.setCover({ x: me.x, y: me.y, z: me.z, nx: sg.nx, nz: sg.nz, px: pd.x, pz: pd.z });
           }
         }
-        nearItem = nearSpot = nearWall = null; useTimer = 0;
+        nearSpot = nearWall = null; useTimer = 0;
       }
       for (const b of bots) {
         const moving = running ? b.update(dt, world) : 0;
@@ -394,7 +365,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       views.get(me).update(dt, player.moving);
       viewModel.update(dt, player.moving);
       arrows.update();
-      pickupViews.update(dt, player.camera.getPosition());
       // 観戦：見ている人の肩越しにカメラを置く
       if (spectating) {
         if (!spectating.alive) nextSpectate();
@@ -414,7 +384,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     get spectating() { return spectating; },
     debugAction,
     views,   // 確認用（自動テストから見た目の状態を読むため）
-    pickups,
     hiding,
     sfx,
     senses,

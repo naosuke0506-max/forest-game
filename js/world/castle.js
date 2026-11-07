@@ -106,14 +106,11 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
   ];
   const walls = [1, [1, 0.94, 0.84], [0.98, 0.9, 0.86], [0.92, 0.92, 0.9], [1, 0.97, 0.88]];   // しっくいの色（白・黄土・薄紅・灰・生成り）
   let i = 0;
-  // 箱を置く場所（家の扉の横。中身は game/pickups.js が決める）。家の並びを変えないよう、別の乱数で選ぶ
-  const crateSpots = [];
-  const rndCrate = createRandom(config.seed + 334);
-  // 家の周りの小物（樽・長椅子・薪の山・干し草）。家の並びと箱の場所を変えないよう、別の乱数で選ぶ
+  // 家の周りの小物（樽・長椅子・薪の山・干し草）。家の並びを変えないよう、別の乱数で選ぶ
   const rndProp = createRandom(config.seed + 335);
-  function houseProps(x, y0, z, yaw, w, d, crateSide) {
+  function houseProps(x, y0, z, yaw, w, d) {
     const F = frame(x, y0, z, yaw);
-    const ps = crateSide ? -crateSide : rndProp.next() < 0.5 ? -1 : 1;   // 箱の無い側
+    const ps = rndProp.next() < 0.5 ? -1 : 1;   // 扉のどちら側に置くか
     const put = (lx, lz, r) => { const q = F.at(lx, 0, lz); solid(q[0], q[2], r); return q; };
     const k = rndProp.next();
     if (k < 0.4) {
@@ -166,20 +163,11 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
       buildHouse(B, { cx: x, cz: z, y0, yaw, w, d, stories: two ? 2 : 1, roof, wall: walls[i++ % walls.length], rnd, deco: createRandom(config.seed + 1000 + houses.length) }, reg);
       houses.push({ x, z, w, d, yaw, stories: two ? 2 : 1 });
       footprints.push({ type: 'rect', x, z, w, d, yaw, roof });
-      let crateSide = 0;
-      if (rndCrate.next() < 0.5) {
-        const F = frame(x, 0, z, yaw);
-        const cs = rndCrate.next() < 0.5 ? -1 : 1;
-        const q = F.at(cs * (w / 2 - 0.6), 0, d / 2 + 0.95);
-        crateSpots.push({ x: q[0], z: q[2], yaw: yaw + (rndCrate.next() - 0.5) * 30 });
-        solid(q[0], q[2], 0.45);
-        crateSide = cs;
-      }
-      houseProps(x, y0, z, yaw, w, d, crateSide);
+      houseProps(x, y0, z, yaw, w, d);
       s += w + 2.0 + rnd.next() * 2.6;
     }
   }
-  /** 家の中か（素材の山を家の中に置かないため） */
+  /** 家の中か（家の中の音の響き・bot の判断に使う） */
   const insideHouse = (x, z) => houses.some((hh) => {
     const a = (hh.yaw * Math.PI) / 180, dx = x - hh.x, dz = z - hh.z;
     const lx = dx * Math.cos(a) - dz * Math.sin(a), lz = dx * Math.sin(a) + dz * Math.cos(a);
@@ -232,5 +220,5 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
       m.update();
     });
   }
-  return { houses, triangles: tris, footprints, crateSpots, hides, covers, insideHouse };
+  return { houses, triangles: tris, footprints, hides, covers, insideHouse };
 }

@@ -160,12 +160,12 @@ async function boot() {
   // 音：iPad は指で触ったときにしか音を出し始められない。試合を始めるボタンで出し、
   // 裏から戻ったなどで止まっていたら、次に画面に触れたときに再び出す
   document.addEventListener('pointerdown', () => { if (playing && !audio.ready) audio.unlock(); }, true);
-  titleScreen.ready(async (myChar) => {
+  titleScreen.ready(async (myChar, loadout) => {
     audio.unlock();
     input.reset();
     session = await startPracticeMatch({
-      app, config: CONFIG, terrain, obstacles, player, myChar, timeOfDay, zones, buildings: village?.footprints || [],
-      crateSpots: village?.crateSpots || [], tex, trees: trees?.canopies || [],
+      app, config: CONFIG, terrain, obstacles, player, myChar, loadout, timeOfDay, zones, buildings: village?.footprints || [],
+      trees: trees?.canopies || [],
       groundAt: floors.groundAt, insideHouse: village?.insideHouse, hides: village?.hides || [], covers: village?.covers || [], sight,
       debug: CONFIG.debug,
       // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」

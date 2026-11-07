@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>蠱毒</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-05.1';</script>
+<script>window.__BUILD = '2026-11-07.1';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -73,12 +73,8 @@
 <link rel="modulepreload" href="./js/audio/engine.js">
 <link rel="modulepreload" href="./js/audio/ambience.js">
 <link rel="modulepreload" href="./js/audio/sfx.js">
-<link rel="modulepreload" href="./js/ui/craft.js">
 <link rel="modulepreload" href="./js/ui/icons.js">
-<link rel="modulepreload" href="./js/game/craft.js">
-<link rel="modulepreload" href="./js/game/pickups.js">
 <link rel="modulepreload" href="./js/game/hiding.js">
-<link rel="modulepreload" href="./js/render/pickup-view.js">
 <link rel="preload" as="fetch" href="./assets/trees_blender/trees.json" crossorigin>
 <link rel="preload" as="fetch" href="./assets/trees_blender/fir_lod1.glb" crossorigin>
 <link rel="preload" as="fetch" href="./assets/trees_blender/red_pine_lod1.glb" crossorigin>
@@ -168,8 +164,6 @@
   <!-- 左上：ミニマップと設定 -->
   <canvas id="minimap" class="minimap"></canvas>
   <button id="settings-btn" class="icon-btn" type="button" aria-label="設定">⚙</button>
-  <!-- 地図の下：持っている素材。タップでクラフト画面 -->
-  <div id="mats" class="mats" role="button" aria-label="素材とクラフト"></div>
   <!-- 右上：ポイントのランキング -->
   <ol id="ranking" class="ranking"></ol>
   <!-- 左：ポイントの知らせ（移動スティックの上） -->
@@ -230,14 +224,6 @@
   <button id="again" class="start" type="button">再戰</button>
 </section>
 
-<!-- クラフト（素材の表示をタップで開く。試合は止まらない） -->
-<section id="craft" class="panel craft" hidden>
-  <div class="craft-head"><h2>鍛冶</h2><button class="craft-close icon-btn" type="button" aria-label="閉じる">×</button></div>
-  <div class="craft-mats"></div>
-  <div class="craft-list"></div>
-  <p class="craft-note">どこでもすぐ作れる（試合は止まらない）。素材は森に落ちている物と、村の家の前の箱から</p>
-</section>
-
 <!-- 設定 -->
 <section id="settings" class="panel settings" hidden>
   <h2>設定</h2>
@@ -281,8 +267,9 @@
     <p class="sub">修練之陣　對傀儡 3 騎</p>
     <div id="char-select" class="char-select"></div>
     <p id="char-desc" class="char-desc"></p>
+    <div id="loadout" class="loadout"></div>
     <button id="start" class="start" type="button" disabled>讀込中…</button>
-    <p class="hint">左下のスティックで移動　／　右側をなぞって見回す　／　右下のボタンで右手・左手・回避（弓は長押しで引く）<br>素材を拾い、左上の素材の表示をタップしてクラフト</p>
+    <p class="hint">左下のスティックで移動　／　右側をなぞって見回す　／　右下のボタンで右手・左手・回避（弓は長押しで引く）<br>武器は試合の前に選ぶ（試合の途中では替えられない）</p>
   </div>
 </section>
 

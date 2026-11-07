@@ -100,8 +100,9 @@ canvas#app {
   background:
     radial-gradient(ellipse at 50% 42%, rgba(20, 18, 12, .25), rgba(6, 5, 4, .88) 75%);
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  overflow-y: auto;               /* 低い画面では、武器選びまで指で送れるように */
 }
-.title-inner { text-align: center; padding: 0 16px; background: radial-gradient(ellipse at 50% 30%, rgba(0, 0, 0, .45), rgba(0, 0, 0, 0) 65%); }
+.title-inner { margin: auto; text-align: center; padding: 12px 16px; background: radial-gradient(ellipse at 50% 30%, rgba(0, 0, 0, .45), rgba(0, 0, 0, 0) 65%); }
 .title h1 {
   margin: 0;
   font-family: var(--serif);
@@ -155,6 +156,21 @@ canvas#app {
 .char-btn.sel { border-color: var(--gold); color: var(--gold-hi); background: linear-gradient(180deg, rgba(90, 70, 34, .9), rgba(40, 30, 14, .9)); box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .4), 0 0 14px rgba(217, 180, 95, .25); }
 .char-desc { min-height: 2.6em; margin: 0 auto 14px; max-width: 520px; color: var(--dim); font-size: clamp(12px, 1.8vmin, 15px); line-height: 1.6; }
 @media (max-width: 520px) { .char-select { grid-template-columns: repeat(2, 1fr); } }
+/* 武器選び（右手・左手・持替） */
+.loadout { display: grid; gap: 8px; margin: 0 auto 18px; max-width: 560px; }
+.lo-row { display: grid; grid-template-columns: 3.4em minmax(0, 1fr); gap: 10px; align-items: center; }
+.lo-label { font-family: var(--serif); color: var(--gold); letter-spacing: .2em; font-size: clamp(13px, 1.9vmin, 16px); text-align: right; }
+.lo-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.lo-btn {
+  min-height: 44px; padding: 6px 14px;
+  font-family: var(--serif); font-size: clamp(14px, 2vmin, 17px); letter-spacing: .1em;
+  color: var(--ink);
+  background: linear-gradient(180deg, rgba(40, 34, 25, .82), rgba(18, 15, 11, .82));
+  border: 1px solid var(--edge-soft); border-radius: 4px;
+}
+.lo-btn.sel { border-color: var(--gold); color: var(--gold-hi); background: linear-gradient(180deg, rgba(90, 70, 34, .9), rgba(40, 30, 14, .9)); box-shadow: 0 0 10px rgba(217, 180, 95, .22); }
+.lo-btn:disabled { opacity: .45; border-style: dashed; cursor: default; }
+.lo-btn small { margin-left: 6px; font-size: 11px; color: var(--dim); letter-spacing: .05em; }
 
 /* エラー表示（iPad では開発者ツールが見られないため） */
 .error {
@@ -228,29 +244,6 @@ canvas#app {
   cursor: pointer;
   box-sizing: border-box;
 }
-/* 地図の下：持っている素材（タップでクラフト画面） */
-.mats {
-  position: absolute;
-  left: calc(10px + var(--safe-l));
-  top: calc(26px + var(--mm) + var(--safe-t));
-  display: flex; align-items: center; gap: 2px;
-  padding: 4px 8px 4px 4px;
-  background: linear-gradient(180deg, rgba(34, 29, 22, .88), rgba(14, 12, 9, .88));
-  border: 1px solid var(--edge);
-  border-radius: 22px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, .45);
-  pointer-events: auto;
-  cursor: pointer;
-}
-.mats-craft {
-  width: 30px; height: 30px; padding: 6px; box-sizing: border-box; margin-right: 4px;
-  color: #1b150c; background: linear-gradient(180deg, var(--gold-hi), var(--gold));
-  border-radius: 50%;
-}
-.mat { display: flex; align-items: center; gap: 2px; padding: 0 4px; }
-.mat svg { width: 22px; height: 22px; }
-.mat b { min-width: 1.1em; font: 700 15px var(--mono); color: #fff4d6; text-shadow: 0 1px 2px #000; }
-
 /* 右上：ポイントのランキング */
 .ranking {
   position: absolute;
@@ -376,52 +369,6 @@ canvas#app {
 .settings .test-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 14px; }
 .settings .test-btns button { flex: 1 1 30%; min-height: 44px; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(120, 60, 40, .45); color: #fff; font-size: 14px; }
 .settings .test-btns button:disabled { opacity: .35; }
-
-/* ===== クラフト画面 ===== */
-.craft { width: min(620px, calc(100vw - 24px)); text-align: left; padding-top: 12px; }
-.craft-head { display: flex; align-items: center; justify-content: space-between; }
-.craft-head h2 { margin: 0; }
-.craft-close { position: static; padding: 0; font-size: 26px; color: var(--ink); }
-.craft-mats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0 4px; }
-.mat.big { gap: 8px; padding: 6px 8px; background: rgba(0, 0, 0, .3); border: 1px solid var(--edge-soft); border-radius: 6px; }
-.mat.big svg { width: 30px; height: 30px; flex: none; }
-.mat.big > span { display: flex; flex-direction: column; line-height: 1.1; }
-.mat.big small { font-size: 11px; color: var(--dim); }
-.mat.big b { font-size: 18px; }
-.craft-sec { margin: 14px 0 6px; font: 600 14px var(--serif); letter-spacing: .3em; color: var(--gold); display: flex; align-items: center; gap: 10px; }
-.craft-sec::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--edge), transparent); }
-.card {
-  display: grid; grid-template-columns: 46px 1fr auto; gap: 10px; align-items: center;
-  margin: 6px 0; padding: 8px 10px;
-  background: linear-gradient(180deg, rgba(52, 43, 30, .75), rgba(24, 20, 14, .75));
-  border: 1px solid var(--edge-soft); border-radius: 6px;
-}
-.card.unowned { opacity: .85; border-style: dashed; }
-.card-icon { width: 46px; height: 46px; padding: 9px; box-sizing: border-box; color: var(--gold-hi); background: radial-gradient(circle, rgba(217, 180, 95, .18), rgba(0, 0, 0, .3)); border: 1px solid var(--edge-soft); border-radius: 50%; }
-.card-name { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font: 600 16px var(--serif); letter-spacing: .06em; }
-.card-eff { margin-top: 2px; font-size: 12.5px; color: var(--dim); }
-.card-cost { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.cost { display: flex; align-items: center; gap: 2px; padding: 1px 6px 1px 2px; background: rgba(0, 0, 0, .3); border-radius: 10px; }
-.cost svg { width: 18px; height: 18px; }
-.cost b { font: 700 13px var(--mono); }
-.cost.lack b { color: #ff8a70; }
-.card-acts { display: flex; flex-direction: column; gap: 6px; }
-.cbtn {
-  min-width: 84px; min-height: 42px; padding: 6px 12px;
-  font: 600 15px var(--serif); letter-spacing: .15em; color: #1b150c;
-  background: linear-gradient(180deg, var(--gold-hi), var(--gold) 60%, #a5843d);
-  border: 1px solid #f7e7b4; border-radius: 4px;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, .4);
-}
-.cbtn.alt { color: var(--gold-hi); background: rgba(0, 0, 0, .35); border-color: var(--edge); }
-.cbtn:disabled { filter: grayscale(1) brightness(.6); opacity: .6; }
-.cbtn:not(:disabled):active { filter: brightness(1.2); }
-.ctag { padding: 1px 7px; font: 600 11px var(--sans); letter-spacing: .05em; color: #1b150c; background: var(--gold); border-radius: 8px; }
-.ctag.dim { color: var(--dim); background: rgba(0, 0, 0, .35); border: 1px solid var(--edge-soft); }
-.pips { display: inline-flex; gap: 3px; }
-.pips i { width: 9px; height: 9px; transform: rotate(45deg); border: 1px solid var(--gold); background: transparent; }
-.pips i.on { background: var(--gold-hi); box-shadow: 0 0 6px rgba(243, 220, 154, .7); }
-.craft-note { margin: 12px 0 0; font-size: 12px; color: var(--dim); }
 
 /* ===== 戦闘の表示 ===== */
 /* 下の真ん中：体力とスタミナ（金の縁の帯） */

@@ -1,34 +1,30 @@
-// 試合のデータ：キャラ・フェーズ・ポイント・フェーズ報酬。
+// 試合のデータ：キャラ・武器・試合の前に選ぶ武器・フェーズ・ポイント・フェーズ報酬。
 // 数値はすべてここに集める（調整しやすく、後で武器や時代を増やしやすくするため）
 
 /**
  * 中世のキャラ（6 種）。
  *   model      ：見た目の模型（assets/characters/<model>.glb）
- *   weaponClass：作れる武器の系統（手順 4 のクラフトで使う）
- *   weapon     ：初期の武器（WEAPONS の名前）
- *   shield     ：盾を持つか（防御で減らせる量が増える）
+ *   持つ武器と楯は、試合の前に選ぶ（LOADOUTS）
  *   armor      ：鎧の硬さ（受けるダメージの倍率。小さいほど硬い）
  *   speed      ：移動の速さの倍率（鎧が重いほど遅い）
  *   weight     ：装備の重さ（light 軽装 / medium 中装 / heavy 重装）。回避の仕方が変わる（DODGE）
  *   left       ：左手ボタンでできること（guard 盾で防御 / heavy 強攻撃 / switch 近接武器と持ち替え）、leftLabel：ボタンの文字
- *   sidearm    ：持ち替える近接武器（left が switch のとき）
- *   crafts     ：クラフトで作れる・強化できる武器（WEAPONS の名前。今ある武器のうち、そのキャラが扱える物）
- *   armorName  ：専用の防具の名前（防具は 1 つだけ。クラフトで強化する）
+ *   armorName  ：専用の防具の名前（防具は 1 つだけ）
  *   sight      ：見える距離（m）。bot がこの距離まで目で気づける（兜の覗き穴が狭いほど短い。game/senses.js）
- * 防具はキャラごとに 1 つ（強化は手順 4）。扱える武器の全体は docs/DESIGN.md
+ * 防具はキャラごとに 1 つ（強化は無い）。扱える武器の全体は docs/DESIGN.md
  */
 export const CHARACTERS = {
-  shield:  { name: '楯劍騎士', model: 'shield', weight: 'medium', left: 'guard', leftLabel: '防禦',  weaponClass: 'shieldsword', weapon: 'armingsword', crafts: ['armingsword', 'mace'], armorName: '青鋼板金鎧', shield: true,  armor: 0.85, speed: 1.0,  maxHp: 105, sight: 40,
+  shield:  { name: '楯劍騎士', model: 'shield', weight: 'medium', left: 'guard', leftLabel: '防禦',  armorName: '青鋼板金鎧', armor: 0.85, speed: 1.0,  maxHp: 105, sight: 40,
              desc: '盾と片手武器。受けが固く、攻守のつり合いがよい（中装より少し軽い鎧）' },
-  sword:   { name: '劍騎士',   model: 'sword', weight: 'medium', left: 'heavy', leftLabel: '重擊',   weaponClass: 'sword',       weapon: 'longsword',   crafts: ['longsword', 'armingsword'], armorName: '十字兜鎧', shield: false, armor: 0.8,  speed: 0.97, maxHp: 110, sight: 35,
+  sword:   { name: '劍騎士',   model: 'sword', weight: 'medium', left: 'heavy', leftLabel: '重擊',   armorName: '十字兜鎧', armor: 0.8,  speed: 0.97, maxHp: 110, sight: 35,
              desc: '両手の剣と二刀流。振りが大きく、広く斬れる（中装より少し重い鎧）' },
-  polearm: { name: '長柄騎士', model: 'polearm', weight: 'heavy', left: 'heavy', leftLabel: '薙拂', weaponClass: 'polearm',     weapon: 'spear',       crafts: ['spear'], armorName: '鋲打重鎧', shield: false, armor: 0.7,  speed: 0.9,  maxHp: 120, sight: 35,
+  polearm: { name: '長柄騎士', model: 'polearm', weight: 'heavy', left: 'heavy', leftLabel: '薙拂', armorName: '鋲打重鎧', armor: 0.7,  speed: 0.9,  maxHp: 120, sight: 35,
              desc: '長柄の武器。間合いが一番長く、近づく前に突ける（重めの重装）' },
-  blunt:   { name: '打擊騎士', model: 'blunt', weight: 'heavy', left: 'heavy', leftLabel: '擊碎',   weaponClass: 'blunt',       weapon: 'mace',        crafts: ['mace'], armorName: '大兜鎧', shield: false, armor: 0.75, speed: 0.92, maxHp: 120, sight: 30,
+  blunt:   { name: '打擊騎士', model: 'blunt', weight: 'heavy', left: 'heavy', leftLabel: '擊碎',   armorName: '大兜鎧', armor: 0.75, speed: 0.92, maxHp: 120, sight: 30,
              desc: '打撃武器。一撃が重く、防御の上からも響く（重装より少し軽い鎧）' },
-  archer:  { name: '弓兵',     model: 'archer', weight: 'light', left: 'switch', leftLabel: '持替',  weaponClass: 'bow',         weapon: 'longbow', sidearm: 'dagger', crafts: ['longbow', 'dagger'], armorName: '革鎖輕鎧', shield: false, armor: 0.95, speed: 1.05, maxHp: 90, sight: 55,
+  archer:  { name: '弓兵',     model: 'archer', weight: 'light', left: 'switch', leftLabel: '持替',  armorName: '革鎖輕鎧', armor: 0.95, speed: 1.05, maxHp: 90, sight: 55,
              desc: '弓で遠くから射る。引くほど強い。近寄られると弱い（軽装より少し重い）' },
-  cleric:  { name: '祓魔僧',   model: 'cleric', weight: 'light', left: 'heavy', leftLabel: '重擊',  weaponClass: 'cleric',      weapon: 'mace',        crafts: ['mace'], armorName: '祓魔法衣', shield: false, armor: 1.0,  speed: 1.08, maxHp: 95, sight: 45,
+  cleric:  { name: '祓魔僧',   model: 'cleric', weight: 'light', left: 'heavy', leftLabel: '重擊',  armorName: '祓魔法衣', armor: 1.0,  speed: 1.08, maxHp: 95, sight: 45,
              desc: '聖なる奇跡を扱う（奇跡は後で追加）。今はメイスで戦う（軽装）' },
 };
 
@@ -45,6 +41,31 @@ export const WEAPONS = {
   spear:     { name: '槍',           kind: 'melee', damage: 22, reach: 3.1, arc: 34,  windup: 0.22, recovery: 0.30, stamina: 12, guardPierce: 0.0 },
   dagger:    { name: '短劍',         kind: 'melee', damage: 14, reach: 1.5, arc: 90,  windup: 0.16, recovery: 0.26, stamina: 8,  guardPierce: 0.0 },
   longbow:   { name: '長弓',         kind: 'bow',   damage: 30, drawTime: 0.75, minDraw: 0.2, speed: 48, stamina: 8, reach: 1.2 },
+};
+
+/**
+ * 試合の前に選ぶ武器（キャラごと）。鍛冶・強化は無い。試合の途中では替えられない
+ *   main：右手（主の武器）、side：持替で持つ近接武器（弓兵）、shield：左手の楯（楯劍騎士）
+ *   並びの最初が、選ばなかったときの物。WEAPONS・SHIELDS に無い物（PLANNED）は、模型と動きができるまで「未完」で選べない
+ */
+export const LOADOUTS = {
+  shield:  { main: ['armingsword', 'mace', 'falchion'], shield: ['kite', 'buckler', 'pavise'] },
+  sword:   { main: ['longsword', 'armingsword', 'greatsword', 'falchion'] },
+  polearm: { main: ['spear', 'pike', 'halberd'] },
+  blunt:   { main: ['mace', 'warhammer', 'lucerne', 'flail'] },
+  archer:  { main: ['longbow', 'crossbow'], side: ['dagger', 'falchion', 'battleaxe'] },
+  cleric:  { main: ['mace'] },
+};
+/** 楯。planned：模型と動きがまだ無い */
+export const SHIELDS = {
+  kite:    { name: '鳶形楯' },
+  buckler: { name: '小楯', planned: true },
+  pavise:  { name: '大楯', planned: true },
+};
+/** まだ模型と動きが無い武器の名前（題の画面に「未完」と出す） */
+export const PLANNED = {
+  falchion: '片刃劍', greatsword: '兩手大劍', pike: '長槍', halberd: '斧槍', warhammer: '戰鎚',
+  lucerne: '長柄鎚', flail: '連枷', battleaxe: '戰斧', crossbow: '弩',
 };
 
 /**
@@ -73,7 +94,7 @@ export const SENSES = {
   lookAround: 4,
   steps: { run: 22, walk: 10 },
   weight: { light: 0.8, medium: 1, heavy: 1.3 },
-  noise: { swing: 12, hit: 25, dodge: 9, bow: 10, crate: 10, pickup: 5, craft: 6, search: 8, hide: 4 },
+  noise: { swing: 12, hit: 25, dodge: 9, bow: 10, search: 8, hide: 4 },
 };
 
 /**
@@ -99,59 +120,6 @@ export const HEAVY = {
     mace: { guardPierce: 0.3 },               // 叩きつけ：防御の上からさらに響く
   },
 };
-
-/**
- * 素材（4 種類）。マップに落ちている物を拾う・村の家の前の箱を開ける（クリーチャーとプレイヤーからは後で）
- */
-export const MATERIALS = {
-  wood:  { name: '木材' },
-  stone: { name: '石塊' },
-  iron:  { name: '屑鐵' },
-  cloth: { name: '皮革' },
-};
-export const MATERIAL_KEYS = Object.keys(MATERIALS);
-/** 最初に持っている素材（全キャラ同じ） */
-export const START_MATERIALS = { wood: 2, stone: 2, iron: 1, cloth: 1 };
-
-/**
- * クラフト（どこでも、すぐできる）。費用は素材の数
- *   WEAPON_COST：新しく武器を作る
- *   UPGRADE    ：武器の強化（2 回まで）。今は数値だけ（威力・スタミナ）。新しい動きは、動きを作るときに段階へ足す
- *   ARMOR      ：防具の強化（2 回まで）。受けるダメージを減らす
- */
-export const WEAPON_COST = {
-  armingsword: { wood: 1, iron: 3, cloth: 1 },
-  longsword:   { wood: 1, iron: 5, cloth: 1 },
-  mace:        { wood: 2, stone: 1, iron: 3 },
-  spear:       { wood: 3, iron: 2 },
-  dagger:      { iron: 2, cloth: 1 },
-  longbow:     { wood: 4, cloth: 2 },
-};
-export const UPGRADE = [
-  null,                                                                   // 強化なし
-  { damage: 1.12, stamina: 0.9, cost: { wood: 1, stone: 2, iron: 2 } },  // 1 回目
-  { damage: 1.25, stamina: 0.8, cost: { stone: 3, iron: 4, cloth: 1 } }, // 2 回目
-];
-export const ARMOR = [
-  null,
-  { taken: 0.9, cost: { iron: 3, cloth: 2 } },             // 受けるダメージ -10%
-  { taken: 0.8, cost: { stone: 1, iron: 5, cloth: 4 } },   // 受けるダメージ -20%
-];
-
-/**
- * 落ちている素材。count：マップ全体の山の数（エリアの多さで場所を選ぶ）、amount：1 つの山の数の範囲
- * zone：エリアごとの置きやすさ。refill：フェーズが始まるたびに足す山の数
- * 村の箱（crate）：村の家の前に置く。開けると loot の数だけ手に入る（1 回だけ）
- */
-export const PICKUPS = {
-  wood:  { count: 80, amount: [1, 3], zone: { mixed: 1, deep: 1.4, prairie: 0.3, castle: 0.3 } },
-  stone: { count: 55, amount: [1, 3], zone: { mixed: 1, deep: 0.7, prairie: 1.4, castle: 0.4 } },
-  iron:  { count: 22, amount: [1, 2], zone: { mixed: 0.8, deep: 1, prairie: 1, castle: 0.6 } },
-  cloth: { count: 22, amount: [1, 2], zone: { mixed: 0.8, deep: 0.6, prairie: 1, castle: 0.6 } },
-  refill: 24,
-  reach: 2.2,      // 拾える近さ（m）
-};
-export const CRATE = { count: 12, loot: { iron: [2, 4], cloth: [2, 3], stone: [0, 2], wood: [0, 1] } };
 
 /** 戦闘の決まりごと */
 export const COMBAT = {
@@ -180,7 +148,7 @@ export const BOT_NAMES = ['玄馬', '志乃', '伊吹', '颯', '朱音', '鐵心
  */
 export const AREA_RADIUS = 175;   // js/config.js の world.playRadius と同じ値（端から端まで 350m）
 export const PHASES = [
-  { name: '第壹刻', duration: 180, radius: AREA_RADIUS, time: 'morning', note: '朝の森。素材を集め、装備を整えよ' },
+  { name: '第壹刻', duration: 180, radius: AREA_RADIUS, time: 'morning', note: '朝の森。息を潜め、敵を探せ' },
   { name: '第貳刻', duration: 180, radius: AREA_RADIUS, time: 'day',     note: '日が高くなった' },
   { name: '第參刻', duration: 180, radius: AREA_RADIUS, time: 'dusk',    note: '日が傾き、森が赤く染まる' },
   { name: '第肆刻', duration: 180, radius: AREA_RADIUS, time: 'night',   note: '夜が来た。暗い森に気をつけよ' },
