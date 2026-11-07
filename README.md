@@ -252,6 +252,7 @@ blender -b --python tools/characters/make_motions.py -- source_models/motions/cr
 
 - `tools/characters/onehand_moves.py`：片手劍の技（踏込突・逆袈裟・袈裟斬（溜めに入る・溜め・放つ）・旋風斬）。`characters.json` で `"onehand": true` のキャラ（楯劍騎士・劍騎士）
 - `tools/characters/longsword_moves.py`：長劍の技（唐竹・横薙・長突・斬返。両手で持ち、左手を柄に添える）。`characters.json` で `"longsword": true` のキャラ（劍騎士）
+- `tools/characters/hide_moves.py`：タンス・ベッドに隠れる・出る・探す（全キャラ）、引きずり出されて止めを刺される（全キャラ）、引きずり出して止めを刺す（片手劍を持つキャラ）。動きの座標は、家具の前の「出る所」に立って家具の方を向いた向き
 - `tools/characters/body_moves.py`：全キャラの体の動き
   - しゃがみ歩き（深くしゃがむ）・伏せから起き上がる（今までの物と入れ替え）
   - 被弾（軽い・重い）とよろめき。それぞれ前・後ろ・左・右から

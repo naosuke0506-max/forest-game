@@ -270,6 +270,56 @@
    "duration": 2.6,
    "loop": false,
    "speed": 0.0
+  },
+  "hide_wd_in": {
+   "duration": 1.7,
+   "loop": false,
+   "speed": 0.0
+  },
+  "hide_wd_out": {
+   "duration": 1.0,
+   "loop": false,
+   "speed": 0.0
+  },
+  "search_wd": {
+   "duration": 1.1,
+   "loop": false,
+   "speed": 0.0
+  },
+  "drag_wd_v": {
+   "duration": 2.5333,
+   "loop": false,
+   "speed": 0.0
+  },
+  "hide_bed_in": {
+   "duration": 1.6,
+   "loop": false,
+   "speed": 0.0
+  },
+  "hide_bed_out": {
+   "duration": 1.4667,
+   "loop": false,
+   "speed": 0.0
+  },
+  "search_bed": {
+   "duration": 1.2,
+   "loop": false,
+   "speed": 0.0
+  },
+  "drag_bed_v": {
+   "duration": 2.2667,
+   "loop": false,
+   "speed": 0.0
+  },
+  "drag_wd": {
+   "duration": 2.5333,
+   "loop": false,
+   "speed": 0.0
+  },
+  "drag_bed": {
+   "duration": 2.2667,
+   "loop": false,
+   "speed": 0.0
   }
  }
 }
