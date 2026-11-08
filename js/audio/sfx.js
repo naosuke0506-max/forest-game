@@ -139,14 +139,18 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
   const walked = new Map();
   const actions = new Map();
 
-  /** 時計台の鐘の 1 打（教会の鐘の倍音：ハム・基音・短三度・五度・ノミナル…。高い倍音ほど早く消える） */
-  function bellStrike(d, t, f, gain) {
-    const parts = [[0.5, 0.55, 9], [1.0, 0.6, 6], [1.2, 0.42, 4.5], [1.5, 0.28, 3.5], [2.0, 0.75, 3.2], [2.5, 0.2, 2.2], [3.0, 0.3, 1.8], [4.0, 0.16, 1.2], [5.3, 0.08, 0.7]];
+  /**
+   * 鉄の鐘の 1 打（金属の音。利用者の指示で、穏やかな教会の鐘から替えた）：倍音は整っていない並び（鉄の板・鐘を強く打った「カーン」）で、
+   * 高い倍音も強く長く残る。少しずれた音を重ねてうなりを付け、撞木が当たる「ガッ」という硬い音を強く入れる
+   */
+  function ironStrike(d, t, f, gain) {
+    const parts = [[1.0, 1.0, 5.5], [2.76, 0.85, 3.6], [5.40, 0.7, 2.6], [8.93, 0.5, 1.8], [13.34, 0.32, 1.2], [18.64, 0.2, 0.8], [0.52, 0.35, 6.5]];
     for (const [k, a, dur] of parts) {
-      toneHit(d, { t, f0: f * k, dur, gain: gain * a, attack: 0.003 });
-      toneHit(d, { t, f0: f * k * 1.0015 + 0.4, dur: dur * 0.9, gain: gain * a * 0.35, attack: 0.003 });   // わずかにずれた音（うなり）
+      toneHit(d, { t, f0: f * k, dur, gain: gain * a, attack: 0.001 });
+      toneHit(d, { t, f0: f * k * 1.0032 + 0.7, dur: dur * 0.85, gain: gain * a * 0.5, attack: 0.001 });   // ずれた音（金属のうなり）
     }
-    noiseHit(d, { t, dur: 0.05, type: 'bandpass', freq: f * 6, q: 3, gain: gain * 0.5 });   // 撞木が当たる音
+    noiseHit(d, { t, dur: 0.07, type: 'highpass', freq: 2600, gain: gain * 1.1 });              // 撞木が当たる硬い音
+    noiseHit(d, { t, dur: 0.18, type: 'bandpass', freq: f * 9, q: 6, gain: gain * 0.6 });       // 当たった直後の、きしむような響き
   }
 
   const api = {
@@ -307,22 +311,17 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
       if (d) playSample(d, 'swing_light', { rate: 0.8, gain: 0.7 });
     },
     /**
-     * 時計台の鐘：4 つの鐘のチャイム（ウェストミンスターの節）と、時を打つ大きな鐘（strikes 回）。
-     * 遠くの塔から聞こえるように、こもらせて残響を付ける
+     * 時計台の鐘（刻が変わったとき）：鉄の鐘を強く 2 度打ち（警鐘）、続いて大きな鐘で時を打つ（strikes 回）。
+     * 金属の硬い響き（利用者の指示）。高い音もこもらせずに残し、残響を付ける
      */
     bell(strikes = 3) {
       if (!audio.ready) return;
-      const d = outlet({ gain: 0.55, cutoff: 4200 });
-      if (audio.reverb) { const send = audio.ctx.createGain(); send.gain.value = 0.9; d.connect(send); send.connect(audio.reverb); }
-      const E4 = 329.6, Fs4 = 370.0, Gs4 = 415.3, B3 = 246.9;
-      const tune = [[Gs4, Fs4, E4, B3], [E4, Gs4, Fs4, B3]];
+      const d = outlet({ gain: 0.6, cutoff: 9500 });
+      if (audio.reverb) { const send = audio.ctx.createGain(); send.gain.value = 0.75; d.connect(send); send.connect(audio.reverb); }
       let t = 0;
-      for (const phrase of tune) {
-        for (const f of phrase) { bellStrike(d, t, f, 0.11); t += 0.72; }
-        t += 0.55;
-      }
-      t += 0.9;
-      for (let i = 0; i < strikes; i++) { bellStrike(d, t, 164.8, 0.2); t += 2.4; }   // 大きな鐘（E3）
+      ironStrike(d, t, 392.0, 0.13); t += 0.32;   // 警鐘：カン、カーン（G4）
+      ironStrike(d, t, 392.0, 0.16); t += 1.6;
+      for (let i = 0; i < strikes; i++) { ironStrike(d, t, 146.8, 0.22); t += 1.9; }   // 大きな鉄の鐘で時を打つ（D3）
     },
   };
   return api;

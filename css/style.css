@@ -41,6 +41,8 @@ html, body {
 [hidden] { display: none !important; }
 svg { display: block; width: 100%; height: 100%; }
 
+/* 時間が止まっている（刻が変わった直後の 5 秒）：色を抜いて、止まった時を見せる */
+body.timestop canvas#app { filter: grayscale(.85) contrast(1.08) brightness(.92); }
 canvas#app {
   position: fixed;
   inset: 0;

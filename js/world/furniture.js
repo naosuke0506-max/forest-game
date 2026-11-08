@@ -1,8 +1,13 @@
 // 家具（家の中の座標で置く）：ベッド・タンス・机と腰掛け・長持（箱）・棚・袋・暖炉と煙突。
 //   ぶつかる範囲はその階の高さだけ（world/obstacles.js の高さの範囲）。
 //   ベッドの下とタンスの中は隠れ場所（game/hiding.js）として記録する
+//   タンスの扉とベッドの掛け布（横に垂れた所）は動く部品：ここでは形に入れず、蝶番の位置と向きを隠れ場所に記録し、
+//   render/furniture-motion.js が隠れる・出る・探す動きに合わせて開け閉めする
 // 家の中の座標：x は横（右が +）、z は奥行き（前＝扉の側が +）、y は高さ
 import { box } from './build-kit.js';
+
+/** ベッドの毛布の色（4 通り。掛け布も同じ色。render/furniture-motion.js も使う） */
+export const BLANKETS = [[0.55, 0.16, 0.12], [0.2, 0.32, 0.5], [0.3, 0.42, 0.22], [0.52, 0.4, 0.22]];
 
 /** 家具（家の中の座標で置く）。ぶつかる範囲はその階の高さだけ */
 export class Furniture {
@@ -30,11 +35,18 @@ export class Furniture {
   hide(kind, x, z, floorY, lookRot, { eyeAhead, eyeH, outAhead }) {
     const a = (lookRot * Math.PI) / 180, dx = Math.sin(a), dz = Math.cos(a);
     const p = this.F.at(x, 0, z), e = this.F.at(x + dx * eyeAhead, 0, z + dz * eyeAhead), o = this.F.at(x + dx * outAhead, 0, z + dz * outAhead);
-    this.reg.hides.push({
+    const spot = {
       kind, x: p[0], z: p[2], y: this.y0 + floorY, yaw: this.yaw + lookRot,
       eyeX: e[0], eyeZ: e[2], eyeH, outX: o[0], outZ: o[2],
       route: this.routes[floorY > 2 ? 1 : 0],
-    });
+    };
+    this.reg.hides.push(spot);
+    return spot;
+  }
+  /** 動く部品の蝶番（家の中の座標 x, z と高さ y）→ 世界の位置と、部品の向き（家具の向き rot に足す角度 turn） */
+  hinge(x, y, z, rot, turn = 0) {
+    const p = this.F.at(x, 0, z);
+    return { x: p[0], y: this.y0 + y, z: p[2], yaw: this.yaw + rot + turn };
   }
   /** ベッド：長さ 2m・幅 1m。頭は rot の向きの後ろ。下に 0.3m の隙間（潜って隠れる） */
   bed(x, z, y, rot, rnd) {
@@ -45,27 +57,30 @@ export class Furniture {
     { const [px, pz] = P(0, -L / 2 + 0.03); this.bx('wood', px, y, pz, Wd + 0.06, 0.08, 1.05, rot); this.block(px, y, pz, Wd + 0.06, 0.08, 1.05, rot); }      // 頭板
     { const [px, pz] = P(0, L / 2 - 0.03); this.bx('wood', px, y, pz, Wd + 0.06, 0.08, 0.62, rot); }       // 足板
     { const [px, pz] = P(0, 0.02); this.bx('cloth', px, y + 0.42, pz, Wd - 0.08, L - 0.12, 0.16, rot, { shade: [0.86, 0.8, 0.66] }); }  // 敷布団
-    const blanket = [[0.55, 0.16, 0.12], [0.2, 0.32, 0.5], [0.3, 0.42, 0.22], [0.52, 0.4, 0.22]][Math.floor(rnd.next() * 4)];
+    const tone = Math.floor(rnd.next() * 4), blanket = BLANKETS[tone];
     { const [px, pz] = P(0, 0.3); this.bx('cloth', px, y + 0.57, pz, Wd - 0.02, L * 0.6, 0.05, rot, { shade: blanket }); }  // 毛布
     { const [px, pz] = P(0, -L / 2 + 0.32); this.bx('cloth', px, y + 0.57, pz, Wd * 0.6, 0.35, 0.1, rot, { shade: [0.92, 0.9, 0.84] }); }  // 枕
     for (const dz of [-0.6, 0, 0.6]) { const [px, pz] = P(0, dz); this.solid(px, pz, 0.48, y); }
     // 下に潜って覗く向き：ベッドの横のうち、部屋の真ん中の側
     const side = Math.cos((rot * Math.PI) / 180) * -x + -Math.sin((rot * Math.PI) / 180) * -z >= 0 ? 1 : -1;
-    { const [px, pz] = P(0, 0.1); this.hide('bed', px, pz, y, rot + side * 90, { eyeAhead: 0.4, eyeH: 0.2, outAhead: 1.05 }); }
+    const spot = (() => { const [px, pz] = P(0, 0.1); return this.hide('bed', px, pz, y, rot + side * 90, { eyeAhead: 0.4, eyeH: 0.2, outAhead: 1.05 }); })();
+    // 毛布の、部屋の側に垂れた所（掛け布）：毛布の縁から下へ垂れ、探すときに持ち上げられる（動く部品。蝶番は毛布の縁）
+    { const [px, pz] = P(side * (Wd / 2 + 0.015), 0.3); spot.flap = { ...this.hinge(px, y + 0.62, pz, rot, side > 0 ? 0 : 180), tone }; }
   }
   /** タンス：幅 1.05・奥行き 0.55・高さ 1.95。扉は rot の向きの前（中に入って隠れる） */
   wardrobe(x, z, y, rot) {
     const P = (dx, dz) => this.local(x, z, dx, dz, rot);
-    { const [px, pz] = P(0, 0); this.bx('wood', px, y, pz, 1.05, 0.55, 1.95, rot, { shade: 0.72 }); this.block(px, y, pz, 1.05, 0.58, 2.03, rot); }
+    // 本体は前の面が無い箱（扉を開けると中が見える）。中は暗い板で、奥の壁・底・天井・横の壁を内側に張る
+    { const [px, pz] = P(0, 0); this.bx('wood', px, y, pz, 1.05, 0.55, 1.95, rot, { shade: 0.72, skip: 'front' }); this.block(px, y, pz, 1.05, 0.58, 2.03, rot); }
+    { const [px, pz] = P(0, -0.25); this.bx('wood', px, y + 0.05, pz, 0.97, 0.02, 1.85, rot, { shade: 0.32 }); }    // 奥の壁
+    for (const s of [-1, 1]) { const [px, pz] = P(s * 0.495, 0.01); this.bx('wood', px, y + 0.05, pz, 0.02, 0.5, 1.85, rot, { shade: 0.38 }); }   // 横の壁
+    { const [px, pz] = P(0, 0.01); this.bx('wood', px, y, pz, 0.97, 0.5, 0.06, rot, { shade: 0.4 }); this.bx('wood', px, y + 1.88, pz, 0.97, 0.5, 0.05, rot, { shade: 0.3, bottom: true }); }   // 底・天井
     { const [px, pz] = P(0, 0.01); this.bx('wood', px, y + 1.95, pz, 1.15, 0.62, 0.08, rot, { shade: 0.6 }); }   // 上の飾り
-    for (const s of [-1, 1]) {
-      const [px, pz] = P(s * 0.26, 0.285);
-      this.bx('gate', px, y + 0.12, pz, 0.47, 0.03, 1.72, rot, { shade: 0.8 });   // 扉
-      const [kx, kz] = P(s * 0.05, 0.31);
-      this.bx('wood', kx, y + 0.95, kz, 0.04, 0.04, 0.12, rot, { shade: 0.35 });  // 取っ手
-    }
     { const [px, pz] = P(0, 0); this.solid(px, pz, 0.5, y); }
-    { const [px, pz] = P(0, 0.05); this.hide('wardrobe', px, pz, y, rot, { eyeAhead: 0.2, eyeH: 1.55, outAhead: 0.85 }); }
+    const spot = (() => { const [px, pz] = P(0, 0.05); return this.hide('wardrobe', px, pz, y, rot, { eyeAhead: 0.2, eyeH: 1.55, outAhead: 0.85 }); })();
+    // 扉 2 枚（取っ手付き。動く部品）：蝶番は外の縁。右・左は、タンスに向いて立った人から見て（右の扉は +x の側）。
+    // 左の扉は、右の扉の形を 180 度回して使う
+    spot.doors = [1, -1].map((s) => { const [px, pz] = P(s * 0.495, 0.285); return this.hinge(px, y + 0.12, pz, rot, s > 0 ? 0 : 180); });
   }
   /** 机（1.4 × 0.8）と腰掛け 2 つ */
   table(x, z, y, rnd) {

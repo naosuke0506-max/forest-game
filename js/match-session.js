@@ -29,7 +29,7 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, loadout, debug, phaseDuration }
  *   loadout：試合の前に選んだ武器 { main, side, shield }（game/data.js の LOADOUTS から。無ければキャラの最初の物）
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], sight = null, debug = false, phaseDuration = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）。bot の武器は、選べる物から乱数で選ぶ
@@ -68,6 +68,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
 
   // 隠れ場所（村の家のベッドの下・タンスの中）
   const hiding = createHiding(hides);
+  furniture?.reset();   // 前の試合で開けたままの扉を閉める
   // 戦闘と bot
   // 壁裏隠れ（村の家の外の壁と中の壁に背を付ける）
   const cover = createCover(covers, { isFree: obstacles.isFree, groundAt: groundAt || ((x, z) => terrain.heightAt(x, z)) });
@@ -275,7 +276,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   match.on('phaseEnd', () => {
     for (const b of bots) {
       if (!b.fighter.alive) continue;
-      setTimeout(() => match.chooseReward(b.fighter, Math.floor(rng.next() * 3)), 1500 + rng.next() * 4000);
+      setTimeout(() => match.chooseReward(b.fighter, Math.floor(rng.next() * 3)), 1000 + rng.next() * 3000);   // 時間が止まっている 5 秒のうちに
     }
   });
 
@@ -315,7 +316,12 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // 1 回の計算で進める時間は最大 0.1 秒（裏から戻った直後などに、一気に動いたり判定を飛ばしたりしないように）
       dt = Math.min(dt, 0.1);
       match.update(dt);
-      const running = match.state === 'running';
+      // 刻が変わった直後は時間が止まる（match.freeze 秒）：誰も動けず、攻撃も当たらない（戦い・bot・矢を進めない）。報酬だけ選べる
+      const frozenTime = match.state === 'running' && match.freeze > 0;
+      const running = match.state === 'running' && !frozenTime;
+      player.setFrozen(frozenTime || !me.alive);
+      document.body.classList.toggle('timestop', frozenTime);
+      for (const v of views.values()) v.setPaused?.(frozenTime);
       player.setAreaRadius(match.areaRadius);
       // 姿勢：ボタン（押す＝しゃがむ／立つ、長押し＝伏せる）。しゃがむ・伏せると遅く、走れず、目が低い
       if (input.stance && running && me.alive && !me.hidden && !me.cover) stanceButton(me, input.stance);
@@ -405,8 +411,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         views.get(b.fighter).setVisible(!b.fighter.hidden);   // 隠れている人は見えない
       }
       if (running) combat.update(dt);
-      senses.update(dt);
-      sfx.update(dt, fighters);
+      if (!frozenTime) { senses.update(dt); sfx.update(dt, fighters); }   // 時間が止まっている間は、見聞きも息遣いも止まる
+      viewModel.paused = frozenTime;
+      furniture?.update(dt, fighters, frozenTime);   // タンスの扉・ベッドの掛け布（隠れる・探す動きに合わせて）
       // 回避・暗殺の飛びかかり・押されて下がる（重い被弾・よろめき）は試合の計算が体を動かすので、その位置をプレイヤーの操作へ戻す
       const pushed = me.react && me.react.push > 0 && me.react.t <= me.react.time;
       if (me.alive && (me.action?.kind === 'dodge' || pushed)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }

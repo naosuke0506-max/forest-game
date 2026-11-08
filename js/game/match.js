@@ -1,6 +1,6 @@
 // 試合の流れ：フェーズ・残り時間・延長・歩ける範囲・ポイント・脱落・終了。
 // PlayCanvas に依存しない「計算だけ」の部分（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { PHASES, POINTS, REWARDS, REWARD_PICK_TIME, CHARACTERS, COMBAT, LOADOUTS, WEAPONS, SHIELDS } from './data.js';
+import { PHASES, POINTS, REWARDS, REWARD_PICK_TIME, PHASE_FREEZE, CHARACTERS, COMBAT, LOADOUTS, WEAPONS, SHIELDS } from './data.js';
 import { initStance, resetStance } from './stance.js';
 
 /** 選べる物か（武器・楯の模型と動きがある） */
@@ -88,6 +88,7 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
     targetRadius: PHASES[0].radius,
     winner: null,
     elapsed: 0,
+    freeze: 0,                 // 刻が変わった直後の、時間が止まっている残り（秒）。この間は誰も動けず、攻撃も当たらない
 
     on(type, fn) { (listeners[type] ||= []).push(fn); return m; },
 
@@ -139,6 +140,17 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
 
     update(dt) {
       if (m.state !== 'running') return;
+      // 刻が変わった直後：時間が止まっている。報酬を選ぶ時間だけ進む（刻の時計は進まない）
+      if (m.freeze > 0) {
+        m.freeze = Math.max(0, m.freeze - dt);
+        for (const f of fighters) {
+          if (!f.pendingReward) continue;
+          f.pendingReward.timeLeft -= dt;
+          if (f.pendingReward.timeLeft <= 0) m.chooseReward(f, 0);
+        }
+        if (m.freeze <= 0) emit('thaw', {});
+        return;
+      }
       m.elapsed += dt;
 
       // 歩ける範囲を、次の大きさへなめらかに広げる（1 秒あたり 4m）
@@ -167,6 +179,9 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
         m.timeLeft = 0;
         emit('overtime', {});
       }
+      // 刻を越えたら、時間が止まる（その間に報酬を選ぶ）
+      m.freeze = PHASE_FREEZE;
+      emit('freeze', { time: PHASE_FREEZE });
     },
   };
 
