@@ -5,7 +5,7 @@ import { createTouchInput } from './touch.js';
 import { createDesktopInput } from './desktop.js';
 
 export function createInput(layer, stickEl, config) {
-  const touch = createTouchInput(layer, stickEl, config, document.getElementById('turnstick'));
+  const touch = createTouchInput(layer, stickEl, config);
   const desktop = createDesktopInput(layer, config);
   const sources = [touch, desktop];
 
@@ -82,7 +82,7 @@ export function createInput(layer, stickEl, config) {
     const len = Math.hypot(mx, my);
     if (len > 1) { mx /= len; my /= len; }
     frame.moveX = mx; frame.moveY = my; frame.lookX = lx; frame.lookY = ly;
-    // 向きを変えるスティック（右 turnX・上 turnY）
+    // 向きを変える（PC の Q・E：turnX。iPad は見回して首の範囲を越えると体が回る。player/controller.js）
     let tx = 0, ty = 0;
     for (const { state } of sources) { tx += state.turnX || 0; ty += state.turnY || 0; }
     const tl = Math.hypot(tx, ty);
