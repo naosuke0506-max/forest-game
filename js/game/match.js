@@ -1,6 +1,6 @@
 // 試合の流れ：フェーズ・残り時間・延長・歩ける範囲・ポイント・脱落・終了。
 // PlayCanvas に依存しない「計算だけ」の部分（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { PHASES, POINTS, REWARDS, REWARD_PICK_TIME, PHASE_FREEZE, CHARACTERS, COMBAT, LOADOUTS, WEAPONS, SHIELDS } from './data.js';
+import { PHASES, POINTS, REWARDS, REWARD_PICK_TIME, PHASE_FREEZE, PHASE_TICKS, CHARACTERS, COMBAT, LOADOUTS, WEAPONS, SHIELDS } from './data.js';
 import { initStance, resetStance } from './stance.js';
 
 /** 選べる物か（武器・楯の模型と動きがある） */
@@ -164,7 +164,11 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
       }
 
       if (m.overtime) return;
+      const before = Math.ceil(m.timeLeft);
       m.timeLeft -= dt;
+      // 刻の終わりの PHASE_TICKS 秒：残りの秒が 1 つ減るたびに合図（時計台の秒針の音。0 秒は刻が変わる＝鐘）
+      const left = Math.ceil(m.timeLeft);
+      if (left < before && left >= 1 && left <= PHASE_TICKS) emit('tick', { left });
       if (m.timeLeft > 0) return;
 
       endPhase();

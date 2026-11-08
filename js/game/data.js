@@ -265,6 +265,8 @@ export const POINTS = {
  * その間にフェーズ報酬を選ぶ（REWARD_PICK_TIME 秒。過ぎたら最初の候補を自動で選ぶ）
  */
 export const PHASE_FREEZE = 5;
+/** 刻の終わりの、この秒数から 1 秒ごとに時計台の秒針の音（カチッ）を鳴らす。0 秒で鐘（カーンカーン） */
+export const PHASE_TICKS = 10;
 export const REWARD_PICK_TIME = PHASE_FREEZE;
 
 /**

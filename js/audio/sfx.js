@@ -311,17 +311,33 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
       if (d) playSample(d, 'swing_light', { rate: 0.8, gain: 0.7 });
     },
     /**
-     * 時計台の鐘（刻が変わったとき）：鉄の鐘を強く 2 度打ち（警鐘）、続いて大きな鐘で時を打つ（strikes 回）。
-     * 金属の硬い響き（利用者の指示）。高い音もこもらせずに残し、残響を付ける
+     * 時計台の秒針（刻の終わりの 10 秒。1 秒ごと）：歯車が 1 つ進む「カチッ」。硬い爪の当たる音と、短い金属の響き、
+     * 大きな時計の仕掛けの木と鉄の胴鳴り。残り 3 秒からは少し強く（もうすぐ鐘が鳴る）
+     * @param {number} left 残りの秒
+     * @param {number} [at] 今から何秒後に鳴らすか（音の時計で正確に並べるとき）
      */
-    bell(strikes = 3) {
+    clockTick(left = 10, at = 0) {
       if (!audio.ready) return;
-      const d = outlet({ gain: 0.6, cutoff: 9500 });
+      const k = left <= 3 ? 1.25 : 1;
+      const d = outlet({ gain: 0.95 * k, cutoff: 12000 });
+      if (audio.reverb) { const send = audio.ctx.createGain(); send.gain.value = 0.3; d.connect(send); send.connect(audio.reverb); }
+      const t = at;
+      noiseHit(d, { t, dur: 0.02, type: 'highpass', freq: 3000, gain: 0.6, attack: 0.001 });                       // 爪が当たる「カ」
+      noiseHit(d, { t: t + 0.003, dur: 0.035, type: 'bandpass', freq: 1900, q: 4, gain: 0.4, attack: 0.001 });   // 「チッ」
+      toneHit(d, { t, dur: 0.06, f0: 2350, f1: 2200, gain: 0.09, attack: 0.001 });                                // 短い金属の響き
+      toneHit(d, { t, dur: 0.045, f0: 3710, gain: 0.045, attack: 0.001 });
+      noiseHit(d, { t: t + 0.004, dur: 0.07, type: 'bandpass', freq: 650, q: 2.5, gain: 0.3, attack: 0.002 });    // 仕掛けの胴鳴り
+    },
+    /**
+     * 時計台の鐘（刻が変わった瞬間）：鉄の鐘を強く 2 度打つ「カーン、カーン！」（利用者の指示。秒針の音の続き）。
+     * 金属の硬い響き。高い音もこもらせずに残し、残響を付ける
+     */
+    bell(at = 0) {
+      if (!audio.ready) return;
+      const d = outlet({ gain: 0.65, cutoff: 9500 });
       if (audio.reverb) { const send = audio.ctx.createGain(); send.gain.value = 0.75; d.connect(send); send.connect(audio.reverb); }
-      let t = 0;
-      ironStrike(d, t, 392.0, 0.13); t += 0.32;   // 警鐘：カン、カーン（G4）
-      ironStrike(d, t, 392.0, 0.16); t += 1.6;
-      for (let i = 0; i < strikes; i++) { ironStrike(d, t, 146.8, 0.22); t += 1.9; }   // 大きな鉄の鐘で時を打つ（D3）
+      ironStrike(d, at, 293.7, 0.2);           // カーン（D4）
+      ironStrike(d, at + 0.8, 293.7, 0.23);    // カーン！
     },
   };
   return api;
@@ -343,7 +359,9 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   combat.on('assassinate', ({ attacker }) => sfx.assassinate(attacker));
   combat.on('assassinFail', ({ attacker }) => sfx.assassinFail(attacker));
   match.on('eliminated', ({ victim }) => sfx.death(victim));
-  match.on('phaseStart', ({ phase }) => sfx.bell(phase + 1));   // 第二フェーズは 2 回、第三フェーズは 3 回…と時を打つ
+  match.on('tick', ({ left }) => sfx.clockTick(left));   // 刻の終わりの 10 秒：秒針の「カチッ」
+  match.on('phaseStart', () => sfx.bell());              // 0 秒（刻が変わった瞬間）：鐘の「カーン、カーン！」
+  match.on('overtime', () => sfx.bell());                // 最後の刻の時間切れ（延長に入る）も同じ
   hiding.on('hide', ({ fighter, spot }) => sfx.hide(fighter, spot.kind));
   hiding.on('exit', ({ fighter, spot }) => sfx.hide(fighter, spot.kind));
   hiding.on('found', ({ searcher, victim }) => { if (searcher === me || victim === me) sfx.found(); });
