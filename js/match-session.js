@@ -71,10 +71,10 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 戦闘と bot
   // 壁裏隠れ（村の家の外の壁と中の壁に背を付ける）
   const cover = createCover(covers, { isFree: obstacles.isFree, groundAt: groundAt || ((x, z) => terrain.heightAt(x, z)) });
-  const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt, hiding, cover });
-  const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => createBot(f, createRandom(config.seed + 100 + i), fighters));
-  // bot の目と耳（game/senses.js）：見える相手・聞こえた音で気づく。音を鳴らす出来事をつなぐ
+  // bot の目と耳（game/senses.js）：見える相手・聞こえた音で気づく。音を鳴らす出来事をつなぐ。暗殺できるか（相手に見られていないか）にも使う
   const senses = createSenses({ sight, heightAt: terrain.heightAt });
+  const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt, hiding, cover, senses });
+  const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => createBot(f, createRandom(config.seed + 100 + i), fighters));
   const botOf = new Map(bots.map((b) => [b.fighter, b]));
   combat.on('swing', ({ fighter }) => senses.noise(fighter, 'swing'));
   combat.on('hit', ({ attacker, target }) => { senses.noise(attacker, 'hit', target); botOf.get(target)?.alert(attacker); });
@@ -128,6 +128,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   let nearSpot = null, nearWall = null, useTimer = 0;
   let coverStick = null;   // 壁際を歩く向きの見方（スティックを倒し始めたときのカメラの右と前）
   const searchBtn = document.getElementById('btn-search');
+  const assassinBtn = document.getElementById('btn-assassinate');
+  setBtn(assassinBtn, ICONS.dagger, L.assassinate);
+  // 試合の計算が体を動かす行動（暗殺する・される）：その間はプレイヤーの操作の位置と向きを、戦う人の記録に合わせる
+  const SCRIPTED = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged']);
+  let wasScripted = false, twistBase = null;
   setBtn(searchBtn, ICONS.eye, L.search);
   // 姿勢ボタン：押したときにすること（立っていれば「しゃがむ」、しゃがむ・伏せていれば「立つ」）。長押しで伏せる
   const stanceBtn = document.getElementById('btn-stance');
@@ -165,7 +170,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   hiding.on('exit', ({ fighter }) => { if (fighter === me) leaveHideView(); });
   hiding.on('found', ({ searcher, victim, spot }) => {
     if (victim === me) { leaveHideView(); hud.centerMsg('見つかった', '動けない……', 2.5); }
-    if (searcher === me) hud.addFeed(`${victim.name}を見つけた！ 攻撃ボタンで致命の一撃`);
+    if (searcher === me) hud.addFeed(`${victim.name}を見つけた！ 引きずり出す`);
     else if (victim !== me && Math.hypot(spot.x - me.x, spot.z - me.z) < 25) hud.addFeed(`${searcher.name} が ${victim.name} を見つけた`);
   });
   hiding.on('empty', ({ searcher, spot }) => { if (searcher === me) hud.addFeed(spot.kind === 'bed' ? 'ベッドの下には誰もいない' : 'タンスの中には誰もいない'); });
@@ -196,7 +201,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   function refreshMyView() {
     const v = views.get(me);
     const gone = !!me.hidden || !!spectating;           // 隠れている・観戦している：自分の体は出さない
-    const third = thirdPerson || !!me.cover;             // 三人称（確認用）・壁裏隠れ
+    const third = thirdPerson;                           // 三人称（確認用）。壁裏隠れも一人称
     const body = !gone && (third || (fpBody && me.alive));   // 倒れた後は（観戦に移るまで）一人称で自分の体を出さない
     v.setVisible(body);
     v.setFirstPerson?.(body && !third);
@@ -243,7 +248,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   });
   match.on('end', () => { spectateEl.hidden = true; });
 
-  const world = { obstacles, groundAt, hiding, cover, sight, senses, get areaRadius() { return match.areaRadius; } };
+  const world = { obstacles, groundAt, hiding, cover, sight, senses, get areaRadius() { return match.areaRadius; },
+    /** f が今暗殺できる相手 { target, grace } か null（bot が暗殺ボタンを押すか決める） */
+    assassinTarget: (f) => combat.assassinTarget(f),
+    /** 隠れる・出る（動きをしてから。game/hide-acts.js） */
+    hideIn: (f, spot) => combat.hideIn(f, spot), hideOut: (f) => combat.hideOut(f) };
   match.on('eliminated', ({ victim }) => { hiding.drop(victim); cover.drop(victim); });
   hiding.on('hide', ({ fighter }) => cover.drop(fighter));
   // 壁裏隠れ：自分が壁に背を付けたら三人称（体を見せ、手元の武器を隠す）。離れたら元に戻す
@@ -319,8 +328,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       me.gait = player.moving > 0.75 && canRun(me) ? 'run' : player.moving > 0.05 ? 'walk' : 'still';   // 足音の大きさ（bot の耳）
       refreshStance();
       // あなたの位置を、試合の記録へ写す（いずれ人間も試合の計算で動かす）
-      // 隠れている間は、隠れ場所が自分の位置（体は動かない）
-      if (me.alive && !me.hidden && !me.cover) { me.x = player.position.x; me.z = player.position.z; me.y = player.position.y; me.yaw = player.yaw; me.pitch = player.pitch; me.headYaw = player.headYaw; }
+      // 隠れている間は、隠れ場所が自分の位置（体は動かない）。暗殺の動きなど、試合の計算が体を動かす間は写さない（あとで逆に合わせる）
+      const scripted = SCRIPTED.has(me.action?.kind);
+      if (me.alive && !me.hidden && !me.cover && !scripted) { me.x = player.position.x; me.z = player.position.z; me.y = player.position.y; me.yaw = player.yaw; me.pitch = player.pitch; me.headYaw = player.headYaw; }
       // 壁裏隠れ：離れるのは「離壁」か暗殺のときだけ。移動スティックを倒すと、壁に背を付けたまま壁際を歩く
       // （スティックの向きを画面の向きで地面の向きにし、壁に沿った分だけ進む）。カメラは三人称で覗く向きを見る
       // 歩く向きの見方（カメラの右と前）は、スティックを倒し始めたときのものを、離すまで使う
@@ -366,16 +376,17 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
           else if (mode === 'leave') setBtn(useBtn, ICONS.exit, L.leave);
         }
         searchBtn.hidden = !nearSpot;
-        // 攻撃ボタン：隠れている間と、壁に隠れていて近くに相手がいるときは「暗殺」、無防備な相手が近くにいれば「とどめ」
+        // 攻撃ボタン：無防備な相手が近くにいれば「とどめ」（暗殺は別の暗殺ボタン）
         const helplessNear = fighters.some((f) => f !== me && f.alive && f.helpless > 0 && Math.hypot(f.x - me.x, f.z - me.z) < 2.6);
-        const foeNear = me.cover && fighters.some((f) => f !== me && f.alive && !f.hidden && Math.hypot(f.x - me.x, f.z - me.z) < 3.2 && Math.abs((f.y ?? 0) - (me.y ?? 0)) < 1.3);
-        const want = me.hidden || foeNear ? 'assassinate' : helplessNear ? 'finisher' : '';
+        const want = helplessNear ? 'finisher' : '';
         if (want !== attackMode) refreshAttack(want);
+        // 暗殺ボタン：暗殺できる相手が近くにいるときだけ出る（見られていない・壁裏・隠れ場所から。game/assassin.js）
+        assassinBtn.hidden = !(running && me.alive && combat.assassinTarget(me));
       }
       if (input.use && running && me.alive) {
-        if (me.hidden) hiding.exit(me);
+        if (me.hidden) combat.hideOut(me);                // 出る動きをしてから出る（game/hide-acts.js）
         else if (me.cover) cover.exit(me);
-        else if (nearSpot) hiding.hide(me, nearSpot);   // 誰かがいれば、その人を見つける
+        else if (nearSpot) combat.hideIn(me, nearSpot);   // 隠れる動きをしてから隠れる。誰かがいれば、覗いて見つけて引きずり出す
         else if (nearWall) {
           // 覗く向き：今見ている向きが、壁に背を付けたときの右か左か
           const sg = nearWall.seg, a = (player.yaw * Math.PI) / 180;
@@ -398,7 +409,12 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       sfx.update(dt, fighters);
       // 回避・暗殺の飛びかかり・押されて下がる（重い被弾・よろめき）は試合の計算が体を動かすので、その位置をプレイヤーの操作へ戻す
       const pushed = me.react && me.react.push > 0 && me.react.t <= me.react.time;
-      if (me.alive && (me.action?.kind === 'dodge' || me.action?.kind === 'assassinate' || pushed)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
+      if (me.alive && (me.action?.kind === 'dodge' || pushed)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
+      // 暗殺の動きなど：体の位置と向きを、プレイヤーの操作へ合わせる（動きが終わった時の、体の移った所と向きも）
+      const scriptedNow = SCRIPTED.has(me.action?.kind);
+      const viewBefore = player.viewYaw;
+      if (me.alive && (scriptedNow || wasScripted)) player.follow(me.x, me.y, me.z, me.yaw);
+      wasScripted = scriptedNow;
       views.get(me).update(dt, player.moving);
       viewModel.update(dt, player.moving);
       arrows.update();
@@ -408,6 +424,19 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         player.setPose(spectating.x, spectating.z, spectating.yaw, spectating.y);
       }
       refreshMyView();
+      // 暗殺の動きの間は、一人称の目が体（肩の線）の回った分に付いて回る（動きの始めの肩の向きから。動きの終わりに体の向きが移ると 0 に戻る）
+      const ma = me.action, twisting = (ma?.kind === 'assassinate' && ma.phase === 'strike') || (SCRIPTED.has(ma?.kind) && ma?.kind !== 'assassinate');
+      if (twisting) {
+        const sy = views.get(me).shoulderYaw;
+        // 始めの肩の向きの分は引く（構えの姿の少しのねじれ）。ただし、動きの始めから体が大きく回っている
+        // （タンスの中で外を向いている・出る動き）ときは引かない（目は体の向く外を見る）
+        if (twistBase === null) { const d0 = (((sy - me.yaw) + 540) % 360) - 180; twistBase = Math.abs(d0) < 30 ? d0 : 0; }
+        player.setTwist((((sy - me.yaw - twistBase) + 540) % 360) - 180);
+      } else {
+        // 動きが終わった：体の向きが移っても、見ている向きはそのまま（首の向きへ引き継ぐ）
+        if (twistBase !== null) { player.setTwist(0); player.keepView(viewBefore); }
+        twistBase = null; player.setTwist(0);
+      }
       hud.update(dt);
       hud.updateVitals(me);
       minimap.update(dt, spectating || me);

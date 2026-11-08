@@ -115,18 +115,22 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   const has = (name) => tracks.has(name);
   // 姿勢の動き（tools/characters/make_motions.py）：しゃがみ（その場）・しゃがみ歩き・伏せる・伏せ・這う・起き上がる
   const stanceClips = ['crouch', 'crouch_walk', 'prone_down', 'prone', 'crawl', 'prone_up'].every(has);
-  let current = '', lastAction = null, swingIndex = 0, deathStarted = false;
+  let current = '', lastAction = null, lastPhase = '', swingIndex = 0, deathStarted = false;
+  const VICTIM = /^(as_back_v|as_slide_v|drag_wd_v|drag_bed_v)$/;   // される側の動き（倒れても最後の姿のまま）
   // 攻撃を受けた動き（game/reactions.js の fighter.react）：流している受けた動きの番号と残りの時間。
   // 押されて下がった分（knock）：動きの中で体が下がっているので、位置をその分だけ戻して描く（受けた動きが終わったら BLEND の間に 0 へ）
   let reactId = 0, reactLeft = 0;
   const knock = { x: 0, z: 0, fade: 0, fx: 0, fz: 0 };
   const knockV = new pc.Vec3();
+  // snap：動き終わりに体の位置と向きが移った（暗殺の滑斬など。fighter.snapPose）。次の動きへは混ぜずにすぐ移る（移った所で姿が合っている）
+  let snap = false;
   const play = (name, speed = 1, blend = BLEND) => {
     if (!has(name)) return;
     body.anim.speed = speed;
     if (name !== current) {
-      body.anim.baseLayer.transition(name, blend);
+      body.anim.baseLayer.transition(name, snap ? 0 : blend);
       current = name;
+      snap = false;
     }
   };
   // 同じ動きを最初から流し直す（攻撃が続いたとき・ひるみが重なったとき）
@@ -172,11 +176,12 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
 
   // 一人称（自分の体を目から見る）：頭（兜）を隠し、上下の向きに合わせて上体を傾け（腕と武器が視線に付いてくる）、
   // 目の位置をカメラへ渡す。脚や胴は動きのまま（下を向けば見える）
-  let firstPerson = false, eyeReady = false;
+  let firstPerson = false, eyeReady = false, eyeHold = false;
   const headBone = body.findByName('Head');
   const spine = ['Spine01', 'Spine02'].map((n) => body.findByName(n)).filter(Boolean);
   const eyeLocal = new pc.Vec3(), eyeTmp = new pc.Vec3(), invRoot = new pc.Mat4(), qAim = new pc.Quat(), qBone = new pc.Quat();
   const lArm = body.findByName('L_Upperarm');
+  const lShoulder = lArm, rShoulder = body.findByName('R_Upperarm');
   const qArm = new pc.Quat();
   const AIM = { stand: 0.9, crouch: 0.8, prone: 0.25 };   // 上下の向きのうち、上体を傾ける割合（伏せていると少し）
   // 楯を持つ左腕：目の前に楯が来て前が見えなくならないよう、一人称のときだけ肩から下げて外へ開く（度。ほかの人から見える姿は変えない）
@@ -201,6 +206,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     // 頭（兜）を潰して隠す（目の前に兜の内側が映らないように）
     headBone.setLocalScale(0.001, 0.001, 0.001);
     // 目の位置：頭の付け根から上と前（体の向きの座標で。頭のうなずきには付いていかない）。少しなめらかにする
+    if (eyeHold) { eyeHold = false; return; }
     invRoot.copy(root.getWorldTransform()).invert();
     invRoot.transformPoint(headBone.getPosition(), eyeTmp);
     eyeTmp.y += EYE_UP; eyeTmp.z -= EYE_FWD;
@@ -228,6 +234,12 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       eyeReady = false;
       if (!v) headBone?.setLocalScale(1, 1, 1);
     },
+    /** 肩の線から見た体の向き（度。戦う人の向きの約束）。暗殺などの動きで体が回った分を、一人称の目に足すのに使う */
+    get shoulderYaw() {
+      if (!lShoulder || !rShoulder) return fighter.yaw;
+      const a = lShoulder.getPosition(), b = rShoulder.getPosition();
+      return (Math.atan2(-(b.z - a.z), b.x - a.x) * 180) / Math.PI;   // 右（左肩→右肩）が (cos y, -sin y)
+    },
     /** 一人称の目の位置（体の向きの座標。前は -Z）。まだ分からなければ null */
     get eyeOffset() { return firstPerson && eyeReady ? eyeLocal : null; },
     setVisible(v) { root.enabled = v; if (!v && nocked) nocked.enabled = false; },
@@ -237,6 +249,12 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
 
   /** 動き：戦闘の計算の状態を見て、どの動きを流すかを決める */
   function updateAnim(dt) {
+      // 動き終わりに体の位置と向きが移った（暗殺の滑斬など）：速さ・回る速さ・目の位置を測り直す（移った分を歩いた・回ったと見ない）
+      if (fighter.snapPose) {
+        fighter.snapPose = false; snap = true;
+        px = fighter.x; pz = fighter.z; vel = 0; fwd = 0; pYaw = fighter.yaw; yawRate = 0; eyeReady = false;
+        eyeHold = true;   // 骨はまだ前の動きの最後の姿（体だけ移った）なので、目の位置は次の姿が出てから測る
+      }
       const target = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z));
       groundY += (target - groundY) * Math.min(1, dt * 12);
       // 壁裏隠れ：背中が壁に付くように、壁の側へ少し寄せて描く（位置の計算は壁から離れた所）
@@ -283,7 +301,8 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       if (fighter.weapon !== shownWeapon) showWeapon(fighter.weapon);
 
       if (!fighter.alive) {
-        if (!deathStarted) { deathStarted = true; restart('death', 1); }
+        // 倒れた：倒れる動き。ただし、暗殺された・引きずり出された（される側の動きの途中）なら、その動きの最後の姿のまま
+        if (!deathStarted) { deathStarted = true; if (!VICTIM.test(current)) restart('death', 1); }
         return;
       }
 
@@ -310,6 +329,36 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       if (fighter.stun > 0) return;
 
       const a = fighter.action;
+      // 暗殺する（game/assassin.js）：飛びかかる間は走り、動き（背刺・滑斬）が始まったらその動き。片手劍でなければ強い一撃
+      if (a?.kind === 'assassinate') {
+        if (a !== lastAction || a.phase !== lastPhase) {
+          lastAction = a; lastPhase = a.phase;
+          if (a.phase === 'approach') play('run', 1.5, 0.08);
+          else if (a.move && has(a.move.clip)) restart(a.move.clip, 1);
+          else { const name = has('heavy') ? 'heavy' : 'a1'; if (has(name)) restart(name, clip(name).duration / 0.7); }
+        }
+        return;
+      }
+      // タンス・ベッドに隠れる・出る・覗く・引きずり出される（game/hide-acts.js）：その動きを最後まで
+      if (a && (a.kind === 'hideIn' || a.kind === 'hideOut' || a.kind === 'search' || a.kind === 'dragged')) {
+        if (a !== lastAction) { lastAction = a; if (has(a.clip)) restart(a.clip, 1); }
+        return;
+      }
+      // 引きずり出して止め：片手劍はその動き。ほかの武器は、止めの少し前から強い一撃
+      if (a?.kind === 'drag') {
+        if (a !== lastAction) { lastAction = a; lastPhase = ''; if (a.move && has(a.move.clip)) restart(a.move.clip, 1); }
+        else if (!a.move && lastPhase !== 'swing' && a.t >= a.drag.kill - 0.5) {
+          lastPhase = 'swing';
+          const name = has('heavy') ? 'heavy' : 'a1';
+          if (has(name)) restart(name, clip(name).duration / 0.7);
+        }
+        return;
+      }
+      // 暗殺される：される側の動き（背刺をされる・滑斬をされる）
+      if (a?.kind === 'assassinated') {
+        if (a !== lastAction) { lastAction = a; if (has(a.clip)) restart(a.clip, 1); }
+        return;
+      }
       // 溜め：溜めに入る動きの後は、溜めている動きを繰り返す
       if (a?.kind === 'charge' && a === lastAction && a.t >= (clip(a.tech.in)?.duration ?? 0)) play(a.tech.hold, 1, 0.1);
       if (a && a !== lastAction) {
@@ -336,13 +385,10 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
           const melee2 = fighter.weapon !== fighter.primary && has('ma1');
           const name = a.heavy && has('heavy') ? 'heavy' : (melee2 ? ['ma1', 'ma2', 'ma3'] : ['a1', 'a2', 'a3'])[swingIndex++ % 3];
           if (has(name)) restart(name, clip(name).duration / (st.windup + st.recovery));   // 動きの無い模型では何もしない
-        } else if (a.kind === 'finisher' || a.kind === 'assassinate') {
-          // 致命の一撃・暗殺：強攻撃の大きな振り（専用の動きができるまで）
+        } else if (a.kind === 'finisher') {
+          // 致命の一撃：強攻撃の大きな振り（専用の動きができるまで）
           const name = has('heavy') ? 'heavy' : 'a1';
           if (has(name)) restart(name, clip(name).duration / 0.85);
-        } else if (a.kind === 'search') {
-          // 探す：かがんで開ける（専用の動きができるまで、構えの動きで代わりにする）
-          restart(has('guard') ? 'guard' : 'idle', 1);
         } else if (a.kind === 'draw') {
           restart('draw', clip('draw').duration / WEAPONS[fighter.weapon].drawTime);
         } else if (a.kind === 'release') {

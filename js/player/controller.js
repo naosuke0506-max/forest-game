@@ -35,7 +35,9 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   let yaw = 200, pitch = -2, groundY = terrain.heightAt(pos.x, pos.z), bob = 0, lastMag = 0;
   let headYaw = 0;                      // 首の向き（体の向きからの左右。度。左が正）
   let look = yaw;                       // 見ている向き（左右。度。体の向き＋首の向き）。なぞった分だけ動く
-  const turn = { target: null, keyHeld: false };   // 体が向かっている向き（首の範囲を越えて見たとき）。keyHeld：PC の Q・E
+  let twist = 0;                        // 暗殺などの動きの間、体（肩の線）が回った分（度）。目もそれに付いて回る（体と一緒に回る）
+  let coverHead = 0;                    // 壁裏隠れの首の向きの元（覗く向きへ 62 度。覗く向きが変わるとなめらかに振り向く）
+  const turn = { target: null, keyHeld: false };   // 体が向かっている向き（首の範囲を越えて見たとき）。keyHeld：PC の Z・C
   const qHead = new pc.Quat(), qPitch = new pc.Quat(), qEye = new pc.Quat();
   let viewMode = 'first';               // first / third
   let areaRadius = config.world.playRadius;
@@ -61,8 +63,8 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       eye.setLocalEulerAngles(pitch, 0, 0);
       return;
     }
-    if (cover) {
-      // 壁裏隠れ：体の前の斜め（覗く向きの反対側）から、覗く向きへ壁に沿って見る。見回した分だけ回す
+    if (cover && viewMode === 'third') {
+      // 壁裏隠れ（三人称で確かめるとき）：体の前の斜め（覗く向きの反対側）から、覗く向きへ壁に沿って見る。見回した分だけ回す
       // （体が画面の端寄りに入るよう、覗く向きの反対側の斜め前に置き、体の横を通して覗く向きを見る）
       const c = cover, up = 1.5;
       camV.set(c.x + c.nx * 1.2 - c.px * 1.6, c.y + up, c.z + c.nz * 1.2 - c.pz * 1.6);
@@ -105,7 +107,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
 
   /** 目の向き：体の向きから、首の左右（headYaw）と上下（pitch） */
   function headRotation() {
-    qHead.setFromAxisAngle(pc.Vec3.UP, headYaw);
+    qHead.setFromAxisAngle(pc.Vec3.UP, headYaw + twist);
     qPitch.setFromAxisAngle(pc.Vec3.RIGHT, pitch);
     return qEye.mul2(qHead, qPitch);
   }
@@ -113,7 +115,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   /**
    * 見回す（なぞる）：見ている向き（look）を動かす。首の範囲（体の向きから左右 neckYaw 度）の中なら首だけが動く。
    * 首の範囲を越えたら、体がその場で足踏みしながら見ている向きへ回る（決まった速さまで。見ている向きは体＋首の範囲までしか回らないので、
-   * 遠く後ろを見るには体が回るのを待つ）。体が向き直ると、首は正面に戻る。PC の Q・E は、左・右へ 90 度なぞったのと同じ
+   * 遠く後ろを見るには体が回るのを待つ）。体が向き直ると、首は正面に戻る。PC の Z・C は、左・右へ 90 度なぞったのと同じ
    */
   function updateLook(dt, input) {
     const key = input.turnX || 0;
@@ -156,11 +158,19 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     // 上下：首と上体で（首の範囲まで）
     pitch = clamp(pitch - input.lookY, -BODY_TURN.neckDown, BODY_TURN.neckUp);
     if (cover) {
-      // 壁裏隠れ：体は動かさない（壁に沿った横歩きは試合の計算が動かす）。見回すのはカメラだけ
-      coverYaw = Math.max(-55, Math.min(55, coverYaw - input.lookX));
+      // 壁裏隠れ（一人称）：体は壁から外を向いて動かさない（壁に沿った横歩きは試合の計算が動かす）。
+      // 首は覗く向きへ 62 度（壁に背を付けた動きと同じ）を元に、なぞった分だけ首の範囲で動く
+      coverYaw = Math.max(-135, Math.min(135, coverYaw - input.lookX));
       coverPitch = Math.max(-35, Math.min(20, coverPitch - input.lookY));
+      yaw = (Math.atan2(-cover.nx, -cover.nz) * 180) / Math.PI;
+      const side = wrapDeg((Math.atan2(-cover.px, -cover.pz) * 180) / Math.PI - yaw) >= 0 ? 1 : -1;
+      coverHead += (side * 62 - coverHead) * Math.min(1, dt * 6);
+      headYaw = clamp(coverHead + coverYaw, -BODY_TURN.neckYaw, BODY_TURN.neckYaw);
+      pitch = coverPitch;
+      look = yaw + headYaw;
       pos.x = cover.x; pos.z = cover.z; pos.y = cover.y; groundY = cover.y;
       body.setPosition(cover.x, cover.y, cover.z);
+      body.setEulerAngles(0, yaw, 0);
       placeCamera(0);
       return;
     }
@@ -235,6 +245,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       pos.x = x; pos.z = z; pos.y = y; groundY = y;
       if (faceYaw !== undefined) yaw = faceYaw;
       headYaw = 0; turn.target = null; look = yaw;
+      pitch = -2;   // 隠れている間は家具の上から見下ろしていたので、出たら正面を見る
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
     },
     get hidden() { return !!hide; },
@@ -250,10 +261,27 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
         update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
         return;
       }
-      if (!cover) { coverYaw = 0; coverPitch = -6; }
+      if (!cover) {
+        coverYaw = 0; coverPitch = -6;
+        const y0 = (Math.atan2(-c.nx, -c.nz) * 180) / Math.PI;
+        coverHead = (wrapDeg((Math.atan2(-c.px, -c.pz) * 180) / Math.PI - y0) >= 0 ? 1 : -1) * 62;
+      }
       cover = c;
     },
     get inCover() { return !!cover; },
+    /**
+     * 試合の計算が体を動かす間（暗殺の動きなど）：体の位置と向きを、戦う人の記録に合わせる（首の向きはそのまま）
+     */
+    follow(x, y, z, faceYaw) {
+      pos.x = x; pos.z = z; pos.y = y;
+      yaw = faceYaw; look = yaw + headYaw; turn.target = null;
+    },
+    /** 動きの間に体（肩の線）が回った分（度）。一人称の目もそれに付いて回る。0 で戻す */
+    setTwist(v) { twist = v; },
+    /** 今見ている向き（左右。度。体の向き＋首の向き＋動きで回った分） */
+    get viewYaw() { return yaw + headYaw + twist; },
+    /** 見ている向きを決める（首の範囲で。動きが終わって体の向きが移ったとき、画面の向きが飛ばないように） */
+    keepView(v) { headYaw = clamp(wrapDeg(v - yaw), -BODY_TURN.neckYaw, BODY_TURN.neckYaw); look = yaw + headYaw; },
     /** 立てる高さを決める仕組み（家の床と階段）を使う */
     setGround(fn) { groundAt = fn; pos.y = fn(pos.x, pos.z, null); groundY = pos.y; },
     setFrozen(v) { frozen = v; },

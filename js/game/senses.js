@@ -45,21 +45,22 @@ export function createSenses({ sight = null, heightAt }) {
 
   /**
    * viewer は target に目で気づくか（前の 120 度・見える距離・体の半分以上が直接見える）
-   * @param {{ ignoreHidden?: boolean }} [opt] ignoreHidden：隠れようとしている所でも数える（隠れるところを見たか）
+   * @param {{ ignoreHidden?: boolean, visible?: number }} [opt] ignoreHidden：隠れようとしている所でも数える（隠れるところを見たか）。
+   *   visible：体のこの割合以上が見えれば「見えた」（ふつうは SENSES.visible。暗殺できるかは 0.7。data.js の ASSASSIN.seen）
    */
-  function canSee(viewer, target, { ignoreHidden = false } = {}) {
+  function canSee(viewer, target, { ignoreHidden = false, visible = SENSES.visible } = {}) {
     if (!target.alive || (target.hidden && !ignoreHidden) || target === viewer) return false;
     const dx = target.x - viewer.x, dz = target.z - viewer.z, d = Math.hypot(dx, dz);
     const reach = CHARACTERS[viewer.char]?.sight ?? 40;
     if (d > reach) return false;
     if (d > 0.3) {
-      const a = viewer.yaw * DEG;
+      const a = (viewer.yaw + (viewer.headYaw || 0)) * DEG;   // 見ている向き（体の向き＋首の向き）
       const cos = (-Math.sin(a) * dx - Math.cos(a) * dz) / d;   // 前（-Z を向きで回したもの）との角度
       if (cos < Math.cos((SENSES.fov / 2) * DEG)) return false;
     }
     if (!sight) return true;
     const eye = eyeOf(viewer), pts = bodyPoints(target, viewer);
-    const need = Math.ceil(pts.length * SENSES.visible);
+    const need = Math.ceil(pts.length * visible);
     let seen = 0, hidden = 0;
     for (const q of pts) {
       if (sight.blocked(eye, q)) { if (++hidden > pts.length - need) return false; }

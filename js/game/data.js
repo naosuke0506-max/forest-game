@@ -183,6 +183,40 @@ export const REACT = {
  */
 export const BODY_TURN = { neckYaw: 70, neckUp: 55, neckDown: 65, headSpeed: 320, turn: { light: 220, medium: 180, heavy: 150 } };
 
+/**
+ * 暗殺（docs/DESIGN.md「暗殺」）：攻擊ボタンとは別の「暗殺」ボタン。近く（reach）に暗殺できる相手がいると出る
+ *   できるとき：相手に体の seen 以上が見えていない（相手の視界の中でも、7 割以上見えていなければよい。game/senses.js）・
+ *              壁裏隠れから（見られていてもよい）・隠れ場所から飛び出す（見られていてもよい）
+ *   grace：避ける猶予（秒）。壁裏・隠れ場所から飛び出す暗殺だけ。この間に相手が回避すると失敗する（見られていない所からの暗殺は避けられない）
+ *   dash：飛びかかる速さ（m/秒）
+ *   moves：片手劍の暗殺の動き（onehand_moves.py）。背中側からは背刺、前・横からは滑斬
+ *     gap 動き始めの相手との間（m）、kill 止めを刺す時刻（秒）、time 動きの長さ、end 動き終わりの体の位置（右 r・前 f。m）と向き（右回り yaw。度）
+ *   片手劍を持たない人は、今までどおり飛びかかって強い一撃（ほかの武器の暗殺の動きは、その武器を作るときに作る）
+ */
+export const ASSASSIN = {
+  reach: 3.0, seen: 0.7, grace: 0.45, dash: 8,
+  moves: {
+    back:  { clip: 'as_back',  victim: 'as_back_v',  gap: 0.64, kill: 0.40, time: 2.03, end: { r: 0, f: 0, yaw: 0 } },
+    slide: { clip: 'as_slide', victim: 'as_slide_v', gap: 2.2,  kill: 0.60, time: 2.6,  end: { r: -0.42, f: 3.02, yaw: 150 } },
+  },
+};
+
+/**
+ * タンス・ベッドに隠れる・出る・探す動き（docs/DESIGN.md「隠れる・探す」。動きは tools/characters/hide_moves.py）。
+ * どれも、家具の前の「出る所」に家具の方を向いて立ち、動きを最後までしてから隠れる・出る・開ける（利用者の指示）。
+ * 探して見つけたら、そのまま引きずり出して止めを刺す（自動。避けられない）
+ *   inClip・inTime：隠れる動きと長さ（秒。終わると隠れる）、outClip・outTime：出る動き（終わると家具に背を向けて立つ）
+ *   searchClip・searchTime・revealAt：探す動き・長さ・中が見える時刻（ここで見つかる）
+ *   drag：引きずり出して止め（clip 攻める側・victim される側・kill 止めの時刻・time 長さ・end 動き終わりの体の位置（右 r・前 f）と向き（右回り yaw））。
+ *         引きずり出す動きは片手劍だけ（ほかの武器は、される側の動きに合わせて強い一撃。動きはその武器を作るときに作る）
+ */
+export const HIDE_ACTS = {
+  wardrobe: { inClip: 'hide_wd_in', inTime: 1.7, outClip: 'hide_wd_out', outTime: 1.0, searchClip: 'search_wd', searchTime: 1.1, revealAt: 0.8,
+    drag: { clip: 'drag_wd', victim: 'drag_wd_v', kill: 1.70, time: 2.53, end: { r: 1.22, f: -0.25, yaw: 25 } } },
+  bed: { inClip: 'hide_bed_in', inTime: 1.6, outClip: 'hide_bed_out', outTime: 1.47, searchClip: 'search_bed', searchTime: 1.2, revealAt: 0.7,
+    drag: { clip: 'drag_bed', victim: 'drag_bed_v', kill: 1.40, time: 2.27, end: { r: 0.02, f: -0.48, yaw: 40 } } },
+};
+
 /** 戦闘の決まりごと */
 export const COMBAT = {
   staminaRegen: 22,        // 1 秒に戻るスタミナ

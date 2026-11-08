@@ -3,16 +3,15 @@
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
 import { WEAPONS, COMBAT, DODGE, HEAVY } from './data.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
-import { SEARCH_TIME } from './hiding.js';
-import { setStance, updateStance, stanceShape } from './stance.js';
+import { setStance, updateStance, stanceShape, resetStance } from './stance.js';
 import { techSetOf, controlTech, updateTech, interruptTech } from './techniques.js';
 import { reactKind, startReact, updateReact } from './reactions.js';
+import { createAssassin } from './assassin.js';
+import { createHideActs } from './hide-acts.js';
 
 // 隠れる・探すに関わる動き
 const FINISH_REACH = 2.4;   // 致命の一撃が届く近さ（無防備な相手まで m）
 const FINISH_HIT = 0.45;    // 致命の一撃が入るまで（秒）
-const ASSN_REACH = 3.2;     // 隠れた所から暗殺へ移れる近さ（m）
-const ASSN_WIN = 0.45;      // 暗殺の猶予（秒）。この間に相手が回避すると失敗する
 
 const DEG = Math.PI / 180;
 const wrap = (a) => ((a + 540) % 360) - 180;
@@ -50,8 +49,9 @@ export function attackStats(weaponId, heavy = false) {
  * @param {object} [opt.hiding] 隠れ場所（game/hiding.js）。隠れている人には攻撃が当たらない
  * @param {object} [opt.cover] 壁裏隠れ（game/cover.js）。壁に背を付けた所から暗殺できる
  * @param {object} opt.obstacles 木の幹や岩（矢が刺さる）
+ * @param {object} [opt.senses] 目（game/senses.js）。暗殺できるか（相手に見られていないか）に使う
  */
-export function createCombat({ match, heightAt, obstacles, groundAt = null, hiding = null, cover = null }) {
+export function createCombat({ match, heightAt, obstacles, groundAt = null, hiding = null, cover = null, senses = null }) {
   const floorAt = groundAt || ((x, z) => heightAt(x, z));
   const yOf = (f) => f.y ?? heightAt(f.x, f.z);   // 足の高さ（家の二階にいれば高い）
   const projectiles = [];
@@ -99,6 +99,9 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     startReact(target, reactKind(target, { guarded, broke, power, pierce }), fromX, fromZ);
     if (!guarded) {                             // まともに受けるとひるむ（振りかぶり・溜めも止まる）
       const ta = target.action;
+      if (ta?.kind === 'assassinate' && !ta.hit) { assassin.cancel(target); target.action = null; }   // 止めを刺す前に斬られた：相手を放す
+      if (ta?.kind === 'drag' && !ta.hit) { if (ta.victim.action?.kind === 'dragged') ta.victim.action = null; target.action = null; }
+      if (ta && ['hideIn', 'hideOut', 'search'].includes(ta.kind)) target.action = null;   // 隠れる・出る・探すのを取りやめる
       if (ta && ((ta.kind === 'attack' && !ta.hit) || ta.kind === 'charge' || ta.kind === 'charge2')) target.action = null;
       interruptTech(target);
     }
@@ -134,6 +137,11 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     return best;
   }
   const faceTo = (f, t) => { f.yaw = (Math.atan2(-(t.x - f.x), -(t.z - f.z)) * 180) / Math.PI; };
+  // 暗殺（game/assassin.js）：暗殺ボタンで、近くの相手を一撃で倒す
+  const assassin = createAssassin({ fighters, senses, yOf, move: (f, dx, dz) => shove(f, dx, dz), lethal, emit });
+  // タンス・ベッドに隠れる・出る・探す動きと、見つけたら引きずり出して止め（game/hide-acts.js）
+  const acts = hiding ? createHideActs({ hiding, move: (f, dx, dz) => shove(f, dx, dz), lethal, emit }) : null;
+  const LOCKED = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged']);   // している間はほかのことができない
   /** 押されて動く（木や岩・壁を避け、歩ける範囲の中・床の高さへ）。実際に動いた分を返す */
   const shove = (f, dx, dz) => {
     const ox = f.x, oz = f.z;
@@ -241,34 +249,29 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       f._dodgeHeld = !!input.dodge;
       const searchPressed = input.search && !f._searchHeld;
       f._searchHeld = !!input.search;
+      const assassinPressed = input.assassinate && !f._assassinHeld;
+      f._assassinHeld = !!input.assassinate;
+      // 暗殺している・されている・隠れる・出る・探す・引きずり出す間は、ほかのことはできない
+      if (LOCKED.has(f.action?.kind)) { f.guarding = false; return; }
       if (f.stun > 0) { f.guarding = false; if (f.action?.kind === 'draw') f.action = null; return; }
 
-      // 隠れている：攻撃ボタンで、近くの相手へ飛び出して暗殺（相手が猶予の間に回避すると失敗）。ほかのことはできない
-      if (f.hidden) {
-        f.guarding = false;
-        const t = pressed ? nearestFoe(f, ASSN_REACH + 1.2) : null;
-        if (t && Math.hypot(t.x - f.hidden.outX, t.z - f.hidden.outZ) < ASSN_REACH) {
-          hiding?.exit(f);
-          faceTo(f, t);
-          f.action = { kind: 'assassinate', t: 0, target: t, dodged: false };
-          emit('assassinate', { attacker: f, target: t });
+      // 暗殺ボタン（攻擊ボタンとは別）：近くに暗殺できる相手がいれば（game/assassin.js）。
+      // 隠れ場所・壁裏からは飛び出して（避ける猶予がある）、ほかは見られていなければどこからでも（避けられない）
+      if (assassinPressed) {
+        const c = assassin.find(f);
+        if (c) {
+          if (f.hidden) hiding?.exit(f);
+          if (f.cover) cover?.exit(f);
+          resetStance(f);   // 暗殺の動きは立ってから
+          assassin.start(f, c.target, c.grace);
+          return;
         }
-        return;
       }
+      // 隠れている：ほかのことはできない（出るのは「出る」ボタン。game/hiding.js）
+      if (f.hidden) { f.guarding = false; return; }
       // 壁裏隠れ：壁から離れるのは、暗殺したとき・「離壁」で離れたとき（攻撃を受けたとき・倒れたときも）だけ。
-      // 攻撃ボタンは、近くに相手がいれば飛びかかって暗殺（近くに来たらいつでも。猶予の間に相手が回避すると失敗）。
-      // 近くに相手がいなければ何もしない。左手・回避も、壁に隠れている間は何もしない
-      if (f.cover) {
-        f.guarding = false;
-        const t = pressed ? nearestFoe(f, ASSN_REACH) : null;
-        if (t) {
-          cover?.exit(f);
-          faceTo(f, t);
-          f.action = { kind: 'assassinate', t: 0, target: t, dodged: false };
-          emit('assassinate', { attacker: f, target: t });
-        }
-        return;
-      }
+      // 攻撃・左手・回避は、壁に隠れている間は何もしない
+      if (f.cover) { f.guarding = false; return; }
       // 姿勢：伏せる・起き上がる途中は何もできない。伏せているときは、攻撃・左手・回避を押すと起き上がる（その押下では何もしない）。
       // しゃがんでいれば、すぐ立って、そのまま攻撃・防御・回避する（game/stance.js）
       if (f.stanceT > 0) { f.guarding = false; return; }
@@ -279,9 +282,9 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       }
       if (f.stance === 'crouch' && (pressed || leftPressed || dodgePressed || (leftHeld && f.left === 'guard'))) setStance(f, 'stand');
       // 探す：近くのベッドやタンスを開ける
-      if (searchPressed && !f.action && hiding) {
+      if (searchPressed && !f.action && acts) {
         const spot = hiding.nearest(f);
-        if (spot) { f.action = { kind: 'search', t: 0, spot }; f.guarding = false; emit('searchStart', { fighter: f, spot }); return; }
+        if (spot && acts.startSearch(f, spot)) return;   // 開けて覗く動きの後で中が見える（game/hide-acts.js）
       }
       // 致命の一撃：無防備な相手（見つけて引きずり出した相手など）が近くにいれば、攻撃ボタンで
       if (pressed && !f.action) {
@@ -367,8 +370,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
             if (a.t >= st.windup + st.recovery) f.action = null;
           } else if (a.kind === 'release' && a.t >= 0.25) {
             f.action = null;
-          } else if (a.kind === 'search') {
-            if (a.t >= SEARCH_TIME) { f.action = null; hiding?.reveal(f, a.spot); }
+          } else if (acts && ['hideIn', 'hideOut', 'search', 'drag', 'dragged'].includes(a.kind)) {
+            acts.update(f, a);   // 隠れる・出る・探す・引きずり出して止め（game/hide-acts.js）
           } else if (a.kind === 'finisher') {
             const t = a.target;
             if (t.alive) faceTo(f, t);
@@ -378,23 +381,10 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
             }
             if (a.t >= FINISH_HIT + 0.45) f.action = null;
           } else if (a.kind === 'assassinate') {
-            // 相手へ飛びかかる。猶予の間に相手が回避したら失敗
-            const t = a.target;
-            if (t.action?.kind === 'dodge') a.dodged = true;
-            const dx = t.x - f.x, dz = t.z - f.z, d = Math.hypot(dx, dz);
-            if (!a.done && d > 0.9) {
-              const step = Math.min(d - 0.9, 7 * dt);
-              f.x += (dx / d) * step; f.z += (dz / d) * step;
-              obstacles.resolve(f, BODY_RADIUS);
-              f.y = floorAt(f.x, f.z, f.y);
-              faceTo(f, t);
-            }
-            if (!a.done && a.t >= ASSN_WIN) {
-              a.done = true;
-              if (!a.dodged && t.alive && !t.hidden && d < 2.2) lethal(t, f, 'assassinate');
-              else { f.stun = 0.8; emit('assassinFail', { attacker: f, target: t }); f.action = null; }
-            }
-            if (f.action && a.t >= ASSN_WIN + 0.4) f.action = null;
+            assassin.update(f, a, dt);   // 飛びかかって、動きの決まった時刻に止めを刺す（game/assassin.js）
+          } else if (a.kind === 'assassinated') {
+            // 暗殺されている：止めを刺される（暗殺する人が倒れた・ひるんだら放される）
+            if (!a.by.alive || a.by.action?.kind !== 'assassinate') f.action = null;
           } else if (a.kind === 'dodge') {
             // 始めに速く、終わりにゆっくり進む
             const d = DODGE[f.weight] || DODGE.medium;
@@ -410,7 +400,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
           }
         }
         // 動きの速さ：防御中・攻撃中・ひるみ中は遅い
-        const still = f.hidden || f.helpless > 0 || ['dodge', 'search', 'finisher', 'assassinate'].includes(f.action?.kind);
+        const still = f.hidden || f.helpless > 0 || f.action?.kind === 'dodge' || f.action?.kind === 'finisher' || LOCKED.has(f.action?.kind);
         f.moveScale = still ? 0 : f.stun > 0 ? 0.25 : f.guarding ? COMBAT.guardMoveScale
           : (a && a.kind !== 'release') ? COMBAT.attackMoveScale : 1;
       }
@@ -421,5 +411,11 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
 
     /** 武器の情報（見た目や bot が使う） */
     weaponOf: (f) => WEAPONS[f.weapon],
+    /** 隠れる（家具の前で隠れる動きをしてから。誰かが入っていれば、覗いて見つけて引きずり出す）。始めたら true */
+    hideIn: (f, spot) => acts?.startHide(f, spot) ?? false,
+    /** 隠れ場所から出る（出る動きをしてから、家具に背を向けて立つ）。始めたら true */
+    hideOut: (f) => acts?.startExit(f) ?? false,
+    /** f が今暗殺できる相手 { target, grace } か null（暗殺ボタンを出す・bot が使う） */
+    assassinTarget: (f) => assassin.find(f),
   };
 }
