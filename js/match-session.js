@@ -1,5 +1,5 @@
 // 練習モードの試合：あなた＋bot 3 体。試合の計算（game/）と、見た目・画面（render/・ui/）をつなぐ
-import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS } from './game/data.js';
+import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS, SHIELD_SKILLS, SHIELD_MOVES } from './game/data.js';
 import { createMinimap } from './ui/minimap.js';
 import { ZONE_NAMES } from './world/zones.js';
 import { TIMES } from './world/time-of-day.js';
@@ -121,6 +121,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   if (me.left) setBtn(leftBtn, me.left === 'guard' ? ICONS.shield : me.left === 'switch' ? ICONS.switch : ICONS.heavy, CHARACTERS[me.char].leftLabel);
   leftBtn.classList.toggle('guard', me.left === 'guard');
   setBtn(document.getElementById('btn-dodge'), ICONS.dodge, L.dodge);
+  // 楯攻撃ボタン：楯の技があるキャラ（楯劍騎士）だけ。名前は楯の技（鳶形楯は楯擊）
+  const shieldBtn = document.getElementById('btn-shield');
+  const shieldMoves = me.left === 'guard' && me.shield ? SHIELD_MOVES[me.shield] : null;
+  shieldBtn.hidden = !shieldMoves;
+  if (shieldMoves) setBtn(shieldBtn, ICONS.shield, SHIELD_SKILLS[shieldMoves.guardAttack].name);
   document.getElementById('settings-btn').innerHTML = ICONS.gear;
   const attackBtn = document.getElementById('btn-attack');
   const attackLabel = () => (WEAPONS[me.weapon].kind === 'bow' ? L.shoot : me.weapon === 'spear' ? L.thrust : L.attack);
@@ -250,7 +255,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         document.getElementById('btn-attack').hidden = true;
         document.getElementById('btn-left').hidden = true;
         document.getElementById('btn-dodge').hidden = true;
-        stanceBtn.hidden = true;
+        stanceBtn.hidden = true; shieldBtn.hidden = true;
         useBtn.hidden = true;
         searchBtn.hidden = true;
         hideView.hidden = true;
@@ -388,6 +393,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         const mode = me.hidden ? 'exit' : me.cover ? 'leave' : nearSpot ? 'hide' : nearWall ? 'wall' : '';
         useBtn.hidden = !mode;
         stanceBtn.hidden = !running || !me.alive || !!me.hidden || !!me.cover;
+        shieldBtn.hidden = !shieldMoves || stanceBtn.hidden;
         if (mode && useBtn.dataset.label !== mode) {
           useBtn.dataset.label = mode;
           if (mode === 'exit') setBtn(useBtn, ICONS.exit, L.exit);
