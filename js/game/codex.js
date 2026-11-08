@@ -5,7 +5,7 @@
 /** 動きの名前（圖鑑の一覧のボタン） */
 export const CLIP_NAMES = {
   idle: '待機', walk: '步行', back: '後退', run: '疾走',
-  a1: '攻擊壹', a2: '攻擊貳', a3: '攻擊參', heavy: '強擊', draw: '引弓', shoot: '放矢', ma1: '短劍壹', ma2: '短劍貳', ma3: '短劍參',
+  a1: '攻擊1', a2: '攻擊2', a3: '攻擊3', heavy: '強擊', draw: '引弓', shoot: '放矢', ma1: '短劍1', ma2: '短劍2', ma3: '短劍3',
   oh_thrust: '踏込突', oh_rise: '逆袈裟', oh_c1_in: '袈裟斬・入', oh_c1_hold: '袈裟斬・溜', oh_c1_out: '袈裟斬・放', oh_c2: '旋風斬',
   ls_cut1: '唐竹', ls_cut2: '横薙', ls_c1_in: '長突・入', ls_c1_hold: '長突・溜', ls_c1_out: '長突・放', ls_c2: '斬返',
   sb_bash: '楯擊', sb_push: '楯押', sb_parry: '受流', sb_charge: '楯突貫',
@@ -72,7 +72,7 @@ export const WEAPON_KIND = {
 /**
  * 技（武器・楯ごと）。how：出し方、done：ゲームで使える（false は動きだけあって、まだゲームで使えない）
  */
-export const SKILLS = {
+export const WEAPON_ARTS = {
   armingsword: [
     { name: '踏込突', how: '攻擊ボタン', desc: '右足を踏み込み、右腕を一本の槍のように真っ直ぐ突き出して刺す（通常攻撃 1 段目）', done: true },
     { name: '逆袈裟', how: '踏込突の後に攻擊ボタン', desc: '左斜め下に溜めた右腕を右斜め上へ振り払う（通常攻撃 2 段目）', done: true },
@@ -117,7 +117,7 @@ export const SKILLS = {
 };
 
 /** 全キャラ共通の技と動き */
-export const COMMON_SKILLS = [
+export const COMMON_ARTS = [
   { name: '迴避', how: '迴避ボタン', desc: '軽い鎧は前転、重い鎧は跳避。避ける間は攻撃が当たらない。ぎりぎりで避けると「ぴったり回避」', done: true },
   { name: '暗殺', how: '暗殺ボタン（相手に体の 7 割以上を見られていないとき・隠れ場所や壁裏から）', desc: '近くの相手を一撃で倒す。見られていない所からの暗殺は避けられない', done: true },
   { name: '屈身・伏', how: '屈身ボタン（押す＝しゃがむ、長押し＝伏せる）', desc: '低くなると見つかりにくく、足音が小さい。遅くなり、走れない', done: true },
@@ -126,3 +126,51 @@ export const COMMON_SKILLS = [
   { name: '疾驅斬', how: '走っているときに攻擊ボタン', desc: '走った勢いのまま斬りつける', done: false },
   { name: '乘越・攀登', how: '柵や梯子の近くで', desc: '低い柵や障害物を乗り越え、見張り櫓の梯子を登る', done: false },
 ];
+
+/**
+ * 魔物の分類（案。クリーチャーを作るときに、それぞれの魔物をどれかに入れる）。圖鑑の「得意な魔物」に使う
+ */
+export const CREATURE_KINDS = {
+  beast: { name: '獸', desc: '狼・熊・猪など。速く、群れで襲う' },
+  swarm: { name: '蟲', desc: '大蜘蛛・百足など。小さく、数が多い' },
+  shell: { name: '甲', desc: '大甲蟲・石の像など。硬い殻で、斬る・突くが通りにくい' },
+  dead:  { name: '屍', desc: '屍兵・骸骨など。倒れても起き上がる、ひるまない' },
+  ghost: { name: '靈', desc: '亡靈・鬼火など。武器が通りにくく、聖なる力や火に弱い' },
+  giant: { name: '巨', desc: '巨人・大熊など。体力が多く一撃が重いが、遅い' },
+};
+
+/**
+ * キャラごとの圖鑑の文：おすすめの武器の組み合わせ（recommend）・戦い方（tactics）・得意な魔物の分類（strong。CREATURE_KINDS）
+ */
+export const CHAR_GUIDE = {
+  shield: {
+    recommend: [['片手劍・鳶形楯', '技が多く、背刺・滑斬で暗殺もできる。いちばん扱いやすい'], ['鎚矛・鳶形楯', '防禦の上から響く一撃で、守りの固い相手を崩す']],
+    tactics: '防禦で受け、楯押で体勢を崩してから技で止めを刺す。囲まれたら楯を構えたまま下がり、1 人ずつ相手にする',
+    strong: ['beast', 'dead'],
+  },
+  sword: {
+    recommend: [['長劍', '間合いが長く、溜攻撃（長突・斬返）が強い'], ['片手劍', '振りが速く、背刺・滑斬で暗殺もできる']],
+    tactics: '楯が無いので、回避の間合いを覚えて当てる。防禦を固める相手には溜攻撃を押し付ける',
+    strong: ['swarm', 'dead'],
+  },
+  polearm: {
+    recommend: [['槍', '間合いが一番長く、近づく前に突ける']],
+    tactics: '間合いの外から突き、近づかれたら薙拂で離す。狭い家の中や林の密な所は苦手',
+    strong: ['giant', 'beast'],
+  },
+  blunt: {
+    recommend: [['鎚矛', '一撃が重く、防禦の上からも響く']],
+    tactics: '重い一撃で防禦を崩し、ひるんだ所へ畳みかける。重いので回避は短い跳避。先に見つけて間合いを詰める',
+    strong: ['shell', 'dead'],
+  },
+  archer: {
+    recommend: [['長弓・短劍', '遠くから射て、近寄られたら短劍に持ち替える']],
+    tactics: '草むらや高い所から、気づかれる前に射る。引き切った矢は重い一撃。近寄られたら持ち替えて離れる',
+    strong: ['giant', 'beast'],
+  },
+  cleric: {
+    recommend: [['鎚矛', '奇跡ができるまでは鎚矛で戦う']],
+    tactics: '軽い鎧の速さで間合いを取り、聖域で体勢を立て直す。屍と靈には聖なる力がよく効く',
+    strong: ['ghost', 'dead'],
+  },
+};

@@ -246,7 +246,7 @@ body.in-hall #glare, body.in-hall #dazzle { display: none; }   /* 森の太陽�
 .pane:not([hidden]) { margin-bottom: auto; }
 
 /* ===== 圖鑑 ===== */
-.tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .tab {
   min-height: 46px; font-family: var(--serif); font-size: clamp(15px, 2.2vmin, 18px); letter-spacing: .3em; text-indent: .3em;
   color: var(--ink); background: rgba(26, 21, 15, .85); border: 1px solid var(--edge-soft); border-radius: 4px;
@@ -291,6 +291,32 @@ body.in-hall #glare, body.in-hall #dazzle { display: none; }   /* 森の太陽�
 .clip-desc { margin: 8px 0 0; color: var(--dim); font-size: 13px; line-height: 1.6; }
 .clip-desc small { display: block; color: rgba(179, 168, 140, .7); font-family: var(--mono); font-size: 11px; }
 .codex .picks .pick { cursor: default; }
+/* 技能の札（専用技能は大きく） */
+.skill-card { padding: 10px 12px; background: rgba(20, 16, 11, .72); border: 1px solid var(--edge-soft); border-left: 3px solid var(--edge); border-radius: 4px; }
+.skill-card + .skill-card { margin-top: 6px; }
+.skill-card.main { padding: 14px 16px; border-color: var(--gold); background: linear-gradient(180deg, rgba(74, 56, 26, .85), rgba(30, 23, 13, .88)); box-shadow: 0 0 14px rgba(217, 180, 95, .18); }
+.sk-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.sk-head b { font-family: var(--serif); font-weight: 600; font-size: 17px; letter-spacing: .2em; color: var(--ink); }
+.skill-card.main .sk-head b { font-size: clamp(22px, 3.4vmin, 28px); color: var(--gold-hi); }
+.sk-head small { font-size: 11px; color: var(--dim); }
+.sk-meta { margin-left: auto; color: var(--gold); font-size: 12px; letter-spacing: .05em; }
+.sk-desc { margin: 6px 0 0; color: var(--ink); opacity: .85; font-size: clamp(12px, 1.8vmin, 14px); line-height: 1.6; }
+/* 性能の目盛り（10 段） */
+.gauges { display: flex; flex-direction: column; gap: 6px; }
+.gauge { display: grid; grid-template-columns: 4.2em minmax(0, 1fr) 3.6em; align-items: center; gap: 10px; }
+.g-name { font-family: var(--serif); color: var(--gold); letter-spacing: .15em; font-size: 14px; }
+.g-bar { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; height: 14px; }
+.g-bar i { background: rgba(255, 255, 255, .07); border: 1px solid rgba(217, 180, 95, .18); border-radius: 2px; transform: skewX(-12deg); }
+.g-bar i.on { background: linear-gradient(180deg, #f3dc9a, #c8902e); border-color: rgba(243, 220, 154, .7); box-shadow: 0 0 6px rgba(217, 160, 60, .45); }
+.g-val { color: var(--ink); font-family: var(--mono); font-size: 13px; text-align: right; }
+/* おすすめの武器・得意な魔物 */
+.recs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.recs li { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; background: rgba(20, 16, 11, .6); border-left: 2px solid var(--edge); }
+.recs b { font-family: var(--serif); color: var(--ink); letter-spacing: .1em; }
+.recs span { color: var(--dim); font-size: 12px; line-height: 1.5; }
+.kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.kind { flex: 1 1 40%; display: flex; gap: 8px; align-items: baseline; padding: 6px 10px; color: var(--dim); font-size: 12px; line-height: 1.5; background: rgba(20, 16, 11, .6); border: 1px solid var(--edge-soft); border-radius: 4px; }
+.kind b { font-family: var(--serif); font-size: 18px; color: var(--gold-hi); }
 
 /* エラー表示（iPad では開発者ツールが見られないため） */
 .error {
