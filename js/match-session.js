@@ -29,7 +29,7 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, loadout, debug, phaseDuration }
  *   loadout：試合の前に選んだ武器 { main, side, shield }（game/data.js の LOADOUTS から。無ければキャラの最初の物）
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], sight = null, debug = false, phaseDuration = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）。bot の武器は、選べる物から乱数で選ぶ
@@ -68,6 +68,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
 
   // 隠れ場所（村の家のベッドの下・タンスの中）
   const hiding = createHiding(hides);
+  furniture?.reset();   // 前の試合で開けたままの扉を閉める
   // 戦闘と bot
   // 壁裏隠れ（村の家の外の壁と中の壁に背を付ける）
   const cover = createCover(covers, { isFree: obstacles.isFree, groundAt: groundAt || ((x, z) => terrain.heightAt(x, z)) });
@@ -412,6 +413,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       if (running) combat.update(dt);
       if (!frozenTime) { senses.update(dt); sfx.update(dt, fighters); }   // 時間が止まっている間は、見聞きも息遣いも止まる
       viewModel.paused = frozenTime;
+      furniture?.update(dt, fighters, frozenTime);   // タンスの扉・ベッドの掛け布（隠れる・探す動きに合わせて）
       // 回避・暗殺の飛びかかり・押されて下がる（重い被弾・よろめき）は試合の計算が体を動かすので、その位置をプレイヤーの操作へ戻す
       const pushed = me.react && me.react.push > 0 && me.react.t <= me.react.time;
       if (me.alive && (me.action?.kind === 'dodge' || pushed)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }

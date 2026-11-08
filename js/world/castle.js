@@ -10,6 +10,7 @@ import { loadTextureSet } from './materials.js';
 import { createRandom } from '../core/random.js';
 import { SURFACES, builder, frame, box, obox, buildHouse } from './house-builder.js';
 import { well, barrel, bench, hay, woodpile } from './village-props.js';
+import { createFurnitureMotion } from '../render/furniture-motion.js';
 
 /**
  * 木の柵（杭と 2 本の横木）を a から b へ。杭の間は約 2.4m
@@ -207,6 +208,8 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
     tris += g.indices.length / 3;
   }
   sceneBudget.triangles += tris;
+  // タンスの扉・ベッドの掛け布（隠れる・探す動きに合わせて動く部品。同じ質感を使う）
+  const furniture = createFurnitureMotion(app, hides, materials);
 
   // 質感の画像は裏で読み込み、届いたら貼る（それまでは色だけ）
   for (const [surf, m] of Object.entries(materials)) {
@@ -220,5 +223,5 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
       m.update();
     });
   }
-  return { houses, triangles: tris, footprints, hides, covers, insideHouse };
+  return { houses, triangles: tris, footprints, hides, covers, insideHouse, furniture };
 }

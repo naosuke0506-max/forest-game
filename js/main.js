@@ -166,7 +166,7 @@ async function boot() {
     session = await startPracticeMatch({
       app, config: CONFIG, terrain, obstacles, player, myChar, loadout, timeOfDay, zones, buildings: village?.footprints || [],
       trees: trees?.canopies || [],
-      groundAt: floors.groundAt, insideHouse: village?.insideHouse, hides: village?.hides || [], covers: village?.covers || [], sight,
+      groundAt: floors.groundAt, insideHouse: village?.insideHouse, hides: village?.hides || [], covers: village?.covers || [], furniture: village?.furniture || null, sight,
       debug: CONFIG.debug,
       // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」
       phaseDuration: CONFIG.phaseDuration ?? (settings.phaseLen === 'normal' ? null : Number(settings.phaseLen)),
