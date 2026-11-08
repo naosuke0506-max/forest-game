@@ -1,7 +1,7 @@
 // 戦闘（計算だけ）：攻撃・防御・弓と矢・ダメージ・ひるみ・スタミナ。
 // 人間も bot も、同じ形の入力 { attack: 押している, guard: 押している } で動かす。
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { WEAPONS, COMBAT, DODGE, HEAVY } from './data.js';
+import { WEAPONS, COMBAT, DODGE, HEAVY, ASSASSIN } from './data.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 import { setStance, updateStance, stanceShape, resetStance } from './stance.js';
 import { techSetOf, controlTech, updateTech, interruptTech } from './techniques.js';
@@ -138,7 +138,20 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   }
   const faceTo = (f, t) => { f.yaw = (Math.atan2(-(t.x - f.x), -(t.z - f.z)) * 180) / Math.PI; };
   // 暗殺（game/assassin.js）：暗殺ボタンで、近くの相手を一撃で倒す
-  const assassin = createAssassin({ fighters, senses, yOf, move: (f, dx, dz) => shove(f, dx, dz), lethal, emit });
+  const assassin = createAssassin({ fighters, senses, yOf, move: (f, dx, dz) => shove(f, dx, dz), lethal, emit, now: () => clock });
+  /** 誰が誰の体を 7 割以上見たか（時刻）を覚える（暗殺の決まり：見られてから 10 秒は暗殺できない）。0.2 秒ごと */
+  let sightTimer = 0;
+  function rememberSight(dt) {
+    if (!senses || (sightTimer -= dt) > 0) return;
+    sightTimer = 0.2;
+    for (const v of fighters) {
+      if (!v.alive || v.hidden) continue;
+      for (const t of fighters) {
+        if (t === v || !t.alive || t.hidden) continue;
+        if (senses.canSee(v, t, { visible: ASSASSIN.seen })) (v.sawAt ||= {})[t.id] = clock;
+      }
+    }
+  }
   // タンス・ベッドに隠れる・出る・探す動きと、見つけたら引きずり出して止め（game/hide-acts.js）
   const acts = hiding ? createHideActs({ hiding, move: (f, dx, dz) => shove(f, dx, dz), lethal, emit }) : null;
   const LOCKED = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged']);   // している間はほかのことができない
@@ -347,6 +360,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
 
     update(dt) {
       clock += dt;
+      rememberSight(dt);
       for (const f of fighters) {
         if (!f.alive) continue;
         updateStance(f, dt);

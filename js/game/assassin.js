@@ -1,5 +1,6 @@
 // 暗殺（計算だけ。PlayCanvas に依存しない。game/combat.js から使う）。暗殺ボタン（攻擊ボタンとは別）で、近くの相手を一撃で倒す
-//   できるとき：相手に体の 7 割以上が見えていない（相手の視界の中でもよい。どこでも・どんな状態でも）、
+//   できるとき：相手に体の 7 割以上が見えていない（相手の視界の中でもよい。どこでも・どんな状態でも）。ただし一度でも 7 割以上見られたら、
+//              それから 10 秒はできない（見られている間は数え直し。誰が誰を見たかは game/combat.js が 0.2 秒ごとに覚える：t.sawAt[f.id]）、
 //              または壁裏隠れ・隠れ場所から飛び出す（見られていてもよい）
 //   避ける猶予：壁裏・隠れ場所から飛び出す暗殺だけ（ASSASSIN.grace 秒の間に相手が回避すると失敗）。見られていない所からの暗殺は避けられない
 //   動き：片手劍を持つ人は、相手の背中側なら背刺、前・横なら滑斬（相手にもされる側の動きを流す）。ほかの武器は飛びかかって強い一撃
@@ -23,8 +24,9 @@ const PLAIN = { approachTo: 0.9, kill: 0.25, time: 0.7 };   // 片手劍を持�
  * @param {(f: object, dx: number, dz: number) => void} o.move 動かす（木や壁を避ける）
  * @param {(t: object, f: object, how: string) => void} o.lethal 一撃で倒す
  * @param {(type: string, data: object) => void} o.emit
+ * @param {() => number} [o.now] 試合の時計（秒。見られてからの時間を数える）
  */
-export function createAssassin({ fighters, senses, yOf, move, lethal, emit }) {
+export function createAssassin({ fighters, senses, yOf, move, lethal, emit, now = () => 0 }) {
   /** f が t を暗殺できるか。できれば { grace（避ける猶予があるか） }、できなければ null */
   function check(f, t) {
     if (!f.alive || !t.alive || t === f || t.hidden) return null;
@@ -36,7 +38,10 @@ export function createAssassin({ fighters, senses, yOf, move, lethal, emit }) {
     if (f.hidden || f.cover) return { grace: true };       // 隠れ場所・壁裏から飛び出す：見られていてもよい（避ける猶予がある）
     if (f.stun > 0 || f.stanceT > 0) return null;
     if (f.action && !['charge', 'charge2'].includes(f.action.kind)) return null;   // 振っている・避けている途中はできない
-    // 相手に体の 7 割以上が見えていれば、できない（相手の視界の外、または物の陰に 3 割より多く隠れていればよい）
+    // 相手に体の 7 割以上が見えていれば、できない（相手の視界の外、または物の陰に 3 割より多く隠れていればよい）。
+    // 一度でも見られたら、それから 10 秒はできない
+    const saw = t.sawAt?.[f.id];
+    if (saw !== undefined && now() - saw < ASSASSIN.memory) return null;
     if (senses && senses.canSee(t, f, { visible: ASSASSIN.seen })) return null;
     return { grace: false };
   }

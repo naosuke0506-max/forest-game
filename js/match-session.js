@@ -323,6 +323,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // その場で回る速さ：鎧の重さで決まる（data.js の BODY_TURN）。ひるんでいる間は遅く、伏せていればとても遅い
       player.turnSpeed = BODY_TURN.turn[me.weight] || BODY_TURN.turn.medium;
       player.turnScale = !me.alive ? 0 : (me.stun > 0 ? 0.3 : 1) * (me.stance === 'prone' ? 0.35 : me.stance === 'crouch' ? 0.75 : 1);
+      // 攻撃・溜め・弓を引く・防禦の間は、体が見ている向きへ素早く向き直る（首を横に向けて斬っても、見ている方へ振る）
+      player.alignFast = me.alive && (me.guarding || ['attack', 'charge', 'charge2', 'draw'].includes(me.action?.kind));
       player.noRun = !canRun(me);
       player.setEyeHeight((config.player.eyeHeight * stanceShape(me).eye) / STANCES.stand.eye);
       me.gait = player.moving > 0.75 && canRun(me) ? 'run' : player.moving > 0.05 ? 'walk' : 'still';   // 足音の大きさ（bot の耳）

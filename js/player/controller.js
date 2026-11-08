@@ -7,6 +7,7 @@ import { BODY_TURN } from '../game/data.js';
 
 const wrapDeg = (a) => ((a + 540) % 360) - 180;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const ALIGN_FAST = 540;   // 攻撃・溜め・弓を引く・防禦のとき、体が見ている向きへ向き直る速さ（度/秒）
 
 // 三人称のカメラ：頭の少し上を中心に、後ろへ THIRD_DIST、右へ THIRD_SIDE
 const THIRD_DIST = 3.4, THIRD_SIDE = 0.55, THIRD_PIVOT = 1.7;
@@ -132,6 +133,14 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       yaw += Math.sign(rem) * Math.min(Math.abs(rem), sp);
       if (Math.abs(wrapDeg(turn.target - yaw)) < 0.5) turn.target = null;
     }
+    // 向き直り（利用者の指示）：前へ歩くと少しずつ、攻撃・溜め・弓を引く・防禦のときは素早く、体が見ている向きへ向き直る。
+    // 首の向きで埋めるので、見ている向き（画面）は変わらない。横歩き・後ろ歩きでは向き直らない
+    if (turn.target === null) {
+      const ahead = Math.max(0, input.moveY || 0);
+      const rate = api.alignFast ? ALIGN_FAST : ahead > 0.2 ? (api.turnSpeed || BODY_TURN.turn.medium) * 0.6 * ahead : 0;
+      const rem = look - yaw;
+      if (rate > 0 && Math.abs(rem) > 0.1) yaw += Math.sign(rem) * Math.min(Math.abs(rem), rate * (api.turnScale ?? 1) * dt);
+    }
     // 首：見ている向きまで（首の範囲まで）。見ている向きは、体＋首で届く所までにする（届かない分は、体が回るのを待つ）
     headYaw = clamp(look - yaw, -BODY_TURN.neckYaw, BODY_TURN.neckYaw);
     if (turn.target === null) look = yaw + headYaw;
@@ -228,6 +237,8 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     /** その場で回る速さ（度/秒。鎧の重さ）と、その倍率（ひるんでいる間は遅い） */
     turnSpeed: BODY_TURN.turn.medium,
     turnScale: 1,
+    /** 攻撃・溜め・弓を引く・防禦の間：体が見ている向きへ素早く向き直る */
+    alignFast: false,
     setAreaRadius(r) { areaRadius = r; },
     /** 隠れる（ベッドの下・タンスの中）：三人称。家具の上の少し後ろから、外を見る向きを見る。null で解除 */
     setHide(spot) {
