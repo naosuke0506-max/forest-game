@@ -155,6 +155,20 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
 
   let groundY = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z)), flashOn = false;
   let px = fighter.x, pz = fighter.z, vel = 0, fwd = 0;
+  let pYaw = fighter.yaw, yawRate = 0;   // 体の向きが変わる速さ（度/秒。左回りが正）：その場で回る足踏みの動きに使う
+  // 首の向き（fighter.headYaw。体の向きからの左右）：首と頭の骨に分けて回す（ほかの人から、どちらを見ているか分かる）
+  const neckBone = body.findByName('NeckTwist01');
+  const qNeck = new pc.Quat(), qNeckB = new pc.Quat();
+  function turnHead() {
+    const h = fighter.headYaw || 0;
+    if (Math.abs(h) < 0.5 || !headBone) return;
+    for (const [b, k] of [[neckBone, 0.4], [headBone, 0.6]]) {
+      if (!b) continue;
+      qNeck.setFromAxisAngle(pc.Vec3.UP, h * k);
+      qNeckB.mul2(qNeck, b.getRotation());
+      b.setRotation(qNeckB);
+    }
+  }
 
   // 一人称（自分の体を目から見る）：頭（兜）を隠し、上下の向きに合わせて上体を傾け（腕と武器が視線に付いてくる）、
   // 目の位置をカメラへ渡す。脚や胴は動きのまま（下を向けば見える）
@@ -203,6 +217,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     root,
     update(dt) {
       updateAnim(dt);
+      if (fighter.alive) turnHead();
       if (firstPerson && fighter.alive) applyFirstPerson(dt);
       if (nocked) placeArrow();
     },
@@ -255,6 +270,11 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         fwd += (f - fwd) * k;
       }
       px = fighter.x; pz = fighter.z;
+      if (dt > 0) {
+        const dy = ((fighter.yaw - pYaw + 540) % 360) - 180;
+        yawRate += (dy / dt - yawRate) * Math.min(1, dt * 12);
+      }
+      pYaw = fighter.yaw;
       if (fighter.action?.kind !== 'dodge') {
         const sh = stanceShape(fighter);
         if (fighter.alive && !stanceClips && (sh.prone > 0 || sh.height < 1.7)) pose(sh);
@@ -370,8 +390,13 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         }
       }
 
-      // 歩き・走り・後ろ歩き。足の運びが地面と合うように、進む速さで動きの速さを変える
-      if (vel < 0.15) play('idle', 1);
+      // 歩き・走り・後ろ歩き。足の運びが地面と合うように、進む速さで動きの速さを変える。
+      // 止まっていて体の向きが変わっているときは、その場で足踏みしながら回る（回る速さで動きの速さを変える）
+      if (vel < 0.15) {
+        const tn = yawRate < 0 ? 'turn_r' : 'turn_l';
+        if (Math.abs(yawRate) > 25 && has(tn)) play(tn, Math.min(2, Math.max(0.5, Math.abs(yawRate) / (clip(tn).turn || 150))), 0.15);
+        else play('idle', 1);
+      }
       else if (fwd < -0.3 * vel) play('back', Math.min(2.5, Math.max(0.5, vel / (clip('back').speed * sc))));
       else if (vel > RUN_FROM) play('run', Math.min(2.5, Math.max(0.6, vel / (clip('run').speed * sc))));
       else play('walk', Math.min(2.5, Math.max(0.5, vel / (clip('walk').speed * sc))));

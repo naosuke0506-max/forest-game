@@ -176,6 +176,13 @@ export const REACT = {
   guard_h: { stun: 0.35 },
 };
 
+/**
+ * 体の向きと首（docs/DESIGN.md「動き」）：見回す（なぞる）と首だけが動き、体の向きは変わらない。体の向きは向きを変えるスティックで変える
+ *   neckYaw：首だけで見られる左右（度）、neckUp・neckDown：上・下（度。首と上体で）、headSpeed：首が回る速さ（度/秒）
+ *   turn：その場で足踏みしながら回る速さ（度/秒。鎧が重いほど遅い）。bot も同じ速さでしか向きを変えられない
+ */
+export const BODY_TURN = { neckYaw: 70, neckUp: 55, neckDown: 65, headSpeed: 320, turn: { light: 220, medium: 180, heavy: 150 } };
+
 /** 戦闘の決まりごと */
 export const COMBAT = {
   staminaRegen: 22,        // 1 秒に戻るスタミナ

@@ -1,6 +1,13 @@
 // プレイヤーの移動と視点：入力を受けて歩き、地面の高さに合わせ、木や岩を避けて、歩ける範囲の外へ出ない。
-// 視点は一人称（目の位置）と三人称（右肩越しの後ろ）を切り替えられる
+// 視点は一人称（目の位置）と三人称（右肩越しの後ろ）を切り替えられる。
+// 見回す（なぞる）と首だけが動く（首の範囲まで）。体の向きは、向きを変えるスティックでだけ変わる：
+// 倒した向き（上＝今の正面・右＝右 90 度・下＝真後ろ）へ、首が先に向き、体はその場で足踏みしながら回る（指を離しても回りきる）
 import * as pc from 'playcanvas';
+import { BODY_TURN } from '../game/data.js';
+
+const wrapDeg = (a) => ((a + 540) % 360) - 180;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const TURN_LOOK = 0.12;   // 向きを変え始めるとき、首だけが先に向く時間（秒）
 
 // 三人称のカメラ：頭の少し上を中心に、後ろへ THIRD_DIST、右へ THIRD_SIDE
 const THIRD_DIST = 3.4, THIRD_SIDE = 0.55, THIRD_PIVOT = 1.7;
@@ -27,6 +34,9 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   // 立てる高さ：地面のほかに、家の床や階段（world/floors.js）。setGround で差し替える
   let groundAt = (x, z) => terrain.heightAt(x, z);
   let yaw = 200, pitch = -2, groundY = terrain.heightAt(pos.x, pos.z), bob = 0, lastMag = 0;
+  let headYaw = 0;                      // 首の向き（体の向きからの左右。度。左が正）
+  const turn = { target: null, latched: false, base: 0, wait: 0 };   // 向きを変えるスティック：向かう体の向き・倒し始めた時の向き
+  const qHead = new pc.Quat(), qPitch = new pc.Quat(), qEye = new pc.Quat();
   let viewMode = 'first';               // first / third
   let areaRadius = config.world.playRadius;
   let frozen = false;                   // 脱落したら動かない
@@ -70,7 +80,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       // 自分の体を映すときは、模型の目の位置（歩く・しゃがむ・前転で頭が動けば一緒に動く）。無ければ決まった高さと揺れ
       if (eyeOff) eye.setLocalPosition(eyeOff.x, eyeOff.y, eyeOff.z);
       else eye.setLocalPosition(0, eyeH + Math.sin(bob) * 0.025 * Math.min(1, mag * 1.5), 0);
-      eye.setLocalEulerAngles(pitch, 0, 0);
+      eye.setLocalRotation(headRotation());
       return;
     }
     // 三人称：見ている向き（上下）に合わせて、後ろ上・下へ回り込む
@@ -87,18 +97,50 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       d *= 0.75;
     }
     thirdDist += (d - thirdDist) * 0.25;
-    eye.setLocalPosition(THIRD_SIDE, THIRD_PIVOT - Math.sin(pr) * thirdDist, Math.cos(pr) * thirdDist);
-    eye.setLocalEulerAngles(pitch, 0, 0);
+    // 首の向いている方を、後ろから見る（体の座標で首の分だけ回す）
+    const h = (headYaw * Math.PI) / 180, lx = THIRD_SIDE, lz = Math.cos(pr) * thirdDist;
+    eye.setLocalPosition(lx * Math.cos(h) + lz * Math.sin(h), THIRD_PIVOT - Math.sin(pr) * thirdDist, -lx * Math.sin(h) + lz * Math.cos(h));
+    eye.setLocalRotation(headRotation());
+  }
+
+  /** 目の向き：体の向きから、首の左右（headYaw）と上下（pitch） */
+  function headRotation() {
+    qHead.setFromAxisAngle(pc.Vec3.UP, headYaw);
+    qPitch.setFromAxisAngle(pc.Vec3.RIGHT, pitch);
+    return qEye.mul2(qHead, qPitch);
+  }
+
+  /** 向きを変えるスティック（turnX 右・turnY 上）。首が先に向き、体は決まった速さでその場で回る */
+  function updateTurn(dt, input) {
+    const tx = input.turnX || 0, ty = input.turnY || 0;
+    if (Math.hypot(tx, ty) > 0.35) {
+      if (!turn.latched) { turn.latched = true; turn.base = yaw; turn.wait = TURN_LOOK; }
+      turn.target = turn.base - (Math.atan2(tx, ty) * 180) / Math.PI;   // 右へ倒すと右回り（向きの角度は左が正）
+    } else turn.latched = false;
+    if (turn.target === null) return;
+    const rem = wrapDeg(turn.target - yaw);
+    turn.wait -= dt;
+    let stepY = 0;
+    if (turn.wait <= 0) {
+      const sp = (api.turnSpeed || BODY_TURN.turn.medium) * (api.turnScale ?? 1) * dt;
+      stepY = Math.sign(rem) * Math.min(Math.abs(rem), sp);
+      yaw += stepY;
+    }
+    // 首：回る向きを先に見る（首の範囲まで）。体が回るほど正面へ戻る
+    const want = clamp(rem - stepY, -BODY_TURN.neckYaw, BODY_TURN.neckYaw);
+    const hs = BODY_TURN.headSpeed * dt;
+    headYaw += clamp(want - headYaw, -hs, hs);
+    if (Math.abs(rem - stepY) < 0.5 && Math.abs(headYaw) < 0.5 && !turn.latched) turn.target = null;
   }
 
   function update(dt, input) {
     dt = Math.min(dt, 0.1); // 裏から戻った直後などの大きな飛びを抑える
     if (frozen) input = { moveX: 0, moveY: 0, lookX: input.lookX, lookY: input.lookY };
 
-    yaw -= input.lookX;
-    pitch = Math.max(-p.pitchLimit, Math.min(p.pitchLimit, pitch - input.lookY));
     eyeH += (eyeWant - eyeH) * Math.min(1, dt * 9);
     if (hide) {
+      yaw -= input.lookX;
+      pitch = Math.max(-p.pitchLimit, Math.min(p.pitchLimit, pitch - input.lookY));
       // 隠れている間は、外を見る向きの左右 50 度・上下の決まった範囲だけ見回せる。動かない
       const c = hide.yaw + 180;   // 外を見る向き（プレイヤーの向きの約束は -Z が前）
       const dy = ((yaw - c + 540) % 360) - 180;
@@ -109,6 +151,9 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       placeCamera(0);
       return;
     }
+    // 見回す：首だけが動く（首の範囲まで。体の向きは変えない）。向きを変えるのはスティックだけ
+    headYaw = clamp(headYaw - input.lookX, -BODY_TURN.neckYaw, BODY_TURN.neckYaw);
+    pitch = clamp(pitch - input.lookY, -BODY_TURN.neckDown, BODY_TURN.neckUp);
     if (cover) {
       // 壁裏隠れ：体は動かさない（壁に沿った横歩きは試合の計算が動かす）。見回すのはカメラだけ
       coverYaw = Math.max(-55, Math.min(55, coverYaw - input.lookX));
@@ -119,6 +164,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       return;
     }
 
+    if (!frozen) updateTurn(dt, input);
     const mag = Math.hypot(input.moveX, input.moveY);
     if (mag > 0) {
       const speed = speedFor(Math.min(1, mag)) * (api.speedScale || 1);
@@ -165,6 +211,11 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     get moving() { return lastMag; },
     get viewMode() { return viewMode; },
     setViewMode(mode) { viewMode = mode === 'third' ? 'third' : 'first'; thirdDist = THIRD_DIST; placeCamera(0); },
+    /** 首の向き（体の向きからの左右。度。左が正） */
+    get headYaw() { return headYaw; },
+    /** その場で回る速さ（度/秒。鎧の重さ）と、その倍率（ひるんでいる間は遅い） */
+    turnSpeed: BODY_TURN.turn.medium,
+    turnScale: 1,
     setAreaRadius(r) { areaRadius = r; },
     /** 隠れる（ベッドの下・タンスの中）：三人称。家具の上の少し後ろから、外を見る向きを見る。null で解除 */
     setHide(spot) {
@@ -181,6 +232,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       hide = null;
       pos.x = x; pos.z = z; pos.y = y; groundY = y;
       if (faceYaw !== undefined) yaw = faceYaw;
+      headYaw = 0; turn.target = null;
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
     },
     get hidden() { return !!hide; },
@@ -192,7 +244,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
         if (!cover) return;
         const was = cover; cover = null;
         pos.x = was.x + was.nx * 0.2; pos.z = was.z + was.nz * 0.2;
-        yaw = (Math.atan2(-was.nx, -was.nz) * 180) / Math.PI; pitch = -2;
+        yaw = (Math.atan2(-was.nx, -was.nz) * 180) / Math.PI; pitch = -2; headYaw = 0; turn.target = null;
         update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
         return;
       }
@@ -209,10 +261,10 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       if (viewMode !== 'third') { viewMode = 'third'; thirdDist = THIRD_DIST; }
     },
     /** 向きと上下の角度を直接決める（確認用） */
-    setLook(faceYaw, facePitch) { yaw = faceYaw; pitch = Math.max(-p.pitchLimit, Math.min(p.pitchLimit, facePitch)); },
+    setLook(faceYaw, facePitch) { yaw = faceYaw; headYaw = 0; turn.target = null; pitch = Math.max(-p.pitchLimit, Math.min(p.pitchLimit, facePitch)); },
     /** 出現する場所と向き */
     spawn(x, z, faceYaw) {
-      pos.x = x; pos.z = z; yaw = faceYaw; pitch = -2;
+      pos.x = x; pos.z = z; yaw = faceYaw; pitch = -2; headYaw = 0; turn.target = null;
       pos.y = groundAt(x, z, null);
       groundY = pos.y;
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });

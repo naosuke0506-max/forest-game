@@ -74,16 +74,19 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
 
   let steps = 0;   // 確認用：鳴らした足音の数
   /** 足音 1 歩（録音。地面で選ぶ） */
+  // 自分の足音の大きさ：自分の音は距離で小さくならず、いつも一番大きく鳴るので、うるさくないように下げる（利用者の指示）
+  const OWN_STEP = 0.35;
   function step(f, run) {
     steps++;
+    const own = f.isPlayer ? OWN_STEP : 1;
     // しゃがむと足音が小さく、伏せていれば体を引きずる布ずれ（bot にも聞こえにくい。game/senses.js）
     const st = f.stance || 'stand';
     if (st === 'prone') {
-      const dp = at(f, 0.35, { ref: 2, max: 14 });
+      const dp = at(f, 0.35 * own, { ref: 2, max: 14 });
       if (dp) playSample(dp, 'roll_cloth', { rate: 0.75 * jitter(0.08), gain: 0.5 });
       return;
     }
-    const d = at(f, (run ? 1 : 0.8) * (st === 'crouch' ? 0.42 : 1), { ref: 2, max: st === 'crouch' ? 16 : 30 });
+    const d = at(f, (run ? 1 : 0.8) * (st === 'crouch' ? 0.42 : 1) * own, { ref: 2, max: st === 'crouch' ? 16 : 30 });
     if (!d) return;
     const s = surfaceAt(f), r = jitter(0.07) * (run ? 1.04 : 1);
     if (s === 'grass') playSample(d, 'step_grass', { rate: r, gain: 0.7 });
