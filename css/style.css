@@ -174,6 +174,73 @@ canvas#app {
 .lo-btn:disabled { opacity: .45; border-style: dashed; cursor: default; }
 .lo-btn small { margin-left: 6px; font-size: 11px; color: var(--dim); letter-spacing: .05em; }
 
+/* ===== 大廳と、試合の前に選ぶ画面（後ろに 3D の広間。横長は右に、縦長は下に出す） ===== */
+body.in-hall #glare, body.in-hall #dazzle { display: none; }   /* 森の太陽のまぶしさは出さない */
+.title { background: radial-gradient(ellipse at 50% 42%, rgba(10, 8, 6, .15), rgba(4, 3, 2, .8) 75%); }
+.lobby { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
+.lobby-panel {
+  pointer-events: auto;
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: min(48vw, 560px);
+  display: flex; flex-direction: column; justify-content: center; gap: 14px;
+  padding: calc(18px + var(--safe-t)) calc(22px + var(--safe-r)) calc(18px + var(--safe-b)) 28px;
+  background: linear-gradient(90deg, rgba(6, 5, 4, 0), rgba(6, 5, 4, .72) 14%, rgba(6, 5, 4, .9));
+  overflow-y: auto;
+}
+@media (max-aspect-ratio: 1/1) {
+  .lobby-panel { top: auto; left: 0; width: auto; max-height: 60dvh; justify-content: flex-start;
+    padding: 20px calc(16px + var(--safe-r)) calc(16px + var(--safe-b)) calc(16px + var(--safe-l));
+    background: linear-gradient(180deg, rgba(6, 5, 4, 0), rgba(6, 5, 4, .8) 12%, rgba(6, 5, 4, .92)); }
+}
+.lobby-head { display: flex; align-items: center; gap: 12px; }
+.lobby-head h2 { margin: 0; flex: 1; font-family: var(--serif); font-weight: 600; font-size: clamp(24px, 4vmin, 36px); letter-spacing: .3em; color: var(--gold-hi); }
+.lobby-step { color: var(--dim); font-size: 13px; letter-spacing: .1em; }
+.back-btn {
+  min-width: 52px; min-height: 44px; padding: 6px 12px;
+  font-family: var(--serif); font-size: 17px; letter-spacing: .1em; color: var(--ink);
+  background: rgba(30, 25, 18, .85); border: 1px solid var(--edge-soft); border-radius: 4px;
+}
+.pane { display: flex; flex-direction: column; gap: 12px; }
+.pane > .start { align-self: flex-end; min-width: 180px; }
+.hall-who { margin: 0 0 4px; display: flex; flex-direction: column; gap: 4px; font-family: var(--serif); }
+.hall-who b { font-size: clamp(20px, 3.2vmin, 28px); font-weight: 600; letter-spacing: .2em; color: var(--ink); }
+.hall-who span { color: var(--dim); letter-spacing: .12em; font-size: clamp(13px, 1.9vmin, 16px); }
+.menu { display: flex; flex-direction: column; gap: 10px; }
+.menu-btn {
+  min-height: 64px; padding: 10px 18px;
+  font-family: var(--serif); font-size: clamp(20px, 3vmin, 26px); letter-spacing: .6em; text-indent: .6em;
+  color: var(--gold-hi);
+  background: linear-gradient(180deg, rgba(62, 48, 26, .9), rgba(26, 20, 12, .9));
+  border: 1px solid var(--edge); border-radius: 4px;
+  box-shadow: inset 0 0 0 3px rgba(0, 0, 0, .45), 0 6px 18px rgba(0, 0, 0, .45);
+}
+.menu-btn:disabled { color: var(--dim); border-style: dashed; opacity: .6; }
+.menu-btn small, .pick-name small { margin-left: 8px; font-size: 12px; letter-spacing: .05em; text-indent: 0; color: var(--dim); }
+.menu-btn:not(:disabled):active, .card:active, .pick:active { filter: brightness(1.25); }
+.cards { display: flex; flex-direction: column; gap: 10px; }
+.card, .pick {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left;
+  padding: 14px 16px; min-height: 56px;
+  color: var(--ink);
+  background: linear-gradient(180deg, rgba(40, 34, 25, .85), rgba(18, 15, 11, .85));
+  border: 1px solid var(--edge-soft); border-radius: 4px;
+}
+.card b { font-family: var(--serif); font-weight: 600; font-size: clamp(20px, 3vmin, 26px); letter-spacing: .3em; }
+.card span, .pick-desc { color: var(--dim); font-size: clamp(12px, 1.8vmin, 14px); line-height: 1.6; }
+.card.sel, .pick.sel { border-color: var(--gold); background: linear-gradient(180deg, rgba(90, 70, 34, .9), rgba(40, 30, 14, .9)); box-shadow: 0 0 12px rgba(217, 180, 95, .22); }
+.card.sel b, .pick.sel .pick-name { color: var(--gold-hi); }
+.pick-head { margin: 4px 0 0; font-family: var(--serif); font-weight: 600; color: var(--gold); letter-spacing: .4em; font-size: clamp(15px, 2.2vmin, 18px); }
+.picks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pick { padding: 10px 12px; gap: 3px; }
+.pick-name { font-family: var(--serif); font-size: clamp(16px, 2.4vmin, 20px); letter-spacing: .2em; }
+.pick-when { font-size: 12px; color: var(--gold); letter-spacing: .05em; }
+.pick-desc { font-size: 12px; line-height: 1.5; }
+.lo-note { margin: 0; color: var(--dim); font-size: 12px; letter-spacing: .05em; }
+.lobby .char-select { margin: 0; max-width: none; }
+.lobby .char-desc { margin: 0; max-width: none; min-height: 0; }
+.lobby .loadout { margin: 0; max-width: none; }
+.panel.settings { z-index: 40; }   /* 大廳からも開く（大廳の画面より上） */
+
 /* エラー表示（iPad では開発者ツールが見られないため） */
 .error {
   position: fixed;

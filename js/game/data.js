@@ -250,6 +250,37 @@ export const PHASES = [
   { name: '終刻', duration: 240, radius: AREA_RADIUS, time: 'night',   note: '最後の一人になるまで終わらない' },
 ];
 
+/**
+ * 戰鬥（試合の形）と戰場（マップ）。大廳の「戰鬥」から選ぶ。今は蠱毒と森だけ
+ */
+export const MODES = {
+  kodoku: { name: '蠱毒', desc: '4 人で、最後の 1 人になるまで生き残りを争う。今は練習（あなた＋傀儡 3 騎）' },
+};
+export const MAPS = {
+  forest: { name: '森', desc: '混淆林・深林・大草原・村。端から端まで 350m。刻が進むと、朝から昼・夕暮れ・夜へ移る' },
+};
+/** 時代（キャラ・兵器の時代。今は中世だけ。キャラに era が無ければ中世） */
+export const ERAS = { medieval: { name: '中世' } };
+
+/**
+ * 兵器と變異：試合の前に、キャラの時代のものからそれぞれ 1 つだけ選ぶ。強いほど遅く届く
+ *   tier：この番号の刻（1 なら第壹刻）を越えたとき（時間が止まる間）に届く
+ *   兵器は届くと近くに来る（馬は呼ぶと来る、攻城兵器は近くに置かれる）。變異はクリーチャーに変わる藥で、届いた後いつでも飲める
+ *   planned：中身（乗る・撃つ・クリーチャーになる）はまだ無い。今は届いた知らせだけ
+ */
+export const ARMS = {
+  horse:     { name: '馬',     tier: 1, era: 'medieval', desc: '速く走れる。呼ぶと来る', planned: true },
+  barded:    { name: '鎧馬',   tier: 2, era: 'medieval', desc: '鎧を着けた馬。矢や刃に強い。呼ぶと来る', planned: true },
+  ballista:  { name: '弩砲',   tier: 3, era: 'medieval', desc: '大きな弩。遠くの敵を貫く。近くに置かれる', planned: true },
+  trebuchet: { name: '投石機', tier: 4, era: 'medieval', desc: '大きな石を遠くへ投げる。近くに置かれる', planned: true },
+};
+export const MUTATIONS = {
+  potion1: { name: '壹之藥', tier: 1, era: 'medieval', creature: null, desc: '飲むと小さなクリーチャーに変わる', planned: true },
+  potion2: { name: '貳之藥', tier: 2, era: 'medieval', creature: null, desc: '飲むと中くらいのクリーチャーに変わる', planned: true },
+  potion3: { name: '參之藥', tier: 3, era: 'medieval', creature: null, desc: '飲むと大きなクリーチャーに変わる', planned: true },
+  potion4: { name: '肆之藥', tier: 4, era: 'medieval', creature: null, desc: '飲むと最も強いクリーチャーに変わる', planned: true },
+};
+
 /** ポイント */
 export const POINTS = {
   phaseSurvive: [50, 75, 100, 150, 200], // フェーズを生き残るたび（フェーズの番号ごと）
