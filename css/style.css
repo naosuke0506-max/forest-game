@@ -176,7 +176,36 @@ canvas#app {
 
 /* ===== 大廳と、試合の前に選ぶ画面（後ろに 3D の広間。横長は右に、縦長は下に出す） ===== */
 body.in-hall #glare, body.in-hall #dazzle { display: none; }   /* 森の太陽のまぶしさは出さない */
-.title { background: radial-gradient(ellipse at 50% 42%, rgba(10, 8, 6, .15), rgba(4, 3, 2, .8) 75%); }
+.title { background: radial-gradient(ellipse at 50% 46%, rgba(6, 6, 10, 0), rgba(3, 3, 6, .55) 78%); flex-direction: column; }
+.title .title-inner { background: radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, .62), rgba(0, 0, 0, 0) 68%); padding: 40px 60px; }
+.title .sub { color: #e8dcbc; text-shadow: 0 1px 4px #000, 0 0 12px #000; }
+.title h1 {
+  font-size: clamp(56px, 13vmin, 140px); letter-spacing: .22em; text-indent: .22em;
+  background: linear-gradient(180deg, #fff6dc 8%, #f0cf7c 48%, #9a6a24 92%); -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .95)) drop-shadow(0 0 22px rgba(0, 0, 0, .8)) drop-shadow(0 0 14px rgba(255, 196, 110, .25));
+  animation: titleIn 2.4s ease-out both;
+}
+.title .sub { animation: titleIn 2.4s .6s ease-out both; letter-spacing: .3em; }
+.title .sub::before, .title .sub::after { content: none; }
+.title .start { animation: titleIn 1.6s 1.2s ease-out both; min-width: 200px; letter-spacing: .6em; text-indent: .6em; }
+.title .hint { position: absolute; left: 0; right: 0; bottom: calc(14px + var(--safe-b)); margin: 0; text-align: center; opacity: .7; }
+@keyframes titleIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+/* 「入」を押したとき：題の文字が大きくなりながら消える */
+.title.leaving .title-inner { animation: titleOut .75s ease-in forwards; }
+@keyframes titleOut { to { opacity: 0; transform: scale(1.18); filter: blur(2px); } }
+/* 一瞬暗くする幕 */
+.fade { position: fixed; inset: 0; z-index: 45; background: #000; opacity: 0; pointer-events: none; transition: opacity .55s ease; }
+.fade.on { opacity: 1; transition: opacity .7s ease-in; }
+/* 最初に触れる画面 */
+.gate {
+  position: fixed; inset: 0; z-index: 44; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+  background: radial-gradient(ellipse at 50% 50%, rgba(5, 5, 9, .55), rgba(0, 0, 0, .92) 70%);
+  transition: opacity .9s ease; cursor: pointer; touch-action: manipulation;
+}
+.gate.gone { opacity: 0; pointer-events: none; }
+.gate-title { font-family: var(--serif); font-weight: 600; font-size: clamp(40px, 9vmin, 96px); letter-spacing: .22em; text-indent: .22em; color: rgba(240, 214, 150, .5); }
+.gate-hint { margin: 0; font-family: var(--serif); letter-spacing: .3em; color: var(--ink); opacity: .85; animation: gatePulse 2.2s ease-in-out infinite; }
+@keyframes gatePulse { 0%, 100% { opacity: .35; } 50% { opacity: .95; } }
 .lobby { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
 .lobby-panel {
   pointer-events: auto;

@@ -7,9 +7,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1b211c">
-<title>蠱毒</title>
+<title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-08.18';</script>
+<script>window.__BUILD = '2026-11-08.20';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -20,6 +20,9 @@
 <link rel="modulepreload" href="./js/ui/minimap.js">
 <link rel="modulepreload" href="./js/render/sun-glare.js">
 <link rel="modulepreload" href="./js/render/hall.js">
+<link rel="modulepreload" href="./js/render/title-scene.js">
+<link rel="modulepreload" href="./js/audio/music.js">
+<link rel="modulepreload" href="./js/audio/ui-sounds.js">
 <link rel="modulepreload" href="./js/render/furniture-motion.js">
 <link rel="modulepreload" href="./js/ui/lobby.js">
 <link rel="modulepreload" href="./js/ui/codex.js">
@@ -268,14 +271,22 @@
   <button id="settings-close" class="start" type="button">閉</button>
 </section>
 
-<section id="title" class="title">
-  <div class="title-inner">
-    <h1>蠱毒</h1>
-    <p class="sub">修練之陣　對傀儡 3 騎</p>
-    <button id="start" class="start" type="button" disabled>讀込中…</button>
-    <p class="hint">左下のスティックで移動　／　右側をなぞって見回す　／　右下のボタンで右手・左手・回避（弓は長押しで引く）</p>
-  </div>
+<!-- 最初に触れる画面（iPad は触れるまで音が出せない）。触れると題の曲が流れ、題の画面になる -->
+<section id="gate" class="gate">
+  <div class="gate-title">時輪戰記</div>
+  <p class="gate-hint">画面に触れて始める</p>
 </section>
+
+<section id="title" class="title" hidden>
+  <div class="title-inner">
+    <h1 id="game-title">時輪戰記</h1>
+    <p class="sub">古今の英傑が時の輪に集い、ただ一人を決める</p>
+    <button id="start" class="start" type="button" disabled>讀込中…</button>
+  </div>
+  <p class="hint">左下のスティックで移動　／　右側をなぞって見回す　／　右下のボタンで攻撃・左手・回避</p>
+</section>
+<!-- 「入」を押したとき：一瞬暗くして大廳へ -->
+<div id="fade" class="fade"></div>
 
 <!-- 大廳（後ろに 3D の広間と、選んだ人物が立つ）と、試合の前に選ぶ画面：戰鬥 → 戰場 → 人物・武器 → 兵器・變異 → 開戰 -->
 <section id="lobby" class="lobby" hidden>

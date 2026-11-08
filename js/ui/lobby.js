@@ -25,8 +25,19 @@ const BACK = { codex: 'hall', mode: 'hall', map: 'mode', char: 'map', arms: 'cha
  * @param {() => void} o.onSettings 大廳の「設定」
  * @param {() => object} o.hall 大廳の 3D（圖鑑で人物の動きを流し、武器を見せる）
  */
-export function createLobby({ onEnter = () => {}, onShow = () => {}, onSettings = () => {}, hall = () => null } = {}) {
+export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = () => {}, onShow = () => {}, onSettings = () => {}, hall = () => null } = {}) {
   const title = document.getElementById('title');
+  const gate = document.getElementById('gate'), fade = document.getElementById('fade');
+  // 最初に触れる画面：触れたら音を出せるようにして題の曲を流し、題の画面を出す
+  const openGate = (e) => {
+    e?.preventDefault?.();
+    gate.removeEventListener('pointerdown', openGate);
+    onGate();
+    gate.classList.add('gone');
+    title.hidden = false;
+    setTimeout(() => { gate.hidden = true; }, 900);
+  };
+  gate.addEventListener('pointerdown', openGate);
   const enterBtn = document.getElementById('start');
   const lobby = document.getElementById('lobby');
   const head = document.getElementById('lobby-title'), stepEl = document.getElementById('lobby-step');
@@ -159,11 +170,20 @@ export function createLobby({ onEnter = () => {}, onShow = () => {}, onSettings 
       enterBtn.disabled = false;
       enterBtn.textContent = L.enter;
       enterBtn.addEventListener('click', () => {
+        if (!gate.hidden) openGate();
+        // 「ドォーン」：音を鳴らし、題の文字が大きくなりながら消え、画面が暗くなったところで大廳に切り替えて明ける
         onEnter();
-        show();
-        title.hidden = true;
-        lobby.hidden = false;
-        go('hall');
+        title.classList.add('leaving');
+        fade.classList.add('on');
+        setTimeout(() => {
+          onHall();
+          show();
+          title.hidden = true;
+          title.classList.remove('leaving');
+          lobby.hidden = false;
+          go('hall');
+          setTimeout(() => fade.classList.remove('on'), 120);
+        }, 750);
       }, { once: true });
       fightBtn.addEventListener('click', async () => {
         // キャラの模型を読み込む間は、画面を出したまま待つ

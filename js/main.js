@@ -30,6 +30,9 @@ import { createInput } from './input/input.js';
 import { createStats } from './ui/screens.js';
 import { createLobby } from './ui/lobby.js';
 import { createHall } from './render/hall.js';
+import { createTitleScene } from './render/title-scene.js';
+import { createMusic } from './audio/music.js';
+import { playBoom } from './audio/ui-sounds.js';
 import { createSettings } from './ui/settings.js';
 import { startPracticeMatch } from './match-session.js';
 import { BUILD } from './version.js';
@@ -39,9 +42,20 @@ import { refreshIfStale } from './core/freshness.js';
 (window.__pendingErrors || []).forEach((m) => window.__showError(m));
 
 // 題の画面と大廳（大廳の 3D の広間は、森を組み立てた後に作る。それまでは押されない）
-let hall = null, settingsRef = null;
+//   最初に画面に触れたら音を出せるようにして題の曲を流し、「入」で「ドォーン」と鳴らして大廳へ（大廳の曲に替える）
+let hall = null, titleScene = null, settingsRef = null;
+const music = createMusic(BUILD);
 const titleScreen = createLobby({
-  onEnter: () => { audio.unlock(); hall?.setActive(true, window.__forest?.player.camera); },
+  onGate: () => { music.unlock(); music.play('title', { fade: 3 }); },
+  onEnter: () => {
+    music.unlock();
+    playBoom();
+    music.play('hall', { fade: 3.5 });
+  },
+  onHall: () => {   // 「入」の後、画面が暗くなったところで大廳に切り替える
+    titleScene?.setActive(false);
+    hall?.setActive(true, window.__forest?.player.camera);
+  },
   onShow: (char, loadout) => { hall?.show(char, loadout).catch((err) => console.warn('大廳の人物:', err)); },
   onSettings: () => settingsRef?.open(),
   hall: () => hall,
@@ -50,6 +64,12 @@ const titleScreen = createLobby({
 async function boot() {
   const canvas = document.getElementById('app');
   const { app } = await createApp(canvas, CONFIG.quality);
+  // 題の画面の背景（時の輪）：森を読み込む間も動かして見せる（先に描き始める）
+  titleScene = createTitleScene(app, CONFIG);
+  titleScene.setActive(true);
+  document.body.classList.add('in-hall');
+  app.on('update', (dt) => titleScene.update(dt));
+  app.start();
 
   // 実写の質感画像（地面・樹皮・岩）と空を、並行して読み込む
   const [tex, sky, treeModels, propTypes, grassTex] = await Promise.all([
@@ -118,14 +138,15 @@ async function boot() {
   const stats = createStats(app, CONFIG.showStats, CONFIG.qualityName);
   // 大廳（試合の前）：松明の灯る石の広間。題の画面の後ろから出し、試合が始まると片付けて森のカメラに戻す
   hall = createHall(app, CONFIG);
-  hall.setActive(true, player.camera);
-  document.body.classList.add('in-hall');
+  hall.setActive(false);
+  player.camera.enabled = false;   // 題の画面・大廳の間は、森のカメラで描かない
 
   let playing = false, session = null, deepK = 0;
   app.on('update', (dt) => {
-    // 大廳にいる間は、広間だけを動かす（森は描かず、動かさない。森の音も止める）
-    ambience.setMuted?.(hall.active);
-    if (hall.active) { hall.update(dt); stats.update(dt); return; }
+    // 題の画面・大廳にいる間は、その 3D だけを動かす（森は描かず、動かさない。森の音も止める）
+    const lobbyOn = hall.active || titleScene.active || !playing;
+    ambience.setMuted?.(lobbyOn);
+    if (lobbyOn) { hall.update(dt); stats.update(dt); return; }
     const frame = playing ? input.read() : null;
     if (playing) player.update(dt, frame);
     session?.update(dt, frame || { attack: false, left: false, dodge: false, use: false, moveX: 0, moveY: 0 });
@@ -151,8 +172,7 @@ async function boot() {
     stats.update(dt);
   });
 
-  // タイトルの後ろでも森を描いておく（背景として見せる）
-  app.start();
+  // （描き始めは、題の画面の背景を作った直後。上の boot の始め）
 
   // 木の近く用（精細な形）は、起動後に裏で読み込む
   if (trees) startLoadingNear(app, treeModels, (name) => trees.enableNear(name));
@@ -191,6 +211,7 @@ async function boot() {
     // 大廳を片付けて、森のカメラに戻す
     hall.setActive(false, player.camera);
     hall.clear();
+    music.stopAll({ fade: 2.5 });
     document.body.classList.remove('in-hall');
     touchLayer.hidden = false;
     document.getElementById('hud').hidden = false;
