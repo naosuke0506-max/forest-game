@@ -189,6 +189,20 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const viewModel = createViewModel(player.camera, me);
   const arrows = createProjectileViews(app, combat);
   let thirdPerson = false;
+  // 一人称でも自分の体（模型）を映す：手・腕・盾・脚が見える（頭は隠す。render/character-view.js）。
+  // 模型が読めなかったとき（仮の人形）だけ、画面の手前に武器だけを出す（render/viewmodel.js）
+  const fpBody = !!views.get(me).setFirstPerson;
+  /** 自分の見え方を、今の状態（一人称・三人称・壁裏・隠れている・観戦）に合わせる（毎フレーム） */
+  function refreshMyView() {
+    const v = views.get(me);
+    const gone = !!me.hidden || !!spectating;           // 隠れている・観戦している：自分の体は出さない
+    const third = thirdPerson || !!me.cover;             // 三人称（確認用）・壁裏隠れ
+    const body = !gone && (third || (fpBody && me.alive));   // 倒れた後は（観戦に移るまで）一人称で自分の体を出さない
+    v.setVisible(body);
+    v.setFirstPerson?.(body && !third);
+    viewModel.setVisible(!gone && !third && !fpBody && me.alive);
+    player.setEyeOffset(body && !third ? v.eyeOffset : null);
+  }
 
   // 戦闘の知らせ：自分が与えたダメージの数字、自分が受けたときの赤い縁
   combat.on('hit', ({ attacker, target, amount, guarded }) => {
@@ -388,8 +402,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       if (spectating) {
         if (!spectating.alive) nextSpectate();
         player.setPose(spectating.x, spectating.z, spectating.yaw, spectating.y);
-        views.get(me).setVisible(false);
       }
+      refreshMyView();
       hud.update(dt);
       hud.updateVitals(me);
       minimap.update(dt, spectating || me);

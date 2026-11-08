@@ -7,7 +7,7 @@ import { WEAPONS, DODGE, STANCE_TIME } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { techSetOf } from '../game/techniques.js';
 import { stanceShape } from '../game/stance.js';
-import { createWeaponModel, createShieldModel } from './weapons.js';
+import { createWeaponModel, createShieldModel, createArrowModel } from './weapons.js';
 import { COVER_SPEED } from '../game/cover.js';
 import { BUILD } from '../version.js';
 
@@ -87,6 +87,22 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   }
   showWeapon(fighter.weapon);
   if (fighter.shield) attach('socket_L', createShieldModel(), [0, 0, 0]);
+  // 弓を引いている間の矢：右手（弦を引く手）から弓の握りへ向けて番える（矢の模型は -Z が鏃）
+  const sockR = body.findByName('socket_R'), sockBow = body.findByName('socket_bow');
+  const nocked = WEAPONS[fighter.primary]?.kind === 'bow' && sockR && sockBow ? createArrowModel() : null;
+  if (nocked) { nocked.enabled = false; app.root.addChild(nocked); }
+  const arrowDir = new pc.Vec3(), arrowAt = new pc.Vec3();
+  function placeArrow() {
+    const drawing = fighter.alive && root.enabled && fighter.action?.kind === 'draw' && WEAPONS[fighter.weapon]?.kind === 'bow';
+    nocked.enabled = drawing;
+    if (!drawing) return;
+    const hand = sockR.getPosition(), grip = sockBow.getPosition();
+    arrowDir.sub2(grip, hand).normalize();
+    arrowAt.copy(arrowDir).mulScalar(0.36).add(hand);   // 矢の真ん中（矢筈を右手に）
+    nocked.setPosition(arrowAt);
+    arrowAt.add(arrowDir);
+    nocked.lookAt(arrowAt);
+  }
 
   // 動き
   const tracks = new Map(asset.resource.animations.map((a) => [a.resource.name, a.resource]));
@@ -135,9 +151,66 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   let groundY = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z)), flashOn = false;
   let px = fighter.x, pz = fighter.z, vel = 0, fwd = 0;
 
+  // 一人称（自分の体を目から見る）：頭（兜）を隠し、上下の向きに合わせて上体を傾け（腕と武器が視線に付いてくる）、
+  // 目の位置をカメラへ渡す。脚や胴は動きのまま（下を向けば見える）
+  let firstPerson = false, eyeReady = false;
+  const headBone = body.findByName('Head');
+  const spine = ['Spine01', 'Spine02'].map((n) => body.findByName(n)).filter(Boolean);
+  const eyeLocal = new pc.Vec3(), eyeTmp = new pc.Vec3(), invRoot = new pc.Mat4(), qAim = new pc.Quat(), qBone = new pc.Quat();
+  const lArm = body.findByName('L_Upperarm');
+  const qArm = new pc.Quat();
+  const AIM = { stand: 0.9, crouch: 0.8, prone: 0.25 };   // 上下の向きのうち、上体を傾ける割合（伏せていると少し）
+  // 楯を持つ左腕：目の前に楯が来て前が見えなくならないよう、一人称のときだけ肩から下げて外へ開く（度。ほかの人から見える姿は変えない）
+  const SHIELD_FP = { down: 24, out: 20 };
+  const EYE_UP = -0.04, EYE_FWD = 0.1;                    // 頭の骨の付け根から目までの高さ・前（m。目の高さが今までの 1.65 m になるように）
+  function applyFirstPerson(dt) {
+    if (!headBone) return;
+    // 上体を傾ける：背骨 2 本に分けて、体の右を軸に回す（上を向くと反り、下を向くとかがむ）。回避の間は傾けない
+    const k = fighter.action?.kind === 'dodge' ? 0 : AIM[fighter.stance] ?? AIM.stand;
+    const aim = Math.max(-60, Math.min(60, fighter.pitch || 0)) * k;
+    if (Math.abs(aim) > 0.1 && spine.length) {
+      qAim.setFromAxisAngle(root.right, aim / spine.length);
+      for (const b of spine) { qBone.mul2(qAim, b.getRotation()); b.setRotation(qBone); }
+    }
+    if (fighter.shield && lArm) {
+      qArm.setFromAxisAngle(root.right, -SHIELD_FP.down);
+      qBone.mul2(qArm, lArm.getRotation());
+      qArm.setFromAxisAngle(pc.Vec3.UP, SHIELD_FP.out);
+      qBone.mul2(qArm, qBone);
+      lArm.setRotation(qBone);
+    }
+    // 頭（兜）を潰して隠す（目の前に兜の内側が映らないように）
+    headBone.setLocalScale(0.001, 0.001, 0.001);
+    // 目の位置：頭の付け根から上と前（体の向きの座標で。頭のうなずきには付いていかない）。少しなめらかにする
+    invRoot.copy(root.getWorldTransform()).invert();
+    invRoot.transformPoint(headBone.getPosition(), eyeTmp);
+    eyeTmp.y += EYE_UP; eyeTmp.z -= EYE_FWD;
+    if (!eyeReady) { eyeLocal.copy(eyeTmp); eyeReady = true; } else eyeLocal.lerp(eyeLocal, eyeTmp, Math.min(1, dt * 25));
+  }
+
   return {
     root,
     update(dt) {
+      updateAnim(dt);
+      if (firstPerson && fighter.alive) applyFirstPerson(dt);
+      if (nocked) placeArrow();
+    },
+    /** 一人称で自分の体を映すか（頭を隠し、上体を視線に合わせる）。外すと頭を戻す */
+    setFirstPerson(v) {
+      if (v === firstPerson) return;
+      firstPerson = v;
+      eyeReady = false;
+      if (!v) headBone?.setLocalScale(1, 1, 1);
+    },
+    /** 一人称の目の位置（体の向きの座標。前は -Z）。まだ分からなければ null */
+    get eyeOffset() { return firstPerson && eyeReady ? eyeLocal : null; },
+    setVisible(v) { root.enabled = v; if (!v && nocked) nocked.enabled = false; },
+    /** 確認用：今の動き */
+    get debugState() { const l = body.anim.baseLayer; return `${current} ${l.activeState} ${l.activeStateCurrentTime?.toFixed(2)} speed${body.anim.speed.toFixed(2)}`; },
+  };
+
+  /** 動き：戦闘の計算の状態を見て、どの動きを流すかを決める */
+  function updateAnim(dt) {
       const target = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z));
       groundY += (target - groundY) * Math.min(1, dt * 12);
       // 壁裏隠れ：背中が壁に付くように、壁の側へ少し寄せて描く（位置の計算は壁から離れた所）
@@ -266,9 +339,5 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       else if (fwd < -0.3 * vel) play('back', Math.min(2.5, Math.max(0.5, vel / (clip('back').speed * sc))));
       else if (vel > RUN_FROM) play('run', Math.min(2.5, Math.max(0.6, vel / (clip('run').speed * sc))));
       else play('walk', Math.min(2.5, Math.max(0.5, vel / (clip('walk').speed * sc))));
-    },
-    setVisible(v) { root.enabled = v; },
-    /** 確認用：今の動き */
-    get debugState() { const l = body.anim.baseLayer; return `${current} ${l.activeState} ${l.activeStateCurrentTime?.toFixed(2)} speed${body.anim.speed.toFixed(2)}`; },
-  };
+  }
 }
