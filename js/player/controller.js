@@ -245,6 +245,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       pos.x = x; pos.z = z; pos.y = y; groundY = y;
       if (faceYaw !== undefined) yaw = faceYaw;
       headYaw = 0; turn.target = null; look = yaw;
+      pitch = -2;   // 隠れている間は家具の上から見下ろしていたので、出たら正面を見る
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
     },
     get hidden() { return !!hide; },

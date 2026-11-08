@@ -201,6 +201,22 @@ export const ASSASSIN = {
   },
 };
 
+/**
+ * タンス・ベッドに隠れる・出る・探す動き（docs/DESIGN.md「隠れる・探す」。動きは tools/characters/hide_moves.py）。
+ * どれも、家具の前の「出る所」に家具の方を向いて立ち、動きを最後までしてから隠れる・出る・開ける（利用者の指示）。
+ * 探して見つけたら、そのまま引きずり出して止めを刺す（自動。避けられない）
+ *   inClip・inTime：隠れる動きと長さ（秒。終わると隠れる）、outClip・outTime：出る動き（終わると家具に背を向けて立つ）
+ *   searchClip・searchTime・revealAt：探す動き・長さ・中が見える時刻（ここで見つかる）
+ *   drag：引きずり出して止め（clip 攻める側・victim される側・kill 止めの時刻・time 長さ・end 動き終わりの体の位置（右 r・前 f）と向き（右回り yaw））。
+ *         引きずり出す動きは片手劍だけ（ほかの武器は、される側の動きに合わせて強い一撃。動きはその武器を作るときに作る）
+ */
+export const HIDE_ACTS = {
+  wardrobe: { inClip: 'hide_wd_in', inTime: 1.7, outClip: 'hide_wd_out', outTime: 1.0, searchClip: 'search_wd', searchTime: 1.1, revealAt: 0.8,
+    drag: { clip: 'drag_wd', victim: 'drag_wd_v', kill: 1.70, time: 2.53, end: { r: 1.22, f: -0.25, yaw: 25 } } },
+  bed: { inClip: 'hide_bed_in', inTime: 1.6, outClip: 'hide_bed_out', outTime: 1.47, searchClip: 'search_bed', searchTime: 1.2, revealAt: 0.7,
+    drag: { clip: 'drag_bed', victim: 'drag_bed_v', kill: 1.40, time: 2.27, end: { r: 0.02, f: -0.48, yaw: 40 } } },
+};
+
 /** 戦闘の決まりごと */
 export const COMBAT = {
   staminaRegen: 22,        // 1 秒に戻るスタミナ

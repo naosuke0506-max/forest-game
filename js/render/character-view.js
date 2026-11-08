@@ -339,6 +339,21 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         }
         return;
       }
+      // タンス・ベッドに隠れる・出る・覗く・引きずり出される（game/hide-acts.js）：その動きを最後まで
+      if (a && (a.kind === 'hideIn' || a.kind === 'hideOut' || a.kind === 'search' || a.kind === 'dragged')) {
+        if (a !== lastAction) { lastAction = a; if (has(a.clip)) restart(a.clip, 1); }
+        return;
+      }
+      // 引きずり出して止め：片手劍はその動き。ほかの武器は、止めの少し前から強い一撃
+      if (a?.kind === 'drag') {
+        if (a !== lastAction) { lastAction = a; lastPhase = ''; if (a.move && has(a.move.clip)) restart(a.move.clip, 1); }
+        else if (!a.move && lastPhase !== 'swing' && a.t >= a.drag.kill - 0.5) {
+          lastPhase = 'swing';
+          const name = has('heavy') ? 'heavy' : 'a1';
+          if (has(name)) restart(name, clip(name).duration / 0.7);
+        }
+        return;
+      }
       // 暗殺される：される側の動き（背刺をされる・滑斬をされる）
       if (a?.kind === 'assassinated') {
         if (a !== lastAction) { lastAction = a; if (has(a.clip)) restart(a.clip, 1); }
@@ -374,9 +389,6 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
           // 致命の一撃：強攻撃の大きな振り（専用の動きができるまで）
           const name = has('heavy') ? 'heavy' : 'a1';
           if (has(name)) restart(name, clip(name).duration / 0.85);
-        } else if (a.kind === 'search') {
-          // 探す：かがんで開ける（専用の動きができるまで、構えの動きで代わりにする）
-          restart(has('guard') ? 'guard' : 'idle', 1);
         } else if (a.kind === 'draw') {
           restart('draw', clip('draw').duration / WEAPONS[fighter.weapon].drawTime);
         } else if (a.kind === 'release') {

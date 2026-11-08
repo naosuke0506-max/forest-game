@@ -131,7 +131,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const assassinBtn = document.getElementById('btn-assassinate');
   setBtn(assassinBtn, ICONS.dagger, L.assassinate);
   // 試合の計算が体を動かす行動（暗殺する・される）：その間はプレイヤーの操作の位置と向きを、戦う人の記録に合わせる
-  const SCRIPTED = new Set(['assassinate', 'assassinated']);
+  const SCRIPTED = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged']);
   let wasScripted = false, twistBase = null;
   setBtn(searchBtn, ICONS.eye, L.search);
   // 姿勢ボタン：押したときにすること（立っていれば「しゃがむ」、しゃがむ・伏せていれば「立つ」）。長押しで伏せる
@@ -170,7 +170,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   hiding.on('exit', ({ fighter }) => { if (fighter === me) leaveHideView(); });
   hiding.on('found', ({ searcher, victim, spot }) => {
     if (victim === me) { leaveHideView(); hud.centerMsg('見つかった', '動けない……', 2.5); }
-    if (searcher === me) hud.addFeed(`${victim.name}を見つけた！ 攻撃ボタンで致命の一撃`);
+    if (searcher === me) hud.addFeed(`${victim.name}を見つけた！ 引きずり出す`);
     else if (victim !== me && Math.hypot(spot.x - me.x, spot.z - me.z) < 25) hud.addFeed(`${searcher.name} が ${victim.name} を見つけた`);
   });
   hiding.on('empty', ({ searcher, spot }) => { if (searcher === me) hud.addFeed(spot.kind === 'bed' ? 'ベッドの下には誰もいない' : 'タンスの中には誰もいない'); });
@@ -250,7 +250,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
 
   const world = { obstacles, groundAt, hiding, cover, sight, senses, get areaRadius() { return match.areaRadius; },
     /** f が今暗殺できる相手 { target, grace } か null（bot が暗殺ボタンを押すか決める） */
-    assassinTarget: (f) => combat.assassinTarget(f) };
+    assassinTarget: (f) => combat.assassinTarget(f),
+    /** 隠れる・出る（動きをしてから。game/hide-acts.js） */
+    hideIn: (f, spot) => combat.hideIn(f, spot), hideOut: (f) => combat.hideOut(f) };
   match.on('eliminated', ({ victim }) => { hiding.drop(victim); cover.drop(victim); });
   hiding.on('hide', ({ fighter }) => cover.drop(fighter));
   // 壁裏隠れ：自分が壁に背を付けたら三人称（体を見せ、手元の武器を隠す）。離れたら元に戻す
@@ -382,9 +384,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         assassinBtn.hidden = !(running && me.alive && combat.assassinTarget(me));
       }
       if (input.use && running && me.alive) {
-        if (me.hidden) hiding.exit(me);
+        if (me.hidden) combat.hideOut(me);                // 出る動きをしてから出る（game/hide-acts.js）
         else if (me.cover) cover.exit(me);
-        else if (nearSpot) hiding.hide(me, nearSpot);   // 誰かがいれば、その人を見つける
+        else if (nearSpot) combat.hideIn(me, nearSpot);   // 隠れる動きをしてから隠れる。誰かがいれば、覗いて見つけて引きずり出す
         else if (nearWall) {
           // 覗く向き：今見ている向きが、壁に背を付けたときの右か左か
           const sg = nearWall.seg, a = (player.yaw * Math.PI) / 180;
@@ -423,10 +425,12 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       }
       refreshMyView();
       // 暗殺の動きの間は、一人称の目が体（肩の線）の回った分に付いて回る（動きの始めの肩の向きから。動きの終わりに体の向きが移ると 0 に戻る）
-      const ma = me.action, twisting = (ma?.kind === 'assassinate' && ma.phase === 'strike') || ma?.kind === 'assassinated';
+      const ma = me.action, twisting = (ma?.kind === 'assassinate' && ma.phase === 'strike') || (SCRIPTED.has(ma?.kind) && ma?.kind !== 'assassinate');
       if (twisting) {
         const sy = views.get(me).shoulderYaw;
-        if (twistBase === null) twistBase = sy - me.yaw;
+        // 始めの肩の向きの分は引く（構えの姿の少しのねじれ）。ただし、動きの始めから体が大きく回っている
+        // （タンスの中で外を向いている・出る動き）ときは引かない（目は体の向く外を見る）
+        if (twistBase === null) { const d0 = (((sy - me.yaw) + 540) % 360) - 180; twistBase = Math.abs(d0) < 30 ? d0 : 0; }
         player.setTwist((((sy - me.yaw - twistBase) + 540) % 360) - 180);
       } else {
         // 動きが終わった：体の向きが移っても、見ている向きはそのまま（首の向きへ引き継ぐ）

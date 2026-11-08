@@ -2,8 +2,8 @@
 //   隠れ場所：家の中のベッドの下とタンスの中（world/house-builder.js が場所を記録する）。1 か所に 1 人
 //   隠れる：近く（同じ階・1.7m 以内）の隠れ場所へ。隠れている間は見つからず、攻撃も当たらない。動けないが外を覗ける
 //   出る：隠れ場所の前へ出る
-//   探す：近くの隠れ場所を開けて探す（少し時間がかかる）。誰かいれば、その人は引きずり出されて「無防備」になる
-//     （HELPLESS 秒、何もできない）。その間に、見つけた人は致命の一撃を入れられる（game/combat.js）
+//   探す：近くの隠れ場所を開けて探す。誰かいれば、その人は隠れ場所から出され、見つけた人がそのまま引きずり出して止めを刺す
+//     （隠れる・出る・探す・引きずり出す動きの流れは game/hide-acts.js。ここは誰が入っているかだけ）
 //   すでに誰かが隠れている所に隠れようとしたら、見つけたのと同じ
 import { resetStance } from './stance.js';
 
@@ -92,17 +92,12 @@ export function createHiding(spots) {
       emit('exit', { fighter: f, spot: s });
     },
 
-    /** 開けて中を見る（探すの結果）。誰かいれば引きずり出して無防備に */
+    /** 開けて中を見る（探すの結果）。誰かいれば隠れ場所から出す（引きずり出して止めを刺すのは game/hide-acts.js） */
     reveal(searcher, s) {
       const v = s.occupant;
       if (!v || v === searcher) { emit('empty', { searcher, spot: s }); return { found: null }; }
       release(v);
-      // 見つけた人の方を向いて、目の前に引きずり出される
-      const dx = searcher.x - v.x, dz = searcher.z - v.z;
-      v.yaw = (Math.atan2(-dx, -dz) * 180) / Math.PI;
-      v.helpless = HELPLESS;
       resetStance(v);
-      v.stun = Math.max(v.stun || 0, HELPLESS);
       v.action = null; v.guarding = false;
       v.foundBy = searcher;
       emit('found', { searcher, victim: v, spot: s });
