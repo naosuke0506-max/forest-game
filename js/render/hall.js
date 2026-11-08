@@ -7,7 +7,7 @@ import { SURFACES, builder, box } from '../world/build-kit.js';
 import { loadTextureSet } from '../world/materials.js';
 import { createFighter } from '../game/match.js';
 import { loadCharacterModel, createCharacterView } from './character-view.js';
-import { loadWeaponModels } from './weapons.js';
+import { loadWeaponModels, createWeaponModel, createShieldModel } from './weapons.js';
 
 const ORIGIN = [0, -400, 0];       // 森の下の、誰も行かない所に建てる（描くのは大廳のカメラだけなので、場所はどこでもよい）
 const W = 11, D = 15, H = 6.2;     // 広間の幅・奥行き・高さ（m）
@@ -259,6 +259,69 @@ export function createHall(app, config) {
     view.update(0);
     view.root.reparent(root);
     adopt(view.root);
+    view.root.enabled = !shownWeapon;
+    directed = null;
+  }
+
+  // ---- 圖鑑：選んだ動きを流す（流す・止める・繰り返す・速さ・好きな時刻へ） ----
+  let directed = null;   // { name, duration, loop（繰り返す）, playing, speed, lastT }
+  function direct(name) {
+    if (!view) return null;
+    const info = name && view.clipInfo(name);
+    view.direct(info ? name : null);
+    directed = info ? { name, duration: info.duration, loop: directed?.loop ?? true, playing: true, speed: directed?.speed ?? 1, lastT: 0 } : null;
+    return directed;
+  }
+  function stepDirected() {
+    if (!directed || !view) return;
+    const layer = view.anim.baseLayer, d = directed;
+    view.anim.speed = d.playing ? d.speed : 0;
+    const t = layer.activeStateCurrentTime ?? 0;
+    // 終わりまで来た：繰り返すなら最初から、繰り返さないなら終わりの姿で止める（模型の動きが繰り返す物でも）
+    const wrapped = t < d.lastT - 0.05;
+    if (d.playing && (t >= d.duration - 0.01 || wrapped)) {
+      if (d.loop) { if (!wrapped) layer.activeStateCurrentTime = 0; }
+      else { d.playing = false; view.anim.speed = 0; layer.activeStateCurrentTime = d.duration - 0.001; }
+    }
+    d.lastT = layer.activeStateCurrentTime ?? t;
+  }
+
+  // ---- 圖鑑：武器を壇の上に浮かべて、ゆっくり回して見せる（人物は隠す） ----
+  let shownWeapon = null, display = null, wtoken = 0;
+  const pivot = new pc.Entity('hall-display');
+  root.addChild(pivot);
+  pivot.setLocalPosition(0, DAIS + 1.15, 0.1);
+  async function showWeapon(id) {
+    shownWeapon = id;
+    display?.destroy(); display = null;
+    if (view) view.root.enabled = !id;
+    if (!id) return;
+    const my = ++wtoken;
+    await loadWeaponModels(app, [id === 'kite' ? 'shield' : id]);
+    if (my !== wtoken || shownWeapon !== id) return;
+    const model = id === 'kite' ? createShieldModel() : createWeaponModel(id);
+    if (!model) return;
+    // 回す軸（pivot）→ 傾け・大きさ（display）→ 真ん中合わせ（shift）→ 立てる（orient）→ 模型
+    //   武器の模型は刃先が -Z（前）へ伸びる形なので、X で 90 度回して刃先を上に立てる（楯はそのまま立っている）
+    display = new pc.Entity('weapon');
+    const shift = new pc.Entity(), orient = new pc.Entity();
+    orient.setLocalEulerAngles(id === 'kite' ? 0 : 90, 0, 0);
+    orient.addChild(model);
+    shift.addChild(orient);
+    display.addChild(shift);
+    pivot.setLocalEulerAngles(0, 0, 0);   // 測る間は回さない（形の真ん中を、回す軸の座標で求める）
+    pivot.addChild(display);
+    adopt(display);
+    // 形の真ん中を回す軸に合わせ、長い物は小さくして収める（槍は 2.5 m を超える）
+    const box = new pc.BoundingBox(), tmp = new pc.BoundingBox();
+    let first = true;
+    for (const r of display.findComponents('render')) for (const mi of r.meshInstances) { if (first) { box.copy(mi.aabb); first = false; } else { tmp.copy(mi.aabb); box.add(tmp); } }
+    const size = Math.max(box.halfExtents.x, box.halfExtents.y, box.halfExtents.z) * 2 || 1;
+    const c = box.center, p = pivot.getPosition();
+    shift.setLocalPosition(p.x - c.x, p.y - c.y, p.z - c.z);
+    const k = Math.min(1.6, 1.9 / size);
+    display.setLocalScale(k, k, k);
+    display.setLocalEulerAngles(0, 0, id === 'kite' ? 0 : -28);   // 武器は少し斜めに（刃先を右上へ）
   }
 
   let active = false, time = 0;
@@ -286,8 +349,26 @@ export function createHall(app, config) {
         f.light.intensity = f.base * (0.85 + 0.15 * k);
       }
       view?.update(dt);   // 待機の動き（体の位置は、作るときに決めた壇の上）
+      stepDirected();
+      if (display) pivot.rotateLocal(0, 24 * dt, 0);
     },
+    /** 圖鑑：動きを流す（null で待機に戻す）。返り値は流している動き { name, duration, loop, playing, speed } */
+    direct,
+    /** 圖鑑：流している動きの今の時刻（秒） */
+    get directed() { return directed ? { ...directed, t: view?.anim.baseLayer.activeStateCurrentTime ?? 0 } : null; },
+    setPlaying(v) {
+      if (!directed) return;
+      if (v && !directed.playing && (view.anim.baseLayer.activeStateCurrentTime ?? 0) >= directed.duration - 0.02) view.anim.baseLayer.activeStateCurrentTime = 0;   // 終わりで止まっていたら最初から
+      directed.playing = v;
+    },
+    setLoop(v) { if (directed) directed.loop = v; },
+    setSpeed(v) { if (directed) directed.speed = v; },
+    seek(t) { if (!directed || !view) return; directed.playing = false; view.anim.speed = 0; view.anim.baseLayer.activeStateCurrentTime = Math.max(0, Math.min(directed.duration - 0.001, t)); directed.lastT = t; },
+    /** 立っている人物が持つ動きの名前（模型を読み終わるまでは空） */
+    get clipNames() { return view ? view.clipNames : []; },
+    /** 圖鑑：武器を見せる（null で人物に戻す） */
+    showWeapon,
     /** 試合が始まるとき：人物の見た目を片付ける（模型そのものは試合でも使うので残す） */
-    clear() { view?.destroy(); view = null; showing = null; token++; },
+    clear() { view?.destroy(); view = null; showing = null; token++; wtoken++; display?.destroy(); display = null; shownWeapon = null; directed = null; },
   };
 }

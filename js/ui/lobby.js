@@ -4,6 +4,7 @@
 import { L } from './labels.js';
 import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, MODES, MAPS, ARMS, MUTATIONS, PHASES } from '../game/data.js';
 import { resolveLoadout } from '../game/match.js';
+import { createCodex } from './codex.js';
 
 // 武器を選ぶ枠：右手（主の武器）・左手（楯）・持替（弓兵の近接武器）
 const SLOTS = [['main', L.main], ['shield', L.shield], ['side', L.side]];
@@ -14,16 +15,17 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 // 画面の順番と見出し（大廳は数えない）
 const STEPS = ['mode', 'map', 'char', 'arms'];
-const HEADS = { hall: L.hall, mode: L.battle, map: L.map, char: `${L.person}・${L.weapon}`, arms: `${L.arms}・${L.mutation}` };
-const BACK = { mode: 'hall', map: 'mode', char: 'map', arms: 'char' };
+const HEADS = { hall: L.hall, codex: L.codex, mode: L.battle, map: L.map, char: `${L.person}・${L.weapon}`, arms: `${L.arms}・${L.mutation}` };
+const BACK = { codex: 'hall', mode: 'hall', map: 'mode', char: 'map', arms: 'char' };
 
 /**
  * @param {object} o
  * @param {() => void} o.onEnter 題の画面から大廳へ入ったとき（音を出せるようにし、3D の広間を出す）
  * @param {(char: string, loadout: object) => void} o.onShow 大廳に立たせる人物（キャラと武器）が変わったとき
  * @param {() => void} o.onSettings 大廳の「設定」
+ * @param {() => object} o.hall 大廳の 3D（圖鑑で人物の動きを流し、武器を見せる）
  */
-export function createLobby({ onEnter = () => {}, onShow = () => {}, onSettings = () => {} } = {}) {
+export function createLobby({ onEnter = () => {}, onShow = () => {}, onSettings = () => {}, hall = () => null } = {}) {
   const title = document.getElementById('title');
   const enterBtn = document.getElementById('start');
   const lobby = document.getElementById('lobby');
@@ -37,8 +39,11 @@ export function createLobby({ onEnter = () => {}, onShow = () => {}, onSettings 
   const show = () => onShow(pick.char, { ...loadouts[pick.char] });
 
   // ---- 画面の切り替え ----
+  const codex = createCodex({ hall });
   let step = 'hall';
   function go(to) {
+    // 圖鑑を閉じたら、動きと武器を片付けて、選んでいる人物を立たせ直す
+    if (step === 'codex' && to !== 'codex') { codex.close(); show(); }
     step = to;
     for (const [k, p] of Object.entries(panes)) p.hidden = k !== to;
     head.textContent = HEADS[to];
@@ -47,6 +52,7 @@ export function createLobby({ onEnter = () => {}, onShow = () => {}, onSettings 
     backBtn.hidden = to === 'hall';
     if (to === 'hall') renderWho();
     if (to === 'arms') renderArms();
+    if (to === 'codex') codex.open(pick.char);
   }
   backBtn.addEventListener('click', () => go(BACK[step] || 'hall'));
   lobby.addEventListener('click', (e) => {
