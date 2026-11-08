@@ -70,49 +70,51 @@ export const WEAPON_KIND = {
 };
 
 /**
- * 技（武器・楯ごと）。how：出し方、done：ゲームで使える（false は動きだけあって、まだゲームで使えない）
+ * 技（武器・楯ごと）。圖鑑には、出し方（how）・効果（effect）・威力だけを出す（利用者の指示）。
+ *   威力は数値（game/data.js）から求める：ref = { w: 武器, t: 'combo'・'charge'・'charge2'・'plain'（技の無い武器のふつうの攻撃）・'heavy'（左手の強い一撃）, i: 段 }、
+ *   { shield: 楯の技 }、{ lethal: true }（一撃で倒す）。done：ゲームで使える
  */
 export const WEAPON_ARTS = {
   armingsword: [
-    { name: '踏込突', how: '攻擊ボタン', desc: '右足を踏み込み、右腕を一本の槍のように真っ直ぐ突き出して刺す（通常攻撃 1 段目）', done: true },
-    { name: '逆袈裟', how: '踏込突の後に攻擊ボタン', desc: '左斜め下に溜めた右腕を右斜め上へ振り払う（通常攻撃 2 段目）', done: true },
-    { name: '袈裟斬', how: '攻擊ボタンを長押しして離す', desc: '右腕を右斜め上の後ろへ伸ばして溜め、離すと右斜め上から左下へ振り下ろす。長く溜めるほど強い', done: true },
-    { name: '旋風斬', how: '袈裟斬のすぐ後に、もう一度長押しして離す', desc: '右回りに一回転して払い、逆の左回りに回って最後の一撃（当たりが 2 回）', done: true },
-    { name: '背刺', how: '相手の背中側から暗殺ボタン', desc: '真後ろから背中へ剣を突き刺し、蹴り飛ばして抜く', done: true },
-    { name: '滑斬', how: '相手の前・横から暗殺ボタン', desc: '滑り込みながら足を斬り、立ち上がって首へ振り下ろす', done: true },
+    { name: '踏込突', how: '攻擊ボタン', effect: '通常攻撃 1 段目。前へ細く突く。軽い被弾', ref: { w: 'armingsword', t: 'combo', i: 0 }, done: true },
+    { name: '逆袈裟', how: '踏込突の後に攻擊ボタン', effect: '通常攻撃 2 段目。前を広く払う。軽い被弾', ref: { w: 'armingsword', t: 'combo', i: 1 }, done: true },
+    { name: '袈裟斬', how: '攻擊ボタンを長押しして離す', effect: '溜攻撃 1。長く溜めるほど強い（1 秒で最大）。重い被弾', ref: { w: 'armingsword', t: 'charge' }, done: true },
+    { name: '旋風斬', how: '袈裟斬のすぐ後に、もう一度長押しして離す', effect: '溜攻撃 2。周りをぐるりと斬り、もう一度前を斬る（2 回当たる。2 回目は重い被弾）', ref: { w: 'armingsword', t: 'charge2' }, done: true },
+    { name: '背刺', how: '相手の背中側から暗殺ボタン', effect: '暗殺。避けられない', ref: { lethal: true }, done: true },
+    { name: '滑斬', how: '相手の前・横から暗殺ボタン', effect: '暗殺。避けられない', ref: { lethal: true }, done: true },
   ],
   longsword: [
-    { name: '唐竹', how: '攻擊ボタン', desc: '頭上へ振りかぶり、右足で踏み込んで真上から真っ直ぐ斬り下ろす（通常攻撃 1 段目）', done: true },
-    { name: '横薙', how: '唐竹の後に攻擊ボタン', desc: '剣を右へ引いて体を開き、右から左へ水平に薙ぐ（通常攻撃 2 段目）', done: true },
-    { name: '長突', how: '攻擊ボタンを長押しして離す', desc: '剣を頭の右横に構えて溜め、離すと左足で大きく踏み込んで両手で長く突く', done: true },
-    { name: '斬返', how: '長突のすぐ後に、もう一度長押しして離す', desc: '右上へ斬り上げ、頭上へ返して右上から左下へ斬り下ろす（当たりが 2 回）', done: true },
+    { name: '唐竹', how: '攻擊ボタン', effect: '通常攻撃 1 段目。真上から細く斬り下ろす。軽い被弾', ref: { w: 'longsword', t: 'combo', i: 0 }, done: true },
+    { name: '横薙', how: '唐竹の後に攻擊ボタン', effect: '通常攻撃 2 段目。前を広く薙ぐ。軽い被弾', ref: { w: 'longsword', t: 'combo', i: 1 }, done: true },
+    { name: '長突', how: '攻擊ボタンを長押しして離す', effect: '溜攻撃 1。間合いが長い突き。長く溜めるほど強い（1.1 秒で最大）。重い被弾', ref: { w: 'longsword', t: 'charge' }, done: true },
+    { name: '斬返', how: '長突のすぐ後に、もう一度長押しして離す', effect: '溜攻撃 2。2 回斬る（2 回目は重い被弾）', ref: { w: 'longsword', t: 'charge2' }, done: true },
   ],
   mace: [
-    { name: '連擊', how: '攻擊ボタン', desc: '重い頭で殴る。防禦の上からも響く', done: true },
+    { name: '連擊', how: '攻擊ボタン', effect: '通常攻撃。防禦の上からも響く', ref: { w: 'mace', t: 'plain' }, done: true },
   ],
   spear: [
-    { name: '連突', how: '攻擊ボタン', desc: '間合いが一番長い。近づく前に突ける', done: true },
-    { name: '薙拂', how: '左手ボタン', desc: '大きく薙ぎ払う強い一撃', done: true },
+    { name: '連突', how: '攻擊ボタン', effect: '通常攻撃。間合いが一番長い', ref: { w: 'spear', t: 'plain' }, done: true },
+    { name: '薙拂', how: '左手ボタン', effect: '強い一撃。前を広く薙ぎ払う。重い被弾', ref: { w: 'spear', t: 'heavy' }, done: true },
   ],
   dagger: [
-    { name: '連擊', how: '攻擊ボタン（持替で持ったとき）', desc: '振りが速く、隙が小さい', done: true },
+    { name: '連擊', how: '攻擊ボタン（持替で持ったとき）', effect: '通常攻撃。振りが速く、隙が小さい', ref: { w: 'dagger', t: 'plain' }, done: true },
   ],
   longbow: [
-    { name: '射', how: '攻擊ボタンを長押しで引き、離して放つ', desc: '引くほど強く、遠くまで飛ぶ。引き切った矢は重い一撃', done: true },
-    { name: '持替', how: '左手ボタン', desc: '短劍に持ち替える（近寄られたとき）', done: true },
+    { name: '射', how: '攻擊ボタンを長押しで引き、離して放つ', effect: '引くほど強く遠くへ飛ぶ。引き切った矢は重い被弾', ref: { w: 'longbow', t: 'plain' }, done: true },
+    { name: '持替', how: '左手ボタン', effect: '短劍に持ち替える', ref: null, done: true },
   ],
   kite: [
-    { name: '防禦', how: '左手ボタンを押している間', desc: '楯で受ける。ふつうの攻撃は弱い受け、強い一撃は強い受け。スタミナが切れると崩れる', done: true },
-    { name: '楯押', how: '左手ボタンを短く押して離す', desc: '楯で敵を約 2 m 押し返して、体勢を崩す（傷は無し。防禦の上からでも崩れる）', done: true },
-    { name: '楯擊', how: '防禦の構えの間に攻擊ボタン', desc: '楯を左に溜めて、右へ殴りつける。少し傷を与えて、重い被弾でひるませる', done: true },
+    { name: '防禦', how: '左手ボタンを押している間', effect: '前からの攻撃を楯で受けて傷を減らす（スタミナが減る。切れると崩れる）', ref: null, done: true },
+    { name: '楯押', how: '左手ボタンを短く押して離す', effect: '押し返してよろめかせる。防禦の上からでも崩れる', ref: { shield: 'push' }, done: true },
+    { name: '楯擊', how: '楯擊ボタン（防禦の構えの間に攻擊ボタンでも）', effect: '楯で殴ってひるませる。重い被弾', ref: { shield: 'bash' }, done: true },
   ],
   buckler: [
-    { name: '受流', how: '左手ボタンを短く押す', desc: '攻撃が当たる直前（0.2 秒の間）に払えば、相手の攻撃を弾いて大きくよろめかせる', done: false },
-    { name: '楯擊', how: '防禦の構えの間に攻擊ボタン', desc: '楯を左に溜めて、右へ殴りつける', done: false },
+    { name: '受流', how: '左手ボタンを短く押す', effect: '当たる直前（0.2 秒の間）に払えば、相手の攻撃を弾いて大きくよろめかせる', ref: null, done: false },
+    { name: '楯擊', how: '楯擊ボタン', effect: '楯で殴ってひるませる', ref: null, done: false },
   ],
   pavise: [
-    { name: '楯押', how: '左手ボタンを短く押す', desc: '楯で敵を押し出して、体勢を崩す', done: false },
-    { name: '楯突貫', how: '防禦の構えの間に攻擊ボタン', desc: '楯を地面に着けて約 4 m 突進する。当たった相手を倒す', done: false },
+    { name: '楯押', how: '左手ボタンを短く押す', effect: '押し返して体勢を崩す', ref: null, done: false },
+    { name: '楯突貫', how: '楯攻撃ボタン', effect: '約 4 m 突進する。当たった相手を倒す', ref: null, done: false },
   ],
 };
 

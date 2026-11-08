@@ -2,7 +2,8 @@
 //   後ろの 3D の広間（render/hall.js）に、選んだ人物を立たせて動きを流し、武器は壇の上に浮かべて回して見せる
 //   動きの再生は、動作監督の画面と同じ作り：動きの一覧（見出しごと）・流す／止める・繰り返す・速さ・時刻のつまみ
 import { L } from './labels.js';
-import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, EXCLUSIVE_SKILLS, SHARED_SKILLS } from '../game/data.js';
+import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, EXCLUSIVE_SKILLS, SHARED_SKILLS, TECHNIQUES, SHIELD_SKILLS } from '../game/data.js';
+import { attackStats } from '../game/combat.js';
 import { resolveLoadout } from '../game/match.js';
 import { CLIP_NAMES, CLIP_DESC, CLIP_GROUPS, WEAPON_KIND, WEAPON_ARTS, COMMON_ARTS, CREATURE_KINDS, CHAR_GUIDE } from '../game/codex.js';
 
@@ -13,12 +14,58 @@ const SPEEDS = [[0.25, '×¼'], [0.5, '×½'], [1, '×1']];
 const weaponName = (id) => WEAPONS[id]?.name ?? SHIELDS[id]?.name ?? PLANNED[id] ?? id;
 const isPlanned = (id) => (SHIELDS[id] ? !!SHIELDS[id].planned : !WEAPONS[id]);
 
-/** 技の一覧（名前・出し方・説明。ゲームでまだ使えない物は「未完」） */
+const R = Math.round;
+const arcText = (a) => (a >= 360 ? '周り' : `前 ${a}°`);
+/** 技の威力（数値は game/data.js から求める。WEAPON_ARTS の ref） */
+function powerText(ref) {
+  if (!ref) return '';
+  if (ref.lethal) return '一撃で倒す';
+  if (ref.shield) {
+    const S = SHIELD_SKILLS[ref.shield];
+    return S.push ? `傷なし（${S.push} 米押し返す）・間合 ${S.reach} 米・${arcText(S.arc)}` : `${S.damage}・間合 ${S.reach} 米・${arcText(S.arc)}`;
+  }
+  const w = WEAPONS[ref.w];
+  if (!w) return '';
+  if (w.kind === 'bow') return `${R(w.damage * 0.35)}〜${w.damage}（引くほど強い。${w.drawTime} 秒で引き切る）`;
+  if (ref.t === 'plain' || ref.t === 'heavy') {
+    const a = attackStats(ref.w, ref.t === 'heavy');
+    return `${R(a.damage)}・間合 ${+a.reach.toFixed(2)} 米・${arcText(a.arc)}${a.guardPierce ? `・防禦を ${R(a.guardPierce * 100)}% 貫く` : ''}`;
+  }
+  const set = TECHNIQUES[ref.w], T = ref.t === 'combo' ? set.combo[ref.i] : set[ref.t];
+  const nth = (v, i) => (Array.isArray(v) ? v[Math.min(i, v.length - 1)] : v);
+  if (T.full) return `${R(w.damage * T.damage[0])}〜${R(w.damage * T.damage[1])}・間合 ${T.reach} 米・${arcText(T.arc)}`;
+  if (T.hits.length > 1) return `${T.hits.map((_, i) => R(w.damage * nth(T.damage, i))).join('＋')}（${T.hits.length} 回）・間合 ${T.reach} 米・${T.hits.map((_, i) => arcText(nth(T.arc, i))).join('→')}`;
+  return `${R(w.damage * T.damage)}・間合 ${T.reach} 米・${arcText(T.arc)}`;
+}
+/** 技の一覧：名前・出し方・効果・威力（攻撃の説明は効果と威力だけ。ゲームでまだ使えない物は「未完」）。共通の技は説明 */
 function skillList(list) {
   if (!list?.length) return '';
-  return `<ul class="skills">${list.map((s) => `<li><b>${esc(s.name)}${s.done ? '' : `<small>${L.planned}</small>`}</b>
-    <span class="how">${esc(s.how)}</span><span class="sdesc">${esc(s.desc)}</span></li>`).join('')}</ul>`;
+  return `<ul class="skills">${list.map((s) => {
+    const pw = s.effect !== undefined ? powerText(s.ref) : '';
+    return `<li><b>${esc(s.name)}${s.done ? '' : `<small>${L.planned}</small>`}</b>
+    <span class="how">${esc(s.how)}</span><span class="sdesc">${esc(s.effect ?? s.desc)}</span>${pw ? `<span class="spow">威力 ${esc(pw)}</span>` : ''}</li>`;
+  }).join('')}</ul>`;
 }
+/** 動きから技へ（動きの再生で、攻撃の動きには説明の代わりに効果と威力を出す） */
+const ART_OF_CLIP = (() => {
+  const out = {};
+  for (const list of Object.values(WEAPON_ARTS)) {
+    for (const a of list) {
+      const r = a.ref;
+      if (r?.shield) out[SHIELD_SKILLS[r.shield].clip] = a;
+      else if (r?.w && TECHNIQUES[r.w] && r.t !== 'plain' && r.t !== 'heavy') {
+        const T = r.t === 'combo' ? TECHNIQUES[r.w].combo[r.i] : TECHNIQUES[r.w][r.t];
+        for (const c of [T.clip, T.in, T.hold]) if (c) out[c] = a;
+      }
+    }
+  }
+  out.as_back = WEAPON_ARTS.armingsword.find((a) => a.name === '背刺');
+  out.as_slide = WEAPON_ARTS.armingsword.find((a) => a.name === '滑斬');
+  for (const c of ['a1', 'a2', 'a3']) out[c] = { effect: '技の無い武器（鎚矛・槍）の通常攻撃（専用の動きができるまで使う）', power: '武器による' };
+  for (const c of ['ma1', 'ma2', 'ma3']) out[c] = { effect: '短劍の通常攻撃（専用の動きができるまで使う）', ref: { w: 'dagger', t: 'plain' } };
+  out.heavy = { effect: '左手の強い一撃・暗殺・誅殺（専用の動きができるまで使う）', power: `武器の ${1.7} 倍` };
+  return out;
+})();
 const row = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
 
 /** 技能の札（名前・種類・効き目の長さ・待ち時間・説明。まだ使えない物は「未完」） */
@@ -138,7 +185,15 @@ export function createCodex({ hall }) {
         <button type="button" class="chip${d?.loop !== false ? ' sel' : ''}" data-act="loop">循環</button>
         ${SPEEDS.map(([v, n]) => `<button type="button" class="chip${(d?.speed ?? 1) === v ? ' sel' : ''}" data-speed="${v}">${n}</button>`).join('')}
       </div>
-      <p class="clip-desc">${clip ? `${esc(CLIP_DESC[clip] || '')}<small>${esc(clip)}・${d ? d.duration.toFixed(2) : ''} 秒</small>` : '動きを選ぶと、大廳の人物が流す'}</p>`;
+      <p class="clip-desc">${clip ? `${clipText(clip)}<small>${esc(clip)}・${d ? d.duration.toFixed(2) : ''} 秒</small>` : '動きを選ぶと、大廳の人物が流す'}</p>`;
+  }
+
+  /** 動きの説明：攻撃の動きは効果と威力だけ、ほかは動きの説明 */
+  function clipText(c) {
+    const a = ART_OF_CLIP[c];
+    if (!a) return esc(CLIP_DESC[c] || '');
+    const pw = a.power ?? powerText(a.ref);
+    return `${esc(a.effect)}${pw ? `<br>威力 ${esc(pw)}` : ''}`;
   }
 
   // ---- 武器 ----
