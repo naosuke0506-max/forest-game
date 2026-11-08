@@ -6,6 +6,7 @@ import { keepInside, BODY_RADIUS } from './movement.js';
 import { SEARCH_TIME } from './hiding.js';
 import { setStance, updateStance, stanceShape } from './stance.js';
 import { techSetOf, controlTech, updateTech, interruptTech } from './techniques.js';
+import { reactKind, startReact, updateReact } from './reactions.js';
 
 // 隠れる・探すに関わる動き
 const FINISH_REACH = 2.4;   // 致命の一撃が届く近さ（無防備な相手まで m）
@@ -30,6 +31,7 @@ export function attackStats(weaponId, heavy = false) {
   const extra = HEAVY.byWeapon[weaponId] || {};
   return {
     ...w,
+    power: 'h',   // 強攻撃は重い一撃（受けた側は重い被弾・強い受け）
     damage: w.damage * HEAVY.damage,
     windup: w.windup * HEAVY.windup,
     recovery: w.recovery * HEAVY.recovery,
@@ -73,7 +75,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (a.t >= d.invuln[0] && a.t <= d.invuln[1]) { emit('dodged', { attacker, target }); return; }
     }
     let amount = (raw * (attacker ? attacker.stats.attack : 1) * target.armor) / target.stats.defense;
-    let guarded = false;
+    let guarded = false, broke = false;
     // 防御：前から来た攻撃だけ。盾があるほど多く減らせる。減らした分だけスタミナを使う
     const dx = fromX - target.x, dz = fromZ - target.z;
     if (target.guarding && target.stamina > 0 && angleTo(target.yaw, dx, dz) <= COMBAT.guardArc / 2) {
@@ -82,10 +84,10 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       spendStamina(target, blocked * COMBAT.guardStaminaPerDamage);
       amount -= blocked;
       guarded = true;
-      if (target.stamina <= 0) {                // 防御が崩れた
+      if (target.stamina <= 0) {                // 防御が崩れた（よろめく）
         target.guarding = false;
-        target.stun = 0.7;
         target.action = null;
+        broke = true;
         emit('guardBreak', { fighter: target });
       }
     }
@@ -93,8 +95,9 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     target.hitFlash = 0.25;
     if (target.cover) cover?.exit(target);   // 攻撃を受けたら壁から離れる
     target.lastHitBy = attacker;
+    // 受けた動き：被弾（軽い・重い）・よろめき・防禦の受け（game/reactions.js）。ひるむ時間もここで決まる
+    startReact(target, reactKind(target, { guarded, broke, power, pierce }), fromX, fromZ);
     if (!guarded) {                             // まともに受けるとひるむ（振りかぶり・溜めも止まる）
-      target.stun = Math.max(target.stun, COMBAT.hitStun);
       const ta = target.action;
       if (ta && ((ta.kind === 'attack' && !ta.hit) || ta.kind === 'charge' || ta.kind === 'charge2')) target.action = null;
       interruptTech(target);
@@ -131,6 +134,15 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     return best;
   }
   const faceTo = (f, t) => { f.yaw = (Math.atan2(-(t.x - f.x), -(t.z - f.z)) * 180) / Math.PI; };
+  /** 押されて動く（木や岩・壁を避け、歩ける範囲の中・床の高さへ）。実際に動いた分を返す */
+  const shove = (f, dx, dz) => {
+    const ox = f.x, oz = f.z;
+    f.x += dx; f.z += dz;
+    obstacles.resolve(f, BODY_RADIUS);
+    keepInside(f, match.areaRadius);
+    f.y = floorAt(f.x, f.z, f.y);
+    return [f.x - ox, f.z - oz];
+  };
 
   /** 近接の当たり判定：間合いと角度に入っている、ほかの全員に当たる */
   function meleeHit(f, w) {
@@ -164,6 +176,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       x: f.x + dir[0] * 0.5, y: yOf(f) + 1.5, z: f.z + dir[2] * 0.5,
       vx: dir[0] * speed, vy: dir[1] * speed, vz: dir[2] * speed,
       damage: w.damage * (0.35 + 0.65 * power),
+      power: power >= 0.9 ? 'h' : 'l',   // 引き切った矢は重い一撃
       life: 5,
       stuck: 0,               // 刺さってからの時間（見た目用。刺さった矢は少し残す）
       id: Math.random(),
@@ -187,7 +200,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       const sx = p.x - ox, sz = p.z - oz, len2 = sx * sx + sz * sz || 1e-6;
       const k = Math.max(0, Math.min(1, ((t.x - ox) * sx + (t.z - oz) * sz) / len2));
       if (Math.hypot(ox + sx * k - t.x, oz + sz * k - t.z) <= COMBAT.bodyRadius) {
-        damage(t, p.damage, p.owner, { fromX: ox, fromZ: oz, kind: 'arrow' });
+        damage(t, p.damage, p.owner, { fromX: ox, fromZ: oz, kind: 'arrow', power: p.power });
         emit('projectileHit', { projectile: p, target: t });
         return false;
       }
@@ -334,6 +347,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       for (const f of fighters) {
         if (!f.alive) continue;
         updateStance(f, dt);
+        updateReact(f, dt, shove);   // 重い被弾・よろめきで押されて下がる
         f.stun = Math.max(0, f.stun - dt);
         f.hitFlash = Math.max(0, f.hitFlash - dt);
         if (f.helpless > 0) f.helpless = Math.max(0, f.helpless - dt);

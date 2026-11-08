@@ -115,7 +115,12 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   const has = (name) => tracks.has(name);
   // 姿勢の動き（tools/characters/make_motions.py）：しゃがみ（その場）・しゃがみ歩き・伏せる・伏せ・這う・起き上がる
   const stanceClips = ['crouch', 'crouch_walk', 'prone_down', 'prone', 'crawl', 'prone_up'].every(has);
-  let current = '', lastAction = null, swingIndex = 0, wasStunned = false, deathStarted = false;
+  let current = '', lastAction = null, swingIndex = 0, deathStarted = false;
+  // 攻撃を受けた動き（game/reactions.js の fighter.react）：流している受けた動きの番号と残りの時間。
+  // 押されて下がった分（knock）：動きの中で体が下がっているので、位置をその分だけ戻して描く（受けた動きが終わったら BLEND の間に 0 へ）
+  let reactId = 0, reactLeft = 0;
+  const knock = { x: 0, z: 0, fade: 0, fx: 0, fz: 0 };
+  const knockV = new pc.Vec3();
   const play = (name, speed = 1, blend = BLEND) => {
     if (!has(name)) return;
     body.anim.speed = speed;
@@ -185,7 +190,13 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     invRoot.copy(root.getWorldTransform()).invert();
     invRoot.transformPoint(headBone.getPosition(), eyeTmp);
     eyeTmp.y += EYE_UP; eyeTmp.z -= EYE_FWD;
-    if (!eyeReady) { eyeLocal.copy(eyeTmp); eyeReady = true; } else eyeLocal.lerp(eyeLocal, eyeTmp, Math.min(1, dt * 25));
+    // 押されて下がった分は体を戻して描いているので、目はその分だけ体の位置（カメラの位置）から見て前にある
+    knockV.set(knock.x, 0, knock.z);
+    invRoot.transformVector(knockV, knockV);
+    eyeTmp.sub(knockV);
+    // 攻撃を受けた直後は頭が急に動く（重い被弾・よろめきで 0.1 秒に 40 cm 沈む）ので、目はゆっくり追う（画面の揺れで酔わないように）
+    const rate = fighter.react && fighter.react.t < 0.6 ? 9 : 25;
+    if (!eyeReady) { eyeLocal.copy(eyeTmp); eyeReady = true; } else eyeLocal.lerp(eyeLocal, eyeTmp, Math.min(1, dt * rate));
   }
 
   return {
@@ -215,7 +226,16 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       groundY += (target - groundY) * Math.min(1, dt * 12);
       // 壁裏隠れ：背中が壁に付くように、壁の側へ少し寄せて描く（位置の計算は壁から離れた所）
       const cv = fighter.cover?.seg;
-      root.setPosition(fighter.x - (cv ? cv.nx * 0.14 : 0), groundY, fighter.z - (cv ? cv.nz * 0.14 : 0));
+      // 押されて下がった分：受けた動きの間は下がった分だけ戻し、終わったら動きの戻り（BLEND）と同じ間に 0 へ
+      const rk = fighter.react;
+      if (rk && rk.id === reactId && reactLeft > 0) { knock.x = rk.moved.x; knock.z = rk.moved.z; knock.fade = 0; }
+      else if (knock.x || knock.z) {
+        if (!knock.fade) { knock.fx = knock.x; knock.fz = knock.z; }
+        knock.fade += dt;
+        const k = Math.max(0, 1 - knock.fade / BLEND);
+        knock.x = knock.fx * k; knock.z = knock.fz * k;
+      }
+      root.setPosition(fighter.x - knock.x - (cv ? cv.nx * 0.14 : 0), groundY, fighter.z - knock.z - (cv ? cv.nz * 0.14 : 0));
       root.setEulerAngles(0, fighter.yaw, 0);
 
       // 質感の画像を消さない程度に、うっすら赤くする。倒れた後は光らせない
@@ -247,11 +267,27 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         return;
       }
 
-      // ひるみ：ひるみ始めに 1 回流す。防御が崩れた（長いひるみ）ときは大きくよろめく
-      const stunned = fighter.stun > 0;
-      if (stunned && !wasStunned) restart(fighter.stun > 0.5 && has('stagger') ? 'stagger' : 'hit', 1);
-      wasStunned = stunned;
-      if (stunned) return;
+      // 攻撃を受けた：被弾（軽い・重い）・よろめきは攻撃された向きの動き、楯で受けたら受けの動き（game/reactions.js）。
+      // 動きの間はほかの動きに替えない（新しい行動を始めたら、そちらへ移る）。向きの動きが無い模型は、今までの hit・stagger
+      const r = fighter.react;
+      if (r && r.id !== reactId) {
+        reactId = r.id;
+        const name = r.dir ? `${r.kind}_${r.dir}` : r.kind;
+        const alt = r.kind === 'stagger' ? 'stagger' : r.kind.startsWith('guard') ? null : 'hit';
+        const use = has(name) ? name : alt && has(alt) ? alt : null;
+        if (use) {
+          restart(use, 1);
+          reactLeft = clip(use).duration * 0.95;
+          lastAction = fighter.action;
+        }
+      }
+      if (reactLeft > 0) {
+        reactLeft -= dt;
+        const a0 = fighter.action;
+        if (!(a0 && a0 !== lastAction)) return;   // 新しい行動が始まるまで、受けた動きのまま
+        reactLeft = 0;
+      }
+      if (fighter.stun > 0) return;
 
       const a = fighter.action;
       // 溜め：溜めに入る動きの後は、溜めている動きを繰り返す
