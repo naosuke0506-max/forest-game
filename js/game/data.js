@@ -161,6 +161,21 @@ export const HEAVY = {
   },
 };
 
+/**
+ * 攻撃を受けたときの動き（docs/DESIGN.md「片手劍の技」の被弾・よろめき、「楯の技」の防禦の受け）。動きは模型に入っている（tools/characters/body_moves.py）
+ *   hit_l：軽い被弾（ふつうの攻撃）、hit_h：重い被弾（溜攻撃・強攻撃・引き切った矢）、stagger：よろめき（防禦が崩れた・重い被弾でひるんでいる間にまた重い一撃）
+ *   guard_l・guard_h：楯で受けた（弱い・強い一撃か鎚矛）。被弾とよろめきは、攻撃された向き（前・後ろ・左・右）で動きが変わる
+ *   stun：何もできない時間（秒。動きの終わりより少し早く動けるようにしてある）
+ *   push：押された向きへ下がる距離（m。動きを作ったときに体が動いた距離と同じ）、time：その間（秒。動きの長さ）
+ */
+export const REACT = {
+  hit_l:   { stun: 0.28 },
+  hit_h:   { stun: 0.62, push: 0.30, time: 0.93 },
+  stagger: { stun: 1.1,  push: 0.66, time: 1.4 },
+  guard_l: { stun: 0 },
+  guard_h: { stun: 0.35 },
+};
+
 /** 戦闘の決まりごと */
 export const COMBAT = {
   staminaRegen: 22,        // 1 秒に戻るスタミナ
@@ -172,7 +187,6 @@ export const COMBAT = {
   guardStaminaPerDamage: 1.0, // 防御で受けたダメージ 1 ごとに使うスタミナ
   guardMoveScale: 0.5,     // 防御中の移動の速さ
   attackMoveScale: 0.55,   // 攻撃中の移動の速さ
-  hitStun: 0.22,           // ひるむ時間（秒）
   bodyRadius: 0.4,         // 当たり判定の体の太さ（m）
   bodyHeight: 1.8,
   gravity: 9.8,

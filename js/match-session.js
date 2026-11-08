@@ -393,8 +393,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       if (running) combat.update(dt);
       senses.update(dt);
       sfx.update(dt, fighters);
-      // 回避は試合の計算が体を動かすので、その位置をプレイヤーの操作へ戻す
-      if (me.alive && (me.action?.kind === 'dodge' || me.action?.kind === 'assassinate')) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
+      // 回避・暗殺の飛びかかり・押されて下がる（重い被弾・よろめき）は試合の計算が体を動かすので、その位置をプレイヤーの操作へ戻す
+      const pushed = me.react && me.react.push > 0 && me.react.t <= me.react.time;
+      if (me.alive && (me.action?.kind === 'dodge' || me.action?.kind === 'assassinate' || pushed)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
       views.get(me).update(dt, player.moving);
       viewModel.update(dt, player.moving);
       arrows.update();
