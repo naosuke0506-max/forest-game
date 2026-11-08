@@ -1,11 +1,11 @@
-// BGM（題の画面・大廳）。曲は assets/music/ の MP3（OpenGameArt の CC0。出典は assets/music/CREDITS.md）
+// BGM（題の画面・大廳）。曲は assets/music/ の MP3（題の曲は OpenGameArt の CC0、大廳の曲は自作。出典は assets/music/CREDITS.md）
 //   iPad のメモリを使いすぎないよう、曲は全部を先に解かず、<audio> で少しずつ読みながら鳴らす（音量は Web Audio の master を通す）
 //   iPad は指で触ったときにしか鳴らし始められないので、最初に触れたとき（unlock）に全部の曲を一度鳴らして止めておく
 import { audio } from './engine.js';
 
 const TRACKS = {
   title: { url: 'assets/music/title.mp3', volume: 0.75 },   // 題の画面：合唱とホルンの劇的な曲
-  hall: { url: 'assets/music/hall.mp3', volume: 0.6 },      // 大廳：パッドと鐘の静かな曲（切れ目なく繰り返す）
+  hall: { url: 'assets/music/hall.mp3', volume: 0.6 },      // 大廳：「ダァーン、ダラダダァ〜ン」のリズムのノれる曲（自作。tools/music/compose_hall.py）
 };
 
 export function createMusic(build = '') {
