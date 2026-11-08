@@ -119,7 +119,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   const VICTIM = /^(as_back_v|as_slide_v|drag_wd_v|drag_bed_v)$/;   // される側の動き（倒れても最後の姿のまま）
   // 攻撃を受けた動き（game/reactions.js の fighter.react）：流している受けた動きの番号と残りの時間。
   // 押されて下がった分（knock）：動きの中で体が下がっているので、位置をその分だけ戻して描く（受けた動きが終わったら BLEND の間に 0 へ）
-  let reactId = 0, reactLeft = 0;
+  let reactId = 0, reactLeft = 0, reactShift = 0;   // reactShift：受けた動きの中で体が下がる距離（m）
   const knock = { x: 0, z: 0, fade: 0, fx: 0, fz: 0 };
   const knockV = new pc.Vec3();
   // snap：動き終わりに体の位置と向きが移った（暗殺の滑斬など。fighter.snapPose）。次の動きへは混ぜずにすぐ移る（移った所で姿が合っている）
@@ -286,7 +286,9 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       const cv = fighter.cover?.seg;
       // 押されて下がった分：受けた動きの間は下がった分だけ戻し、終わったら動きの戻り（BLEND）と同じ間に 0 へ
       const rk = fighter.react;
-      if (rk && rk.id === reactId && reactLeft > 0) { knock.x = rk.moved.x; knock.z = rk.moved.z; knock.fade = 0; }
+      // 動きの中で下がる分より遠くへ押された（楯押）：動きの分だけ戻し、残りは体ごと滑って下がるように見せる
+      const kk = rk && rk.push > 0 && reactShift > 0 ? Math.min(1, reactShift / rk.push) : 1;
+      if (rk && rk.id === reactId && reactLeft > 0) { knock.x = rk.moved.x * kk; knock.z = rk.moved.z * kk; knock.fade = 0; }
       else if (knock.x || knock.z) {
         if (!knock.fade) { knock.fx = knock.x; knock.fz = knock.z; }
         knock.fade += dt;
@@ -342,6 +344,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         if (use) {
           restart(use, 1);
           reactLeft = clip(use).duration * 0.95;
+          reactShift = (clip(use).shift || 0) * meta.scale;
           lastAction = fighter.action;
         }
       }
@@ -392,6 +395,10 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
           // 技（片手劍・長劍）：動きを作った速さのまま流す（data.js の TECHNIQUES の time が動きの長さ）
           const name = a.tech.clip;
           if (has(name)) restart(name, clip(name).duration / a.tech.time);
+        } else if (a.kind === 'shield') {
+          // 楯の技（楯擊・楯押）：動きを作った速さのまま
+          const name = a.skill.clip;
+          if (has(name)) restart(name, clip(name).duration / a.skill.time);
         } else if (a.kind === 'charge') {
           if (has(a.tech.in)) restart(a.tech.in, 1);
         } else if (a.kind === 'charge2') {

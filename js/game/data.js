@@ -96,6 +96,21 @@ export const LOADOUTS = {
   archer:  { main: ['longbow', 'crossbow'], side: ['dagger', 'falchion', 'battleaxe'] },
   cleric:  { main: ['mace'] },
 };
+/**
+ * 楯の技（docs/DESIGN.md「楯の技」）。楯ごとに 2 つ：左手ボタンを短く押して離す技（tap）と、防禦の構えの間に攻擊ボタンの技（guardAttack）
+ *   clip 動き（楯劍騎士の模型に入っている）、time 長さ（秒）、hit 当たる時刻（秒）、reach 間合い（m。体の太さの外から）、arc 当たる角度（度）、
+ *   stamina、damage（この値の傷。武器の威力は使わない）、power 受けた側の動き（h：重い被弾）、
+ *   push 押し返す距離（m。傷は無く、防禦の上からでも体勢を崩してよろめかせる）、pushTime 押し返す間（秒）
+ */
+export const SHIELD_SKILLS = {
+  push: { name: '楯押', clip: 'sb_push', time: 0.73, hit: 0.30, reach: 1.25, arc: 80, stamina: 14, damage: 0, push: 2.0, pushTime: 0.8 },
+  bash: { name: '楯擊', clip: 'sb_bash', time: 0.73, hit: 0.30, reach: 1.2, arc: 100, stamina: 16, damage: 9, power: 'h' },
+};
+/** 楯ごとの技（小楯の受流・大楯の楯突貫は、その楯の模型ができたら） */
+export const SHIELD_MOVES = {
+  kite: { tap: 'push', guardAttack: 'bash' },
+};
+
 /** 楯。planned：模型と動きがまだ無い */
 export const SHIELDS = {
   kite:    { name: '鳶形楯' },
