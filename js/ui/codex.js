@@ -2,13 +2,13 @@
 //   後ろの 3D の広間（render/hall.js）に、選んだ人物を立たせて動きを流し、武器は壇の上に浮かべて回して見せる
 //   動きの再生は、動作監督の画面と同じ作り：動きの一覧（見出しごと）・流す／止める・繰り返す・速さ・時刻のつまみ
 import { L } from './labels.js';
-import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES } from '../game/data.js';
+import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, EXCLUSIVE_SKILLS, SHARED_SKILLS } from '../game/data.js';
 import { resolveLoadout } from '../game/match.js';
-import { CLIP_NAMES, CLIP_DESC, CLIP_GROUPS, WEAPON_KIND, SKILLS, COMMON_SKILLS } from '../game/codex.js';
+import { CLIP_NAMES, CLIP_DESC, CLIP_GROUPS, WEAPON_KIND, WEAPON_ARTS, COMMON_ARTS, CREATURE_KINDS, CHAR_GUIDE } from '../game/codex.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const WEIGHT = { light: '輕裝', medium: '中裝', heavy: '重裝' };
-const TABS = [['person', L.person], ['weapon', L.weapon], ['arms', L.arms], ['beast', L.beast]];
+const TABS = [['person', L.person], ['skill', L.skill], ['weapon', L.weapon], ['arms', L.arms], ['beast', L.beast]];
 const SPEEDS = [[0.25, '×¼'], [0.5, '×½'], [1, '×1']];
 const weaponName = (id) => WEAPONS[id]?.name ?? SHIELDS[id]?.name ?? PLANNED[id] ?? id;
 const isPlanned = (id) => (SHIELDS[id] ? !!SHIELDS[id].planned : !WEAPONS[id]);
@@ -20,6 +20,33 @@ function skillList(list) {
     <span class="how">${esc(s.how)}</span><span class="sdesc">${esc(s.desc)}</span></li>`).join('')}</ul>`;
 }
 const row = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
+
+/** 技能の札（名前・種類・効き目の長さ・待ち時間・説明。まだ使えない物は「未完」） */
+function skillCard(s, main = false) {
+  const meta = [SKILL_TYPES[s.type], s.time ? `${s.time} 秒` : '一撃', `待 ${s.cd} 秒`].map(esc).join('・');
+  return `<div class="skill-card${main ? ' main' : ''}"><div class="sk-head"><b>${esc(s.name)}</b>${s.planned ? `<small>${L.planned}</small>` : ''}<span class="sk-meta">${meta}</span></div>
+    <p class="sk-desc">${esc(s.desc)}</p></div>`;
+}
+
+/**
+ * 性能（殺傷力・生命力・敏捷・防禦力）：全キャラの中での強さを 10 の目盛りで表す（一番弱い人で 3、一番強い人で 10）
+ *   殺傷力：選べる武器の威力の平均、生命力：體力、敏捷：速さ、防禦力：鎧の硬さ（受ける傷が少ないほど硬い）
+ */
+function powerOf(id) {
+  const lo = LOADOUTS[id], c = CHARACTERS[id];
+  const ws = [...(lo.main || []), ...(lo.side || [])].filter((w) => WEAPONS[w]);
+  const dmg = ws.length ? ws.reduce((n, w) => n + WEAPONS[w].damage, 0) / ws.length : 0;
+  return { kill: dmg, life: c.maxHp, quick: c.speed, guard: 1 - c.armor };
+}
+const POWER = [['kill', '殺傷力', (v) => v.toFixed(0)], ['life', '生命力', (v) => v], ['quick', '敏捷', (v) => `×${v}`], ['guard', '防禦力', (v) => `${Math.round(v * 100)}%`]];
+function gauges(id) {
+  const all = Object.keys(CHARACTERS).map(powerOf), me = powerOf(id);
+  return `<div class="gauges">${POWER.map(([k, name, fmt]) => {
+    const vs = all.map((p) => p[k]), lo = Math.min(...vs), hi = Math.max(...vs);
+    const n = hi > lo ? Math.round(3 + (7 * (me[k] - lo)) / (hi - lo)) : 7;
+    return `<div class="gauge"><span class="g-name">${name}</span><span class="g-bar">${Array.from({ length: 10 }, (_, i) => `<i${i < n ? ' class="on"' : ''}></i>`).join('')}</span><span class="g-val">${fmt(me[k])}</span></div>`;
+  }).join('')}</div>`;
+}
 
 /**
  * @param {object} o
@@ -43,7 +70,7 @@ export function createCodex({ hall }) {
     for (const b of tabsEl.children) b.classList.toggle('sel', b.dataset.tab === t);
     hall().direct(null);
     hall().showWeapon(t === 'weapon' && !isPlanned(weapon) ? weapon : null);
-    if (t === 'person' || t === 'arms' || t === 'beast') showChar();
+    if (t !== 'weapon') showChar();
     render();
   }
 
@@ -61,9 +88,22 @@ export function createCodex({ hall }) {
   function renderPerson() {
     const c = CHARACTERS[char], lo = LOADOUTS[char];
     const gear = (slot) => (lo[slot] || []).map((id) => `${esc(weaponName(id))}${isPlanned(id) ? `<small>${L.planned}</small>` : ''}`).join('・');
-    const skills = [...new Set([...(lo.main || []), ...(lo.shield || []), ...(lo.side || [])])].filter((id) => SKILLS[id]);
+    const skills = [...new Set([...(lo.main || []), ...(lo.shield || []), ...(lo.side || [])])].filter((id) => WEAPON_ARTS[id]);
+    const g = CHAR_GUIDE[char], ex = EXCLUSIVE_SKILLS[char];
     return `<div class="char-select codex-chars">${Object.entries(CHARACTERS).map(([id, ch]) => `<button type="button" class="char-btn${id === char ? ' sel' : ''}" data-char="${id}">${esc(ch.name)}</button>`).join('')}</div>
       <p class="codex-desc">${esc(c.desc)}</p>
+      <h4 class="codex-head">專用技能</h4>
+      ${ex ? skillCard(ex, true) : ''}
+      <p class="codex-note">技能ボタンで使う。専用技能はキャラ 1 人に 1 つで、最初から使える。共通技能は刻を越えるたびの報酬で 3 つから 1 つ選ぶ（技能の札）</p>
+      <h4 class="codex-head">性能</h4>
+      ${gauges(char)}
+      ${g ? `<h4 class="codex-head">推奨</h4>
+      <ul class="recs">${g.recommend.map(([k, v]) => `<li><b>${esc(k)}</b><span>${esc(v)}</span></li>`).join('')}</ul>
+      <h4 class="codex-head">戰術</h4>
+      <p class="codex-desc">${esc(g.tactics)}</p>
+      <h4 class="codex-head">得意</h4>
+      <div class="kinds">${g.strong.map((k) => `<span class="kind"><b>${esc(CREATURE_KINDS[k].name)}</b>${esc(CREATURE_KINDS[k].desc)}</span>`).join('')}</div>` : ''}
+      <h4 class="codex-head">能力</h4>
       <dl class="cx-stats">
         ${row('鎧', esc(c.armorName))}${row('輕重', WEIGHT[c.weight] || c.weight)}${row('體力', c.maxHp)}
         ${row('迅速', `×${c.speed}`)}${row('視界', `${c.sight} 米`)}${row('左手', esc(c.leftLabel || '―'))}
@@ -75,8 +115,8 @@ export function createCodex({ hall }) {
       ${lo.shield ? `<p class="gear"><span>${L.shield}</span>${gear('shield')}</p>` : ''}
       ${lo.side ? `<p class="gear"><span>${L.side}</span>${gear('side')}</p>` : ''}
       <h4 class="codex-head">技</h4>
-      ${skills.map((id) => `<p class="skill-of">${esc(weaponName(id))}</p>${skillList(SKILLS[id])}`).join('')}
-      <p class="skill-of">共通</p>${skillList(COMMON_SKILLS)}`;
+      ${skills.map((id) => `<p class="skill-of">${esc(weaponName(id))}</p>${skillList(WEAPON_ARTS[id])}`).join('')}
+      <p class="skill-of">共通</p>${skillList(COMMON_ARTS)}`;
   }
 
   /** 動きの再生（見出しを選び、動きを選ぶと大廳の人物が流す） */
@@ -120,7 +160,7 @@ export function createCodex({ hall }) {
       ${stats ? `<dl class="cx-stats">${stats}</dl>` : ''}
       <p class="gear"><span>使用</span>${users.map(esc).join('・') || '―'}</p>
       <h4 class="codex-head">技</h4>
-      ${skillList(SKILLS[weapon]) || `<p class="codex-note">技はこれから作る</p>`}`;
+      ${skillList(WEAPON_ARTS[weapon]) || `<p class="codex-note">技はこれから作る</p>`}`;
   }
 
   // ---- 兵器・魔物（まだ未完） ----
@@ -129,14 +169,26 @@ export function createCodex({ hall }) {
       <div class="picks">${Object.values(ARMS).map((a) => `<div class="pick"><span class="pick-name">${esc(a.name)}<small>${L.planned}</small></span>
         <span class="pick-when">${esc(PHASES[a.tier - 1]?.name ?? '')}を越えると届く</span><span class="pick-desc">${esc(a.desc)}</span></div>`).join('')}</div>`;
   }
+  function renderSkill() {
+    return `<p class="codex-note">技能ボタンを押して使う。使うと効き目がしばらく続き、使った後は待ち時間が過ぎるとまた使える。今はまだ案で、ゲームでは使えない（${L.planned}）</p>
+      <h4 class="codex-head">共通技能</h4>
+      <p class="codex-note">全キャラ共通。刻を越えるたびの報酬で、ここから 3 つ出て 1 つ選ぶ（最大 4 つ）</p>
+      ${Object.values(SHARED_SKILLS).map((s) => skillCard(s)).join('')}
+      <h4 class="codex-head">專用技能</h4>
+      <p class="codex-note">キャラ 1 人に 1 つ。最初から使える</p>
+      ${Object.entries(EXCLUSIVE_SKILLS).map(([id, s]) => `<p class="skill-of">${esc(CHARACTERS[id].name)}</p>${skillCard(s)}`).join('')}`;
+  }
   function renderBeast() {
     return `<p class="codex-note">魔物（クリーチャー）はこれから作る（${L.planned}）。森に出てくる魔物・ボスと、變異の藥で変わる姿をここに載せる</p>
+      <h4 class="codex-head">分類</h4>
+      <div class="kinds">${Object.values(CREATURE_KINDS).map((k) => `<span class="kind"><b>${esc(k.name)}</b>${esc(k.desc)}</span>`).join('')}</div>
+      <h4 class="codex-head">${L.mutation}</h4>
       <div class="picks">${Object.values(MUTATIONS).map((m) => `<div class="pick"><span class="pick-name">${esc(m.name)}<small>${L.planned}</small></span>
         <span class="pick-desc">${esc(m.desc)}（クリーチャーは${esc(m.creature ?? L.creatureTbd)}）</span></div>`).join('')}</div>`;
   }
 
   function render() {
-    body.innerHTML = tab === 'person' ? renderPerson() : tab === 'weapon' ? renderWeapon() : tab === 'arms' ? renderArms() : renderBeast();
+    body.innerHTML = tab === 'person' ? renderPerson() : tab === 'skill' ? renderSkill() : tab === 'weapon' ? renderWeapon() : tab === 'arms' ? renderArms() : renderBeast();
     if (tab === 'person') renderMotions();
   }
 

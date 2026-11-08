@@ -258,12 +258,51 @@ export const BOT_NAMES = ['玄馬', '志乃', '伊吹', '颯', '朱音', '鐵心
  */
 export const AREA_RADIUS = 175;   // js/config.js の world.playRadius と同じ値（端から端まで 350m）
 export const PHASES = [
-  { name: '第壹刻', duration: 180, radius: AREA_RADIUS, time: 'morning', note: '朝の森。息を潜め、敵を探せ' },
-  { name: '第貳刻', duration: 180, radius: AREA_RADIUS, time: 'day',     note: '日が高くなった' },
-  { name: '第參刻', duration: 180, radius: AREA_RADIUS, time: 'dusk',    note: '日が傾き、森が赤く染まる' },
-  { name: '第肆刻', duration: 180, radius: AREA_RADIUS, time: 'night',   note: '夜が来た。暗い森に気をつけよ' },
+  { name: '第1刻', duration: 180, radius: AREA_RADIUS, time: 'morning', note: '朝の森。息を潜め、敵を探せ' },
+  { name: '第2刻', duration: 180, radius: AREA_RADIUS, time: 'day',     note: '日が高くなった' },
+  { name: '第3刻', duration: 180, radius: AREA_RADIUS, time: 'dusk',    note: '日が傾き、森が赤く染まる' },
+  { name: '第4刻', duration: 180, radius: AREA_RADIUS, time: 'night',   note: '夜が来た。暗い森に気をつけよ' },
   { name: '終刻', duration: 240, radius: AREA_RADIUS, time: 'night',   note: '最後の一人になるまで終わらない' },
 ];
+
+/**
+ * 技能（スキル。docs/DESIGN.md「技能」）：技能ボタンを押して使う。使うと効き目が time 秒続き、使った後は cd 秒待つとまた使える
+ *   專用技能：キャラ 1 人に 1 つ（最初から使える）。共通技能：全キャラ共通で、刻を越えるたびの報酬で 3 つから 1 つ選ぶ（最大 4 つ）
+ *   type：SKILL_TYPES。planned：まだゲームの中で使えない（今は圖鑑に載せるだけ。数字は案）
+ */
+export const SKILL_TYPES = { finisher: '必殺', buff: '強化', hinder: '妨害', heal: '回復', stealth: '隱密', sense: '探知' };
+export const EXCLUSIVE_SKILLS = {
+  shield:  { name: '鐵壁', type: 'buff', time: 8, cd: 60, planned: true,
+             desc: '8 秒、どの向きからの攻撃も楯で受けられ、防禦が崩れない。受けるたびに、攻撃してきた相手が大きくよろめいて無防備になる（誅殺できる）' },
+  sword:   { name: '一閃', type: 'finisher', time: 0, cd: 50, planned: true,
+             desc: '技能ボタンを長押しして構え、離すと前へ 8 m を一瞬で踏み込み、通り抜けざまに斬る。防禦を貫く。倒せたら待ち時間が半分になる' },
+  polearm: { name: '豬突', type: 'finisher', time: 0, cd: 45, planned: true,
+             desc: '槍を構えて前へ 10 m 突進する。最初に当たった敵を貫いて大きな傷を与え、突き倒す（無防備になる）。木や壁に当たると止まる' },
+  blunt:   { name: '地裂', type: 'finisher', time: 0, cd: 60, planned: true,
+             desc: '鎚を地面に叩きつけ、周り 5 m の敵を突き倒す（無防備になる）。近くのベッド・タンスに隠れた敵は、揺れで転がり出る。大きな音で居場所が知れる' },
+  archer:  { name: '鷹目', type: 'sense', time: 12, cd: 50, planned: true,
+             desc: '12 秒、50 m 以内の敵の輪郭が、壁や草越し・隠れ場所の中まで見える' },
+  cleric:  { name: '聖域', type: 'heal', time: 10, cd: 70, planned: true,
+             desc: '自分の周り 5 m に光の輪を 10 秒張る。中にいる間は体力が戻り続け（毎秒 4）、入ってきた敵は目がくらんで遅くなる' },
+};
+export const SHARED_SKILLS = {
+  imbue:   { name: '屬性付與', type: 'buff', time: 15, cd: 60, planned: true,
+             desc: '15 秒、武器にマップの屬性を宿す（森は火。当たった相手は燃えて少しずつ傷が増え、草や木に燃え移る）' },
+  warcry:  { name: '鬨聲', type: 'hinder', time: 0, cd: 45, planned: true,
+             desc: '雄叫び。周り 8 m の敵が 1 秒ひるみ、自分のスタミナが全部戻る。大きな声なので居場所が知れる' },
+  gale:    { name: '疾風', type: 'buff', time: 8, cd: 40, planned: true,
+             desc: '8 秒、移動が 30% 速くなり、走る・回避でスタミナが減らない' },
+  ironskin:{ name: '鐵膚', type: 'buff', time: 8, cd: 50, planned: true,
+             desc: '8 秒、受ける傷が 40% 減り、軽い攻撃ではひるまない' },
+  bandage: { name: '止血', type: 'heal', time: 4, cd: 60, planned: true,
+             desc: '4 秒かけて体力の 35% が戻る。その間は攻撃できず、ゆっくり歩く' },
+  smoke:   { name: '煙玉', type: 'hinder', time: 8, cd: 45, planned: true,
+             desc: '投げた所に煙が 8 秒広がる（半径 6 m）。中も、その向こうも見えない' },
+  shadow:  { name: '隱形', type: 'stealth', time: 10, cd: 50, planned: true,
+             desc: '10 秒、足音と息遣いがしない。しゃがみ歩きが、ふつうの歩きと同じ速さになる' },
+  foresee: { name: '見切', type: 'buff', time: 5, cd: 40, planned: true,
+             desc: '5 秒以内に受けた最初の攻撃を、自動でぴったり回避する。そのあと周りが 2 秒ゆっくりになる' },
+};
 
 /**
  * 戰鬥（試合の形）と戰場（マップ）。大廳の「戰鬥」から選ぶ。今は蠱毒と森だけ
@@ -279,7 +318,7 @@ export const ERAS = { medieval: { name: '中世' } };
 
 /**
  * 兵器と變異：試合の前に、キャラの時代のものからそれぞれ 1 つだけ選ぶ。強いほど遅く届く
- *   tier：この番号の刻（1 なら第壹刻）を越えたとき（時間が止まる間）に届く
+ *   tier：この番号の刻（1 なら第1刻）を越えたとき（時間が止まる間）に届く
  *   兵器は届くと近くに来る（馬は呼ぶと来る、攻城兵器は近くに置かれる）。變異はクリーチャーに変わる藥で、届いた後いつでも飲める
  *   planned：中身（乗る・撃つ・クリーチャーになる）はまだ無い。今は届いた知らせだけ
  */
@@ -290,10 +329,10 @@ export const ARMS = {
   trebuchet: { name: '投石機', tier: 4, era: 'medieval', desc: '大きな石を遠くへ投げる。近くに置かれる', planned: true },
 };
 export const MUTATIONS = {
-  potion1: { name: '壹之藥', tier: 1, era: 'medieval', creature: null, desc: '飲むと小さなクリーチャーに変わる', planned: true },
-  potion2: { name: '貳之藥', tier: 2, era: 'medieval', creature: null, desc: '飲むと中くらいのクリーチャーに変わる', planned: true },
-  potion3: { name: '參之藥', tier: 3, era: 'medieval', creature: null, desc: '飲むと大きなクリーチャーに変わる', planned: true },
-  potion4: { name: '肆之藥', tier: 4, era: 'medieval', creature: null, desc: '飲むと最も強いクリーチャーに変わる', planned: true },
+  potion1: { name: '1號藥', tier: 1, era: 'medieval', creature: null, desc: '飲むと小さなクリーチャーに変わる', planned: true },
+  potion2: { name: '2號藥', tier: 2, era: 'medieval', creature: null, desc: '飲むと中くらいのクリーチャーに変わる', planned: true },
+  potion3: { name: '3號藥', tier: 3, era: 'medieval', creature: null, desc: '飲むと大きなクリーチャーに変わる', planned: true },
+  potion4: { name: '4號藥', tier: 4, era: 'medieval', creature: null, desc: '飲むと最も強いクリーチャーに変わる', planned: true },
 };
 
 /** ポイント */

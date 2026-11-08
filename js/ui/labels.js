@@ -13,7 +13,7 @@ export const L = {
   loading: '讀込中', start: '出陣', startFail: '起動失敗', practice: '修練之陣　對傀儡 3 騎', enter: '入',
   // 大廳と、試合の前に選ぶ画面（戰鬥 → 戰場 → 人物・武器 → 兵器・變異 → 開戰）
   hall: '大廳', battle: '戰鬥', codex: '圖鑑', settings: '設定', map: '戰場', person: '人物', weapon: '武器',
-  arms: '兵器', mutation: '變異', fight: '開戰', back: '歸', next: '次', creatureTbd: '未定', beast: '魔物',
+  arms: '兵器', mutation: '變異', fight: '開戰', back: '歸', next: '次', creatureTbd: '未定', beast: '魔物', skill: '技能',
   // 試合の前に選ぶ武器
   main: '右手', side: '持替', shield: '左手', planned: '未完',
   // 試合
