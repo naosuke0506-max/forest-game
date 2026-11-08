@@ -196,7 +196,8 @@ async function boot() {
 
   // 音：iPad は指で触ったときにしか音を出し始められない。試合を始めるボタンで出し、
   // 裏から戻ったなどで止まっていたら、次に画面に触れたときに再び出す
-  document.addEventListener('pointerdown', () => { if (playing && !audio.ready) audio.unlock(); }, true);
+  // （iPad の Safari は指を離したとき＝click でしか許さないので click で受ける。曲が断られていたら、ここで流し直す）
+  document.addEventListener('click', () => { if (!audio.ready) audio.unlock(); music.unlock(); }, true);
   titleScreen.ready(async (myChar, loadout) => {
     audio.unlock();
     input.reset();

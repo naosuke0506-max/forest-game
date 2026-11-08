@@ -1,11 +1,11 @@
-// BGM（題の画面・大廳）。曲は assets/music/ の MP3（OpenGameArt の CC0。出典は assets/music/CREDITS.md）
+// BGM（題の画面・大廳）。曲は assets/music/ の MP3（題の曲は OpenGameArt の CC0、大廳の曲は自作。出典は assets/music/CREDITS.md）
 //   iPad のメモリを使いすぎないよう、曲は全部を先に解かず、<audio> で少しずつ読みながら鳴らす（音量は Web Audio の master を通す）
 //   iPad は指で触ったときにしか鳴らし始められないので、最初に触れたとき（unlock）に全部の曲を一度鳴らして止めておく
 import { audio } from './engine.js';
 
 const TRACKS = {
   title: { url: 'assets/music/title.mp3', volume: 0.75 },   // 題の画面：合唱とホルンの劇的な曲
-  hall: { url: 'assets/music/hall.mp3', volume: 0.6 },      // 大廳：パッドと鐘の静かな曲（切れ目なく繰り返す）
+  hall: { url: 'assets/music/hall.mp3', volume: 0.6 },      // 大廳：「ダァーン、ダラダダァ〜ン」のリズムのノれる曲（自作。tools/music/compose_hall.py）
 };
 
 export function createMusic(build = '') {
@@ -51,11 +51,14 @@ export function createMusic(build = '') {
      */
     unlock() {
       audio.unlock();
-      if (unlocked || !audio.ctx) return;
+      if (!audio.ctx) return;
       unlocked = true;
       for (const t of Object.values(tracks)) {
         wire(t);
-        if (t !== tracks[current]) t.el.play().then(() => { if (t !== tracks[current]) t.el.pause(); }).catch(() => {});
+        if (t.ok) continue;   // もう鳴らせると分かった曲
+        const cur = t === tracks[current];
+        t.el.play().then(() => { t.ok = true; if (t !== tracks[current]) t.el.pause(); }).catch(() => {});
+        if (cur) fadeTo(t, t.T.volume, 2);   // 流すはずだったのに断られていた曲（題の曲など）：今から流す
       }
     },
     /** 曲を流す（fade 秒で大きくする）。ほかの曲は fade 秒で小さくして止める */
@@ -65,7 +68,7 @@ export function createMusic(build = '') {
       wire(t);
       for (const [n, o] of Object.entries(tracks)) if (n !== name && o.gain) this.stop(n, { fade });
       current = name;
-      if (t.el.paused) { t.el.currentTime = 0; t.el.play().catch(() => {}); }
+      if (t.el.paused) { t.el.currentTime = 0; t.el.play().then(() => { t.ok = true; }).catch(() => {}); }   // 断られたら、次に触れたとき unlock で流す
       fadeTo(t, t.T.volume, fade);
     },
     /** 曲を止める（fade 秒で小さくしてから） */

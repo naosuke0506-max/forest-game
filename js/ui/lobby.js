@@ -28,16 +28,17 @@ const BACK = { codex: 'hall', mode: 'hall', map: 'mode', char: 'map', arms: 'cha
 export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = () => {}, onShow = () => {}, onSettings = () => {}, hall = () => null } = {}) {
   const title = document.getElementById('title');
   const gate = document.getElementById('gate'), fade = document.getElementById('fade');
-  // 最初に触れる画面：触れたら音を出せるようにして題の曲を流し、題の画面を出す
+  // 最初に触れる画面：触れたら音を出せるようにして題の曲を流し、題の画面を出す。
+  // iPad の Safari は、指が触れた瞬間（pointerdown）ではなく、指を離したとき（click）しか音を許さないので click で受ける
   const openGate = (e) => {
     e?.preventDefault?.();
-    gate.removeEventListener('pointerdown', openGate);
+    gate.removeEventListener('click', openGate);
     onGate();
     gate.classList.add('gone');
     title.hidden = false;
     setTimeout(() => { gate.hidden = true; }, 900);
   };
-  gate.addEventListener('pointerdown', openGate);
+  gate.addEventListener('click', openGate);
   const enterBtn = document.getElementById('start');
   const lobby = document.getElementById('lobby');
   const head = document.getElementById('lobby-title'), stepEl = document.getElementById('lobby-step');
