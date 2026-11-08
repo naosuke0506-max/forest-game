@@ -44,6 +44,7 @@ const titleScreen = createLobby({
   onEnter: () => { audio.unlock(); hall?.setActive(true, window.__forest?.player.camera); },
   onShow: (char, loadout) => { hall?.show(char, loadout).catch((err) => console.warn('大廳の人物:', err)); },
   onSettings: () => settingsRef?.open(),
+  hall: () => hall,
 });
 
 async function boot() {

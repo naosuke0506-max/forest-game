@@ -220,10 +220,13 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     if (!eyeReady) { eyeLocal.copy(eyeTmp); eyeReady = true; } else eyeLocal.lerp(eyeLocal, eyeTmp, Math.min(1, dt * rate));
   }
 
+  // 圖鑑で動きを流すとき（direct）：戦闘の状態を見ずに、選んだ動きだけを流す
+  let directed = null;
   return {
     root,
     update(dt) {
       if (paused) return;   // 時間が止まっている（刻が変わった直後）：姿もそのまま
+      if (directed) return;  // 圖鑑：選んだ動きをそのまま流す（時刻は圖鑑が動かす）
       updateAnim(dt);
       if (fighter.alive) turnHead();
       if (firstPerson && fighter.alive) applyFirstPerson(dt);
@@ -247,6 +250,18 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     setVisible(v) { root.enabled = v; if (!v && nocked) nocked.enabled = false; },
     /** 片付ける（大廳の人物を替えるとき） */
     destroy() { root.destroy(); },
+    /** 動きの情報（長さ・繰り返すか）。この模型が持つ動きの名前の一覧は clipNames */
+    clipInfo: (name) => (has(name) ? clip(name) : null),
+    get clipNames() { return Object.keys(meta.clips).filter(has); },
+    /** 圖鑑：name の動きを最初から流す（null で戦闘の状態に戻す）。時刻と速さは anim で動かす */
+    direct(name) {
+      directed = name && has(name) ? name : null;
+      if (!directed) { current = ''; return; }
+      body.anim.speed = 1;
+      body.anim.baseLayer.transition(directed, 0.12, 0);
+      current = directed;
+    },
+    get anim() { return body.anim; },
     /** 時間を止める（刻が変わった直後）：動きを止め、今の姿のまま */
     setPaused(v) {
       if (v === paused) return;
