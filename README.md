@@ -146,6 +146,7 @@ iPad の Safari で動く、4 人で戦う対戦ゲームの試作品です（�
 
 ```
 index.html               入口。import map でエンジンの版を 1 か所で決める
+CLAUDE.md                Claude Code で作業するときの約束・作業の決まり・残っていること
 css/style.css            画面サイズ・Safari のセーフエリアに合わせた UI
 vendor/playcanvas/2.23.3 固定したエンジン本体・ライセンス・照合記録（VERSION.md）
 assets/textures/         実写の質感画像（読み込むのは軽くした WebP。出典は CREDITS.md）
@@ -186,7 +187,7 @@ js/
   render/viewmodel.js    一人称で手元に見える武器と盾
   render/weapons.js      武器・盾の模型の読み込み（模型が無い武器と矢は仮の形）
   render/projectiles.js  飛んでいる矢の見た目
-  render/title-scene.js  題の画面の背景（3D）：暗い空間に三重の石の「時の輪」が回り、光る核・岩のかけら・火の粉
+  render/title-scene.js  題の画面の背景（3D）：星空に三重の青銅の「時の輪」（歯車・目盛りの環・内歯車）が回り、光る文字盤と金の針（曲の拍で進む）・光る核・岩のかけら・火の粉。絵はその場で作る
   render/hall.js         大廳の 3D：松明の灯る石の広間と、選んだ人物（森とは別の層に作り、大廳のカメラだけが描く）
   render/furniture-motion.js タンスの扉・ベッドの掛け布を、隠れる・出る・探す・引きずり出す動きに合わせて開け閉めする
   render/boundary.js     歩ける範囲の光る境界（今は使っていない。外周は world/fence.js の柵）
