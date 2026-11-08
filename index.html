@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>蠱毒</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-08.14';</script>
+<script>window.__BUILD = '2026-11-08.15';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -19,6 +19,9 @@
 <link rel="modulepreload" href="./js/match-session.js">
 <link rel="modulepreload" href="./js/ui/minimap.js">
 <link rel="modulepreload" href="./js/render/sun-glare.js">
+<link rel="modulepreload" href="./js/render/hall.js">
+<link rel="modulepreload" href="./js/render/furniture-motion.js">
+<link rel="modulepreload" href="./js/ui/lobby.js">
 <link rel="modulepreload" href="./js/render/sky-lights.js">
 <link rel="modulepreload" href="./js/render/air-particles.js">
 <link rel="modulepreload" href="./js/world/ground-blend.js">
@@ -267,11 +270,50 @@
   <div class="title-inner">
     <h1>蠱毒</h1>
     <p class="sub">修練之陣　對傀儡 3 騎</p>
-    <div id="char-select" class="char-select"></div>
-    <p id="char-desc" class="char-desc"></p>
-    <div id="loadout" class="loadout"></div>
     <button id="start" class="start" type="button" disabled>讀込中…</button>
-    <p class="hint">左下のスティックで移動　／　右側をなぞって見回す　／　右下のボタンで右手・左手・回避（弓は長押しで引く）<br>武器は試合の前に選ぶ（試合の途中では替えられない）</p>
+    <p class="hint">左下のスティックで移動　／　右側をなぞって見回す　／　右下のボタンで右手・左手・回避（弓は長押しで引く）</p>
+  </div>
+</section>
+
+<!-- 大廳（後ろに 3D の広間と、選んだ人物が立つ）と、試合の前に選ぶ画面：戰鬥 → 戰場 → 人物・武器 → 兵器・變異 → 開戰 -->
+<section id="lobby" class="lobby" hidden>
+  <div class="lobby-panel">
+    <header class="lobby-head">
+      <button id="lobby-back" class="back-btn" type="button" hidden>歸</button>
+      <h2 id="lobby-title">大廳</h2>
+      <span id="lobby-step" class="lobby-step"></span>
+    </header>
+    <div class="pane" data-pane="hall">
+      <p id="hall-who" class="hall-who"></p>
+      <div class="menu">
+        <button type="button" class="menu-btn" data-go="mode">戰鬥</button>
+        <button type="button" class="menu-btn" disabled>圖鑑<small>未完</small></button>
+        <button type="button" class="menu-btn" data-act="settings">設定</button>
+      </div>
+    </div>
+    <div class="pane" data-pane="mode" hidden>
+      <div id="mode-list" class="cards"></div>
+      <button type="button" class="start" data-go="map">次</button>
+    </div>
+    <div class="pane" data-pane="map" hidden>
+      <div id="map-list" class="cards"></div>
+      <button type="button" class="start" data-go="char">次</button>
+    </div>
+    <div class="pane" data-pane="char" hidden>
+      <div id="char-select" class="char-select"></div>
+      <p id="char-desc" class="char-desc"></p>
+      <div id="loadout" class="loadout"></div>
+      <p class="lo-note">武器は試合の前に選ぶ（試合の途中では替えられない）</p>
+      <button type="button" class="start" data-go="arms">次</button>
+    </div>
+    <div class="pane" data-pane="arms" hidden>
+      <h3 class="pick-head">兵器</h3>
+      <div id="arms-list" class="picks"></div>
+      <h3 class="pick-head">變異</h3>
+      <div id="mut-list" class="picks"></div>
+      <p class="lo-note">それぞれ 1 つだけ。強いものほど遅く届く（その刻を越えたときに届く）</p>
+      <button id="fight" type="button" class="start">開戰</button>
+    </div>
   </div>
 </section>
 

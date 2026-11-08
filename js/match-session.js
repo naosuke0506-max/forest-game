@@ -1,5 +1,5 @@
 // 練習モードの試合：あなた＋bot 3 体。試合の計算（game/）と、見た目・画面（render/・ui/）をつなぐ
-import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS } from './game/data.js';
+import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS } from './game/data.js';
 import { createMinimap } from './ui/minimap.js';
 import { ZONE_NAMES } from './world/zones.js';
 import { TIMES } from './world/time-of-day.js';
@@ -100,6 +100,14 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     return [f, m ? createCharacterView(app, f, terrain, m) : createFighterView(app, f, terrain)];
   }));
   const hud = createHud(match, me);
+  // 試合の前に選んだ兵器・變異：その刻を越えたときに届く（中身はまだ無いので、今は知らせだけ）
+  const arms = ARMS[loadout?.arms], mutation = MUTATIONS[loadout?.mutation];
+  me.arms = null; me.potion = null;
+  match.on('phaseStart', ({ phase }) => {
+    if (!me.alive) return;
+    if (arms && phase === arms.tier) { me.arms = loadout.arms; hud.addFeed(`兵器「${arms.name}」が届いた${arms.planned ? '（使う仕組みはこれから）' : ''}`); }
+    if (mutation && phase === mutation.tier) { me.potion = loadout.mutation; hud.addFeed(`變異の藥「${mutation.name}」が届いた${mutation.planned ? '（飲む仕組みはこれから）' : ''}`); }
+  });
   const minimap = createMinimap(document.getElementById('minimap'), { areaRadius: AREA_RADIUS, zones, buildings, heightAt: terrain.heightAt, trees });
   // 別のエリアに入ったら、左の知らせに出す
   let zoneNow = zones ? zones.zoneAt(me.x, me.z) : null, zoneTimer = 0;

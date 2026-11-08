@@ -27,7 +27,9 @@ import { loadTreeModels, startLoadingNear, createModelTrees } from './world/tree
 import { loadProps, createProps } from './world/props.js';
 import { createPlayer } from './player/controller.js';
 import { createInput } from './input/input.js';
-import { createTitleScreen, createStats } from './ui/screens.js';
+import { createStats } from './ui/screens.js';
+import { createLobby } from './ui/lobby.js';
+import { createHall } from './render/hall.js';
 import { createSettings } from './ui/settings.js';
 import { startPracticeMatch } from './match-session.js';
 import { BUILD } from './version.js';
@@ -36,7 +38,13 @@ import { refreshIfStale } from './core/freshness.js';
 // <head> の仕組みが拾ったエラーのうち、画面ができる前のものをここで表示する
 (window.__pendingErrors || []).forEach((m) => window.__showError(m));
 
-const titleScreen = createTitleScreen();
+// 題の画面と大廳（大廳の 3D の広間は、森を組み立てた後に作る。それまでは押されない）
+let hall = null, settingsRef = null;
+const titleScreen = createLobby({
+  onEnter: () => { audio.unlock(); hall?.setActive(true, window.__forest?.player.camera); },
+  onShow: (char, loadout) => { hall?.show(char, loadout).catch((err) => console.warn('大廳の人物:', err)); },
+  onSettings: () => settingsRef?.open(),
+});
 
 async function boot() {
   const canvas = document.getElementById('app');
@@ -107,9 +115,16 @@ async function boot() {
   const touchLayer = document.getElementById('touch-layer');
   const input = createInput(touchLayer, document.getElementById('stick'), CONFIG);
   const stats = createStats(app, CONFIG.showStats, CONFIG.qualityName);
+  // 大廳（試合の前）：松明の灯る石の広間。題の画面の後ろから出し、試合が始まると片付けて森のカメラに戻す
+  hall = createHall(app, CONFIG);
+  hall.setActive(true, player.camera);
+  document.body.classList.add('in-hall');
 
   let playing = false, session = null, deepK = 0;
   app.on('update', (dt) => {
+    // 大廳にいる間は、広間だけを動かす（森は描かず、動かさない。森の音も止める）
+    ambience.setMuted?.(hall.active);
+    if (hall.active) { hall.update(dt); stats.update(dt); return; }
     const frame = playing ? input.read() : null;
     if (playing) player.update(dt, frame);
     session?.update(dt, frame || { attack: false, left: false, dodge: false, use: false, moveX: 0, moveY: 0 });
@@ -156,6 +171,7 @@ async function boot() {
     audio.setVolume({ high: 1, mid: 0.7, low: 0.4, off: 0 }[st.sound] ?? 0.7);
   };
   const settings = createSettings(applySettings, (act) => session?.debugAction(act));
+  settingsRef = settings;
 
   // 音：iPad は指で触ったときにしか音を出し始められない。試合を始めるボタンで出し、
   // 裏から戻ったなどで止まっていたら、次に画面に触れたときに再び出す
@@ -171,6 +187,10 @@ async function boot() {
       // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」
       phaseDuration: CONFIG.phaseDuration ?? (settings.phaseLen === 'normal' ? null : Number(settings.phaseLen)),
     });
+    // 大廳を片付けて、森のカメラに戻す
+    hall.setActive(false, player.camera);
+    hall.clear();
+    document.body.classList.remove('in-hall');
     touchLayer.hidden = false;
     document.getElementById('hud').hidden = false;
     window.__forest.session = session;

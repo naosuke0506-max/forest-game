@@ -63,7 +63,14 @@ export function createAmbience({ timeOfDay, wind, zones = null }) {
     playSample(outlet({ gain: Math.min(1, p.gain * 1.4), pan: p.pan, cutoff: p.cutoff, dest: bus }), 'amb_chirp', { rate: 0.9 + R() * 0.25, gain: 0.8 });
   }
 
+  let muted = false;   // 大廳にいる間は森の音を止める
   return {
+    /** 森の音を止める・戻す（大廳） */
+    setMuted(v) {
+      if (v === muted) return;
+      muted = v;
+      if (bus) bus.gain.setTargetAtTime(v ? 0 : 0.9, ctx.currentTime, 0.2);
+    },
     update(dt) {
       if (!audio.ready) return;
       if (!ctx) init();
@@ -73,7 +80,7 @@ export function createAmbience({ timeOfDay, wind, zones = null }) {
       const gust = wind?.gust ?? 0;
       // 家の中は外の音がこもる
       busLP.frequency.setTargetAtTime(lerp(18000, 900, indoor), now, 0.3);
-      bus.gain.setTargetAtTime(lerp(0.9, 0.55, indoor), now, 0.3);
+      bus.gain.setTargetAtTime(muted ? 0 : lerp(0.9, 0.55, indoor), now, 0.3);
 
       // 風：大草原で強く、深い森で弱い。突風で強く高くなる
       const open = w.prairie * 1 + w.mixed * 0.65 + w.deep * 0.4 + w.castle * 0.7;

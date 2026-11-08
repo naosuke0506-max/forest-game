@@ -33,7 +33,10 @@ export function createSettings(onChange, onTest = () => {}) {
     render();
     onChange(settings);
   });
-  document.getElementById('settings-btn').addEventListener('click', () => { render(); panel.hidden = false; });
+  const open = () => { render(); panel.hidden = false; };
+  document.getElementById('settings-btn').addEventListener('click', open);
+  // 大廳の「設定」からも開く（保存する設定には入れない）
+  Object.defineProperty(settings, 'open', { value: open, enumerable: false });
   document.getElementById('settings-close').addEventListener('click', () => { panel.hidden = true; });
 
   render();

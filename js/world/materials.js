@@ -83,7 +83,12 @@ export async function loadTextureSets(device, quality, onProgress = () => {}) {
  * 質感 1 種類を読み込む（起動の後に裏で読むもの用。城と村の建物など）。失敗したら null
  * @param {string} id assets/textures/ の名前
  */
-export async function loadTextureSet(device, id, quality) {
+const setCache = new Map();   // 同じ質感は 1 回だけ読む（村と大廳で同じ石・床・板を使う。iPad のメモリを無駄にしない）
+export function loadTextureSet(device, id, quality) {
+  if (!setCache.has(id)) setCache.set(id, readTextureSet(device, id, quality));
+  return setCache.get(id);
+}
+async function readTextureSet(device, id, quality) {
   try {
     const images = await Promise.all(MAPS.map((map) => loadImage(`${ROOT}/${id}/${id}_${map.suffix}.webp`)));
     const textures = {};

@@ -245,6 +245,8 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     /** 一人称の目の位置（体の向きの座標。前は -Z）。まだ分からなければ null */
     get eyeOffset() { return firstPerson && eyeReady ? eyeLocal : null; },
     setVisible(v) { root.enabled = v; if (!v && nocked) nocked.enabled = false; },
+    /** 片付ける（大廳の人物を替えるとき） */
+    destroy() { root.destroy(); },
     /** 時間を止める（刻が変わった直後）：動きを止め、今の姿のまま */
     setPaused(v) {
       if (v === paused) return;
