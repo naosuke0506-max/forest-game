@@ -1,5 +1,5 @@
 // PC で確認するための補助操作（iPad に外付けキーボードやトラックパッドをつないだときにも使える）
-//   W A S D / 矢印：移動　Shift：走る　マウスでドラッグ：見回す（首だけ）　Q・E：左・右へ向きを変える
+//   W A S D / 矢印：移動　Shift：走る　マウスでドラッグ：見回す（首だけ）　Z・C：左・右へ向きを変える
 
 export function createDesktopInput(layer, config) {
   const cfg = config.input;
@@ -14,7 +14,7 @@ export function createDesktopInput(layer, config) {
     const k = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 1 : 0.55; // 普段は歩き、Shift で走る
     state.moveX = (r / len) * k;
     state.moveY = (f / len) * k;
-    state.turnX = (keys.has('KeyE') ? 1 : 0) - (keys.has('KeyQ') ? 1 : 0);   // 押すたびに、右・左へ 90 度なぞったのと同じ（体が回る）
+    state.turnX = (keys.has('KeyC') ? 1 : 0) - (keys.has('KeyZ') ? 1 : 0);   // 押すたびに、右・左へ 90 度なぞったのと同じ（体が回る）
   };
 
   window.addEventListener('keydown', (e) => {

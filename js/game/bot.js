@@ -50,6 +50,7 @@ export function createBot(fighter, rng, fighters) {
     // 技のある武器（game/techniques.js）：tap＝次のフレームに 1 回だけ短く押す、hold＝残りこの秒だけ押し続ける（溜め）、
     // wantC2＝溜攻撃 1 の後に溜攻撃 2 も出す、chained＝この攻撃の次の段をもう押した
     tap: false, hold: 0, wantC2: false, chained: false,
+    assassin: false,     // 次のフレームに 1 回だけ暗殺ボタンを押す
     input: { forward: 0, strafe: 0, run: false, yaw: fighter.yaw, pitch: 0, attack: false, guard: false, left: false, dodge: false, dodgeX: 0, dodgeY: 0, search: false },
   };
   const f = fighter;
@@ -237,7 +238,7 @@ export function createBot(fighter, rng, fighters) {
       b.input.forward = 0; b.input.strafe = 0; b.input.left = false; b.input.dodge = false;
       const s = f.hidden;
       const near = fighters.some((t) => t !== f && t.alive && !t.hidden && Math.hypot(t.x - s.outX, t.z - s.outZ) < 2.6 && Math.abs((t.y ?? 0) - s.y) < 1.2);
-      b.input.attack = near && !b.input.attack && rng.next() < 0.7;
+      if (near && world.assassinTarget?.(f) && rng.next() < 0.7) b.assassin = true;   // 飛び出して暗殺（暗殺ボタン）
       if (!near && b.hideTimer <= 0) { world.hiding?.exit(f); b.route = { pts: [...s.route].reverse(), i: 0, why: 'leave' }; b.hideCooldown = 20; }
       return;
     }
@@ -247,7 +248,7 @@ export function createBot(fighter, rng, fighters) {
       b.input.forward = 0; b.input.strafe = 0; b.input.left = false; b.input.dodge = false; b.input.guard = false;
       perceive(world, b.lastThink || 0.2);
       const near = fighters.some((t) => t !== f && t.alive && !t.hidden && Math.hypot(t.x - f.x, t.z - f.z) < 3.0 && Math.abs((t.y ?? 0) - (f.y ?? 0)) < 1.2);
-      b.input.attack = near && !b.input.attack && rng.next() < 0.75;
+      if (near && world.assassinTarget?.(f) && rng.next() < 0.75) b.assassin = true;   // 壁裏から暗殺（暗殺ボタン）
       const seen = pickTarget();
       if (!near && (b.coverTimer <= 0 || (seen && Math.hypot(seen.x - f.x, seen.z - f.z) > 7 && rng.next() < 0.15))) world.cover?.exit(f);
       return;
@@ -263,6 +264,8 @@ export function createBot(fighter, rng, fighters) {
       }
     }
     perceive(world, b.lastThink || 0.2);
+    // 見られていない相手がすぐ近くにいれば、どこからでも暗殺する（相手に体の 7 割以上見えていなければ。game/assassin.js）
+    if (!f.action && world.assassinTarget?.(f) && rng.next() < 0.8) { b.assassin = true; return; }
     b.target = pickTarget();
     if (b.target) b.look = null;
     if (!b.look) setStance(f, 'stand');   // 探しに行っていなければ立つ（相手が見えたら立って戦う）
@@ -441,8 +444,10 @@ export function createBot(fighter, rng, fighters) {
       // （隠れ場所・壁裏からの暗殺は、今までどおり押した瞬間だけを見る）
       const attack = techSetOf(f.weapon) && !f.hidden && !f.cover ? (b.tap || b.hold > 0) : i.attack;
       b.tap = false;
+      const assassinate = b.assassin;
+      b.assassin = false;
       // 左手ボタン：盾持ちは防御、ほかは強攻撃・持ち替え
-      return { attack, left: f.left === 'guard' ? i.guard : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
+      return { attack, assassinate, left: f.left === 'guard' ? i.guard : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
     },
   };
 }

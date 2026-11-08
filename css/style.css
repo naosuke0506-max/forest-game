@@ -420,6 +420,10 @@ canvas#app {
   background: radial-gradient(circle at 38% 30%, rgba(120, 100, 60, .92), rgba(40, 32, 18, .9) 70%);
   border-color: var(--gold-hi); animation: usePulse 1.6s ease-in-out infinite; }
 .act-btn.use .ab-icon { width: 46%; height: 46%; }
+/* 暗殺：暗殺できる相手が近くにいるときだけ出る（攻撃ボタンの左上）。暗い紅で、脈打って目立つ */
+.act-btn.assassinate { right: calc(132px + var(--safe-r)); bottom: calc(236px + var(--safe-b)); width: 86px; height: 86px; font-size: 14px;
+  background: radial-gradient(circle at 38% 30%, rgba(150, 30, 34, .95), rgba(52, 8, 12, .92) 70%);
+  border-color: var(--gold-hi); animation: usePulse 1.2s ease-in-out infinite; }
 .act-btn.search { right: calc(222px + var(--safe-r)); bottom: calc(150px + var(--safe-b)); width: 72px; height: 72px; font-size: 13px;
   background: radial-gradient(circle at 38% 30%, rgba(96, 86, 120, .92), rgba(36, 30, 52, .9) 70%); }
 /* 隠れている間の見た目：タンスは扉の隙間（縦の細い光）、ベッドの下は上が板で塞がれ、床すれすれから外を見る */

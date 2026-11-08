@@ -183,6 +183,24 @@ export const REACT = {
  */
 export const BODY_TURN = { neckYaw: 70, neckUp: 55, neckDown: 65, headSpeed: 320, turn: { light: 220, medium: 180, heavy: 150 } };
 
+/**
+ * 暗殺（docs/DESIGN.md「暗殺」）：攻擊ボタンとは別の「暗殺」ボタン。近く（reach）に暗殺できる相手がいると出る
+ *   できるとき：相手に体の seen 以上が見えていない（相手の視界の中でも、7 割以上見えていなければよい。game/senses.js）・
+ *              壁裏隠れから（見られていてもよい）・隠れ場所から飛び出す（見られていてもよい）
+ *   grace：避ける猶予（秒）。壁裏・隠れ場所から飛び出す暗殺だけ。この間に相手が回避すると失敗する（見られていない所からの暗殺は避けられない）
+ *   dash：飛びかかる速さ（m/秒）
+ *   moves：片手劍の暗殺の動き（onehand_moves.py）。背中側からは背刺、前・横からは滑斬
+ *     gap 動き始めの相手との間（m）、kill 止めを刺す時刻（秒）、time 動きの長さ、end 動き終わりの体の位置（右 r・前 f。m）と向き（右回り yaw。度）
+ *   片手劍を持たない人は、今までどおり飛びかかって強い一撃（ほかの武器の暗殺の動きは、その武器を作るときに作る）
+ */
+export const ASSASSIN = {
+  reach: 3.0, seen: 0.7, grace: 0.45, dash: 8,
+  moves: {
+    back:  { clip: 'as_back',  victim: 'as_back_v',  gap: 0.64, kill: 0.40, time: 2.03, end: { r: 0, f: 0, yaw: 0 } },
+    slide: { clip: 'as_slide', victim: 'as_slide_v', gap: 2.2,  kill: 0.60, time: 2.6,  end: { r: -0.42, f: 3.02, yaw: 150 } },
+  },
+};
+
 /** 戦闘の決まりごと */
 export const COMBAT = {
   staminaRegen: 22,        // 1 秒に戻るスタミナ
