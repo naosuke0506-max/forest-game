@@ -222,6 +222,20 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
       const d = at(f, 0.9);
       if (d) playSample(d, 'hit_wood', { rate: jitter(0.08), gain: 0.9 });
     },
+    /** 楯の技を始めた：楯を振る革と布のすれ、ときどき力む声 */
+    shieldSwing(f) {
+      const d = at(f, 0.8);
+      if (!d) return;
+      playSample(d, 'pick_cloth', { rate: 0.8 * jitter(0.06), gain: 0.6 });
+      if (R() < 0.5) voice(f, 'v_attack', 0.7, { t: 0.15 });
+    },
+    /** 楯の技が当たった：楯擊は楯で殴る鈍い音、楯押は楯が体にぶつかる重い音 */
+    shieldHit(f, push) {
+      const d = at(f, 1);
+      if (!d) return;
+      playSample(d, 'hit_shield', { rate: (push ? 0.7 : 0.9) * jitter(0.05), gain: 1 });
+      playSample(d, push ? 'hit_wood' : 'hit_blunt', { t: 0.01, rate: 0.8 * jitter(0.05), gain: 0.7 });
+    },
     guardBreak(f) {
       const d = at(f, 1);
       if (!d) return;
@@ -349,6 +363,8 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   combat.on('hit', ({ attacker, target, guarded, kind }) => { if (kind === 'melee' || kind === 'arrow') sfx.hit(attacker, target, guarded, kind); });
   combat.on('strike', ({ fighter, hits, blocked }) => { if (!hits && blocked) sfx.strikeObstacle(fighter); });
   combat.on('guardBreak', ({ fighter }) => sfx.guardBreak(fighter));
+  combat.on('shieldSkill', ({ fighter }) => sfx.shieldSwing(fighter));
+  combat.on('shieldStrike', ({ fighter, skill, hits }) => { if (hits) sfx.shieldHit(fighter, !!skill.push); });
   combat.on('fire', ({ fighter }) => sfx.bowRelease(fighter));
   combat.on('projectileStuck', ({ projectile }) => sfx.arrowStuck(projectile));
   combat.on('dodge', ({ fighter }) => sfx.dodge(fighter));

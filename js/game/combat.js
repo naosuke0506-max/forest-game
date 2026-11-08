@@ -1,7 +1,7 @@
 // 戦闘（計算だけ）：攻撃・防御・弓と矢・ダメージ・ひるみ・スタミナ。
 // 人間も bot も、同じ形の入力 { attack: 押している, guard: 押している } で動かす。
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { WEAPONS, COMBAT, DODGE, HEAVY } from './data.js';
+import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES } from './data.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 import { setStance, updateStance, stanceShape, resetStance } from './stance.js';
 import { techSetOf, controlTech, updateTech, interruptTech } from './techniques.js';
@@ -102,7 +102,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (ta?.kind === 'assassinate' && !ta.hit) { assassin.cancel(target); target.action = null; }   // 止めを刺す前に斬られた：相手を放す
       if (ta?.kind === 'drag' && !ta.hit) { if (ta.victim.action?.kind === 'dragged') ta.victim.action = null; target.action = null; }
       if (ta && ['hideIn', 'hideOut', 'search'].includes(ta.kind)) target.action = null;   // 隠れる・出る・探すのを取りやめる
-      if (ta && ((ta.kind === 'attack' && !ta.hit) || ta.kind === 'charge' || ta.kind === 'charge2')) target.action = null;
+      if (ta && ((ta.kind === 'attack' && !ta.hit) || (ta.kind === 'shield' && !ta.hit) || ta.kind === 'charge' || ta.kind === 'charge2')) target.action = null;
       interruptTech(target);
     }
     emit('hit', { attacker, target, amount, guarded, kind, power });
@@ -112,6 +112,43 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       target.guarding = false;
       match.eliminate(target, attacker);
     }
+  }
+
+  /**
+   * 楯の技が当たる（楯擊・楯押）：前の、間合いと角度に入っている相手に。
+   *   楯擊は少し傷を与えて重い被弾でひるませる（防禦されれば強い受け）。楯押は傷は無く、防禦の上からでも押し返してよろめかせる
+   */
+  function shieldStrike(f, S) {
+    const fy = yOf(f);
+    let hits = 0;
+    for (const t of fighters) {
+      if (t === f || !t.alive || t.hidden || LOCKED.has(t.action?.kind)) continue;
+      const dx = t.x - f.x, dz = t.z - f.z, d = Math.hypot(dx, dz);
+      if (d > S.reach + COMBAT.bodyRadius || Math.abs(yOf(t) - fy) > 1.6) continue;
+      if (d > 0.6 && angleTo(f.yaw, dx, dz) > S.arc / 2) continue;
+      hits++;
+      if (S.push) shieldPush(t, f, S);
+      else damage(t, S.damage, f, { fromX: f.x, fromZ: f.z, power: S.power || 'l', kind: 'shield' });
+    }
+    emit('shieldStrike', { fighter: f, skill: S, hits });
+  }
+  /** 楯押：押し返して体勢を崩す（よろめく）。していたことは取りやめになる。回避の、攻撃が当たらない間だけは押されない */
+  function shieldPush(t, f, S) {
+    if (match.state !== 'running') return;
+    const a = t.action;
+    if (a?.kind === 'dodge') {
+      const d = DODGE[t.weight];
+      if (a.t >= d.invuln[0] && a.t <= d.invuln[1]) { emit('dodged', { attacker: f, target: t }); return; }
+    }
+    if (t.cover) cover?.exit(t);
+    t.guarding = false;
+    if (a && ['attack', 'charge', 'charge2', 'shield', 'draw', 'release', 'finisher', 'hideIn', 'hideOut', 'search'].includes(a.kind)) t.action = null;
+    interruptTech(t);
+    startReact(t, 'stagger', f.x, f.z);
+    t.react.push = S.push;          // よろめきの動きより遠くへ押し返す（見た目は render/character-view.js が合わせる）
+    t.react.time = S.pushTime;
+    t.lastHitBy = f;
+    emit('shieldPushed', { attacker: f, target: t });
   }
 
   /** 致命の一撃・暗殺：一撃で倒す */
@@ -244,6 +281,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       // 左手ボタン：盾持ちは防御（押している間）、ほかは強攻撃、弓兵は近接武器との持ち替え
       const leftHeld = !!(input.left ?? input.guard);
       const leftPressed = leftHeld && !f._leftHeld;
+      const leftReleased = !leftHeld && f._leftHeld;
+      if (leftPressed) f._leftDownAt = clock;
       f._leftHeld = leftHeld;
       const dodgePressed = input.dodge && !f._dodgeHeld;
       f._dodgeHeld = !!input.dodge;
@@ -315,6 +354,23 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         return;
       }
 
+      // 楯の技（楯持ち。data.js の SHIELD_SKILLS・SHIELD_MOVES）：防禦の構えの間に攻擊ボタン＝楯擊、
+      // 左手ボタンを短く（TECH.hold 秒より短く）押して離す＝楯押。押している間はいつもどおり防禦する（受けが遅れないように）
+      const moves = f.left === 'guard' && f.shield ? SHIELD_MOVES[f.shield] : null;
+      if (moves && !f.action) {
+        const tapped = leftReleased && clock - (f._leftDownAt ?? -9) < TECH.hold;
+        const want = pressed && leftHeld ? moves.guardAttack : tapped ? moves.tap : null;
+        const S = want && SHIELD_SKILLS[want];
+        if (S && f.stamina >= S.stamina * 0.5) {
+          spendStamina(f, S.stamina);
+          f.action = { kind: 'shield', t: 0, skill: S, name: want, hit: false };
+          f.guarding = false;
+          if (pressed) f._press = { at: clock, follow: false, used: true };   // この押下で通常攻撃・溜めを出さない（game/techniques.js）
+          emit('shieldSkill', { fighter: f, skill: want });
+          return;
+        }
+      }
+
       if (w.kind === 'melee') {
         // 強攻撃（左手）を先に見る：両方押したときは重い方
         const heavy = f.left === 'heavy' && leftPressed;
@@ -370,6 +426,10 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
             if (a.t >= st.windup + st.recovery) f.action = null;
           } else if (a.kind === 'release' && a.t >= 0.25) {
             f.action = null;
+          } else if (a.kind === 'shield') {
+            // 楯の技：決まった時刻に当たる
+            if (!a.hit && a.t >= a.skill.hit) { a.hit = true; shieldStrike(f, a.skill); }
+            if (a.t >= a.skill.time) f.action = null;
           } else if (acts && ['hideIn', 'hideOut', 'search', 'drag', 'dragged'].includes(a.kind)) {
             acts.update(f, a);   // 隠れる・出る・探す・引きずり出して止め（game/hide-acts.js）
           } else if (a.kind === 'finisher') {

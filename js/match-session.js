@@ -80,6 +80,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   combat.on('swing', ({ fighter }) => senses.noise(fighter, 'swing'));
   combat.on('hit', ({ attacker, target }) => { senses.noise(attacker, 'hit', target); botOf.get(target)?.alert(attacker); });
   combat.on('dodge', ({ fighter }) => senses.noise(fighter, 'dodge'));
+  // 楯押：傷は無いが、押された人は押した人に気づく
+  combat.on('shieldPushed', ({ attacker, target }) => { senses.noise(attacker, 'hit', target); botOf.get(target)?.alert(attacker); });
   combat.on('fire', ({ fighter }) => senses.noise(fighter, 'bow'));
   combat.on('searchStart', ({ fighter }) => senses.noise(fighter, 'search'));
   hiding.on('hide', ({ fighter }) => senses.noise(fighter, 'hide'));
@@ -224,6 +226,10 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (target === me) hud.hurt(amount / 25);
   });
   combat.on('guardBreak', ({ fighter }) => { if (fighter === me) hud.addFeed('防禦が崩れた'); });
+  combat.on('shieldPushed', ({ attacker, target }) => {
+    if (target === me) { hud.hurt(0.25); hud.addFeed('楯で押し返された'); }
+    else if (attacker === me) hud.addFeed(`${target.name}を楯で押し返した`);
+  });
 
   // 脱落したら、生き残りを肩越しに観戦する
   let spectating = null;

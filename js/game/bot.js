@@ -14,7 +14,7 @@
 // 後で、逃走・アイテムの使用を足す
 import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
-import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN } from './data.js';
+import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES } from './data.js';
 import { techSetOf } from './techniques.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
 
@@ -330,6 +330,21 @@ export function createBot(fighter, rng, fighters) {
     const threat = t.action && ((t.action.kind === 'attack' && !t.action.hit) || t.action.kind === 'charge') && d < WEAPONS[t.weapon].reach + 1;
     if (f.shield && b.guardTimer <= 0 && threat && f.stamina > 20 && rng.next() < (lowHp ? 0.75 : 0.45)) b.guardTimer = 0.5 + rng.next() * 0.4;
     b.input.guard = b.guardTimer > 0;
+    // 楯の技（data.js の SHIELD_MOVES）：相手が楯の届く所の正面にいるとき。構えている間に楯擊（攻擊ボタン）、
+    // 相手が防禦を固めている・溜めているときは、左手を短く押して楯押（押し返して体勢を崩す）
+    const sm = f.left === 'guard' && f.shield && SHIELD_MOVES[f.shield];
+    if (sm && !f.action && b.attackCooldown <= 0 && d < 1.55 && f.stamina > 25 && Math.abs(wrap(yawTo(f, t.x, t.z) - f.yaw)) < 30) {
+      if (b.input.guard && rng.next() < 0.3) {
+        if (techSetOf(f.weapon)) b.tap = true; else b.input.attack = true;
+        b.attackCooldown = 0.9 + rng.next() * 0.6;
+        return;
+      }
+      if (!b.input.guard && (t.guarding || t.action?.kind === 'charge') && rng.next() < 0.45) {
+        b.leftTap = true;   // 1 フレームだけ押す（combatInput）
+        b.attackCooldown = 0.9 + rng.next() * 0.6;
+        return;
+      }
+    }
     // 回避：相手の振りかぶりが見えたら、ときどき後ろか横へ避ける（盾があれば防御の方を多く使う）
     b.input.dodge = false;
     const dodgeChance = (f.shield ? 0.12 : 0.4) * (lowHp ? 1.4 : 1);
@@ -448,8 +463,10 @@ export function createBot(fighter, rng, fighters) {
       b.tap = false;
       const assassinate = b.assassin;
       b.assassin = false;
-      // 左手ボタン：盾持ちは防御、ほかは強攻撃・持ち替え
-      return { attack, assassinate, left: f.left === 'guard' ? i.guard : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
+      // 左手ボタン：盾持ちは防御（楯押は 1 フレームだけ押す）、ほかは強攻撃・持ち替え
+      const leftTap = b.leftTap;
+      b.leftTap = false;
+      return { attack, assassinate, left: f.left === 'guard' ? i.guard || leftTap : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
     },
   };
 }
