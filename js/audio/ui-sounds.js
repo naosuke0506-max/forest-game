@@ -3,7 +3,12 @@
 import { audio, outlet, noiseHit, toneHit } from './engine.js';
 
 export function playBoom() {
-  if (!audio.ready) return;
+  if (!audio.ctx) return;
+  // 押した直後は、音の準備（resume）がまだ終わっていないことがある：終わってから鳴らす（黙って捨てない）
+  if (!audio.ready) { audio.ctx.resume().then(() => { if (audio.ready) boom(); }).catch(() => {}); return; }
+  boom();
+}
+function boom() {
   const d = outlet({ gain: 0.5, cutoff: 3200 });   // 低い音は大きく重ねると割れて歪む（中くらいの高さに濁りが出る）ので、全体は控えめに
   if (audio.reverb) { const send = audio.ctx.createGain(); send.gain.value = 0.55; d.connect(send); send.connect(audio.reverb); }
   // 地を揺らす低い音（沈みながら長く残る）。iPad の小さなスピーカーでも聞こえるよう、少し上の高さも重ねる

@@ -51,11 +51,14 @@ export function createMusic(build = '') {
      */
     unlock() {
       audio.unlock();
-      if (unlocked || !audio.ctx) return;
+      if (!audio.ctx) return;
       unlocked = true;
       for (const t of Object.values(tracks)) {
         wire(t);
-        if (t !== tracks[current]) t.el.play().then(() => { if (t !== tracks[current]) t.el.pause(); }).catch(() => {});
+        if (t.ok) continue;   // もう鳴らせると分かった曲
+        const cur = t === tracks[current];
+        t.el.play().then(() => { t.ok = true; if (t !== tracks[current]) t.el.pause(); }).catch(() => {});
+        if (cur) fadeTo(t, t.T.volume, 2);   // 流すはずだったのに断られていた曲（題の曲など）：今から流す
       }
     },
     /** 曲を流す（fade 秒で大きくする）。ほかの曲は fade 秒で小さくして止める */
@@ -65,7 +68,7 @@ export function createMusic(build = '') {
       wire(t);
       for (const [n, o] of Object.entries(tracks)) if (n !== name && o.gain) this.stop(n, { fade });
       current = name;
-      if (t.el.paused) { t.el.currentTime = 0; t.el.play().catch(() => {}); }
+      if (t.el.paused) { t.el.currentTime = 0; t.el.play().then(() => { t.ok = true; }).catch(() => {}); }   // 断られたら、次に触れたとき unlock で流す
       fadeTo(t, t.T.volume, fade);
     },
     /** 曲を止める（fade 秒で小さくしてから） */
