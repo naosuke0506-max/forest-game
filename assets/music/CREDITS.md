@@ -1,12 +1,16 @@
 # 曲の出典
 
-題の画面の BGM は [OpenGameArt](https://opengameart.org/) の **CC0**（パブリックドメイン相当。帰属表示の義務なし）の曲、大廳の BGM は自作です。
+題の画面の BGM は、利用者が Suno（音楽を作る AI）で作った曲です（4 つの版を設定の「題曲」で選ぶ）。大廳の BGM は自作です。前に使っていた題の曲（title.mp3）は [OpenGameArt](https://opengameart.org/) の **CC0** です。
 記録のために残しています。取り込んだときに、各ページのライセンスが CC0 であることを確かめました。
-取り込むときに音の大きさをそろえ（題の曲 −18 LUFS、大廳の曲 −17 LUFS）、MP3 にしています。
+取り込むときに音の大きさをそろえ（題の曲 −16 LUFS、大廳の曲 −17 LUFS）、MP3 にしています。
 
 | 使っている所 | ファイル | 曲（OpenGameArt のページ） | 作者 |
 |---|---|---|---|
-| 題の画面 | `title.mp3` | [Epic Endgame (Cinematic)](https://opengameart.org/content/epic-endgame-cinematic)（女声の合唱とホルン、重い低音の劇的な曲） | cynicmusic |
+| 題の画面（日本） | `title_ja.mp3` | 利用者が Suno で作った曲（日本語の歌詞。女性のソプラノと男性のバリトンが交互に歌い、サビで一緒に歌う。時計の音が刻み、鐘が鳴る） | 利用者 |
+| 題の画面（羅甸） | `title_la.mp3` | 同じ曲の、ラテン語風の歌詞の版 | 利用者 |
+| 題の画面（獨逸） | `title_de.mp3` | 同じ曲の、ドイツ語風の歌詞の版 | 利用者 |
+| 題の画面（伊太利） | `title_it.mp3` | 同じ曲の、イタリア語風の歌詞の版 | 利用者 |
+| （今は使っていない） | `title.mp3` | [Epic Endgame (Cinematic)](https://opengameart.org/content/epic-endgame-cinematic)（女声の合唱とホルン、重い低音の劇的な曲） | cynicmusic |
 | 大廳 | `hall.mp3` | 自作（`tools/music/compose_hall.py` で作る）。「ダァーン、ダラダダァ〜ン」のリズムが主役のノれる曲。テンポ 104・ニ短調・32 小節（約 74 秒）で切れ目なく繰り返す。大太鼓・小太鼓・スネア・ハイハット・ベース・金管・弦の刻み・笛 | ― |
 
 題の画面で「入」を押したときの「ドォーン」は、録音を使わず、その場で作っています（`js/audio/ui-sounds.js`）。

@@ -168,7 +168,7 @@ export function createTitleScene(app, config) {
   const rayTex = (() => {
     const c = document.createElement('canvas'); c.width = 16; c.height = 256;
     const g = c.getContext('2d'), grd = g.createLinearGradient(0, 0, 0, 256);
-    grd.addColorStop(0, 'rgba(255,220,160,0)'); grd.addColorStop(0.5, 'rgba(255,214,150,0.16)'); grd.addColorStop(1, 'rgba(255,220,160,0)');
+    grd.addColorStop(0, 'rgba(255,220,160,0)'); grd.addColorStop(0.5, 'rgba(255,214,150,0.1)'); grd.addColorStop(1, 'rgba(255,220,160,0)');
     g.fillStyle = grd; g.fillRect(0, 0, 16, 256);
     const t = new pc.Texture(device, { width: 16, height: 256, format: pc.PIXELFORMAT_RGBA8 }); t.setSource(c); return t;
   })();
@@ -225,6 +225,42 @@ export function createTitleScene(app, config) {
     embers.push({ e, x: (rnd.next() - 0.5) * 22, y: (rnd.next() - 0.5) * 14, z: -6 + rnd.next() * 12, v: 0.3 + rnd.next() * 0.6, ph: rnd.next() * 6 });
   }
 
+  // ---- 時計の針：題の曲の時計の刻みに合わせて 1 拍ずつ進み（8 拍で一周）、鐘の鳴る拍で一周して光る ----
+  const handMat = new pc.StandardMaterial();
+  handMat.useLighting = false; handMat.useSkybox = false; handMat.useFog = false;
+  handMat.emissive = new pc.Color(1, 0.78, 0.4); handMat.diffuse = new pc.Color(0, 0, 0);
+  handMat.update();
+  const hand = new pc.Entity('clock-hand');
+  hand.setLocalPosition(0, 0, 0.9);
+  root.addChild(hand);
+  const handMesh = (() => {
+    const B = builder();
+    box(B, 'cloth', 0, 0, 0, 0.22, 0.05, 4.9, 0, { shade: [1, 1, 1], bottom: true });           // 長い針（上へ伸びる）
+    box(B, 'cloth', 0, -1.5, 0, 0.36, 0.06, 1.5, 0, { shade: [1, 1, 1], bottom: true });        // 反対側のおもり
+    return createMesh(device, B.parts.cloth);
+  })();
+  const handBody = new pc.Entity();
+  handBody.addComponent('render', { meshInstances: [new pc.MeshInstance(handMesh, handMat)], castShadows: false, receiveShadows: false, layers: L });
+  hand.addChild(handBody);   // 箱の高さ（Y）が画面の上。針の面は画面に平行（カメラは -Z を見る）
+  // 針の先の矢じり（平たい円錐）と、中心の丸い軸
+  const tip = new pc.Entity();
+  tip.addComponent('render', { type: 'cone', material: handMat, castShadows: false, receiveShadows: false, layers: L });
+  tip.setLocalPosition(0, 5.25, 0);
+  tip.setLocalScale(0.62, 0.75, 0.08);
+  hand.addChild(tip);
+  const hub = new pc.Entity();
+  hub.addComponent('render', { type: 'cylinder', material: handMat, castShadows: false, receiveShadows: false, layers: L });
+  hub.setLocalEulerAngles(90, 0, 0);
+  hub.setLocalScale(0.85, 0.1, 0.85);
+  hand.addChild(hub);
+  let lastStep = null, flash = 0;
+  /** 拍（小数）から針の角度：拍の始めにすばやく進み（0.08 拍で）、あとは止まる。8 拍で一周 */
+  const handAngle = (beat) => {
+    const step = Math.floor(beat), frac = beat - step;
+    const k = Math.min(1, frac / 0.08);
+    return -((step + (1 - (1 - k) ** 3)) * 45);
+  };
+
   // ---- カメラ ----
   const cam = new pc.Entity('title-camera');
   cam.addComponent('camera', {
@@ -235,8 +271,10 @@ export function createTitleScene(app, config) {
   root.addChild(cam);
   const look = new pc.Vec3();
 
-  let active = false, time = 0;
+  let active = false, time = 0, beatOf = null;
   return {
+    /** 時計の針の拍を受け取る（題の曲が流れていれば、その拍。無ければ 120 拍で自分で進む） */
+    setBeatSource(fn) { beatOf = fn; },
     get active() { return active; },
     /** 題の画面の背景を出す（このカメラで描く）・しまう */
     setActive(v, otherCameras = []) {
@@ -249,9 +287,18 @@ export function createTitleScene(app, config) {
       time += dt;
       for (const r of rings) r.spin.rotateLocal(0, r.speed * dt, 0);
       rays.setLocalEulerAngles(0, 0, time * 3);
+      // 時計の針：曲の拍に合わせて進め、鐘の鳴る拍（8 拍ごと）で一周したら光る
+      const beat = beatOf?.() ?? time * 2;
+      hand.setLocalEulerAngles(0, 0, handAngle(beat));
+      const step = Math.floor(beat);
+      if (lastStep !== null && step !== lastStep && ((step % 8) + 8) % 8 === 0) flash = 1;
+      lastStep = step;
+      flash = Math.max(0, flash - dt * 1.4);
       const pulse = 1 + 0.06 * Math.sin(time * 1.7) + 0.03 * Math.sin(time * 4.3);
-      glow.setLocalScale(7 * pulse, 1, 7 * pulse);
-      light.light.intensity = 1.9 * pulse;
+      glow.setLocalScale(7 * (pulse + flash * 0.5), 1, 7 * (pulse + flash * 0.5));
+      light.light.intensity = 1.9 * pulse + flash * 2.2;
+      const glowK = 1 + flash * 1.5;
+      if (Math.abs(glowK - handMat.emissiveIntensity) > 0.01) { handMat.emissiveIntensity = glowK; handMat.update(); }
       for (const s of shards) {
         s.a += s.w * dt;
         s.e.setLocalPosition(Math.cos(s.a) * s.r, s.y + Math.sin(time * 0.3 + s.a) * 0.4, s.z + Math.sin(s.a) * s.r * 0.35);

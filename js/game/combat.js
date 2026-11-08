@@ -269,7 +269,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
 
     /**
      * 1 人分の入力を受ける（毎フレーム、移動の後に呼ぶ）
-     * @param {{attack: boolean, left?: boolean, guard?: boolean, dodge?: boolean, moveX?: number, moveY?: number}} input
+     * @param {{attack: boolean, left?: boolean, guard?: boolean, dodge?: boolean, shield?: boolean, moveX?: number, moveY?: number}} input
      *   attack（右手）・left（左手。古い名前の guard でもよい）・dodge は押している間 true。moveX（右）・moveY（前）は回避の向き（移動スティック）
      */
     control(f, input) {
@@ -290,6 +290,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       f._searchHeld = !!input.search;
       const assassinPressed = input.assassinate && !f._assassinHeld;
       f._assassinHeld = !!input.assassinate;
+      const shieldPressed = input.shield && !f._shieldHeld;   // 楯攻撃ボタン（楯の技 guardAttack をすぐ出す）
+      f._shieldHeld = !!input.shield;
       // 暗殺している・されている・隠れる・出る・探す・引きずり出す間は、ほかのことはできない
       if (LOCKED.has(f.action?.kind)) { f.guarding = false; return; }
       if (f.stun > 0) { f.guarding = false; if (f.action?.kind === 'draw') f.action = null; return; }
@@ -315,11 +317,11 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       // しゃがんでいれば、すぐ立って、そのまま攻撃・防御・回避する（game/stance.js）
       if (f.stanceT > 0) { f.guarding = false; return; }
       if (f.stance === 'prone') {
-        if (pressed || leftPressed || dodgePressed) setStance(f, 'stand');
+        if (pressed || leftPressed || dodgePressed || shieldPressed) setStance(f, 'stand');
         f.guarding = false;
         return;
       }
-      if (f.stance === 'crouch' && (pressed || leftPressed || dodgePressed || (leftHeld && f.left === 'guard'))) setStance(f, 'stand');
+      if (f.stance === 'crouch' && (pressed || leftPressed || dodgePressed || shieldPressed || (leftHeld && f.left === 'guard'))) setStance(f, 'stand');
       // 探す：近くのベッドやタンスを開ける
       if (searchPressed && !f.action && acts) {
         const spot = hiding.nearest(f);
@@ -359,7 +361,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       const moves = f.left === 'guard' && f.shield ? SHIELD_MOVES[f.shield] : null;
       if (moves && !f.action) {
         const tapped = leftReleased && clock - (f._leftDownAt ?? -9) < TECH.hold;
-        const want = pressed && leftHeld ? moves.guardAttack : tapped ? moves.tap : null;
+        const want = shieldPressed || (pressed && leftHeld) ? moves.guardAttack : tapped ? moves.tap : null;
         const S = want && SHIELD_SKILLS[want];
         if (S && f.stamina >= S.stamina * 0.5) {
           spendStamina(f, S.stamina);
