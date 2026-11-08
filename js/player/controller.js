@@ -13,7 +13,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   const eye = new pc.Entity('Eye');
   eye.addComponent('camera', {
     fov: p.fov,
-    nearClip: 0.1,
+    nearClip: 0.05,   // 一人称で自分の腕や盾が目の近くに来ても切れないように（0.1 では肩や前腕の手前が欠ける）
     farClip: config.atmosphere.farClip,
     clearColor: fogColor,
     toneMapping: pc.TONEMAP_ACES,
@@ -36,6 +36,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   let thirdDist = THIRD_DIST;           // 三人称のカメラの距離（地面に当たると縮める）
 
   let eyeH = p.eyeHeight, eyeWant = p.eyeHeight;   // 目の高さ（しゃがむ・伏せると低い。なめらかに変える）
+  let eyeOff = null;                    // 一人称で自分の体を映すときの目の位置（体の向きの座標。模型の頭から決める）
   function speedFor(mag) {
     // 半分ほど倒すと歩き、端まで倒すと走る（しゃがむ・伏せているときは走れない：歩きの速さまで）
     if (api.noRun) return p.walkSpeed * Math.min(1, mag / 0.75);
@@ -66,7 +67,9 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       return;
     }
     if (viewMode === 'first') {
-      eye.setLocalPosition(0, eyeH + Math.sin(bob) * 0.025 * Math.min(1, mag * 1.5), 0);
+      // 自分の体を映すときは、模型の目の位置（歩く・しゃがむ・前転で頭が動けば一緒に動く）。無ければ決まった高さと揺れ
+      if (eyeOff) eye.setLocalPosition(eyeOff.x, eyeOff.y, eyeOff.z);
+      else eye.setLocalPosition(0, eyeH + Math.sin(bob) * 0.025 * Math.min(1, mag * 1.5), 0);
       eye.setLocalEulerAngles(pitch, 0, 0);
       return;
     }
@@ -155,6 +158,8 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     noRun: false,   // しゃがむ・伏せているときは走れない
     /** 目の高さ（m。しゃがむ・伏せると低い。なめらかに移る） */
     setEyeHeight(h) { eyeWant = h; },
+    /** 一人称の目の位置（体の向きの座標 {x, y, z}。前は -Z）。null で決まった高さに戻す */
+    setEyeOffset(v) { eyeOff = v; },
     get yaw() { return yaw; },
     get pitch() { return pitch; },
     get moving() { return lastMag; },
