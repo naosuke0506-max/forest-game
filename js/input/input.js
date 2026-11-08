@@ -5,7 +5,7 @@ import { createTouchInput } from './touch.js';
 import { createDesktopInput } from './desktop.js';
 
 export function createInput(layer, stickEl, config) {
-  const touch = createTouchInput(layer, stickEl, config);
+  const touch = createTouchInput(layer, stickEl, config, document.getElementById('turnstick'));
   const desktop = createDesktopInput(layer, config);
   const sources = [touch, desktop];
 
@@ -69,7 +69,7 @@ export function createInput(layer, stickEl, config) {
   const resetButtons = () => { for (const o of [held, keys]) o.attack = o.left = o.dodge = o.use = o.search = false; stance.held = false; stance.tap = stance.hold = false; };
   document.addEventListener('visibilitychange', resetButtons);
 
-  const frame = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, attack: false, left: false, dodge: false, use: false, search: false, stance: null };
+  const frame = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, turnX: 0, turnY: 0, attack: false, left: false, dodge: false, use: false, search: false, stance: null };
 
   /** 1 フレーム分の入力を取り出す（向きの変化量はここで 0 に戻す） */
   function read() {
@@ -82,6 +82,11 @@ export function createInput(layer, stickEl, config) {
     const len = Math.hypot(mx, my);
     if (len > 1) { mx /= len; my /= len; }
     frame.moveX = mx; frame.moveY = my; frame.lookX = lx; frame.lookY = ly;
+    // 向きを変えるスティック（右 turnX・上 turnY）
+    let tx = 0, ty = 0;
+    for (const { state } of sources) { tx += state.turnX || 0; ty += state.turnY || 0; }
+    const tl = Math.hypot(tx, ty);
+    frame.turnX = tl > 1 ? tx / tl : tx; frame.turnY = tl > 1 ? ty / tl : ty;
     frame.attack = held.attack || keys.attack || latched.attack;
     frame.left = held.left || keys.left || latched.left;
     frame.dodge = held.dodge || keys.dodge || latched.dodge;

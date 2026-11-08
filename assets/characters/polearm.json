@@ -191,6 +191,18 @@
    "loop": true,
    "speed": 0.3173
   },
+  "turn_r": {
+   "duration": 0.8,
+   "loop": true,
+   "speed": 0.0,
+   "turn": 150.0
+  },
+  "turn_l": {
+   "duration": 0.8,
+   "loop": true,
+   "speed": 0.0,
+   "turn": 150.0
+  },
   "as_back_v": {
    "duration": 2.2,
    "loop": false,

@@ -14,7 +14,7 @@
 // 後で、逃走・アイテムの使用を足す
 import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
-import { WEAPONS, COMBAT, SENSES, TECH } from './data.js';
+import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN } from './data.js';
 import { techSetOf } from './techniques.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
 
@@ -415,9 +415,10 @@ export function createBot(fighter, rng, fighters) {
       }
       f.pitch = b.input.pitch;
 
-      // 向きはなめらかに変える（1 秒に 300 度まで）
+      // 向きはなめらかに変える（プレイヤーと同じく、鎧の重さで決まる速さまで。data.js の BODY_TURN）
       const dYaw = wrap(b.input.yaw - f.yaw);
-      const turned = { ...b.input, yaw: f.yaw + Math.sign(dYaw) * Math.min(Math.abs(dYaw), 300 * dt) };
+      const turnRate = (BODY_TURN.turn[f.weight] || BODY_TURN.turn.medium) * (f.stun > 0 ? 0.3 : 1);
+      const turned = { ...b.input, yaw: f.yaw + Math.sign(dYaw) * Math.min(Math.abs(dYaw), turnRate * dt) };
       const mag = moveFighter(f, turned, dt, world);
       f.gait = mag > 0.05 ? (turned.run && canRun(f) ? 'run' : 'walk') : 'still';   // 足音の大きさ（game/senses.js）
       return mag;

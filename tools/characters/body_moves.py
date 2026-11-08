@@ -1,5 +1,6 @@
 # 全キャラの体の動きを、Tripo の骨に直接付ける（Blender 4.2。tools/characters/build_character.py から呼ぶ開発用の道具）
 #
+#   turn_r・turn_l  その場で足踏みしながら右回り・左回り（向きを変えるスティック。体の向きはゲームが回す）
 #   crouch_walk     しゃがみ歩き（深くしゃがんで歩く。顔はまっすぐ前）。前の動き（make_motions.py の中腰の物）と入れ替える
 #   prone_up        伏せから起き上がる（腕で押し上げる → 片膝を引き寄せる → 片膝立ち → 立つ）。前の動きと入れ替える
 #   hit_l_<向き>    被弾（軽い）：攻撃された向き（f 前・b 後ろ・l 左・r 右）と反対へ、体がはじかれる
@@ -336,6 +337,40 @@ def cover_walk_fn(side, shield, step=0.40, dur=0.70):
     return fn, dur, step / dur
 
 
+# ======================= その場で回る（向きを変えるスティック） =======================
+TURN_DEG_S = 150.0   # この動きを 1 倍で流したときに体が回る速さ（度/秒）。ゲームは実際に回る速さとの比で流す（情報の turn）
+
+
+def turn_fn(side, shield, dur=0.8, stance=0.6):
+    """その場で足踏みしながら、右（side='r'）か左（'l'）へ回る（体の向きはゲームが回す。この動きは向きを変えない）。
+    地面に着いている足は、体が回るのと逆へ回る（体が回っても地面に止まって見える）。浮いた足は回る向きへ大きく踏み出す。
+    2 歩で 1 回り（dur 秒で TURN_DEG_S × dur 度）。頭は回る向きを先に見る"""
+    s = 1 if side == 'r' else -1
+    A = TURN_DEG_S * dur * stance   # 足が着いている間に体が回る角度
+    base = ready(shield)
+
+    def foot(ph, off, ft):
+        q = (ph - off) % 1.0
+        if q < stance:                     # 着いている：回る向きと逆へ（地面に止まって見える）
+            a, lift = s * A * (0.5 - q / stance), 0.0
+        else:                              # 浮いている：回る向きへ踏み出す
+            u = (q - stance) / (1 - stance)
+            a, lift = s * A * (-0.5 + u * u * (3 - 2 * u)), 0.07 * math.sin(math.pi * u)
+        return foot_at((0.0, 0.0), a, (ft[0], ft[1], ft[2], 0, lift, 0))
+
+    def fn(t):
+        ph = (t / dur) % 1.0
+        p = dict(base)
+        p['hip'] = (0.0, -0.05 - 0.018 * abs(math.sin(2 * math.pi * ph)), 0.0)
+        p['hip_rot'] = (s * 8, 5, 0)
+        p['chest'] = (s * 5, 3, 0)
+        p['look'] = (s * 28, 0)
+        p['L_foot'] = foot(ph, 0.0, (-0.15, 0.02, 4))
+        p['R_foot'] = foot(ph, 0.5, (0.15, -0.02, -4))
+        return p
+    return fn, dur
+
+
 # ======================= 暗殺される側 =======================
 AS_BACK_GAP, AS_SLIDE_GAP = 0.64, 2.2   # onehand_moves.py と同じ並び（暗殺する側から見た、相手の立つ所）
 
@@ -437,6 +472,12 @@ def build(rig, has_shield, made_by_name, group=None):
     for side in ('r', 'l'):
         fn, dur, spd = cover_walk_fn(side, has_shield)
         out.append(make_clip(rig, f'cover_walk_{side}', fn, dur, loop=True, speed=spd * rig.K))
+    # その場で回る（右回り・左回り）
+    for side in ('r', 'l'):
+        fn, dur = turn_fn(side, has_shield)
+        name, act, meta = make_clip(rig, f'turn_{side}', fn, dur, loop=True)
+        meta['turn'] = TURN_DEG_S
+        out.append((name, act, meta))
     # 暗殺される側（背刺・滑斬）
     for name, k in (('as_back_v', as_back_v_keys(has_shield)), ('as_slide_v', as_slide_v_keys(has_shield))):
         out.append(make_clip(rig, name, lambda t, k=k: sample(k, t), k[-1][0]))

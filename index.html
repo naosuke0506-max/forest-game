@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>蠱毒</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-08.7';</script>
+<script>window.__BUILD = '2026-11-08.8';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -146,6 +146,7 @@
 <!-- 指の操作を受ける層（左：移動、右：視点） -->
 <div id="touch-layer" hidden>
   <div id="stick" class="stick" hidden><div class="stick-knob"></div></div>
+  <div id="turnstick" class="stick turn" hidden><div class="stick-knob"></div><span class="stick-label">轉身</span></div>
 </div>
 
 <!-- 太陽のまぶしさ（太陽の位置の光と、画面全体が白く飛ぶ光）。操作の邪魔をしないよう指は通す -->

@@ -20,7 +20,7 @@ import { createSfx, wireSounds } from './audio/sfx.js';
 import { ICONS, weaponIconOf } from './ui/icons.js';
 import { createSenses } from './game/senses.js';
 import { stanceButton, stanceSpeed, canRun, stanceShape } from './game/stance.js';
-import { STANCES } from './game/data.js';
+import { STANCES, BODY_TURN } from './game/data.js';
 
 const PLAYER_COLOR = '#ffd75e';
 const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
@@ -230,6 +230,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         document.getElementById('btn-attack').hidden = true;
         document.getElementById('btn-left').hidden = true;
         document.getElementById('btn-dodge').hidden = true;
+        document.getElementById('turnstick').hidden = true;
         stanceBtn.hidden = true;
         useBtn.hidden = true;
         searchBtn.hidden = true;
@@ -311,13 +312,16 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // 姿勢：ボタン（押す＝しゃがむ／立つ、長押し＝伏せる）。しゃがむ・伏せると遅く、走れず、目が低い
       if (input.stance && running && me.alive && !me.hidden && !me.cover) stanceButton(me, input.stance);
       player.speedScale = me.stats.speed * (me.moveScale ?? 1) * stanceSpeed(me);
+      // その場で回る速さ：鎧の重さで決まる（data.js の BODY_TURN）。ひるんでいる間は遅く、伏せていればとても遅い
+      player.turnSpeed = BODY_TURN.turn[me.weight] || BODY_TURN.turn.medium;
+      player.turnScale = !me.alive ? 0 : (me.stun > 0 ? 0.3 : 1) * (me.stance === 'prone' ? 0.35 : me.stance === 'crouch' ? 0.75 : 1);
       player.noRun = !canRun(me);
       player.setEyeHeight((config.player.eyeHeight * stanceShape(me).eye) / STANCES.stand.eye);
       me.gait = player.moving > 0.75 && canRun(me) ? 'run' : player.moving > 0.05 ? 'walk' : 'still';   // 足音の大きさ（bot の耳）
       refreshStance();
       // あなたの位置を、試合の記録へ写す（いずれ人間も試合の計算で動かす）
       // 隠れている間は、隠れ場所が自分の位置（体は動かない）
-      if (me.alive && !me.hidden && !me.cover) { me.x = player.position.x; me.z = player.position.z; me.y = player.position.y; me.yaw = player.yaw; me.pitch = player.pitch; }
+      if (me.alive && !me.hidden && !me.cover) { me.x = player.position.x; me.z = player.position.z; me.y = player.position.y; me.yaw = player.yaw; me.pitch = player.pitch; me.headYaw = player.headYaw; }
       // 壁裏隠れ：離れるのは「離壁」か暗殺のときだけ。移動スティックを倒すと、壁に背を付けたまま壁際を歩く
       // （スティックの向きを画面の向きで地面の向きにし、壁に沿った分だけ進む）。カメラは三人称で覗く向きを見る
       // 歩く向きの見方（カメラの右と前）は、スティックを倒し始めたときのものを、離すまで使う
