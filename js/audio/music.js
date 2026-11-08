@@ -1,16 +1,26 @@
-// BGM（題の画面・大廳）。曲は assets/music/ の MP3（題の曲は OpenGameArt の CC0、大廳の曲は自作。出典は assets/music/CREDITS.md）
+// BGM（題の画面・大廳）。曲は assets/music/ の MP3（出典は assets/music/CREDITS.md）
+//   題の曲は 4 つの版（日本語・ラテン語風・ドイツ語風・イタリア語風。利用者が Suno で作った）から、設定で選ぶ（題曲）
 //   iPad のメモリを使いすぎないよう、曲は全部を先に解かず、<audio> で少しずつ読みながら鳴らす（音量は Web Audio の master を通す）
-//   iPad は指で触ったときにしか鳴らし始められないので、最初に触れたとき（unlock）に全部の曲を一度鳴らして止めておく
+//   iPad は指で触ったときにしか鳴らし始められないので、最初に触れたとき（unlock）に、読んである曲を一度鳴らして止めておく
 import { audio } from './engine.js';
 
+// bpm・phase：時計の音が刻む速さと、最初の刻みの時刻（秒）。rot：8 拍の一回りのうち、鐘の鳴る拍。
+//   どれも曲を測って決めた（題の画面の時の輪の針を、曲に合わせて 1 拍ずつ進め、鐘で一周させる）
 const TRACKS = {
-  title: { url: 'assets/music/title.mp3', volume: 0.75 },   // 題の画面：合唱とホルンの劇的な曲
+  title_ja: { url: 'assets/music/title_ja.mp3', volume: 0.7, bpm: 120.08, phase: 0.086, rot: 0 },
+  title_la: { url: 'assets/music/title_la.mp3', volume: 0.7, bpm: 120.04, phase: 0.125, rot: 0 },
+  title_de: { url: 'assets/music/title_de.mp3', volume: 0.7, bpm: 121.96, phase: 0.131, rot: 0 },
+  title_it: { url: 'assets/music/title_it.mp3', volume: 0.7, bpm: 120.0, phase: 0.133, rot: 4 },
   hall: { url: 'assets/music/hall.mp3', volume: 0.6 },      // 大廳：「ダァーン、ダラダダァ〜ン」のリズムのノれる曲（自作。tools/music/compose_hall.py）
 };
+/** 題曲の版（設定の題曲。日本・羅甸・獨逸・伊太利） */
+export const TITLE_VERSIONS = ['ja', 'la', 'de', 'it'];
 
-export function createMusic(build = '') {
+export function createMusic(build = '', titleVersion = 'ja') {
   const tracks = {};
-  let current = null, unlocked = false;
+  let current = null;
+  let version = TITLE_VERSIONS.includes(titleVersion) ? titleVersion : 'ja';
+  const resolve = (name) => (name === 'title' ? `title_${version}` : name);
 
   /** 曲の入れ物を作る（音を出せるようになってから、master へつなぐ） */
   function track(name) {
@@ -41,8 +51,9 @@ export function createMusic(build = '') {
     t.gain.gain.linearRampToValueAtTime(v, now + Math.max(0.01, sec));
   };
 
-  // 先に読み始めておく（鳴らすのは触れてから）
-  for (const name of Object.keys(TRACKS)) track(name);
+  // 先に読み始めておく（鳴らすのは触れてから）。題の曲は、選んでいる版だけ（ほかの版は選んだときに読む）
+  track(resolve('title'));
+  track('hall');
 
   return {
     /**
@@ -52,7 +63,6 @@ export function createMusic(build = '') {
     unlock() {
       audio.unlock();
       if (!audio.ctx) return;
-      unlocked = true;
       for (const t of Object.values(tracks)) {
         wire(t);
         if (t.ok) continue;   // もう鳴らせると分かった曲
@@ -64,6 +74,7 @@ export function createMusic(build = '') {
     /** 曲を流す（fade 秒で大きくする）。ほかの曲は fade 秒で小さくして止める */
     play(name, { fade = 2 } = {}) {
       if (!audio.ctx) return;
+      name = resolve(name);
       const t = track(name);
       wire(t);
       for (const [n, o] of Object.entries(tracks)) if (n !== name && o.gain) this.stop(n, { fade });
@@ -82,5 +93,22 @@ export function createMusic(build = '') {
     /** 全部止める（試合が始まるとき） */
     stopAll({ fade = 1.5 } = {}) { for (const n of Object.keys(tracks)) this.stop(n, { fade }); },
     get current() { return current; },
+    /**
+     * 題曲の版を替える（設定の題曲）。題の曲が流れていれば、すぐ新しい版へ入れ替える
+     * （iPad が鳴らせるよう、設定のボタンを押した処理の中から呼ぶ）
+     */
+    setTitleVersion(v) {
+      if (!TITLE_VERSIONS.includes(v) || v === version) return;
+      const wasTitle = current?.startsWith('title_');
+      version = v;
+      if (wasTitle && audio.ctx) this.play('title', { fade: 1.2 });
+      else track(resolve('title'));
+    },
+    /** 題の曲の、今の拍（時計の刻み。鐘の鳴る拍が 8 の倍数。流れていなければ null） */
+    get titleBeat() {
+      const t = tracks[current];
+      if (!t?.T.bpm || t.el.paused) return null;
+      return (t.el.currentTime - t.T.phase) / (60 / t.T.bpm) - (t.T.rot || 0);
+    },
   };
 }

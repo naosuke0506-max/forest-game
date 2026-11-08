@@ -194,6 +194,8 @@ body.in-hall #glare, body.in-hall #dazzle { display: none; }   /* 森の太陽�
 .title.leaving .title-inner { animation: titleOut .75s ease-in forwards; }
 @keyframes titleOut { to { opacity: 0; transform: scale(1.18); filter: blur(2px); } }
 /* 一瞬暗くする幕 */
+/* 題の画面の設定ボタン（右上） */
+.title .icon-btn.title-gear { left: auto; right: calc(16px + var(--safe-r)); top: calc(14px + var(--safe-t)); width: 48px; height: 48px; animation: titleIn 1.6s 1.4s ease-out both; }
 .fade { position: fixed; inset: 0; z-index: 45; background: #000; opacity: 0; pointer-events: none; transition: opacity .55s ease; }
 .fade.on { opacity: 1; transition: opacity .7s ease-in; }
 /* 最初に触れる画面 */

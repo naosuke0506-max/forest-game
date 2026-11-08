@@ -5,6 +5,7 @@ import { L } from './labels.js';
 import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, MODES, MAPS, ARMS, MUTATIONS, PHASES } from '../game/data.js';
 import { resolveLoadout } from '../game/match.js';
 import { createCodex } from './codex.js';
+import { ICONS } from './icons.js';
 
 // 武器を選ぶ枠：右手（主の武器）・左手（楯）・持替（弓兵の近接武器）
 const SLOTS = [['main', L.main], ['shield', L.shield], ['side', L.side]];
@@ -28,6 +29,10 @@ const BACK = { codex: 'hall', mode: 'hall', map: 'mode', char: 'map', arms: 'cha
 export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = () => {}, onShow = () => {}, onSettings = () => {}, hall = () => null } = {}) {
   const title = document.getElementById('title');
   const gate = document.getElementById('gate'), fade = document.getElementById('fade');
+  // 題の画面の設定ボタン（題曲の版・音の大きさ）
+  const gear = document.getElementById('title-settings');
+  gear.innerHTML = ICONS.gear;
+  gear.addEventListener('click', () => onSettings());
   // 最初に触れる画面：触れたら音を出せるようにして題の曲を流し、題の画面を出す。
   // iPad の Safari は、指が触れた瞬間（pointerdown）ではなく、指を離したとき（click）しか音を許さないので click で受ける
   const openGate = (e) => {

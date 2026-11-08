@@ -33,7 +33,7 @@ import { createHall } from './render/hall.js';
 import { createTitleScene } from './render/title-scene.js';
 import { createMusic } from './audio/music.js';
 import { playBoom } from './audio/ui-sounds.js';
-import { createSettings } from './ui/settings.js';
+import { createSettings, loadSettings } from './ui/settings.js';
 import { startPracticeMatch } from './match-session.js';
 import { BUILD } from './version.js';
 import { refreshIfStale } from './core/freshness.js';
@@ -43,8 +43,17 @@ import { refreshIfStale } from './core/freshness.js';
 
 // 題の画面と大廳（大廳の 3D の広間は、森を組み立てた後に作る。それまでは押されない）
 //   最初に画面に触れたら音を出せるようにして題の曲を流し、「入」で「ドォーン」と鳴らして大廳へ（大廳の曲に替える）
-let hall = null, titleScene = null, settingsRef = null;
-const music = createMusic(BUILD);
+let hall = null, titleScene = null, applyWorld = null, debugRef = null;
+const music = createMusic(BUILD, loadSettings().titleBgm);
+window.__music = music;   // 確認用（自動テストから題の曲の拍を読むため）
+// 設定（性能表示・音の大きさ・題曲の版・試験用）：題の画面からも開けるよう、森を読み込む前に作る。
+// 森に関わる分（視点）は、森ができてから applyWorld で反映する
+const settings = createSettings((st) => {
+  document.getElementById('stats').hidden = st.stats === 'off';
+  audio.setVolume({ high: 1, mid: 0.7, low: 0.4, off: 0 }[st.sound] ?? 0.7);
+  music.setTitleVersion(st.titleBgm);   // 題の曲が流れていれば、すぐその版に替わる
+  applyWorld?.(st);
+}, (act) => debugRef?.(act));
 const titleScreen = createLobby({
   onGate: () => { music.unlock(); music.play('title', { fade: 3 }); },
   onEnter: () => {
@@ -57,7 +66,7 @@ const titleScreen = createLobby({
     hall?.setActive(true, window.__forest?.player.camera);
   },
   onShow: (char, loadout) => { hall?.show(char, loadout).catch((err) => console.warn('大廳の人物:', err)); },
-  onSettings: () => settingsRef?.open(),
+  onSettings: () => settings.open(),
   hall: () => hall,
 });
 
@@ -67,6 +76,7 @@ async function boot() {
   // 題の画面の背景（時の輪）：森を読み込む間も動かして見せる（先に描き始める）
   titleScene = createTitleScene(app, CONFIG);
   titleScene.setActive(true);
+  titleScene.setBeatSource(() => music.titleBeat);   // 時の輪の針を、題の曲の時計の刻みに合わせる
   document.body.classList.add('in-hall');
   app.on('update', (dt) => titleScene.update(dt));
   app.start();
@@ -183,16 +193,14 @@ async function boot() {
   // 確認用（自動テストから状態を読むため）
   window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air, floors, sight };
 
-  // 設定（視点・性能表示）。変わるたびに反映する
-  const applySettings = (st) => {
+  // 設定のうち森に関わる分（視点）。変わるたびに反映する
+  applyWorld = () => {
     // 視点は一人称だけ（三人称は観戦のときと、確認用の ?view=third だけ）
     player.setViewMode(CONFIG.view);
     session?.showMyBody(CONFIG.view === 'third');
-    document.getElementById('stats').hidden = st.stats === 'off';
-    audio.setVolume({ high: 1, mid: 0.7, low: 0.4, off: 0 }[st.sound] ?? 0.7);
   };
-  const settings = createSettings(applySettings, (act) => session?.debugAction(act));
-  settingsRef = settings;
+  applyWorld(settings);
+  debugRef = (act) => session?.debugAction(act);
 
   // 音：iPad は指で触ったときにしか音を出し始められない。試合を始めるボタンで出し、
   // 裏から戻ったなどで止まっていたら、次に画面に触れたときに再び出す
@@ -217,7 +225,7 @@ async function boot() {
     touchLayer.hidden = false;
     document.getElementById('hud').hidden = false;
     window.__forest.session = session;
-    applySettings(settings);
+    applyWorld(settings);
     playing = true;
   });
 }
