@@ -260,8 +260,12 @@ export const POINTS = {
   lastSurvivor: 600,        // 最後の生き残り
 };
 
-/** フェーズ報酬が選べるまでの時間（秒）。過ぎたら最初の候補を自動で選ぶ（対戦中なので止めない） */
-export const REWARD_PICK_TIME = 15;
+/**
+ * 刻（フェーズ）が変わったら、全員がこの秒数だけ止まる（利用者の指示）：時間が止まり、誰も動けず、攻撃も当たらない（矢も止まる）。
+ * その間にフェーズ報酬を選ぶ（REWARD_PICK_TIME 秒。過ぎたら最初の候補を自動で選ぶ）
+ */
+export const PHASE_FREEZE = 5;
+export const REWARD_PICK_TIME = PHASE_FREEZE;
 
 /**
  * フェーズ報酬（ステータス向上）。values はフェーズの番号ごとの強さ。

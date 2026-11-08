@@ -177,6 +177,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   // 一人称（自分の体を目から見る）：頭（兜）を隠し、上下の向きに合わせて上体を傾け（腕と武器が視線に付いてくる）、
   // 目の位置をカメラへ渡す。脚や胴は動きのまま（下を向けば見える）
   let firstPerson = false, eyeReady = false, eyeHold = false;
+  let paused = false, pausedSpeed = 1;   // 時間が止まっている（刻が変わった直後）
   const headBone = body.findByName('Head');
   const spine = ['Spine01', 'Spine02'].map((n) => body.findByName(n)).filter(Boolean);
   const eyeLocal = new pc.Vec3(), eyeTmp = new pc.Vec3(), invRoot = new pc.Mat4(), qAim = new pc.Quat(), qBone = new pc.Quat();
@@ -222,6 +223,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   return {
     root,
     update(dt) {
+      if (paused) return;   // 時間が止まっている（刻が変わった直後）：姿もそのまま
       updateAnim(dt);
       if (fighter.alive) turnHead();
       if (firstPerson && fighter.alive) applyFirstPerson(dt);
@@ -243,6 +245,12 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     /** 一人称の目の位置（体の向きの座標。前は -Z）。まだ分からなければ null */
     get eyeOffset() { return firstPerson && eyeReady ? eyeLocal : null; },
     setVisible(v) { root.enabled = v; if (!v && nocked) nocked.enabled = false; },
+    /** 時間を止める（刻が変わった直後）：動きを止め、今の姿のまま */
+    setPaused(v) {
+      if (v === paused) return;
+      paused = v;
+      if (v) { pausedSpeed = body.anim.speed; body.anim.speed = 0; } else body.anim.speed = pausedSpeed;
+    },
     /** 確認用：今の動き */
     get debugState() { const l = body.anim.baseLayer; return `${current} ${l.activeState} ${l.activeStateCurrentTime?.toFixed(2)} speed${body.anim.speed.toFixed(2)}`; },
   };

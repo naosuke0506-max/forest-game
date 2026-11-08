@@ -86,8 +86,10 @@ export function createViewModel(camera, fighter) {
 
   return {
     setVisible(v) { root.enabled = v; },
+    paused: false,   // 時間が止まっている間（刻が変わった直後）は揺れも動きも止める
     update(dt, moving) {
       if (!fighter.alive) { root.enabled = false; return; }
+      if (this.paused) return;
       if (fighter.weapon !== shownWeapon) showWeapon(fighter.weapon);
       sway += dt * (2 + 6 * moving);
       const bob = [Math.sin(sway) * 0.012 * moving, Math.abs(Math.cos(sway)) * 0.015 * moving, 0];
