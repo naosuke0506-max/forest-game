@@ -230,7 +230,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         document.getElementById('btn-attack').hidden = true;
         document.getElementById('btn-left').hidden = true;
         document.getElementById('btn-dodge').hidden = true;
-        document.getElementById('turnstick').hidden = true;
         stanceBtn.hidden = true;
         useBtn.hidden = true;
         searchBtn.hidden = true;

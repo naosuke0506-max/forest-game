@@ -14,7 +14,7 @@ export function createDesktopInput(layer, config) {
     const k = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 1 : 0.55; // 普段は歩き、Shift で走る
     state.moveX = (r / len) * k;
     state.moveY = (f / len) * k;
-    state.turnX = (keys.has('KeyE') ? 1 : 0) - (keys.has('KeyQ') ? 1 : 0);   // 押している間、右・左 90 度へ向きを変える
+    state.turnX = (keys.has('KeyE') ? 1 : 0) - (keys.has('KeyQ') ? 1 : 0);   // 押すたびに、右・左へ 90 度なぞったのと同じ（体が回る）
   };
 
   window.addEventListener('keydown', (e) => {

@@ -72,10 +72,6 @@ canvas#app {
   transition: opacity .15s;
 }
 .stick.active { opacity: 1; }
-/* 向きを変えるスティック（右側。迴避ボタンの上）：移動のスティックより少し小さく、まわりに矢印の輪 */
-.stick.turn { border-style: dashed; }
-.stick-label { position: absolute; left: 50%; top: -1.6em; transform: translateX(-50%); font: 600 12px var(--serif); letter-spacing: .2em;
-  color: var(--gold-hi); text-shadow: 0 1px 2px #000; white-space: nowrap; }
 .stick-knob {
   position: absolute;
   left: 50%;
