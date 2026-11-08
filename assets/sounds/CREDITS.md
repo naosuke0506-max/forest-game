@@ -24,7 +24,7 @@
 | カラス | [Crow caw](https://opengameart.org/content/crow-caw) | zeroisnotnull |
 | 夜の虫（コオロギ） | [Crickets Ambient Noise - loopable](https://opengameart.org/content/crickets-ambient-noise-loopable) | Wolfgang_ |
 
-風・葉のざわめき・弓の弦・時計台の鐘・ぴったり回避の音は、録音を使わず、その場で作っています（`js/audio/`）。
+風・葉のざわめき・弓の弦・時計台の秒針と鐘・ぴったり回避の音は、録音を使わず、その場で作っています（`js/audio/`）。
 
 ## 作り直すとき
 
