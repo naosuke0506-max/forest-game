@@ -1,0 +1,142 @@
+{
+  "wine_barrel_01": {
+    "tris": 2399,
+    "min": [
+      -0.37,
+      0.002,
+      -0.37
+    ],
+    "max": [
+      0.37,
+      0.871,
+      0.381
+    ],
+    "materials": [
+      "wine_barrel_01"
+    ],
+    "kb": 165
+  },
+  "WoodenTable_01": {
+    "tris": 952,
+    "min": [
+      -0.9,
+      0,
+      -0.329
+    ],
+    "max": [
+      0.9,
+      0.549,
+      0.329
+    ],
+    "materials": [
+      "WoodenTable_01"
+    ],
+    "kb": 96
+  },
+  "treasure_chest": {
+    "tris": 5915,
+    "min": [
+      -0.476,
+      -0.001,
+      -0.26
+    ],
+    "max": [
+      0.48,
+      0.616,
+      0.262
+    ],
+    "materials": [
+      "treasure_chest"
+    ],
+    "kb": 277
+  },
+  "kite_shield": {
+    "tris": 2599,
+    "min": [
+      -0.272,
+      -0.747,
+      -0.052
+    ],
+    "max": [
+      0.272,
+      0.647,
+      0.082
+    ],
+    "materials": [
+      "kite_shield_body",
+      "kite_shield_clamps_and_trim"
+    ],
+    "kb": 218
+  },
+  "brass_goblets": {
+    "tris": 1800,
+    "min": [
+      -0.219,
+      0.005,
+      -0.102
+    ],
+    "max": [
+      0.233,
+      0.278,
+      0.194
+    ],
+    "materials": [
+      "brass_goblets_01",
+      "brass_goblets_02",
+      "brass_goblets_03"
+    ],
+    "kb": 102
+  },
+  "wooden_candlestick": {
+    "tris": 1768,
+    "min": [
+      -0.049,
+      0,
+      -0.049
+    ],
+    "max": [
+      0.048,
+      0.22,
+      0.049
+    ],
+    "materials": [
+      "wooden_candlestick"
+    ],
+    "kb": 57
+  },
+  "wooden_lantern_01": {
+    "tris": 2433,
+    "min": [
+      -0.11,
+      -0.011,
+      -0.11
+    ],
+    "max": [
+      0.111,
+      0.518,
+      0.124
+    ],
+    "materials": [
+      "wooden_lantern_01",
+      "wooden_lantern_01_glass"
+    ],
+    "kb": 102
+  },
+  "wooden_stool_02": {
+    "tris": 1600,
+    "min": [
+      -0.133,
+      0,
+      -0.096
+    ],
+    "max": [
+      0.132,
+      0.182,
+      0.087
+    ],
+    "materials": [
+      "wooden_stool_02"
+    ],
+    "kb": 146
+  }
+}

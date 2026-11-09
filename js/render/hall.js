@@ -1,72 +1,83 @@
-// 大廳（試合の前の待つ所）：松明だけが灯る薄暗い石の広間に、選んだ人物が立っている。題の画面と、戰鬥・人物選びの後ろに出す
+// 大廳（試合の前の待つ所）：中世の城の広間。奥の大きな暖炉の火・左右の火鉢と壁の松明だけが灯り、選んだ人物が壇の上に立つ。題の画面と、戰鬥・人物選びの後ろに出す
 //   森とは別の「層」（Hall）に作り、大廳のカメラはこの層だけを描く：森の空・霧・太陽の光は入らず、森も描かないので重くならない
-//   形は村と同じ道具（world/build-kit.js）と実写の質感（Poly Haven）。人物は試合と同じ見た目（render/character-view.js）
+//   形は render/hall-room.js（石の床と壁・暖炉・柱・壇・絨毯・旗）、火と空気は render/hall-fire.js、小物は render/hall-props.js
+//   質感はどれも Poly Haven（CC0）の実写。人物は試合と同じ見た目（render/character-view.js）
+//   画質：low は暖炉の影と仕上げ（にじむ光）を省く。medium は暖炉の火の影と、にじむ光・周りを暗く・色味。high はさらに火鉢の影・隅の陰（SSAO）・縁のなめらかさ
 import * as pc from 'playcanvas';
-import { createMesh, sceneBudget } from '../core/mesh-utils.js';
-import { SURFACES, builder, box } from '../world/build-kit.js';
+import { sceneBudget } from '../core/mesh-utils.js';
 import { loadTextureSet } from '../world/materials.js';
 import { createFighter } from '../game/match.js';
 import { loadCharacterModel, createCharacterView } from './character-view.js';
 import { loadWeaponModels, createWeaponModel, createShieldModel } from './weapons.js';
+import { buildRoom, DAIS, FIRE, TORCHES, BRAZIERS } from './hall-room.js';
+import { createHallFire } from './hall-fire.js';
+import { loadHallProps } from './hall-props.js';
+import { BUILD } from '../version.js';
 
 const ORIGIN = [0, -400, 0];       // 森の下の、誰も行かない所に建てる（描くのは大廳のカメラだけなので、場所はどこでもよい）
-const W = 11, D = 15, H = 6.2;     // 広間の幅・奥行き・高さ（m）
-const BACK = -4.2;                 // 奥の壁（人物は真ん中に立ち、カメラは手前）
-const DAIS = 0.24;                 // 人物が立つ壇の高さ
-const AMBIENT = [0.05, 0.045, 0.05];   // 空から回り込む光は無い。材質の「周りの光」をこれだけに絞る（松明の光が主）
+const AMBIENT = [0.035, 0.03, 0.032];   // 空から回り込む光は無い。材質の「周りの光」をこれだけに絞る（火の光が主）
 
-/** 炎の絵（中心が白く、外へ橙から透明へ）。画面に足して描く */
-function flameTexture(device) {
-  const c = document.createElement('canvas');
-  c.width = 64; c.height = 128;
-  const g = c.getContext('2d');
-  const grd = g.createRadialGradient(32, 92, 2, 32, 80, 60);
-  grd.addColorStop(0, 'rgba(255,246,214,1)');
-  grd.addColorStop(0.18, 'rgba(255,196,96,0.95)');
-  grd.addColorStop(0.45, 'rgba(236,104,28,0.55)');
-  grd.addColorStop(1, 'rgba(120,30,0,0)');
-  g.fillStyle = grd;
-  // 炎の形：下が丸く、上へ細く伸びる
-  g.beginPath();
-  g.moveTo(32, 2);
-  g.bezierCurveTo(50, 40, 60, 80, 32, 124);
-  g.bezierCurveTo(4, 80, 14, 40, 32, 2);
-  g.fill();
-  const t = new pc.Texture(device, { width: 64, height: 128, format: pc.PIXELFORMAT_RGBA8, mipmaps: true });
-  t.setSource(c);
-  return t;
+// 広間の質感（Poly Haven の名前）。gloss：滑らかさの上限（濡れたように光りすぎないように）
+const SURFACES = {
+  wall: { id: 'medieval_blocks_03', bump: 1.0 },
+  floor: { id: 'large_floor_tiles_02', bump: 0.8, glossMax: 0.75 },
+  rubble: { id: 'castle_wall_varriation', bump: 1.0 },
+  wood: { id: 'old_planks_02', bump: 0.8 },
+  carpet: { id: 'velour_velvet', bump: 0.6, tiling: 3 },   // 色は絨毯の絵（hall-room.js）、凹凸と粗さは布
+  iron: { id: null, metalness: 0.8, gloss: 0.45 },
+  gold: { id: null, metalness: 1, gloss: 0.7 },   // 暖炉の上の金箔の浮き彫り
+};
+
+/** 部屋の霧：遠い所ほど暗い煙たい空気に沈む（大廳のカメラだけ） */
+function hallFog() {
+  const f = new pc.FogParams();
+  f.type = pc.FOG_LINEAR;
+  f.color = new pc.Color(0.018, 0.012, 0.01);
+  f.start = 7; f.end = 30;
+  return f;
 }
 
-/** 光の輪（松明のまわりの、空気が照らされた明るさ） */
-function glowTexture(device) {
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
+/**
+ * 金属に映る部屋の様子（球の絵。見る向きから決まる）：下から暖炉と火鉢の橙、真ん中は暗い石の茶、上は暗い天井。
+ * 空の写真が無い部屋でも、金・鉄・真鍮が金属らしく光る
+ */
+let roomSphere = null;
+function roomReflection(device) {
+  if (roomSphere) return roomSphere;
+  const S = 128, c = document.createElement('canvas');
+  c.width = c.height = S;
   const g = c.getContext('2d');
-  const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  grd.addColorStop(0, 'rgba(255,170,80,0.5)');
-  grd.addColorStop(0.4, 'rgba(200,90,30,0.16)');
-  grd.addColorStop(1, 'rgba(0,0,0,0)');
-  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
-  const t = new pc.Texture(device, { width: 128, height: 128, format: pc.PIXELFORMAT_RGBA8, mipmaps: true });
-  t.setSource(c);
-  return t;
+  g.fillStyle = '#0a0705'; g.fillRect(0, 0, S, S);
+  g.globalCompositeOperation = 'lighter';
+  const blob = (x, y, r, rgb, a) => { const q = g.createRadialGradient(x * S, y * S, 0, x * S, y * S, r * S); q.addColorStop(0, `rgba(${rgb},${a})`); q.addColorStop(1, `rgba(${rgb},0)`); g.fillStyle = q; g.fillRect(0, 0, S, S); };
+  blob(0.5, 0.5, 0.5, '105,66,36', 0.9);
+  blob(0.5, 0.85, 0.35, '255,140,50', 0.9);
+  blob(0.22, 0.7, 0.18, '255,170,80', 0.6);
+  blob(0.8, 0.68, 0.18, '255,170,80', 0.6);
+  blob(0.15, 0.3, 0.14, '90,120,200', 0.35);   // 左上：月の光
+  roomSphere = new pc.Texture(device, { width: S, height: S, format: pc.PIXELFORMAT_RGBA8, srgb: true, mipmaps: false, minFilter: pc.FILTER_LINEAR, magFilter: pc.FILTER_LINEAR });
+  roomSphere.setSource(c);
+  return roomSphere;
 }
 
-/** 大廳の材質：空からの光と霧は使わない（森の時間帯に左右されない） */
-function hallMaterial(m) {
+/** 大廳の材質：空からの光は使わない（森の時間帯に左右されない）。部屋の霧は使う。金属には部屋の映り込み */
+function hallMaterial(m, device = null) {
   m.useSkybox = false;
-  m.useFog = false;
+  m.useFog = true;
   m.ambient = new pc.Color(...AMBIENT);
+  if (device && (m.metalness > 0.3 || m.metalnessMap)) { m.sphereMap = roomReflection(device); m.reflectivity = 1; }
   m.update();
   return m;
 }
 
 /**
  * @param {pc.AppBase} app
- * @param {object} config 画質（質感の画像の大きさ）
+ * @param {object} config 画質（質感の画像の大きさ・影・仕上げ）
  */
 export function createHall(app, config) {
   const device = app.graphicsDevice;
+  const q = config.qualityName || 'medium';
+  const low = q === 'low', high = q === 'high';
   const layer = new pc.Layer({ name: 'Hall' });
   app.scene.layers.push(layer);
   const L = [layer.id];
@@ -75,150 +86,133 @@ export function createHall(app, config) {
   root.setPosition(...ORIGIN);
   app.root.addChild(root);
 
-  // ---- 形（質感ごとに 1 つ） ----
-  const B = builder();
-  const hx = W / 2, f0 = BACK, f1 = BACK + D;
-  // 床（石畳）と天井（板）
-  B.quad('cobble', [-hx, 0, f1], [hx, 0, f1], [hx, 0, f0], [-hx, 0, f0], [0, 1, 0], 0.8);
-  B.quad('wood', [-hx, H, f0], [hx, H, f0], [hx, H, f1], [-hx, H, f1], [0, -1, 0], 0.45);
-  // 壁（内側を向く。石積み）
-  const wallShade = 0.75;
-  B.quad('stone', [-hx, 0, f0], [hx, 0, f0], [hx, H, f0], [-hx, H, f0], [0, 0, 1], wallShade);           // 奥
-  B.quad('stone', [-hx, 0, f1], [-hx, 0, f0], [-hx, H, f0], [-hx, H, f1], [1, 0, 0], wallShade);         // 左
-  B.quad('stone', [hx, 0, f0], [hx, 0, f1], [hx, H, f1], [hx, H, f0], [-1, 0, 0], wallShade);            // 右
-  B.quad('stone', [hx, 0, f1], [-hx, 0, f1], [-hx, H, f1], [hx, H, f1], [0, 0, -1], wallShade);          // 手前（後ろに映る）
-  // 人物が立つ壇（2 段）
-  box(B, 'stone', 0, 0, 0, 3.4, 2.6, DAIS * 0.5, 0, { shade: 0.9 });
-  box(B, 'stone', 0, DAIS * 0.5, -0.1, 2.6, 2.0, DAIS * 0.5, 0, { shade: 1.0 });
-  // 柱（左右に 2 本ずつ）と、天井の梁
-  for (const sx of [-1, 1]) {
-    for (const z of [-2.2, 2.4]) {
-      box(B, 'stone', sx * 3.3, 0, z, 0.9, 0.9, 0.35, 0, { shade: 0.8 });
-      box(B, 'stone', sx * 3.3, 0.35, z, 0.68, 0.68, H - 0.35, 0, { shade: 0.85 });
-    }
-  }
-  for (const z of [-2.2, 0.1, 2.4, 4.7]) box(B, 'wood', 0, H - 0.42, z, W, 0.34, 0.42, 0, { shade: 0.5, bottom: true });
-  for (const sx of [-1, 1]) box(B, 'wood', sx * 3.3, H - 0.72, 0.1, 0.3, D, 0.3, 0, { shade: 0.45, bottom: true });
-  // 奥の壁の旗（赤い布に金の縁）。旗竿は鉄
-  for (const sx of [-1, 1]) {
-    const x = sx * 1.75;
-    box(B, 'cloth', x, 1.5, f0 + 0.06, 1.15, 0.04, 3.4, 0, { shade: [0.36, 0.05, 0.04] });
-    box(B, 'cloth', x, 1.5, f0 + 0.085, 0.95, 0.02, 3.25, 0, { shade: [0.5, 0.08, 0.05] });
-    for (const y of [1.62, 4.62]) box(B, 'cloth', x, y, f0 + 0.1, 0.95, 0.02, 0.07, 0, { shade: [0.55, 0.42, 0.16] });   // 金の縁
-    box(B, 'cloth', x, 4.92, f0 + 0.12, 1.4, 0.07, 0.07, 0, { shade: [0.12, 0.11, 0.1] });
-  }
-  // 壁の松明（鉄の受けと木の柄）。奥の壁の左右と、横の壁
-  const torches = [[-2.68, 2.35, f0 + 0.28, 0], [2.68, 2.35, f0 + 0.28, 0], [-hx + 0.28, 2.35, 1.0, 90], [hx - 0.28, 2.35, 1.0, -90]];
-  for (const [x, y, z, rot] of torches) {
-    box(B, 'cloth', x, y - 0.42, z, 0.07, 0.07, 0.45, rot, { shade: [0.25, 0.16, 0.09], bottom: true });   // 柄
-    box(B, 'cloth', x, y - 0.02, z, 0.16, 0.16, 0.08, rot, { shade: [0.1, 0.1, 0.1], bottom: true });       // 鉄の受け
-  }
-  // 奥の壁の下の、大きな火鉢（人物の後ろを照らす）
-  box(B, 'stone', 0, 0, f0 + 0.9, 1.0, 0.7, 0.55, 0, { shade: 0.6 });
-  box(B, 'cloth', 0, 0.55, f0 + 0.9, 1.1, 0.8, 0.08, 0, { shade: [0.08, 0.07, 0.06] });
-
-  const materials = {};
+  // ---- 広間の形（質感ごとに 1 つ）と旗 ----
+  const room = buildRoom(device, config.quality);
   let tris = 0;
-  for (const [surf, g] of Object.entries(B.parts)) {
-    if (!g.indices.length) continue;
+  for (const [surf, { mesh, tris: t }] of Object.entries(room.surfaces)) {
+    const S = SURFACES[surf];
     const m = new pc.StandardMaterial();
     m.diffuse = new pc.Color(1, 1, 1);
     m.diffuseVertexColor = true;
     m.vertexColorGamma = true;
     m.useMetalness = true;
-    m.metalness = 0;
-    m.gloss = 0.2;
-    m.cull = pc.CULLFACE_NONE;
-    hallMaterial(m);
-    materials[surf] = m;
+    m.metalness = S.metalness ?? 0;
+    m.gloss = S.gloss ?? 0.25;
+    hallMaterial(m, device);
     const e = new pc.Entity(`hall-${surf}`);
-    e.addComponent('render', { meshInstances: [new pc.MeshInstance(createMesh(device, g), m)], castShadows: true, receiveShadows: true, layers: L });
+    // 床と壁は影を受けるだけ（落とす物は、壇・柱・小物・人物）
+    e.addComponent('render', { meshInstances: [new pc.MeshInstance(mesh, m)], castShadows: surf === 'iron' || surf === 'wood' || surf === 'gold', receiveShadows: true, layers: L });
     root.addChild(e);
-    tris += g.indices.length / 3;
-  }
-  sceneBudget.triangles += tris;
-  for (const [surf, m] of Object.entries(materials)) {
-    if (!SURFACES[surf].id) continue;
-    loadTextureSet(device, SURFACES[surf].id, config.quality).then((t) => {
-      if (!t) return;
-      m.diffuseMap = t.diffuse; m.normalMap = t.normal;
-      m.aoMap = t.arm; m.aoMapChannel = 'r';
-      m.glossMap = t.arm; m.glossMapChannel = 'g'; m.glossInvert = true; m.gloss = 1;
+    tris += t;
+    if (!S.id) continue;
+    if (surf === 'carpet') { m.diffuseMap = room.carpetTex; m.diffuseMapOffset = new pc.Vec2(0.5, 0); m.update(); }
+    loadTextureSet(device, S.id, config.quality).then((tx) => {
+      if (!tx) return;
+      if (surf !== 'carpet') m.diffuseMap = tx.diffuse;
+      m.normalMap = tx.normal; m.bumpiness = S.bump ?? 1;
+      if (S.tiling) for (const k of ['normalMapTiling', 'aoMapTiling', 'glossMapTiling']) m[k] = new pc.Vec2(S.tiling, S.tiling);
+      m.aoMap = tx.arm; m.aoMapChannel = 'r';
+      m.glossMap = tx.arm; m.glossMapChannel = 'g'; m.glossInvert = true; m.gloss = S.glossMax ?? 0.62;
       m.update();
     });
   }
-
-  // ---- 炎（絵を画面に足して描く）と、光 ----
-  const flameMat = new pc.StandardMaterial();
-  flameMat.useLighting = false; flameMat.useSkybox = false; flameMat.useFog = false;
-  flameMat.emissiveMap = flameTexture(device); flameMat.emissive = new pc.Color(1, 1, 1);
-  flameMat.opacityMap = flameMat.emissiveMap; flameMat.opacityMapChannel = 'a';
-  flameMat.blendType = pc.BLEND_ADDITIVE; flameMat.depthWrite = false; flameMat.cull = pc.CULLFACE_NONE;
-  flameMat.diffuse = new pc.Color(0, 0, 0);
-  flameMat.update();
-  const glowMat = flameMat.clone();
-  glowMat.emissiveMap = glowMat.opacityMap = glowTexture(device);
-  glowMat.update();
-  const fires = [];
-  /** 炎 1 つ（十字に組んだ 2 枚の絵）と光の輪、光（omni）。size：炎の高さ */
-  function addFire(x, y, z, size, light) {
-    const e = new pc.Entity('fire');
-    e.setLocalPosition(x, y, z);
-    root.addChild(e);
-    const flame = new pc.Entity();
-    for (const a of [0, 90]) {
-      const q = new pc.Entity();
-      q.addComponent('render', { type: 'plane', material: flameMat, castShadows: false, receiveShadows: false, layers: L });
-      q.setLocalEulerAngles(90, a, 0);   // 平面を立てる
-      q.setLocalScale(size * 0.5, 1, size);
-      q.setLocalPosition(0, size * 0.45, 0);
-      flame.addChild(q);
+  // 旗：絵（紋）に、布の凹凸。両面
+  {
+    const m = new pc.StandardMaterial();
+    m.diffuseMap = room.banner.tex;
+    m.useMetalness = true; m.metalness = 0; m.gloss = 0.3;
+    m.cull = pc.CULLFACE_NONE; m.twoSidedLighting = true;
+    hallMaterial(m);
+    loadTextureSet(device, SURFACES.carpet.id, config.quality).then((tx) => {
+      if (!tx) return;
+      m.normalMap = tx.normal; m.normalMapTiling = new pc.Vec2(3, 7); m.bumpiness = 0.8;
+      m.update();
+    });
+    for (const b of room.banner.meshes) {
+      const e = new pc.Entity('hall-banner');
+      e.addComponent('render', { meshInstances: [new pc.MeshInstance(b.mesh, m)], castShadows: true, receiveShadows: true, layers: L });
+      e.setLocalPosition(b.x, room.banner.top, room.banner.z);
+      root.addChild(e);
+      tris += b.mesh.primitive[0].count / 3;
     }
-    e.addChild(flame);
-    const glow = new pc.Entity();
-    glow.addComponent('render', { type: 'plane', material: glowMat, castShadows: false, receiveShadows: false, layers: L });
-    glow.setLocalEulerAngles(90, 0, 0);
-    glow.setLocalScale(size * 3.2, 1, size * 3.2);
-    glow.setLocalPosition(0, size * 0.4, 0.02);
-    e.addChild(glow);
-    const lt = new pc.Entity();
-    lt.addComponent('light', { type: 'omni', color: new pc.Color(1, 0.52, 0.22), intensity: light.intensity, range: light.range, castShadows: false, layers: L });
-    lt.setLocalPosition(0, size * 0.5, 0.15);
-    e.addChild(lt);
-    fires.push({ flame, glow, light: lt.light, base: light.intensity, seed: Math.random() * 100, size });
   }
-  for (const [x, y, z] of torches) addFire(x, y + 0.06, z, 0.42, { intensity: 0.5, range: 5.5 });
-  addFire(0, 0.63, f0 + 0.9, 0.62, { intensity: 0.7, range: 4.5 });   // 火鉢
+  sceneBudget.triangles += tris;
+
+  // ---- 火（暖炉・火鉢・壁の松明・蝋燭）と、空気（火の粉・煙・月の光の筋と塵） ----
+  const fire = createHallFire(app, L, root, { sparks: low ? 40 : 90, motes: low ? 30 : 70 });
+  // 暖炉：人物の後ろから照らす一番強い火。画質が medium 以上なら、人物と壇の影を手前へ落とす
+  fire.addCoals([0, 0.03, FIRE.zf - 0.42], 1.5, 0.55);
+  fire.addFire([0, 0.1, FIRE.zf - 0.42], 1.0, { tongues: 6, spread: 1.15, glow: 2.0, intensity: 1.5,
+    light: { intensity: 1.5, range: 10, shadow: low ? 0 : 512, forward: 0.55 } });
+  for (const b of BRAZIERS) {
+    fire.addCoals([b.flame[0], 0.97, b.flame[2]], 0.62, 0.62);
+    fire.addFire([b.flame[0], 0.95, b.flame[2]], 0.62, { tongues: 3, spread: 0.36, glow: 2.2, intensity: 1.4, light: { intensity: 0.55, range: 7, shadow: high ? 256 : 0, forward: 0 } });
+  }
+  for (const t of TORCHES) fire.addFire(t.flame, 0.34, { tongues: 2, spread: 0.06, glow: 2.4, intensity: 1.4, light: { intensity: 0.32, range: 5.5, forward: 0.1 } });
+  // 月の光：左奥の見えない高い窓から、壇の左手前の床へ斜めに差し込む（暖かい火の中の、冷たい青い光）
+  const MOON_FROM = [-4.9, 6.2, -2.9], MOON_TO = [-0.95, 0, 1.55];
+  fire.addMoonShaft(MOON_FROM, MOON_TO, 1.0);
+  const moon = new pc.Entity('hall-moon');
+  moon.addComponent('light', {
+    type: 'spot', color: new pc.Color(0.42, 0.56, 1.0), intensity: 3.6, range: 16, innerConeAngle: 6, outerConeAngle: 13,
+    castShadows: false, falloffMode: pc.LIGHTFALLOFF_LINEAR, layers: L,
+  });
+  root.addChild(moon);
+  moon.setLocalPosition(...MOON_FROM);
+  moon.lookAt(new pc.Vec3(ORIGIN[0] + MOON_TO[0], ORIGIN[1] + MOON_TO[1], ORIGIN[2] + MOON_TO[2]));
+  moon.rotateLocal(90, 0, 0);   // 光は自分の -Y へ進む（lookAt は -Z を向けるので、-Y を向け直す）
 
   // 人物を照らす光：手前の左上の大きな火（画面の外）から。人物の影を壇に落とす
   const key = new pc.Entity('hall-key');
   key.addComponent('light', {
-    type: 'spot', color: new pc.Color(1, 0.7, 0.42), intensity: 1.7, range: 12, innerConeAngle: 9, outerConeAngle: 22,
-    castShadows: true, shadowResolution: 1024, shadowBias: 0.2, normalOffsetBias: 0.05, layers: L,
+    type: 'spot', color: new pc.Color(1, 0.68, 0.4), intensity: 1.1, range: 12, innerConeAngle: 10, outerConeAngle: 24,
+    castShadows: true, shadowResolution: low ? 512 : 1024, shadowBias: 0.2, normalOffsetBias: 0.05, layers: L,
   });
   root.addChild(key);
   key.setLocalPosition(-2.4, 4.4, 3.6);
   key.lookAt(new pc.Vec3(ORIGIN[0], ORIGIN[1] + 0.9, ORIGIN[2]));
-  key.rotateLocal(90, 0, 0);   // 光は自分の -Y へ進む（lookAt は -Z を向けるので、-Y を向け直す）
-  // 後ろからの冷たい光（窓の月明かり）：人物の輪郭を浮かせる
-  const rim = new pc.Entity('hall-rim');
-  rim.addComponent('light', { type: 'omni', color: new pc.Color(0.42, 0.5, 0.75), intensity: 0.35, range: 4.5, castShadows: false, layers: L });
-  rim.setLocalPosition(1.2, 3.2, -2.2);
-  root.addChild(rim);
+  key.rotateLocal(90, 0, 0);
   // 部屋全体の、とても弱い光（真っ暗にしない。空から回り込む光の代わり）
   const fill = new pc.Entity('hall-fill');
-  fill.addComponent('light', { type: 'omni', color: new pc.Color(0.5, 0.45, 0.5), intensity: 0.07, range: 22, castShadows: false, layers: L });
-  fill.setLocalPosition(0, 4, 2);
+  fill.addComponent('light', { type: 'omni', color: new pc.Color(0.55, 0.45, 0.42), intensity: 0.025, range: 24, castShadows: false, layers: L });
+  fill.setLocalPosition(0, 4, 3);
   root.addChild(fill);
+
+  // ---- 小物（樽・宝箱・机と杯・燭台・灯・腰掛け・壁の楯） ----
+  loadHallProps(app, L, root, fire, (m) => hallMaterial(m, device), BUILD)
+    .then(({ tris: t }) => { sceneBudget.triangles += t; })
+    .catch((err) => console.warn('大廳の小物:', err));
 
   // ---- カメラ ----
   const cam = new pc.Entity('hall-camera');
   cam.addComponent('camera', {
     fov: 38, nearClip: 0.1, farClip: 40, layers: L,
-    clearColor: new pc.Color(0.02, 0.015, 0.012),
+    clearColor: new pc.Color(0.012, 0.009, 0.008),
     toneMapping: pc.TONEMAP_ACES, gammaCorrection: pc.GAMMA_SRGB,
   });
+  cam.camera.fog = hallFog();
   root.addChild(cam);
+  // 仕上げ（medium 以上）：明るい所がにじむ光・周りを暗く・色味。high は隅の陰（SSAO）と、縁のなめらかさ（2 倍の重ね描き）も
+  let frameFx = null;
+  if (!low && pc.CameraFrame) {
+    try {
+      frameFx = new pc.CameraFrame(app, cam.camera);
+      frameFx.rendering.toneMapping = pc.TONEMAP_ACES;
+      frameFx.rendering.samples = high ? 2 : 1;
+      frameFx.bloom.intensity = 0.05;
+      frameFx.bloom.blurLevel = 12;
+      frameFx.grading.enabled = true;
+      frameFx.grading.brightness = 1.0; frameFx.grading.contrast = 1.08; frameFx.grading.saturation = 1.06;
+      frameFx.grading.tint = new pc.Color(1.02, 0.99, 0.95, 1);
+      frameFx.vignette.intensity = 0.42; frameFx.vignette.inner = 0.45; frameFx.vignette.outer = 1.15; frameFx.vignette.curvature = 0.6;
+      if (high) {
+        frameFx.ssao.type = pc.SSAOTYPE_COMBINE;
+        frameFx.ssao.intensity = 0.45; frameFx.ssao.radius = 0.6; frameFx.ssao.samples = 12; frameFx.ssao.scale = 0.5;
+      }
+      frameFx.update();
+      frameFx.enabled = false;   // 大廳を出すときに有効にする
+    } catch (err) { console.warn('大廳の仕上げ（CameraFrame）を使えません', err); frameFx = null; }
+  }
   const target = new pc.Vec3();
   /** 画面の形に合わせて人物を置く：横長は人物を左に（右に選ぶ画面）、縦長は真ん中の上に */
   function frame() {
@@ -232,6 +226,7 @@ export function createHall(app, config) {
   }
   frame();
   window.addEventListener('resize', frame);
+  const origin = new pc.Vec3(...ORIGIN);
 
   // ---- 人物 ----
   let view = null, showing = null, token = 0;
@@ -332,6 +327,7 @@ export function createHall(app, config) {
     setActive(v, worldCamera) {
       active = v;
       root.enabled = v;
+      if (frameFx) frameFx.enabled = v;
       if (worldCamera) worldCamera.enabled = !v;
       if (v) frame();
     },
@@ -340,14 +336,7 @@ export function createHall(app, config) {
     update(dt) {
       if (!active) return;
       time += dt;
-      // 炎のゆらぎ：大きさと光の強さを、いくつかの波を重ねて揺らす
-      for (const f of fires) {
-        const s = f.seed + time;
-        const k = 0.82 + 0.1 * Math.sin(s * 7.3) + 0.06 * Math.sin(s * 13.1 + 1.7) + 0.04 * Math.sin(s * 23.7);
-        f.flame.setLocalScale(1 + 0.08 * Math.sin(s * 9.1), k, 1);
-        f.glow.setLocalScale(1, 1, 1);
-        f.light.intensity = f.base * (0.85 + 0.15 * k);
-      }
+      fire.update(dt, cam, origin);   // 炎の揺らぎ・光の揺らぎ・火の粉・煙・月の光の塵
       view?.update(dt);   // 待機の動き（体の位置は、作るときに決めた壇の上）
       stepDirected();
       if (display) pivot.rotateLocal(0, 24 * dt, 0);

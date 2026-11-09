@@ -177,7 +177,7 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
       enterBtn.textContent = L.enter;
       enterBtn.addEventListener('click', () => {
         if (!gate.hidden) openGate();
-        // 「ドォーン」：音を鳴らし、題の文字が大きくなりながら消え、画面が暗くなったところで大廳に切り替えて明ける
+        // 「時が動き出す音」を鳴らし、題の文字が大きくなりながら消え、画面が暗くなったところで大廳に切り替えて明ける
         onEnter();
         title.classList.add('leaving');
         fade.classList.add('on');

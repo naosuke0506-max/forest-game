@@ -25,12 +25,22 @@ SIZES = {
     'clay_roof_tiles': {'diff': 512, 'nor_gl': 512, 'arm': 512},
     'cobblestone_floor_04': {'diff': 512, 'nor_gl': 512, 'arm': 512},
     'wooden_gate': {'diff': 512, 'nor_gl': 512, 'arm': 512},
+    # 大廳（中世の城の広間）。壁と床は画面に大きく映るので色を 1024 に
+    'medieval_blocks_03': {'diff': 1024, 'nor_gl': 512, 'arm': 512},
+    'large_floor_tiles_02': {'diff': 1024, 'nor_gl': 1024, 'arm': 512},
+    'old_planks_02': {'diff': 512, 'nor_gl': 512, 'arm': 512},
+    'velour_velvet': {'diff': 512, 'nor_gl': 512, 'arm': 256},
+    'castle_wall_varriation': {'diff': 512, 'nor_gl': 512, 'arm': 512},
 }
 # WebP の画質（凹凸は細かい向きの情報なので高め）
 QUALITY = {'diff': 82, 'nor_gl': 90, 'arm': 85}
 
+import sys
+ONLY = set(sys.argv[1:])   # 名前を渡すと、その素材だけ作り直す
 total = 0
 for asset, maps in SIZES.items():
+    if ONLY and asset not in ONLY:
+        continue
     for kind, size in maps.items():
         src = ROOT / asset / f'{asset}_{kind}_1k.jpg'
         dst = ROOT / asset / f'{asset}_{kind}.webp'

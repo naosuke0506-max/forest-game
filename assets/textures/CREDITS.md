@@ -25,6 +25,18 @@
 
 どれも Poly Haven（CC0）。取り込んだときに MD5 を確かめた。色は 1024（石）か 512、凹凸と陰影・粗さは 512 の WebP にした。
 
+## 大廳（中世の城の広間。`js/render/hall.js`・`hall-room.js`）
+
+| 素材 | 作者 | 実物の大きさ | 使う所 |
+|---|---|---|---|
+| [medieval_blocks_03](https://polyhaven.com/a/medieval_blocks_03) | Rob Tuytel | 2m 四方 | 壁・暖炉の胸壁・柱（色 1024） |
+| [large_floor_tiles_02](https://polyhaven.com/a/large_floor_tiles_02) | Rob Tuytel | 3m 四方 | 床・壇・炉床（色と凹凸 1024） |
+| [castle_wall_varriation](https://polyhaven.com/a/castle_wall_varriation) | Rob Tuytel | 2m 四方 | 炉の中・腰石 |
+| [old_planks_02](https://polyhaven.com/a/old_planks_02) | Rob Tuytel | 2m 四方 | 天井・梁・薪・松明の柄 |
+| [velour_velvet](https://polyhaven.com/a/velour_velvet) | colormass, Rico Cilliers | 0.28m 四方 | 絨毯と旗の布の凹凸（色は絵を描いた。`hall-room.js`） |
+
+`tools/fetch_polyhaven_hall.py` で取り込み（MD5 を確かめる）、`tools/optimize_textures.py` で WebP にした。
+
 ## 使っているファイル
 
 ゲームが読み込むのは、`tools/optimize_textures.py` で元の 1K JPG から作った **WebP** です（9 枚で合計約 0.9MB）。
