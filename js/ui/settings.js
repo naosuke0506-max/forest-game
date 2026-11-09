@@ -1,6 +1,6 @@
 // 設定：性能表示、テスト用（フェーズの長さ・フェーズを飛ばす など）。設定はこの端末に保存する（保存できない環境でも動く）
 const KEY = 'forest-game.settings';
-const DEFAULTS = { stats: 'on', phaseLen: 'normal', sound: 'mid', titleBgm: 'ja' };   // titleBgm：題曲の版（日本・羅甸・獨逸・伊太利）
+const DEFAULTS = { stats: 'on', phaseLen: 'normal', sound: 'mid', titleBgm: 'ja' };   // titleBgm：題曲の版（日本・羅甸・獨逸・伊太利・西班牙・英吉利）
 
 /** この端末に保存した設定（無ければ初めの値）。設定の画面を作る前に読むとき用 */
 export function loadSettings() { return load(); }

@@ -537,9 +537,13 @@ body.in-hall #glare, body.in-hall #dazzle { display: none; }   /* 森の太陽�
 .settings { width: min(440px, calc(100vw - 32px)); }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; }
 .seg { display: flex; border: 1px solid var(--edge); border-radius: 4px; overflow: hidden; }
-.seg button { min-width: 84px; min-height: 44px; font: inherit; color: var(--ink); background: rgba(0, 0, 0, .25); border: 0; }
+.seg button { min-width: min(84px, 17vw); min-height: 44px; font: inherit; color: var(--ink); background: rgba(0, 0, 0, .25); border: 0; }
 .seg button + button { border-left: 1px solid var(--edge-soft); }
 .seg button.on { background: linear-gradient(180deg, rgba(110, 86, 40, .9), rgba(60, 46, 20, .9)); color: var(--gold-hi); }
+/* 題曲：6 つの版を 3 つずつ 2 段に（1 段では設定の枠からはみ出す） */
+.seg[data-key="titleBgm"] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.seg[data-key="titleBgm"] button:nth-child(3n + 1) { border-left: 0; }
+.seg[data-key="titleBgm"] button:nth-child(n + 4) { border-top: 1px solid var(--edge-soft); }
 
 /* 設定画面のテスト用の欄 */
 .settings .test-head { margin: 18px 0 6px; font-size: 14px; opacity: .7; font-weight: normal; letter-spacing: .1em; }

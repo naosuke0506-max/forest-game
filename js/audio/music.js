@@ -1,20 +1,23 @@
 // BGM（題の画面・大廳）。曲は assets/music/ の MP3（出典は assets/music/CREDITS.md）
-//   題の曲は 4 つの版（日本語・ラテン語風・ドイツ語風・イタリア語風。利用者が Suno で作った）から、設定で選ぶ（題曲）
+//   題の曲は 6 つの版（日本語・ラテン語風・ドイツ語風・イタリア語風・スペイン語風・英語風。利用者が Suno で作った）から、設定で選ぶ（題曲）
 //   iPad のメモリを使いすぎないよう、曲は全部を先に解かず、<audio> で少しずつ読みながら鳴らす（音量は Web Audio の master を通す）
 //   iPad は指で触ったときにしか鳴らし始められないので、最初に触れたとき（unlock）に、読んである曲を一度鳴らして止めておく
 import { audio } from './engine.js';
 
 // bpm・phase：時計の音が刻む速さと、最初の刻みの時刻（秒）。rot：8 拍の一回りのうち、鐘の鳴る拍。
 //   どれも曲を測って決めた（題の画面の時の輪の針を、曲に合わせて 1 拍ずつ進め、鐘で一周させる）
+//   測り方：時計のカチッ（3〜10 kHz の立ち上がり）が一番よくそろう速さと位置を探し、鐘は拍の後の響きの音色で 8 拍のどれかを決める
 const TRACKS = {
   title_ja: { url: 'assets/music/title_ja.mp3', volume: 0.7, bpm: 120.08, phase: 0.086, rot: 0 },
   title_la: { url: 'assets/music/title_la.mp3', volume: 0.7, bpm: 120.04, phase: 0.125, rot: 0 },
   title_de: { url: 'assets/music/title_de.mp3', volume: 0.7, bpm: 121.96, phase: 0.131, rot: 0 },
   title_it: { url: 'assets/music/title_it.mp3', volume: 0.7, bpm: 120.0, phase: 0.133, rot: 4 },
+  title_es: { url: 'assets/music/title_es.mp3', volume: 0.7, bpm: 120.01, phase: 0.12, rot: 0 },
+  title_en: { url: 'assets/music/title_en.mp3', volume: 0.7, bpm: 120.12, phase: 0.15, rot: 0 },   // 始めの 30 秒は少し速め（ずれは 60 ms まで）
   hall: { url: 'assets/music/hall.mp3', volume: 0.6 },      // 大廳：「ダァーン、ダラダダァ〜ン」のリズムのノれる曲（自作。tools/music/compose_hall.py）
 };
-/** 題曲の版（設定の題曲。日本・羅甸・獨逸・伊太利） */
-export const TITLE_VERSIONS = ['ja', 'la', 'de', 'it'];
+/** 題曲の版（設定の題曲。日本・羅甸・獨逸・伊太利・西班牙・英吉利） */
+export const TITLE_VERSIONS = ['ja', 'la', 'de', 'it', 'es', 'en'];
 
 export function createMusic(build = '', titleVersion = 'ja') {
   const tracks = {};
