@@ -32,7 +32,7 @@ import { createLobby } from './ui/lobby.js';
 import { createHall } from './render/hall.js';
 import { createTitleScene } from './render/title-scene.js';
 import { createMusic } from './audio/music.js';
-import { playBoom } from './audio/ui-sounds.js';
+import { playTimeStart, TIME_START_PEAK } from './audio/ui-sounds.js';
 import { createSettings, loadSettings } from './ui/settings.js';
 import { startPracticeMatch } from './match-session.js';
 import { BUILD } from './version.js';
@@ -42,7 +42,7 @@ import { refreshIfStale } from './core/freshness.js';
 (window.__pendingErrors || []).forEach((m) => window.__showError(m));
 
 // 題の画面と大廳（大廳の 3D の広間は、森を組み立てた後に作る。それまでは押されない）
-//   最初に画面に触れたら音を出せるようにして題の曲を流し、「入」で「ドォーン」と鳴らして大廳へ（大廳の曲に替える）
+//   最初に画面に触れたら音を出せるようにして題の曲を流し、「入」で「時が動き出す音」を鳴らして大廳へ（大廳の曲に替える）
 let hall = null, titleScene = null, applyWorld = null, debugRef = null;
 const music = createMusic(BUILD, loadSettings().titleBgm);
 window.__music = music;   // 確認用（自動テストから題の曲の拍を読むため）
@@ -58,8 +58,9 @@ const titleScreen = createLobby({
   onGate: () => { music.unlock(); music.play('title', { fade: 3 }); },
   onEnter: () => {
     music.unlock();
-    playBoom();
-    music.play('hall', { fade: 3.5 });
+    // 「時が動き出す音」を聞かせるため、題の曲はすぐ下げ、大廳の曲は弾けた後から上げる
+    playTimeStart();
+    music.play('hall', { fade: 2.4, out: 0.45, delay: TIME_START_PEAK + 0.25 });
   },
   onHall: () => {   // 「入」の後、画面が暗くなったところで大廳に切り替える
     titleScene?.setActive(false);
