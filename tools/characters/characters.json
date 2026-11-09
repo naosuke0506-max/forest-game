@@ -8,7 +8,8 @@
       "source": "shield_knight.glb",
       "group": "1hs",
       "guard": "1hs_sguard",
-      "onehand": true
+      "onehand": true,
+      "mace": true
     },
     "sword": {
       "source": "sword_knight.glb",
@@ -24,16 +25,22 @@
     },
     "blunt": {
       "source": "blunt_knight.glb",
-      "group": "mc"
+      "group": "mc",
+      "mace": true,
+      "warhammer": true,
+      "lucerne": true
     },
     "archer": {
       "source": "archer.glb",
       "group": "bw",
-      "melee": "kn"
+      "melee": "kn",
+      "dagger": true
     },
     "cleric": {
       "source": "cleric.glb",
-      "group": "mc"
+      "group": "mc",
+      "mace": true
     }
-  }
+  },
+  "_技": "技の動きを入れるキャラ：onehand 片手劍・longsword 長劍・mace 鎚矛・warhammer 戰鎚・lucerne 長柄鎚・dagger 短劍（tools/characters/*_moves.py）"
 }

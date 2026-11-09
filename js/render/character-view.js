@@ -3,7 +3,7 @@
 // 模型は tools/characters/build_character.py で作る（assets/characters/<名前>.glb と、動きの長さ・速さの .json）。
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
-import { WEAPONS, DODGE, STANCE_TIME } from '../game/data.js';
+import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { techSetOf } from '../game/techniques.js';
 import { stanceShape } from '../game/stance.js';
@@ -113,6 +113,8 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   }
   const clip = (name) => meta.clips[name];
   const has = (name) => tracks.has(name);
+  // 両手で持つ武器（戰鎚・長柄鎚。data.js の stance）は、待機・歩き・後ろ歩き・走りも両手で持つ動き（wh_idle など）にする
+  const loco = (name) => { const st = WEAPONS[fighter.weapon]?.stance; return st && has(`${st}_${name}`) ? `${st}_${name}` : name; };
   // 姿勢の動き（tools/characters/make_motions.py）：しゃがみ（その場）・しゃがみ歩き・伏せる・伏せ・這う・起き上がる
   const stanceClips = ['crouch', 'crouch_walk', 'prone_down', 'prone', 'crawl', 'prone_up'].every(has);
   let current = '', lastAction = null, lastPhase = '', swingIndex = 0, deathStarted = false;
@@ -222,6 +224,14 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
 
   // 圖鑑で動きを流すとき（direct）：戦闘の状態を見ずに、選んだ動きだけを流す
   let directed = null;
+  // その動きを使う武器（技の動き・両手で持つ待機や歩き）。無ければ null
+  const weaponOfClip = (name) => {
+    for (const [id, set] of Object.entries(TECHNIQUES)) {
+      for (const t of [...set.combo, set.charge, set.charge2]) if (t.clip === name || t.in === name || t.hold === name) return id;
+    }
+    const st = name.split('_')[0];
+    return Object.keys(WEAPONS).find((id) => WEAPONS[id].stance === st) || null;
+  };
   return {
     root,
     update(dt) {
@@ -256,11 +266,18 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     /** 圖鑑：name の動きを最初から流す（null で戦闘の状態に戻す）。時刻と速さは anim で動かす */
     direct(name) {
       directed = name && has(name) ? name : null;
+      // 技の動きは、その技の武器を持たせて流す（弓兵の短劍・打擊騎士の戰鎚など）。止めたら、持っている武器へ戻す
+      const want = (directed && weaponOfClip(directed)) || fighter.weapon;
+      if (want !== shownWeapon) showWeapon(want);
       if (!directed) { current = ''; return; }
       body.anim.speed = 1;
       body.anim.baseLayer.transition(directed, 0.12, 0);
       current = directed;
     },
+    /** その動きを使う武器（圖鑑。大廳が先に模型を読み込むのに使う） */
+    weaponFor: (name) => weaponOfClip(name),
+    /** 手の武器を付け直す（武器の模型を読み込んだ後に） */
+    refreshWeapon() { if (shownWeapon) showWeapon(shownWeapon); },
     get anim() { return body.anim; },
     /** 時間を止める（刻が変わった直後）：動きを止め、今の姿のまま */
     setPaused(v) {
@@ -392,7 +409,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       if (a && a !== lastAction) {
         lastAction = a;
         if (a.kind === 'attack' && a.tech) {
-          // 技（片手劍・長劍）：動きを作った速さのまま流す（data.js の TECHNIQUES の time が動きの長さ）
+          // 技（片手劍・長劍・鎚矛・戰鎚・長柄鎚・短劍）：動きを作った速さのまま流す（data.js の TECHNIQUES の time が動きの長さ）
           const name = a.tech.clip;
           if (has(name)) restart(name, clip(name).duration / a.tech.time);
         } else if (a.kind === 'shield') {
@@ -473,10 +490,10 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       if (vel < 0.15) {
         const tn = yawRate < 0 ? 'turn_r' : 'turn_l';
         if (Math.abs(yawRate) > 25 && has(tn)) play(tn, Math.min(2, Math.max(0.5, Math.abs(yawRate) / (clip(tn).turn || 150))), 0.15);
-        else play('idle', 1);
+        else play(loco('idle'), 1);
       }
-      else if (fwd < -0.3 * vel) play('back', Math.min(2.5, Math.max(0.5, vel / (clip('back').speed * sc))));
-      else if (vel > RUN_FROM) play('run', Math.min(2.5, Math.max(0.6, vel / (clip('run').speed * sc))));
-      else play('walk', Math.min(2.5, Math.max(0.5, vel / (clip('walk').speed * sc))));
+      else if (fwd < -0.3 * vel) play(loco('back'), Math.min(2.5, Math.max(0.5, vel / (clip('back').speed * sc))));
+      else if (vel > RUN_FROM) play(loco('run'), Math.min(2.5, Math.max(0.6, vel / (clip('run').speed * sc))));
+      else play(loco('walk'), Math.min(2.5, Math.max(0.5, vel / (clip('walk').speed * sc))));
   }
 }

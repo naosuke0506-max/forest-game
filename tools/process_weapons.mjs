@@ -9,6 +9,8 @@
 // 向きは形から自動で見つける：
 //   剣：長い軸の上で一番幅が広い所が鍔。鍔から短い側が柄、長い側が刃
 //   槍：長い軸の両端のうち、太い方が穂先
+//   鎚（鎚矛・戰鎚・長柄鎚）：槍と同じく太い方が頭。頭の一番広い向きを X にし、鎚の面（嘴より短く出ている側）を +X にする
+//     （技の動きの「打つ側」が +X。鎚矛は頭が丸いので、どちらでもよい）
 //   盾：一番薄い軸が厚み。横幅の広い側が上。真ん中の出っ張り（ボス）が出ている側が表
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -23,11 +25,17 @@ const WEAPONS = {
   armingsword: { kind: 'sword', length: 0.95, grip: 0.4, tris: 2500, tex: 512 },
   longsword:   { kind: 'sword', length: 1.25, grip: 0.25, tris: 2500, tex: 512 },  // 両手持ち：右手は鍔のすぐ下
   spear:       { kind: 'spear', length: 2.5,  grip: 0.25, tris: 2000, tex: 512 },
+  // 利用者が送った模型（2026-11-09）。元（source_models/weapons/）は tools/decimate_weapon.py で 4 万三角形に減らした物。
+  // ここへ渡す前に、もう一度 decimate_weapon.py で 3000 三角形にした物を使う（この道具の減らし方は、Tripo の模型の継ぎ目で止まるため）
+  mace:        { kind: 'hammer', length: 0.75, grip: 0.2, tris: 3000, tex: 512, error: 0.06 },   // 鎚矛：片手。持ち手は柄頭から 2 割
+  warhammer:   { kind: 'hammer', length: 1.15, grip: 0.36, tris: 3000, tex: 512, error: 0.06 },  // 戰鎚：両手。右手（上の手）は柄頭から 36%、左手はその 0.3 m 下
+  lucerne:     { kind: 'hammer', length: 2.05, grip: 0.5, tris: 3000, tex: 512, error: 0.06, face: -1 },   // 長柄鎚：両手。右手（前の手）は真ん中、左手はその 0.7 m 後ろ。三つ又と嘴の長さがほぼ同じで見分けられないので、向きを決めて書く
+  dagger:      { kind: 'sword', length: 0.40, grip: 0.45, tris: 2000, tex: 512, error: 0.06 },   // 短劍：片手
   kite_shield: { kind: 'shield', length: 0.9, tris: 3000, tex: 1024 },
 };
 
-const [srcDir, outDir] = process.argv.slice(2);
-if (!srcDir || !outDir) { console.error('使い方: node process_weapons.mjs <元の模型のフォルダ> <出力フォルダ>'); process.exit(1); }
+const [srcDir, outDir, ...only] = process.argv.slice(2);   // only：名前を渡すと、その武器だけ作り直す
+if (!srcDir || !outDir) { console.error('使い方: node process_weapons.mjs <元の模型のフォルダ> <出力フォルダ> [武器の名前…]'); process.exit(1); }
 await MeshoptDecoder.ready;
 await MeshoptSimplifier.ready;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.decoder': MeshoptDecoder });
@@ -105,6 +113,31 @@ function orient(id, opt, P) {
     const origin = [...mid]; origin[long] = gripPos;
     return { m: frame(ex, ey, ez, origin, opt.length / L), note: `鍔 ${(guard / bins).toFixed(2)}` };
   }
+  if (opt.kind === 'hammer') {
+    const width = slices.map((s) => Math.max(s.wa, s.wb));
+    const n = Math.round(bins * 0.2);
+    const a = Math.max(...width.slice(0, n)), b = Math.max(...width.slice(bins - n));
+    const toButt = a > b ? 1 : -1;                          // 太い方が頭。その反対が柄頭
+    const buttEnd = toButt > 0 ? hi : lo;
+    const gripPos = buttEnd - toButt * L * opt.grip;
+    const hk = a > b ? width.indexOf(a) : bins - n + width.slice(bins - n).indexOf(b);   // 頭の一番広い輪切り
+    const s = slices[hk];
+    const wide = s.wa >= s.wb ? o[0] : o[1];
+    // 柄の真ん中（長さの 3〜7 割の所の、広い向きの座標の平均）から、頭がどちら側へ長く出ているか：長い側が嘴、短い側が鎚の面
+    const headLo = lo + (hk - 2) / bins * L, headHi = lo + (hk + 3) / bins * L;
+    let shaft = 0, ns = 0, mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < P.length; i += 3) {
+      const t = (P[i + long] - lo) / L;
+      if (t > 0.3 && t < 0.7) { shaft += P[i + wide]; ns++; }
+      if (P[i + long] >= headLo && P[i + long] <= headHi) { mn = Math.min(mn, P[i + wide]); mx = Math.max(mx, P[i + wide]); }
+    }
+    shaft /= Math.max(1, ns);
+    let face = (mx - shaft) < (shaft - mn) ? 1 : -1;         // 短く出ている側を +X（鎚の面）
+    if (opt.face) face *= opt.face;                           // 見分けられない物は、写して確かめて向きを書く
+    const ez = unit(long, toButt), ex = unit(wide, face), ey = cross(ez, ex);
+    const origin = [...mid]; origin[long] = gripPos; origin[wide] = shaft;
+    return { m: frame(ex, ey, ez, origin, opt.length / L), note: `頭 ${a > b ? '始め' : '終わり'}側・鎚の面 ${face > 0 ? '+' : '-'}（+ ${(mx - shaft).toFixed(3)} / - ${(shaft - mn).toFixed(3)}）` };
+  }
   if (opt.kind === 'spear') {
     const width = slices.map((s) => Math.max(s.wa, s.wb));
     const n = Math.round(bins * 0.2);
@@ -136,7 +169,10 @@ function orient(id, opt, P) {
 
 await fs.mkdir(outDir, { recursive: true });
 const meta = {};
+const prev = JSON.parse(await fs.readFile(path.join(outDir, 'weapons.json'), 'utf8').catch(() => '{}'));
+Object.assign(meta, prev);
 for (const [id, opt] of Object.entries(WEAPONS)) {
+  if (only.length && !only.includes(id)) continue;
   const file = path.join(srcDir, `${id}.glb`);
   const doc = await io.read(file);
   const root = doc.getRoot();
@@ -154,7 +190,7 @@ for (const [id, opt] of Object.entries(WEAPONS)) {
 
   const tris = () => prim.getIndices().getCount() / 3;
   const before = tris();
-  if (tris() > opt.tris) await doc.transform(weld(), simplify({ simplifier: MeshoptSimplifier, ratio: opt.tris / tris(), error: 0.02, lockBorder: false }));
+  if (tris() > opt.tris) await doc.transform(weld(), simplify({ simplifier: MeshoptSimplifier, ratio: opt.tris / tris(), error: opt.error ?? 0.02, lockBorder: false }));
   // 質感の画像を小さくする
   for (const tex of root.listTextures()) {
     const img = tex.getImage();

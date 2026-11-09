@@ -41,12 +41,16 @@ export const WEAPONS = {
   mace:      { name: '鎚矛',         kind: 'melee', damage: 32, reach: 1.9, arc: 90,  windup: 0.36, recovery: 0.44, stamina: 18, guardPierce: 0.35 },
   spear:     { name: '槍',           kind: 'melee', damage: 22, reach: 3.1, arc: 34,  windup: 0.22, recovery: 0.30, stamina: 12, guardPierce: 0.0 },
   dagger:    { name: '短劍',         kind: 'melee', damage: 14, reach: 1.5, arc: 90,  windup: 0.16, recovery: 0.26, stamina: 8,  guardPierce: 0.0 },
+  // 両手で持つ打撃武器（打擊騎士）。戰鎚は鎚矛より重く遅い。長柄鎚は間合いが長い
+  warhammer: { name: '戰鎚',         kind: 'melee', damage: 38, reach: 2.2, arc: 80,  windup: 0.40, recovery: 0.50, stamina: 22, guardPierce: 0.45, stance: 'wh' },
+  lucerne:   { name: '長柄鎚',       kind: 'melee', damage: 34, reach: 3.2, arc: 60,  windup: 0.38, recovery: 0.48, stamina: 20, guardPierce: 0.40, stance: 'lc' },
   longbow:   { name: '長弓',         kind: 'bow',   damage: 30, drawTime: 0.75, minDraw: 0.2, speed: 48, stamina: 8, reach: 1.2 },
 };
 
 /**
- * 武器の技（片手劍・長劍。docs/DESIGN.md の「片手劍の技」「長劍の技」）。動きは模型に入っている
- * （tools/characters/onehand_moves.py・longsword_moves.py）。技の流れは game/techniques.js
+ * 武器の技（片手劍・長劍・鎚矛・戰鎚・長柄鎚・短劍。docs/DESIGN.md の「〇〇の技」）。動きは模型に入っている
+ * （tools/characters/onehand_moves.py・longsword_moves.py・mace_moves.py・warhammer_moves.py・lucerne_moves.py・dagger_moves.py）。
+ * 技の流れは game/techniques.js
  *   combo：通常攻撃（攻擊ボタンを短く押す）。1 段目 → 2 段目 → また 1 段目
  *   charge：溜攻撃 1（長押しで溜め、離して放つ）。in・hold は溜めに入る・溜めている間の動き。溜めた長さ（full 秒で満タン）で damage [最小, 最大] の間
  *   charge2：溜攻撃 2（溜攻撃 1 の後、すぐもう一度長押しして離す）
@@ -75,6 +79,46 @@ export const TECHNIQUES = {
       reach: 3.2, arc: 30, stamina: 26, chain: 0.55, power: 'h' },
     charge2: { name: '斬返', clip: 'ls_c2', time: 1.47, hits: [0.3, 0.78], damage: [1.0, 1.5], reach: 2.6, arc: [110, 110], stamina: 30,
       chain: 1.05, power: ['l', 'h'] },
+  },
+  mace: {   // 楯劍騎士・打擊騎士・祓魔僧。片手で振る重い鎚。振りかぶりが大きく、防禦の上から響く
+    combo: [
+      { name: '打落', clip: 'mc_cut1', time: 0.97, hits: [0.36], damage: 1.0, reach: 1.9, arc: 70, stamina: 18, chain: 0.6, power: 'l' },
+      { name: '拂打', clip: 'mc_cut2', time: 0.87, hits: [0.3], damage: 0.95, reach: 1.9, arc: 130, stamina: 16, chain: 0.52, power: 'l' },
+    ],
+    charge: { name: '兜割', in: 'mc_c1_in', hold: 'mc_c1_hold', clip: 'mc_c1_out', time: 0.93, hits: [0.18], damage: [1.4, 2.1], full: 1.0,
+      reach: 2.0, arc: 50, stamina: 24, chain: 0.55, power: 'h' },
+    charge2: { name: '連碎', clip: 'mc_c2', time: 1.53, hits: [0.32, 0.8], damage: [0.9, 1.5], reach: [1.8, 2.0], arc: [60, 60], stamina: 28,
+      chain: 1.1, power: ['l', 'h'] },
+  },
+  warhammer: {   // 打擊騎士。両手で持つ重い鎚。いちばん遅いが、一撃が重い
+    combo: [
+      { name: '打込', clip: 'wh_cut1', time: 1.03, hits: [0.38], damage: 1.0, reach: 2.2, arc: 80, stamina: 22, chain: 0.66, power: 'l' },
+      { name: '嘴打', clip: 'wh_cut2', time: 0.97, hits: [0.34], damage: 1.0, reach: 2.2, arc: 110, stamina: 22, chain: 0.6, power: 'l' },
+    ],
+    charge: { name: '天墜', in: 'wh_c1_in', hold: 'wh_c1_hold', clip: 'wh_c1_out', time: 1.13, hits: [0.24], damage: [1.5, 2.2], full: 1.2,
+      reach: 2.4, arc: 40, stamina: 30, chain: 0.75, power: 'h' },
+    charge2: { name: '穿突', clip: 'wh_c2', time: 1.6, hits: [0.3, 0.82], damage: [0.9, 1.6], reach: [2.5, 2.2], arc: [30, 60], stamina: 32,
+      chain: 1.15, power: ['l', 'h'] },
+  },
+  lucerne: {   // 打擊騎士。長い柄で遠くを突き、大きく薙ぐ
+    combo: [
+      { name: '穗突', clip: 'lc_cut1', time: 0.73, hits: [0.24], damage: 0.9, reach: 3.3, arc: 30, stamina: 16, chain: 0.45, power: 'l' },
+      { name: '大薙', clip: 'lc_cut2', time: 1.0, hits: [0.38], damage: 1.0, reach: 3.0, arc: 140, stamina: 22, chain: 0.64, power: 'l' },
+    ],
+    charge: { name: '落雷', in: 'lc_c1_in', hold: 'lc_c1_hold', clip: 'lc_c1_out', time: 1.07, hits: [0.24], damage: [1.4, 2.1], full: 1.1,
+      reach: 3.4, arc: 35, stamina: 28, chain: 0.7, power: 'h' },
+    charge2: { name: '鉤返', clip: 'lc_c2', time: 1.37, hits: [0.34, 0.72], damage: [0.9, 1.4], reach: [3.2, 3.4], arc: [60, 30], stamina: 30,
+      chain: 1.0, power: ['h', 'l'] },
+  },
+  dagger: {   // 弓兵が持ち替えて使う。軽くて速い。間合いは短い
+    combo: [
+      { name: '迅刺', clip: 'dg_cut1', time: 0.53, hits: [0.16], damage: 1.0, reach: 1.6, arc: 30, stamina: 8, chain: 0.3, power: 'l' },
+      { name: '搔斬', clip: 'dg_cut2', time: 0.6, hits: [0.2], damage: 1.0, reach: 1.5, arc: 120, stamina: 8, chain: 0.34, power: 'l' },
+    ],
+    charge: { name: '逆手刺', in: 'dg_c1_in', hold: 'dg_c1_hold', clip: 'dg_c1_out', time: 0.87, hits: [0.2], damage: [1.5, 2.4], full: 0.8,
+      reach: 1.9, arc: 40, stamina: 14, chain: 0.5, power: 'h' },
+    charge2: { name: '雙刺', clip: 'dg_c2', time: 0.97, hits: [0.22, 0.46], damage: [1.0, 1.3], reach: [1.6, 1.6], arc: [30, 30], stamina: 14,
+      chain: 0.7, power: ['l', 'l'] },
   },
 };
 /**
@@ -119,8 +163,8 @@ export const SHIELDS = {
 };
 /** まだ模型と動きが無い武器の名前（題の画面に「未完」と出す） */
 export const PLANNED = {
-  falchion: '片刃劍', greatsword: '兩手大劍', pike: '長槍', halberd: '斧槍', warhammer: '戰鎚',
-  lucerne: '長柄鎚', flail: '連枷', battleaxe: '戰斧', crossbow: '弩',
+  falchion: '片刃劍', greatsword: '兩手大劍', pike: '長槍', halberd: '斧槍',
+  flail: '連枷', battleaxe: '戰斧', crossbow: '弩',
 };
 
 /**

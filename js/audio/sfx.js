@@ -28,7 +28,7 @@ const VOICE = {
 const voiceOf = (f) => VOICE[f?.char] || VOICE.shield;
 
 // 武器の種類：斬る（剣・ダガー）・突く（槍・矢）・打つ（メイス）
-const KIND = { armingsword: 'slash', longsword: 'slash', dagger: 'slash', spear: 'pierce', mace: 'blunt', longbow: 'pierce' };
+const KIND = { armingsword: 'slash', longsword: 'slash', dagger: 'slash', spear: 'pierce', mace: 'blunt', warhammer: 'blunt', lucerne: 'blunt', longbow: 'pierce' };
 // 振る音：録音の組・高さ・大きさ
 const SWING = {
   armingsword: { set: 'swing_light', rate: 1.0, gain: 0.8 },
@@ -36,6 +36,8 @@ const SWING = {
   dagger:      { set: 'swing_light', rate: 1.2, gain: 0.6 },
   spear:       { set: 'swing_mid', rate: 1.15, gain: 0.7 },
   mace:        { set: 'swing_heavy', rate: 0.78, gain: 1.0 },
+  warhammer:   { set: 'swing_heavy', rate: 0.7, gain: 1.05 },   // 鎚矛より重く、低い音
+  lucerne:     { set: 'swing_heavy', rate: 0.84, gain: 0.95 },  // 長い柄が風を切る
 };
 
 /**

@@ -264,6 +264,9 @@ export function createHall(app, config) {
     if (!view) return null;
     const info = name && view.clipInfo(name);
     view.direct(info ? name : null);
+    // 技の動きは、その技の武器を持たせる（選んだ武器と違えば、模型を読み込んでから付け直す）
+    const wid = info ? view.weaponFor(name) : null;
+    if (wid) { const v = view; loadWeaponModels(app, [wid]).then(() => { if (v === view) v.refreshWeapon(); }); }
     directed = info ? { name, duration: info.duration, loop: directed?.loop ?? true, playing: true, speed: directed?.speed ?? 1, lastT: 0 } : null;
     return directed;
   }
