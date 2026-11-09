@@ -54,6 +54,27 @@ def frame_from(z, x):
     return Matrix((x, y, z)).transposed().to_quaternion()
 
 
+def hilt_point(sp_r, axis, spec, K, hh, reach):
+    """両手持ちの左手で握る柄の点（右手の持ち手の点 sp_r から、柄の向き axis の反対へ hilt m）。
+    spec に 'slide' があれば、決めた所に腕が届かないとき、届く所まで右手の側へ滑らせる（長い柄では手が柄の上を滑る）"""
+    lo = spec['hilt'] * K
+    if not spec.get('slide'):
+        return sp_r + axis * lo
+    hi = -0.14 * K                                   # 右手にいちばん近づける所（拳 2 つ分ほど離す）
+    R = reach * 0.97 + 0.055 * K                     # 手首は柄から肩の側へ 0.055 m 戻すので、その分も足す
+    s0 = (hh - sp_r).dot(axis)                       # 肩にいちばん近い柄の点
+    d2 = (hh - sp_r - axis * s0).length_squared
+    s = None
+    if d2 < R * R:
+        w = math.sqrt(R * R - d2)
+        a, b = max(lo, s0 - w), min(hi, s0 + w)
+        if a <= b:
+            s = a
+    if s is None:
+        s = min(hi, max(lo, s0))
+    return sp_r + axis * s
+
+
 def twist_angle(q, axis):
     """回転 q の、軸 axis まわりのねじれの角度（ラジアン）"""
     p = Vector((q.x, q.y, q.z)).dot(axis)
@@ -268,7 +289,7 @@ class Rig:
                 elif s == 'L' and 'hilt' in spec:
                     # 両手持ち：右手の持ち手の点から刃と反対（柄頭）の側へ hilt m の所を左手で握る（手首は肩の側へ少し戻した所）
                     sp_r, q_r = side_targets['R_sock']
-                    hp = sp_r + (q_r @ Vector((0, 0, 1))) * (spec['hilt'] * self.K)
+                    hp = hilt_point(sp_r, q_r @ Vector((0, 0, 1)), spec, self.K, hh, sum(self.arm[s]))
                     wrist = hp + (hh - hp).normalized() * (0.055 * self.K)
                 else:
                     wrist = hh + V(*spec['wrist']) * AR
@@ -588,3 +609,73 @@ def fix_arms(rig, action, two_handed=False):
                 b.keyframe_insert('rotation_quaternion', frame=f, group=n)
     T.animation_data.action = None
     return fixed
+
+
+def hold_weapon(rig, src_action, name, spec_r, spec_l):
+    """できている動き（待機・歩き・後ろ歩き・走り）の脚と体はそのままに、腕だけを武器を持つ形に解き直した、新しい動きを作る。
+    spec_r：右手（grip・blade・edge・pole。胸から見た向きで書く。胸が回れば一緒に回る）。
+    spec_l：左手（hilt・pole：両手持ちで右手の持ち手の点から柄頭の側へ hilt m を握る）。返り値：新しい action"""
+    import bpy
+    T = rig.T
+    act = src_action.copy()
+    act.name = name
+    act.use_fake_user = True
+    T.animation_data.action = act
+    f0, f1 = map(int, act.frame_range)
+    scn = bpy.context.scene
+    h, K, AR = rig.rest_h, rig.K, rig.AR
+    sR_q, sR_t = rig.sR.to_quaternion(), rig.sR.translation
+    for f in range(f0, f1 + 1):
+        scn.frame_set(f)
+        pb = T.pose.bones
+        W = {b.name: pb[b.name].matrix.to_quaternion() @ rig.rest_q[b.name].inverted() for b in rig.order}
+        H = {b.name: pb[b.name].head.copy() for b in rig.order}
+        Wc = W['Spine02']                        # 胸の向き（休みの姿勢から）
+        C = lambda v: Wc @ V(*v)
+        R_sock = None
+        for s, spec in (('R', spec_r), ('L', spec_l)):
+            up = f'{s}_Upperarm'
+            hh = H[up]
+            Wr = W[rig.parent[up]].copy()
+            Wh = None
+            if s == 'R':
+                Wh = frame_from(C(spec['blade']), C(spec['edge'])) @ sR_q.inverted()
+                wrist = hh + C(spec['grip']) * AR - Wh @ sR_t
+            else:
+                sp_r, q_r = R_sock
+                hp = hilt_point(sp_r, q_r @ Vector((0, 0, 1)), spec, K, hh, sum(rig.arm[s]))
+                wrist = hp + (hh - hp).normalized() * (0.055 * K)
+            wrist = rig.push_out(wrist, W, H, 0.05 * K)
+            if s == 'R':
+                R_sock = (wrist + Wh @ sR_t, Wh @ sR_q)
+            l1, l2 = rig.arm[s]
+            pole = C(spec['pole'])
+            elbow, wrist = two_bone(hh, wrist, l1, l2, pole)
+            elbow = rig.elbow_out(hh, elbow, wrist, W, H)
+            v = Wr @ (h[f'{s}_Forearm'] - h[up])
+            Wr = v.rotation_difference(elbow - hh) @ Wr
+            Wr = rig._align_twist(Wr, (elbow - hh).normalized(), Wc @ FWD, wrist - elbow, -pole)
+            W[up] = Wr
+            # 腕の先の骨（前腕・ねじれ・手）を、肩から順に解き直す
+            chain = [n for n in (f'{s}_Forearm', f'{s}_ForearmTwist01', f'{s}_ForearmTwist02', f'{s}_Hand') if n in W]
+            Wf = None
+            phi = 0.0
+            for n in chain:
+                p = rig.parent[n]
+                H[n] = H[p] + W[p] @ (h[n] - h[p])
+                if n.endswith('_Forearm'):
+                    Wn = W[p].copy()
+                    vv = Wn @ (h[f'{s}_Hand'] - h[n])
+                    Wn = vv.rotation_difference(wrist - H[n]) @ Wn
+                    Whr = Wh @ rig.rest_q[f'{s}_Hand'].inverted() if Wh is not None else Wn
+                    axis_rest = (h[f'{s}_Hand'] - h[n]).normalized()
+                    phi = twist_angle(Wn.inverted() @ Whr, axis_rest)
+                    Wf, W[n], hand_W = Wn, Wn, Whr
+                elif 'Twist' in n:
+                    ax = (Wf @ (h[f'{s}_Hand'] - h[f'{s}_Forearm'])).normalized()
+                    W[n] = Quaternion(ax, phi * (0.5 if n.endswith('01') else 1.0)) @ Wf
+                else:
+                    W[n] = hand_W
+        rig.key(W, H, f)
+    T.animation_data.action = None
+    return act

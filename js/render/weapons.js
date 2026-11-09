@@ -6,7 +6,10 @@ import * as pc from 'playcanvas';
 import { BUILD } from '../version.js';
 
 // 模型がある武器（武器の名前 → assets/weapons/ のファイル名）
-const MODEL_FILES = { armingsword: 'armingsword', longsword: 'longsword', spear: 'spear', shield: 'kite_shield' };
+const MODEL_FILES = {
+  armingsword: 'armingsword', longsword: 'longsword', spear: 'spear', shield: 'kite_shield',
+  mace: 'mace', warhammer: 'warhammer', lucerne: 'lucerne', dagger: 'dagger',   // 利用者が送った模型（2026-11-09）
+};
 const models = new Map();
 
 /** 武器・盾の模型を読み込む（読み込めなかった物は仮の形で続ける） */

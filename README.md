@@ -170,6 +170,7 @@ source_models/characters/ キャラの元の模型（Tripo AI で骨付けした
 assets/weapons/          武器・盾の模型（持ち手を原点にそろえたもの）
 source_models/weapons/   武器・盾の元の模型（Tripo AI の GLB。ゲームは読み込まない）
 tools/process_weapons.mjs 武器・盾の模型の向きと持ち手をそろえ、軽くする道具（開発用。cd tools && npm ci）
+tools/decimate_weapon.py 数十万三角形ある Tripo の武器を、Blender で 4 万三角形に減らす道具（開発用。process_weapons.mjs の前に使う）
 tools/characters/        キャラの模型を作る道具（Blender 4.2 で動かす開発用。下の「キャラの模型を作り直す」）
 js/
   main.js                起動の順番だけ
@@ -274,12 +275,19 @@ blender -b --python tools/characters/make_motions.py -- source_models/motions/cr
 
 作り直したら、上の手順で 6 キャラの模型を作り直します。
 
-### 手と足の位置で付ける動き（片手劍の技・体の動き・楯の技）
+### 手と足の位置で付ける動き（武器の技・体の動き・楯の技）
 
 次の動きは、Tripo の骨に直接付けています。手（剣の持ち手・楯）の位置と向き、足の位置、腰の位置と向きを何か所かの時刻で決め、その間をなめらかにつなぎます。腕と脚は、手と足が届くように関節を曲げます（道具は `tools/characters/ik_rig.py`）。
 
 - `tools/characters/onehand_moves.py`：片手劍の技（踏込突・逆袈裟・袈裟斬（溜めに入る・溜め・放つ）・旋風斬）。`characters.json` で `"onehand": true` のキャラ（楯劍騎士・劍騎士）
 - `tools/characters/longsword_moves.py`：長劍の技（唐竹・横薙・長突・斬返。両手で持ち、左手を柄に添える）。`characters.json` で `"longsword": true` のキャラ（劍騎士）
+- `tools/characters/mace_moves.py`：鎚矛の技（打落・拂打・兜割・連碎）。`"mace": true` のキャラ（楯劍騎士は楯を構えたまま。打擊騎士・祓魔僧は左の拳を前に）
+- `tools/characters/warhammer_moves.py`：戰鎚の技（打込・嘴打・天墜・穿突）と、両手で斜めに持つ待機・歩き・後ろ歩き・走り。`"warhammer": true` のキャラ（打擊騎士）
+- `tools/characters/lucerne_moves.py`：長柄鎚の技（穗突・大薙・落雷・鉤返）と、立てて持つ待機・歩きなど。`"lucerne": true` のキャラ（打擊騎士）
+- `tools/characters/dagger_moves.py`：短劍の技（迅刺・搔斬・逆手刺・雙刺）。`"dagger": true` のキャラ（弓兵）
+- 戰鎚・長柄鎚の待機・歩きは、できている動きの脚と体はそのままに、腕だけを両手で持つ形に解き直す（`ik_rig.py` の `hold_weapon`）。
+  武器の `stance`（`js/game/data.js`）が `wh`・`lc` なら、ゲームは `wh_idle` などを使う（`js/render/character-view.js`）。
+  長い柄で左手が届かない姿勢では、左手を柄の上で右手の側へ滑らせる（左手の決まりに `'slide': True`）
 - `tools/characters/hide_moves.py`：タンス・ベッドに隠れる・出る・探す（全キャラ）、引きずり出されて止めを刺される（全キャラ）、引きずり出して止めを刺す（片手劍を持つキャラ）。動きの座標は、家具の前の「出る所」に立って家具の方を向いた向き
 - `tools/characters/body_moves.py`：全キャラの体の動き
   - しゃがみ歩き（深くしゃがむ）・伏せから起き上がる（今までの物と入れ替え）

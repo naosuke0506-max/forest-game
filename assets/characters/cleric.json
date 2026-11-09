@@ -113,6 +113,36 @@
    "loop": true,
    "speed": 0.0
   },
+  "mc_cut1": {
+   "duration": 0.9667,
+   "loop": false,
+   "speed": 0.0
+  },
+  "mc_cut2": {
+   "duration": 0.8667,
+   "loop": false,
+   "speed": 0.0
+  },
+  "mc_c1_in": {
+   "duration": 0.3667,
+   "loop": false,
+   "speed": 0.0
+  },
+  "mc_c1_hold": {
+   "duration": 1.0,
+   "loop": true,
+   "speed": 0.0
+  },
+  "mc_c1_out": {
+   "duration": 0.9333,
+   "loop": false,
+   "speed": 0.0
+  },
+  "mc_c2": {
+   "duration": 1.5333,
+   "loop": false,
+   "speed": 0.0
+  },
   "hit_l_f": {
    "duration": 0.4667,
    "loop": false,
