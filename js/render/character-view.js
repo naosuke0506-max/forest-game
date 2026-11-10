@@ -3,7 +3,7 @@
 // 模型は tools/characters/build_character.py で作る（assets/characters/<名前>.glb と、動きの長さ・速さの .json）。
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
-import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES } from '../game/data.js';
+import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { techSetOf } from '../game/techniques.js';
 import { stanceShape } from '../game/stance.js';
@@ -229,6 +229,9 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     for (const [id, set] of Object.entries(TECHNIQUES)) {
       for (const t of [...set.combo, set.charge, set.charge2]) if (t.clip === name || t.in === name || t.hold === name) return id;
     }
+    for (const [id, m] of Object.entries(ASSASSIN.byWeapon)) {   // 暗殺の動き（片手劍の背刺・滑斬、鈍器・短劍の背後から）
+      if (Object.values(m).some((k) => ASSASSIN.moves[k].clip === name)) return id;
+    }
     const st = name.split('_')[0];
     return Object.keys(WEAPONS).find((id) => WEAPONS[id].stance === st) || null;
   };
@@ -419,10 +422,12 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         } else if (a.kind === 'charge') {
           if (has(a.tech.in)) restart(a.tech.in, 1);
         } else if (a.kind === 'charge2') {
-          // 溜攻撃 2 を待つ：溜攻撃 1 の振り終わりの姿のまま（動きは最後の姿で止まる）。
-          // 振り終わってから長押ししたとき（もう別の動きに戻っていれば）は、振り終わりの姿へ戻す
-          const out = techSetOf(fighter.weapon)?.charge.clip;
-          if (out && current !== out && has(out)) {
+          // 溜攻撃 2 を待つ：その技の溜めの動き（charge2.hold。鎚矛は肩の高さで構えて震える など）があれば、それを繰り返す。
+          // 無ければ溜攻撃 1 の振り終わりの姿のまま（動きは最後の姿で止まる）。振り終わってから長押ししたときは、振り終わりの姿へ戻す
+          const set = techSetOf(fighter.weapon);
+          const out = set?.charge.clip;
+          if (set?.charge2.hold && has(set.charge2.hold)) play(set.charge2.hold, 1, 0.15);
+          else if (out && current !== out && has(out)) {
             body.anim.speed = 1;
             body.anim.baseLayer.transition(out, 0.15, clip(out).duration * 0.98);
             current = out;

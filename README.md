@@ -281,13 +281,17 @@ blender -b --python tools/characters/make_motions.py -- source_models/motions/cr
 
 - `tools/characters/onehand_moves.py`：片手劍の技（踏込突・逆袈裟・袈裟斬（溜めに入る・溜め・放つ）・旋風斬）。`characters.json` で `"onehand": true` のキャラ（楯劍騎士・劍騎士）
 - `tools/characters/longsword_moves.py`：長劍の技（唐竹・横薙・長突・斬返。両手で持ち、左手を柄に添える）。`characters.json` で `"longsword": true` のキャラ（劍騎士）
-- `tools/characters/mace_moves.py`：鎚矛の技（打落・拂打・兜割・連碎）。`"mace": true` のキャラ（楯劍騎士は楯を構えたまま。打擊騎士・祓魔僧は左の拳を前に）
-- `tools/characters/warhammer_moves.py`：戰鎚の技（打込・嘴打・天墜・穿突）と、両手で斜めに持つ待機・歩き・後ろ歩き・走り。`"warhammer": true` のキャラ（打擊騎士）
-- `tools/characters/lucerne_moves.py`：長柄鎚の技（穗突・大薙・落雷・鉤返）と、立てて持つ待機・歩きなど。`"lucerne": true` のキャラ（打擊騎士）
-- `tools/characters/dagger_moves.py`：短劍の技（迅刺・搔斬・逆手刺・雙刺）。`"dagger": true` のキャラ（弓兵）
+- `tools/characters/mace_moves.py`：鎚矛の技（橫打・返打・打上・昇擊・地碎・暗殺の碎顱）。`"mace": true` のキャラ（楯劍騎士は楯を構えたまま。打擊騎士・祓魔僧は左の拳を前に）
+- `tools/characters/warhammer_moves.py`：戰鎚の技（薙擊・返擊・天墜・袈裟返・旋擊・碎顱）と、両手で持つ待機・歩き・後ろ歩き・走り。`"warhammer": true` のキャラ（打擊騎士）
+- `tools/characters/lucerne_moves.py`：長柄鎚の技（打落・撥上・大薙・車輪・碎顱）と、柄の先を持って立てる待機・歩きなど。`"lucerne": true` のキャラ（打擊騎士）
+- `tools/characters/dagger_moves.py`：短劍の技（斜斬・斬上・刺突・亂斬・雙斬・暗殺の背刺）。`"dagger": true` のキャラ（弓兵）
+- `tools/characters/weapon_common.py`：4 つの武器で共通の道具（溜めの震え・回転・両手持ちの姿勢の書き方 `two_hand`・鈍器の暗殺 `blunt_assassin_keys`）。
+  鈍器の暗殺をされる側の動き（`as_blunt_v`。全キャラ）は `body_moves.py`
 - 戰鎚・長柄鎚の待機・歩きは、できている動きの脚と体はそのままに、腕だけを両手で持つ形に解き直す（`ik_rig.py` の `hold_weapon`）。
   武器の `stance`（`js/game/data.js`）が `wh`・`lc` なら、ゲームは `wh_idle` などを使う（`js/render/character-view.js`）。
-  長い柄で左手が届かない姿勢では、左手を柄の上で右手の側へ滑らせる（左手の決まりに `'slide': True`）
+  長い柄で左手が届かない姿勢では、左手を柄の上で右手の側へ滑らせる（左手の決まりに `'slide'`）
+- 両手持ちの拳の向き：右手に `'auto'`、左手に `'grip2'` を書くと、拳の中に柄が通るように、柄の向きと前腕から拳の向きを決める（`ik_rig.py` の `auto_grip`・`grip_solve`。
+  左手の握りの点は、右手の持ち手の点を体の左右で映した物）。腕や手が武器に埋もれないようにするため
 - `tools/characters/hide_moves.py`：タンス・ベッドに隠れる・出る・探す（全キャラ）、引きずり出されて止めを刺される（全キャラ）、引きずり出して止めを刺す（片手劍を持つキャラ）。動きの座標は、家具の前の「出る所」に立って家具の方を向いた向き
 - `tools/characters/body_moves.py`：全キャラの体の動き
   - しゃがみ歩き（深くしゃがむ）・伏せから起き上がる（今までの物と入れ替え）

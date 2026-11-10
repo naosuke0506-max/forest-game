@@ -53,7 +53,7 @@ export const WEAPONS = {
  * 技の流れは game/techniques.js
  *   combo：通常攻撃（攻擊ボタンを短く押す）。1 段目 → 2 段目 → また 1 段目
  *   charge：溜攻撃 1（長押しで溜め、離して放つ）。in・hold は溜めに入る・溜めている間の動き。溜めた長さ（full 秒で満タン）で damage [最小, 最大] の間
- *   charge2：溜攻撃 2（溜攻撃 1 の後、すぐもう一度長押しして離す）
+ *   charge2：溜攻撃 2（溜攻撃 1 の後、すぐもう一度長押しして離す）。hold があれば、溜攻撃 2 を待つ間はその動き（無ければ溜攻撃 1 の振り終わりの姿）
  * 技ごとに：clip 動き、time 長さ（秒。動きを作った速さのまま）、hits 当たる時刻（秒）、damage 武器の damage に掛ける倍率、
  *   reach 間合い（m）、arc 当たる角度（度。当たりが 2 回ある技は 1 回ごと）、stamina、chain 次の技へ移れる時刻（秒。先に押しておけばこの時刻に移る）、
  *   power 威力（l 軽い / h 重い。被弾・防禦の受け方を変える）
@@ -80,45 +80,48 @@ export const TECHNIQUES = {
     charge2: { name: '斬返', clip: 'ls_c2', time: 1.47, hits: [0.3, 0.78], damage: [1.0, 1.5], reach: 2.6, arc: [110, 110], stamina: 30,
       chain: 1.05, power: ['l', 'h'] },
   },
-  mace: {   // 楯劍騎士・打擊騎士・祓魔僧。片手で振る重い鎚。振りかぶりが大きく、防禦の上から響く
+  mace: {   // 楯劍騎士・打擊騎士・祓魔僧。片手で振る重い鎚。防禦の上から響く（動きの形は利用者の指示 2026-11-09）
     combo: [
-      { name: '打落', clip: 'mc_cut1', time: 0.97, hits: [0.36], damage: 1.0, reach: 1.9, arc: 70, stamina: 18, chain: 0.6, power: 'l' },
-      { name: '拂打', clip: 'mc_cut2', time: 0.87, hits: [0.3], damage: 0.95, reach: 1.9, arc: 130, stamina: 16, chain: 0.52, power: 'l' },
+      { name: '橫打', clip: 'mc_cut1', time: 0.87, hits: [0.31], damage: 1.0, reach: 1.9, arc: 130, stamina: 16, chain: 0.5, power: 'l' },
+      { name: '返打', clip: 'mc_cut2', time: 0.83, hits: [0.27], damage: 1.0, reach: 1.9, arc: 130, stamina: 16, chain: 0.46, power: 'l' },
+      { name: '打上', clip: 'mc_cut3', time: 1.17, hits: [0.56], damage: 1.25, reach: 1.9, arc: 60, stamina: 20, chain: 0.85, power: 'h' },
     ],
-    charge: { name: '兜割', in: 'mc_c1_in', hold: 'mc_c1_hold', clip: 'mc_c1_out', time: 0.93, hits: [0.18], damage: [1.4, 2.1], full: 1.0,
-      reach: 2.0, arc: 50, stamina: 24, chain: 0.55, power: 'h' },
-    charge2: { name: '連碎', clip: 'mc_c2', time: 1.53, hits: [0.32, 0.8], damage: [0.9, 1.5], reach: [1.8, 2.0], arc: [60, 60], stamina: 28,
-      chain: 1.1, power: ['l', 'h'] },
+    charge: { name: '昇擊', in: 'mc_c1_in', hold: 'mc_c1_hold', clip: 'mc_c1_out', time: 0.97, hits: [0.16], damage: [1.4, 2.1], full: 1.0,
+      reach: 2.0, arc: 60, stamina: 24, chain: 0.5, power: 'h' },
+    charge2: { name: '地碎', hold: 'mc_c2_hold', clip: 'mc_c2', time: 1.2, hits: [0.32], damage: 1.8, reach: 2.1, arc: 100, stamina: 28,
+      chain: 0.9, power: 'h' },
   },
-  warhammer: {   // 打擊騎士。両手で持つ重い鎚。いちばん遅いが、一撃が重い
+  warhammer: {   // 打擊騎士。両手で持つ重い鎚。いちばん遅いが、一撃が重い（動きの形は利用者の指示 2026-11-09）
     combo: [
-      { name: '打込', clip: 'wh_cut1', time: 1.03, hits: [0.38], damage: 1.0, reach: 2.2, arc: 80, stamina: 22, chain: 0.66, power: 'l' },
-      { name: '嘴打', clip: 'wh_cut2', time: 0.97, hits: [0.34], damage: 1.0, reach: 2.2, arc: 110, stamina: 22, chain: 0.6, power: 'l' },
+      { name: '薙擊', clip: 'wh_cut1', time: 1.03, hits: [0.42], damage: 1.0, reach: 2.2, arc: 140, stamina: 22, chain: 0.66, power: 'l' },
+      { name: '返擊', clip: 'wh_cut2', time: 0.93, hits: [0.31], damage: 1.0, reach: 2.2, arc: 140, stamina: 22, chain: 0.56, power: 'l' },
+      { name: '天墜', clip: 'wh_cut3', time: 1.77, hits: [0.92], damage: 1.5, reach: 2.4, arc: 60, stamina: 30, chain: 1.3, power: 'h' },
     ],
-    charge: { name: '天墜', in: 'wh_c1_in', hold: 'wh_c1_hold', clip: 'wh_c1_out', time: 1.13, hits: [0.24], damage: [1.5, 2.2], full: 1.2,
-      reach: 2.4, arc: 40, stamina: 30, chain: 0.75, power: 'h' },
-    charge2: { name: '穿突', clip: 'wh_c2', time: 1.6, hits: [0.3, 0.82], damage: [0.9, 1.6], reach: [2.5, 2.2], arc: [30, 60], stamina: 32,
-      chain: 1.15, power: ['l', 'h'] },
+    charge: { name: '袈裟返', in: 'wh_c1_in', hold: 'wh_c1_hold', clip: 'wh_c1_out', time: 1.27, hits: [0.2, 0.6], damage: [1.3, 1.9], full: 1.2,
+      reach: 2.3, arc: [80, 80], stamina: 30, chain: 0.85, power: 'h' },
+    charge2: { name: '旋擊', hold: 'wh_c2_hold', clip: 'wh_c2', time: 1.4, hits: [0.72], damage: 1.9, reach: 2.3, arc: 120, stamina: 34,
+      chain: 1.0, power: 'h' },
   },
-  lucerne: {   // 打擊騎士。長い柄で遠くを突き、大きく薙ぐ
+  lucerne: {   // 打擊騎士。柄の先を持ち、長い柄で遠くから叩く（動きの形は利用者の指示 2026-11-09）
     combo: [
-      { name: '穗突', clip: 'lc_cut1', time: 0.73, hits: [0.24], damage: 0.9, reach: 3.3, arc: 30, stamina: 16, chain: 0.45, power: 'l' },
-      { name: '大薙', clip: 'lc_cut2', time: 1.0, hits: [0.38], damage: 1.0, reach: 3.0, arc: 140, stamina: 22, chain: 0.64, power: 'l' },
+      { name: '打落', clip: 'lc_cut1', time: 1.0, hits: [0.38], damage: 1.0, reach: 3.3, arc: 40, stamina: 18, chain: 0.62, power: 'l' },
+      { name: '撥上', clip: 'lc_cut2', time: 0.93, hits: [0.26], damage: 1.0, reach: 3.1, arc: 40, stamina: 18, chain: 0.52, power: 'l' },
     ],
-    charge: { name: '落雷', in: 'lc_c1_in', hold: 'lc_c1_hold', clip: 'lc_c1_out', time: 1.07, hits: [0.24], damage: [1.4, 2.1], full: 1.1,
-      reach: 3.4, arc: 35, stamina: 28, chain: 0.7, power: 'h' },
-    charge2: { name: '鉤返', clip: 'lc_c2', time: 1.37, hits: [0.34, 0.72], damage: [0.9, 1.4], reach: [3.2, 3.4], arc: [60, 30], stamina: 30,
-      chain: 1.0, power: ['h', 'l'] },
+    charge: { name: '大薙', in: 'lc_c1_in', hold: 'lc_c1_hold', clip: 'lc_c1_out', time: 0.97, hits: [0.22], damage: [1.4, 2.1], full: 1.1,
+      reach: 3.3, arc: 160, stamina: 28, chain: 0.6, power: 'h' },
+    charge2: { name: '車輪', hold: 'lc_c2_hold', clip: 'lc_c2', time: 1.4, hits: [0.18, 0.79], damage: [1.0, 1.4], reach: [3.3, 3.3], arc: [360, 360], stamina: 30,
+      chain: 1.05, power: ['l', 'h'] },
   },
-  dagger: {   // 弓兵が持ち替えて使う。軽くて速い。間合いは短い
+  dagger: {   // 弓兵が持ち替えて使う。軽くて速い。間合いは短い（動きの形は利用者の指示 2026-11-09）
     combo: [
-      { name: '迅刺', clip: 'dg_cut1', time: 0.53, hits: [0.16], damage: 1.0, reach: 1.6, arc: 30, stamina: 8, chain: 0.3, power: 'l' },
-      { name: '搔斬', clip: 'dg_cut2', time: 0.6, hits: [0.2], damage: 1.0, reach: 1.5, arc: 120, stamina: 8, chain: 0.34, power: 'l' },
+      { name: '斜斬', clip: 'dg_cut1', time: 0.57, hits: [0.18], damage: 1.0, reach: 1.5, arc: 100, stamina: 8, chain: 0.32, power: 'l' },
+      { name: '斬上', clip: 'dg_cut2', time: 0.57, hits: [0.17], damage: 1.0, reach: 1.5, arc: 100, stamina: 8, chain: 0.31, power: 'l' },
+      { name: '刺突', clip: 'dg_cut3', time: 0.67, hits: [0.22], damage: 1.3, reach: 1.7, arc: 30, stamina: 10, chain: 0.4, power: 'l' },
     ],
-    charge: { name: '逆手刺', in: 'dg_c1_in', hold: 'dg_c1_hold', clip: 'dg_c1_out', time: 0.87, hits: [0.2], damage: [1.5, 2.4], full: 0.8,
-      reach: 1.9, arc: 40, stamina: 14, chain: 0.5, power: 'h' },
-    charge2: { name: '雙刺', clip: 'dg_c2', time: 0.97, hits: [0.22, 0.46], damage: [1.0, 1.3], reach: [1.6, 1.6], arc: [30, 30], stamina: 14,
-      chain: 0.7, power: ['l', 'l'] },
+    charge: { name: '亂斬', in: 'dg_c1_in', hold: 'dg_c1_hold', clip: 'dg_c1_out', time: 1.0, hits: [0.13, 0.31, 0.49], damage: [0.8, 1.2], full: 0.8,
+      reach: 1.7, arc: [110, 110, 110], stamina: 14, chain: 0.62, power: 'l' },
+    charge2: { name: '雙斬', hold: 'dg_c2_hold', clip: 'dg_c2', time: 0.87, hits: [0.14, 0.34], damage: [1.0, 1.3], reach: [1.6, 1.6], arc: [110, 110], stamina: 14,
+      chain: 0.6, power: ['l', 'h'] },
   },
 };
 /**
@@ -257,6 +260,17 @@ export const ASSASSIN = {
   moves: {
     back:  { clip: 'as_back',  victim: 'as_back_v',  gap: 0.64, kill: 0.40, time: 2.03, end: { r: 0, f: 0, yaw: 0 } },
     slide: { clip: 'as_slide', victim: 'as_slide_v', gap: 2.2,  kill: 0.60, time: 2.6,  end: { r: -0.42, f: 3.02, yaw: 150 } },
+    // 鈍器（背後から）：相手の肩に振り下ろし（0.45 秒）、跪いたところへ頭に返しで振り下ろす（1.30 秒で倒す）。される側は全員同じ as_blunt_v
+    mace_back:      { clip: 'mc_as_back', victim: 'as_blunt_v', gap: 0.95, kill: 1.30, time: 2.2, end: { r: 0, f: 0, yaw: 0 } },
+    warhammer_back: { clip: 'wh_as_back', victim: 'as_blunt_v', gap: 1.20, kill: 1.30, time: 2.2, end: { r: 0, f: 0, yaw: 0 } },
+    lucerne_back:   { clip: 'lc_as_back', victim: 'as_blunt_v', gap: 1.85, kill: 1.30, time: 2.2, end: { r: 0, f: 0, yaw: 0 } },
+    // 短劍（背後から）：背中を刺す。片手劍の背刺と同じ並び・時刻（される側は as_back_v）
+    dagger_back:    { clip: 'dg_as_back', victim: 'as_back_v', gap: 0.64, kill: 0.40, time: 2.03, end: { r: 0, f: 0, yaw: 0 } },
+  },
+  /** 武器ごとの暗殺の動き（back：相手の背中側から・front：前・横から）。無い所は、飛びかかって強い一撃 */
+  byWeapon: {
+    armingsword: { back: 'back', front: 'slide' },
+    mace: { back: 'mace_back' }, warhammer: { back: 'warhammer_back' }, lucerne: { back: 'lucerne_back' }, dagger: { back: 'dagger_back' },
   },
 };
 

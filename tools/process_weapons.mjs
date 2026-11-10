@@ -28,8 +28,8 @@ const WEAPONS = {
   // 利用者が送った模型（2026-11-09）。元（source_models/weapons/）は tools/decimate_weapon.py で 4 万三角形に減らした物。
   // ここへ渡す前に、もう一度 decimate_weapon.py で 3000 三角形にした物を使う（この道具の減らし方は、Tripo の模型の継ぎ目で止まるため）
   mace:        { kind: 'hammer', length: 0.75, grip: 0.2, tris: 3000, tex: 512, error: 0.06 },   // 鎚矛：片手。持ち手は柄頭から 2 割
-  warhammer:   { kind: 'hammer', length: 1.15, grip: 0.36, tris: 3000, tex: 512, error: 0.06 },  // 戰鎚：両手。右手（上の手）は柄頭から 36%、左手はその 0.3 m 下
-  lucerne:     { kind: 'hammer', length: 2.05, grip: 0.5, tris: 3000, tex: 512, error: 0.06, face: -1 },   // 長柄鎚：両手。右手（前の手）は真ん中、左手はその 0.7 m 後ろ。三つ又と嘴の長さがほぼ同じで見分けられないので、向きを決めて書く
+  warhammer:   { kind: 'hammer', length: 1.15, grip: 0.31, tris: 3000, tex: 512, error: 0.06 },  // 戰鎚：両手。右手（上の手）は柄頭から 31%（0.36 m）、左手はその 0.3 m 下（柄頭のすぐ上。2026-11-09 に持ち方を直した）
+  lucerne:     { kind: 'hammer', length: 2.05, grip: 0.25, tris: 3000, tex: 512, error: 0.06, face: -1 },   // 長柄鎚：両手。柄の先（石突きの側）を持つ（利用者の指示 2026-11-09）：右手（前の手）は石突きから 25%（0.51 m）、左手はその 0.42 m 後ろ（石突きのすぐ上）。三つ又と嘴の長さがほぼ同じで見分けられないので、向きを決めて書く
   dagger:      { kind: 'sword', length: 0.40, grip: 0.45, tris: 2000, tex: 512, error: 0.06 },   // 短劍：片手
   kite_shield: { kind: 'shield', length: 0.9, tris: 3000, tex: 1024 },
 };
