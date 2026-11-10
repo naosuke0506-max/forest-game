@@ -361,18 +361,26 @@ export const PHASES = [
  */
 export const SKILL_TYPES = { finisher: '必殺', buff: '強化', hinder: '妨害', heal: '回復', stealth: '隱密', sense: '探知' };
 export const EXCLUSIVE_SKILLS = {
-  shield:  { name: '鐵壁', type: 'buff', time: 8, cd: 60, planned: true,
-             desc: '8 秒、どの向きからの攻撃も楯で受けられ、防禦が崩れない。受けるたびに、攻撃してきた相手が大きくよろめいて無防備になる（誅殺できる）' },
-  sword:   { name: '一閃', type: 'finisher', time: 0, cd: 50, planned: true,
-             desc: '技能ボタンを長押しして構え、離すと前へ 8 m を一瞬で踏み込み、通り抜けざまに斬る。防禦を貫く。倒せたら待ち時間が半分になる' },
-  polearm: { name: '豬突', type: 'finisher', time: 0, cd: 45, planned: true,
-             desc: '槍を構えて前へ 10 m 突進する。最初に当たった敵を貫いて大きな傷を与え、突き倒す（無防備になる）。木や壁に当たると止まる' },
-  blunt:   { name: '地裂', type: 'finisher', time: 0, cd: 60, planned: true,
-             desc: '鎚を地面に叩きつけ、周り 5 m の敵を突き倒す（無防備になる）。近くのベッド・タンスに隠れた敵は、揺れで転がり出る。大きな音で居場所が知れる' },
-  archer:  { name: '鷹目', type: 'sense', time: 12, cd: 50, planned: true,
-             desc: '12 秒、50 m 以内の敵の輪郭が、壁や草越し・隠れ場所の中まで見える' },
-  cleric:  { name: '聖域', type: 'heal', time: 10, cd: 70, planned: true,
-             desc: '自分の周り 5 m に光の輪を 10 秒張る。中にいる間は体力が戻り続け（毎秒 4）、入ってきた敵は目がくらんで遅くなる' },
+  // 利用者の指示（2026-11-10）の專用技能。名前・効き目の秒・待ち時間（cd）の数字は Claude の案。effect は game/skills.js と combat.js が見る
+  shield:  { name: '反擊', type: 'buff', effect: 'counter', time: 8, cd: 45,
+             desc: '8 秒、楯で受けると、すぐに自動で強い反撃を返す（その武器の溜攻撃 1 を、速く・強く）。反撃を受けた相手は大きくひるむ' },
+  sword:   { name: '奧義', type: 'finisher', time: 0, cd: 60, planned: true,
+             desc: '（これから作る）二刀流：剣を交差させて構え、前へ高速で滑り込みながら斬る。長劍・大劍：振り下ろして地面にめり込ませ、引き抜きざまに砂煙ごと斬り上げる' },
+  polearm: { name: '強靱', type: 'buff', effect: 'tough', time: 10, cd: 50,
+             desc: '10 秒、体幹と防禦力が上がる（受ける傷が 3 分の 2 になる）。どんな攻撃を受けてもひるまず、振り・溜めも止まらない（楯押でも崩れない）' },
+  blunt:   { name: '剛力', type: 'buff', effect: 'might', time: 10, cd: 50,
+             desc: '10 秒、一撃の衝撃が大きく上がる（傷が 1.5 倍）。楯の上からでも傷の半分が通り、当たった相手は大きくひるむ（重い一撃はよろめかせる）' },
+  archer:  { name: '鷹目', type: 'sense', effect: 'hawk', time: 12, cd: 60,
+             desc: '12 秒、目に映る物が白黒になり、80 m 以内の敵が体温で壁越しに見える（隠れ場所の中も）。その間に放つ最初の 1 本は、人も木も壁も貫く矢になる（傷 2 倍・防禦できない）' },
+  cleric:  { name: '神怒', type: 'finisher', time: 0, cd: 90, planned: true,
+             desc: '（これから作る）胸の前で腕を交差して宙に浮き、腕を広げて神の衝撃波を広く放つ。人を吹き飛ばし、1 m 未満の物は飛ばし、それより大きな物（天井など）は一部が壊れる。崩れた物の下敷きになると即死' },
+};
+/** 專用技能の効き目の数字（game/combat.js・game/bot.js・render/heat-vision.js が使う） */
+export const SKILL_FX = {
+  counter: { damage: 2.4, speed: 1.35, arc: 150, reachAdd: 0.3, reach: 4.0 },   // 反擊：溜攻撃 1 を 1.35 倍の速さで。傷は武器の 2.4 倍。受けた相手が reach m 以内なら返す
+  tough:   { defense: 1.5 },                                                     // 強靱：受ける傷を 1.5 で割る。ひるまない
+  might:   { damage: 1.5, pierce: 0.5 },                                         // 剛力：傷 1.5 倍、楯の上から半分通る、当たりは重く（重い一撃はよろめき）
+  hawk:    { range: 80, arrowDamage: 2.0, arrowSpeed: 1.3, arrowLife: 3 },      // 鷹目：見える距離（m）、貫く矢の傷・速さの倍率と飛ぶ秒
 };
 export const SHARED_SKILLS = {
   imbue:   { name: '屬性付與', type: 'buff', time: 15, cd: 60, planned: true,

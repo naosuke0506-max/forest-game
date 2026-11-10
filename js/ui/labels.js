@@ -7,7 +7,7 @@ export const L = {
   you: '汝',                 // あなた（自分の名前の表示）
   // 右下のボタン
   attack: '攻擊', shoot: '射', thrust: '突', assassinate: '暗殺', finisher: '誅殺',
-  dodge: '迴避', search: '搜索', sprint: '疾驅',
+  dodge: '迴避', search: '搜索', sprint: '疾驅', skill: '技能',
   crouch: '屈身', stand: '起立', getUp: '起身',
   exit: '出', hide: '潛伏', wall: '壁潛', leave: '離壁',
   // 題の画面

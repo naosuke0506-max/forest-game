@@ -1,7 +1,8 @@
 // 戦闘（計算だけ）：攻撃・防御・弓と矢・ダメージ・ひるみ・スタミナ。
 // 人間も bot も、同じ形の入力 { attack: 押している, guard: 押している } で動かす。
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH } from './data.js';
+import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SKILL_FX } from './data.js';
+import { skillOf, skillOn, useSkill, updateSkill } from './skills.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 import { setStance, updateStance, stanceShape, resetStance } from './stance.js';
 import { techSetOf, controlTech, updateTech, interruptTech } from './techniques.js';
@@ -76,6 +77,11 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     }
     let amount = (raw * (attacker ? attacker.stats.attack : 1) * target.armor) / target.stats.defense;
     let guarded = false, broke = false;
+    // 技能（game/skills.js）：剛力（攻めた人）は傷 1.5 倍・楯の上から半分通る・当たりが重い。強靱（受けた人）は受ける傷が減る
+    const might = physical && skillOn(attacker, 'might'), crush = might && power === 'h';
+    if (might) { amount *= SKILL_FX.might.damage; pierce = Math.max(pierce, SKILL_FX.might.pierce); power = 'h'; }
+    const tough = skillOn(target, 'tough');
+    if (tough) amount /= SKILL_FX.tough.defense;
     // 防御：前から来た物理の攻撃だけ。楯ごとに減らせる割合が違う（data.js の SHIELDS の cut：鳶形楯・大楯 100%・小楯 70%）。
     // 減らした分だけスタミナを使う。防禦の上から響く武器（pierce）は、その割合だけ通る
     const dx = fromX - target.x, dz = fromZ - target.z;
@@ -98,9 +104,13 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     target.hitFlash = 0.25;
     if (target.cover) cover?.exit(target);   // 攻撃を受けたら壁から離れる
     target.lastHitBy = attacker;
-    // 受けた動き：被弾（軽い・重い）・よろめき・防禦の受け（game/reactions.js）。ひるむ時間もここで決まる
-    startReact(target, reactKind(target, { guarded, broke, power, pierce, impact }), fromX, fromZ);
-    if (!guarded) {                             // まともに受けるとひるむ（振りかぶり・溜めも止まる）
+    // 反擊（楯劍騎士の技能）：近くの相手の近接攻撃を楯で受けたら、受けの動きの代わりに、すぐ強い反撃を返す
+    const countered = guarded && !broke && kind === 'melee' && attacker?.alive && skillOn(target, 'counter') && !target.action
+      && Math.hypot(attacker.x - target.x, attacker.z - target.z) <= SKILL_FX.counter.reach && startCounter(target, attacker);
+    // 受けた動き：被弾（軽い・重い）・よろめき・防禦の受け（game/reactions.js）。ひるむ時間もここで決まる。
+    // 強靱（長柄騎士の技能）の間は、どんな攻撃でもひるまない（振り・溜めも止まらない）
+    if (!countered && !tough) startReact(target, reactKind(target, { guarded, broke, power, pierce, impact, crush }), fromX, fromZ);
+    if (!guarded && !tough) {                   // まともに受けるとひるむ（振りかぶり・溜めも止まる）
       const ta = target.action;
       if (ta?.kind === 'assassinate' && !ta.hit) { assassin.cancel(target); target.action = null; }   // 止めを刺す前に斬られた：相手を放す
       if (ta?.kind === 'drag' && !ta.hit) { if (ta.victim.action?.kind === 'dragged') ta.victim.action = null; target.action = null; }
@@ -115,6 +125,25 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       target.guarding = false;
       match.eliminate(target, attacker);
     }
+  }
+
+  /**
+   * 反擊（楯劍騎士の技能）：持っている武器の溜攻撃 1 の動きを、速く・強く出す（受けた相手の方を向く）。出せたら true
+   */
+  function startCounter(f, foe) {
+    const base = techSetOf(f.weapon)?.charge || DASH_ATTACKS[f.weapon];
+    if (!base) return false;
+    const C = SKILL_FX.counter, k = 1 / C.speed;
+    const reach = (Array.isArray(base.reach) ? base.reach[0] : base.reach) ?? WEAPONS[f.weapon].reach;
+    const T = { name: '反擊', clip: base.clip, time: base.time * k, hits: [base.hits[0] * k], damage: C.damage, reach: reach + C.reachAdd,
+      arc: C.arc, power: 'h', single: true, stamina: 0, chain: base.time * k };
+    f.guarding = false;
+    f.yaw = (Math.atan2(-(foe.x - f.x), -(foe.z - f.z)) * 180) / Math.PI;
+    f.action = { kind: 'attack', t: 0, hit: false, heavy: true, tech: T, name: 'counter', step: 0, charge: 0, n: 0 };
+    f._press = null; f._queued = false;
+    emit('swing', { fighter: f, heavy: true, tech: T });
+    emit('counter', { fighter: f, target: foe });
+    return true;
   }
 
   /**
@@ -144,6 +173,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (a.t >= d.invuln[0] && a.t <= d.invuln[1]) { emit('dodged', { attacker: f, target: t }); return; }
     }
     if (t.cover) cover?.exit(t);
+    if (skillOn(t, 'tough')) { t.lastHitBy = f; emit('shieldPushed', { attacker: f, target: t }); return; }   // 強靱の間は押されても崩れない
     t.guarding = false;
     if (a && ['attack', 'charge', 'charge2', 'shield', 'draw', 'release', 'finisher', 'hideIn', 'hideOut', 'search'].includes(a.kind)) t.action = null;
     interruptTech(t);
@@ -217,15 +247,20 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   /** 矢を放つ。power：引いた割合（0〜1） */
   function fire(f, w, power) {
     const yaw = f.yaw * DEG, pitch = (f.pitch || 0) * DEG;
-    const speed = w.speed * (0.45 + 0.55 * power);
+    // 鷹目（弓兵の技能）の間に放つ最初の 1 本：人も木も壁も貫く矢（傷 2 倍・防禦できない。速く飛ぶ）
+    const piercing = !!f.pierceArrow;
+    f.pierceArrow = false;
+    const H = SKILL_FX.hawk;
+    const speed = w.speed * (0.45 + 0.55 * power) * (piercing ? H.arrowSpeed : 1);
     const dir = [-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
     const p = {
       owner: f,
       x: f.x + dir[0] * 0.5, y: yOf(f) + 1.5, z: f.z + dir[2] * 0.5,
       vx: dir[0] * speed, vy: dir[1] * speed, vz: dir[2] * speed,
-      damage: w.damage * (0.35 + 0.65 * power),
-      power: power >= 0.9 ? 'h' : 'l',   // 引き切った矢は重い一撃
-      life: 5,
+      damage: w.damage * (0.35 + 0.65 * power) * (piercing ? H.arrowDamage : 1),
+      power: piercing || power >= 0.9 ? 'h' : 'l',   // 引き切った矢は重い一撃
+      life: piercing ? H.arrowLife : 5,
+      pierce: piercing, struck: piercing ? new Set() : null,   // 貫く矢：当たった人（同じ人には 1 度だけ）
       stuck: 0,               // 刺さってからの時間（見た目用。刺さった矢は少し残す）
       id: Math.random(),
     };
@@ -242,17 +277,26 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
     // 人に当たる：線分（前の位置 → 今の位置）と、体の円柱
     for (const t of fighters) {
-      if (t === p.owner || !t.alive || t.hidden) continue;
+      if (t === p.owner || !t.alive || (t.hidden && !p.pierce)) continue;   // 隠れている人には当たらない（貫く矢は、隠れ場所ごと貫く）
       const g = yOf(t);
       if (p.y < g || p.y > g + stanceShape(t).height) continue;   // しゃがむ・伏せると体が低い
       const sx = p.x - ox, sz = p.z - oz, len2 = sx * sx + sz * sz || 1e-6;
       const k = Math.max(0, Math.min(1, ((t.x - ox) * sx + (t.z - oz) * sz) / len2));
       if (Math.hypot(ox + sx * k - t.x, oz + sz * k - t.z) <= COMBAT.bodyRadius) {
+        if (p.pierce) {   // 貫く矢：当たっても止まらず、次の人へ
+          if (p.struck.has(t)) continue;
+          p.struck.add(t);
+          damage(t, p.damage, p.owner, { fromX: ox, fromZ: oz, kind: 'arrow', power: p.power, pierce: 1 });
+          emit('projectileHit', { projectile: p, target: t, through: true });
+          continue;
+        }
         damage(t, p.damage, p.owner, { fromX: ox, fromZ: oz, kind: 'arrow', power: p.power });
         emit('projectileHit', { projectile: p, target: t });
         return false;
       }
     }
+    // 貫く矢：木・壁・床は通り抜ける（建物に穴が開くのは、建物を壊す仕組みを作るとき）。地面と外周では消える
+    if (p.pierce) return p.y > heightAt(p.x, p.z) && Math.hypot(p.x, p.z) <= match.areaRadius + 0.5;
     // 外周の柵（と、その上の見えない壁）：柵の高さまでなら柵に刺さり、それより上は落ちて消える
     if (Math.hypot(p.x, p.z) > match.areaRadius + 0.5) {
       if (p.y < heightAt(p.x, p.z) + 10) { p.stuck = 1e-6; emit('projectileStuck', { projectile: p }); return true; }
@@ -295,9 +339,13 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       f._assassinHeld = !!input.assassinate;
       const shieldPressed = input.shield && !f._shieldHeld;   // 楯攻撃ボタン（楯の技 guardAttack をすぐ出す）
       f._shieldHeld = !!input.shield;
+      const skillPressed = input.skill && !f._skillHeld;      // 技能ボタン（專用技能。game/skills.js）
+      f._skillHeld = !!input.skill;
       // 暗殺している・されている・隠れる・出る・探す・引きずり出す間は、ほかのことはできない
       if (LOCKED.has(f.action?.kind)) { f.guarding = false; return; }
       if (f.stun > 0) { f.guarding = false; if (f.action?.kind === 'draw') f.action = null; return; }
+      // 技能：隠れている間・ひるんでいる間・暗殺などの間は使えない。使っても、していることは続ける（効き目が付くだけ）
+      if (skillPressed && !f.hidden && useSkill(f)) emit('skill', { fighter: f, skill: skillOf(f) });
 
       // 暗殺ボタン（攻擊ボタンとは別）：近くに暗殺できる相手がいれば（game/assassin.js）。
       // 隠れ場所・壁裏からは飛び出して（避ける猶予がある）、ほかは見られていなければどこからでも（避けられない）
@@ -380,7 +428,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       // 振り始めに前へ滑り、動きの後は DASH.recover 秒動けない。全速力はここで終わる
       const dashTech = w.kind === 'melee' && f.sprinting && DASH_ATTACKS[f.weapon];
       if (pressed && dashTech && !f.action && f.stamina >= DASH.stamina * 0.5) {
-        const T = { ...dashTech, dash: true, power: DASH.power, recover: DASH.recover, chain: dashTech.time, stamina: DASH.stamina };
+        const T = { ...dashTech, dash: true, single: true, power: DASH.power, recover: DASH.recover, chain: dashTech.time, stamina: DASH.stamina };
         spendStamina(f, DASH.stamina);
         f.action = { kind: 'attack', t: 0, hit: false, heavy: true, tech: T, name: 'dash', step: 0, charge: 0, n: 0, moved: 0 };
         f._press = { at: clock, follow: false, used: true };   // この押下で通常攻撃・溜めを出さない（game/techniques.js）
@@ -429,6 +477,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         f.stun = Math.max(0, f.stun - dt);
         f.hitFlash = Math.max(0, f.hitFlash - dt);
         if (f.helpless > 0) f.helpless = Math.max(0, f.helpless - dt);
+        updateSkill(f, dt);   // 技能の効き目と待ち時間
         // スタミナ：使ってから少しして戻る（防御中は半分）
         f.staminaDelay -= dt;
         if (f.staminaDelay <= 0) f.stamina = Math.min(f.stats.maxStamina, f.stamina + COMBAT.staminaRegen * (f.guarding ? 0.5 : 1) * dt);

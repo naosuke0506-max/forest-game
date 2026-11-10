@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-10.3';</script>
+<script>window.__BUILD = '2026-11-10.4';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -193,6 +193,8 @@
   <button id="btn-dodge" class="act-btn dodge" type="button">迴避</button>
   <!-- 全速力（疾驅）：押してから動き出すと 10 秒、全速力で走る。その間の攻擊は疾驅攻撃 -->
   <button id="btn-sprint" class="act-btn sprint" type="button">疾驅</button>
+  <!-- 技能（專用技能。名前は人物ごと。PC は G）。まだ作っていない技能の人物には出さない -->
+  <button id="btn-skill" class="act-btn skill" type="button" hidden>技能</button>
   <button id="btn-attack" class="act-btn attack" type="button">攻擊</button>
   <!-- 姿勢：押す＝しゃがむ／立つ、長押し＝伏せる -->
   <button id="btn-stance" class="act-btn stance" type="button">屈身</button>
