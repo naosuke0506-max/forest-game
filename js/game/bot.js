@@ -14,7 +14,8 @@
 // 後で、逃走・アイテムの使用を足す
 import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
-import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY } from './data.js';
+import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY, SKILL_FX } from './data.js';
+import { skillOf, skillOn, skillReady } from './skills.js';
 import { techSetOf } from './techniques.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
 
@@ -55,6 +56,7 @@ export function createBot(fighter, rng, fighters) {
     // wantC2＝溜攻撃 1 の後に溜攻撃 2 も出す、chained＝この攻撃の次の段をもう押した
     tap: false, hold: 0, wantC2: false, chained: false,
     assassin: false,     // 次のフレームに 1 回だけ暗殺ボタンを押す
+    skillTap: false,     // 次のフレームに 1 回だけ技能ボタンを押す
     input: { forward: 0, strafe: 0, run: false, yaw: fighter.yaw, pitch: 0, attack: false, guard: false, left: false, dodge: false, dodgeX: 0, dodgeY: 0, search: false },
   };
   const f = fighter;
@@ -73,10 +75,15 @@ export function createBot(fighter, rng, fighters) {
   function perceive(world, dt) {
     const S = world.senses;
     for (const [t, k] of b.known) { k.age += dt; k.track = (k.track || 0) - dt; if (!t.alive || k.age > SENSES.memory) b.known.delete(t); }
+    const hawk = skillOn(f, 'hawk');   // 鷹目（弓兵の技能）：80 m 以内の敵が壁越しに分かる。隠れ場所の中の人は、その隠れ場所を探しに行く
     for (const t of fighters) {
       if (t === f || !t.alive) continue;
       const see = S ? S.canSee(f, t) : !t.hidden && Math.hypot(t.x - f.x, t.z - f.z) <= 40;
       const k = b.known.get(t);
+      if (hawk && !see && Math.hypot(t.x - f.x, t.z - f.z) <= SKILL_FX.hawk.range) {
+        if (t.hidden) { if (!f.hidden) b.knownSpot = t.hidden; }
+        else { b.known.set(t, { x: t.x, y: t.y, z: t.z, age: 0, seen: false, track: Math.max(k?.track ?? 0, 0.5), tracked: true }); continue; }
+      }
       // 見つけた相手は、見失っても SENSES.track 秒の間は居場所が分かる（利用者の指示 2026-11-10）。隠れ場所に入った相手は分からない
       if (see) b.known.set(t, { x: t.x, y: t.y, z: t.z, age: 0, seen: true, track: SENSES.track, tracked: false });
       else if (k) {
@@ -296,6 +303,15 @@ export function createBot(fighter, rng, fighters) {
     if (!f.action && assassinable(world) && rng.next() < 0.8) { b.assassin = true; return; }
     b.target = pickTarget();
     if (b.target) b.look = null;
+    // 技能（專用技能。game/skills.js）：使いどころで、ときどき使う（技能ボタンを 1 フレームだけ押す）
+    if (skillReady(f) && !f.hidden && rng.next() < 0.35) {
+      const fx = skillOf(f).effect, t = b.target, d = t ? Math.hypot(t.x - f.x, t.z - f.z) : Infinity;
+      const use = fx === 'counter' ? d < 3.5 && ['attack', 'charge', 'charge2'].includes(t.action?.kind)   // 反擊：相手が振る・溜めるとき
+        : fx === 'tough' || fx === 'might' ? d < 4.5                                                    // 強靱・剛力：打ち合う間合いで
+        : fx === 'hawk' ? (t ? !b.known.get(t)?.seen : !!b.look)                                        // 鷹目：狙う相手が見えないとき・探しているとき
+        : false;
+      if (use) b.skillTap = true;
+    }
     if (!b.look) setStance(f, 'stand');   // 探しに行っていなければ立つ（相手が見えたら立って戦う）
     // 近くに隠れている人の息遣いが聞こえたら、その場所を覚えて探す（息が荒いほど気づきやすい）
     if (!b.knownSpot) {
@@ -494,7 +510,9 @@ export function createBot(fighter, rng, fighters) {
       // 左手ボタン：盾持ちは防御（楯押は 1 フレームだけ押す）、ほかは強攻撃・持ち替え
       const leftTap = b.leftTap;
       b.leftTap = false;
-      return { attack, assassinate, left: f.left === 'guard' ? i.guard || leftTap : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
+      const skill = b.skillTap;
+      b.skillTap = false;
+      return { attack, assassinate, skill, left: f.left === 'guard' ? i.guard || leftTap : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
     },
   };
 }

@@ -18,10 +18,12 @@ export function hitDir(f, fromX, fromZ) {
 
 /**
  * 受けた動きを決める
- * @param {object} o { guarded（楯で受けた）, broke（防禦が崩れた）, power（l 軽い / h 重い）, pierce（防禦の上から響く割合）, impact（受けた一撃の強さ） }
+ * @param {object} o { guarded（楯で受けた）, broke（防禦が崩れた）, power（l 軽い / h 重い）, pierce（防禦の上から響く割合）, impact（受けた一撃の強さ）,
+ *   crush（剛力の重い一撃：まともに受けるとよろめく） }
  */
-export function reactKind(target, { guarded, broke, power, pierce, impact = 0 }) {
+export function reactKind(target, { guarded, broke, power, pierce, impact = 0, crush = false }) {
   if (broke) return 'stagger';   // 防禦が崩れた（スタミナ切れ）：よろめく
+  if (crush && !guarded) return 'stagger';
   // 防禦で受けた：受けた一撃の強さで使い分ける（重い攻撃・強い一撃は「強い受け」で押し込まれる。軽い一撃は「弱い受け」）
   if (guarded) return power === 'h' || impact >= COMBAT.guardHeavyImpact || pierce >= 0.3 ? 'guard_h' : 'guard_l';
   if (power !== 'h') return 'hit_l';

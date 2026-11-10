@@ -21,6 +21,8 @@ import { ICONS, weaponIconOf } from './ui/icons.js';
 import { createSenses } from './game/senses.js';
 import { stanceButton, stanceSpeed, canRun, stanceShape } from './game/stance.js';
 import { STANCES, BODY_TURN } from './game/data.js';
+import { skillOf, skillOn } from './game/skills.js';
+import { createHeatVision } from './render/heat-vision.js';
 
 const PLAYER_COLOR = '#ffd75e';
 const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
@@ -137,6 +139,28 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const endSprint = () => { if (sprint.state === 'on' || sprint.state === 'armed') { sprint.state = 'cool'; sprint.left = SPRINT.cooldown; } };
   combat.on('dashAttack', ({ fighter }) => { if (fighter === me) endSprint(); });
   showSprint();
+  // 技能ボタン（專用技能。game/skills.js）：名前は人物ごと。効き目の間は紅く光って残りの秒、待ち時間は暗く残りの秒。
+  // まだ作っていない技能の人物（劍騎士・祓魔僧）には出さない
+  const skillBtn = document.getElementById('btn-skill') || document.createElement('button');
+  const mySkill = skillOf(me);
+  let skillShown = '';
+  const showSkill = () => {
+    if (!mySkill) return;
+    const on = me.skillLeft > 0, cool = me.skillCool > 0;
+    const sec = on ? Math.ceil(me.skillLeft) : cool ? Math.ceil(me.skillCool) : 0;
+    const key = `${on}${cool}${sec}`;
+    if (key === skillShown) return;
+    skillShown = key;
+    setBtn(skillBtn, ICONS.skill, sec ? `${mySkill.name}<small>${sec}</small>` : mySkill.name);
+    skillBtn.classList.toggle('on', on);
+    skillBtn.classList.toggle('cool', cool);
+  };
+  showSkill();
+  combat.on('skill', ({ fighter, skill }) => { if (fighter === me) hud.addFeed(`${skill.name}を使った（${skill.time} 秒）`); });
+  combat.on('counter', ({ fighter, target }) => {
+    if (fighter === me) hud.addFeed(`${target.name}に反擊した`);
+    else if (target === me) hud.addFeed(`${fighter.name}の反擊を受けた`);
+  });
   // 楯攻撃ボタン：楯の技があるキャラ（楯劍騎士）だけ。名前は楯の技（鳶形楯は楯擊）
   // （ボタンが画面に無いときは、楯擊ボタンを出さないだけにする。無いまま進めると試合が始まらない：2026-11-10 に一度起きた）
   const shieldBtn = document.getElementById('btn-shield') || document.createElement('button');
@@ -226,6 +250,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (target === me) hud.addFeed(`${attacker.name}の暗殺をかわした`);
   });
   const viewModel = createViewModel(player.camera, me);
+  const heat = createHeatVision(player.camera);   // 鷹目（弓兵の技能）の見え方
   const arrows = createProjectileViews(app, combat);
   let thirdPerson = false;
   // 一人称でも自分の体（模型）を映す：手・腕・盾・脚が見える（頭は隠す。render/character-view.js）。
@@ -387,6 +412,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       player.strafe = !!me.guarding || !!me.action;
       sprintBtn.hidden = !running || !me.alive || !!me.hidden || !!me.cover;
       showSprint();
+      skillBtn.hidden = !mySkill || !running || !me.alive || !!me.hidden;
+      showSkill();
       player.setEyeHeight((config.player.eyeHeight * stanceShape(me).eye) / STANCES.stand.eye);
       me.gait = (player.moving > 0.75 || me.sprinting) && canRun(me) ? 'run' : player.moving > 0.05 ? 'walk' : 'still';   // 足音の大きさ（bot の耳）
       refreshStance();
@@ -490,6 +517,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         player.setPose(spectating.x, spectating.z, spectating.yaw, spectating.y);
       }
       refreshMyView();
+      heat.update(dt, skillOn(me, 'hawk') && me.alive && !spectating, fighters, me, views);   // 鷹目：白黒にして、敵の体温を壁越しに描く
       // 暗殺の動きの間は、一人称の目が体（肩の線）の回った分に付いて回る（動きの始めの肩の向きから。動きの終わりに体の向きが移ると 0 に戻る）
       const ma = me.action, twisting = (ma?.kind === 'assassinate' && ma.phase === 'strike') || (SCRIPTED.has(ma?.kind) && ma?.kind !== 'assassinate');
       if (twisting) {

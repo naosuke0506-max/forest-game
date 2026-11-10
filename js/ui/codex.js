@@ -145,7 +145,7 @@ export function createCodex({ hall }) {
       <p class="codex-desc">${esc(c.desc)}</p>
       <h4 class="codex-head">專用技能</h4>
       ${ex ? skillCard(ex, true) : ''}
-      <p class="codex-note">技能ボタンで使う。専用技能はキャラ 1 人に 1 つで、最初から使える。共通技能は刻を越えるたびの報酬で 3 つから 1 つ選ぶ（技能の札）</p>
+      <p class="codex-note">技能ボタンで使う（PC は G）。専用技能はキャラ 1 人に 1 つで、最初から使える。共通技能は刻を越えるたびの報酬で 3 つから 1 つ選ぶ（まだ使えない。技能の札）</p>
       <h4 class="codex-head">性能</h4>
       ${gauges(char)}
       ${g ? `<h4 class="codex-head">推奨</h4>
@@ -229,7 +229,7 @@ export function createCodex({ hall }) {
         <span class="pick-when">${esc(PHASES[a.tier - 1]?.name ?? '')}を越えると届く</span><span class="pick-desc">${esc(a.desc)}</span></div>`).join('')}</div>`;
   }
   function renderSkill() {
-    return `<p class="codex-note">技能ボタンを押して使う。使うと効き目がしばらく続き、使った後は待ち時間が過ぎるとまた使える。今はまだ案で、ゲームでは使えない（${L.planned}）</p>
+    return `<p class="codex-note">技能ボタンを押して使う（PC は G）。使うと効き目がしばらく続き、効き目が切れてから待ち時間が過ぎるとまた使える。專用技能は反擊・強靱・剛力・鷹目が使える。共通技能と、${L.planned}の印の付いた技能は、まだゲームでは使えない</p>
       <h4 class="codex-head">共通技能</h4>
       <p class="codex-note">全キャラ共通。刻を越えるたびの報酬で、ここから 3 つ出て 1 つ選ぶ（最大 4 つ）</p>
       ${Object.values(SHARED_SKILLS).map((s) => skillCard(s)).join('')}

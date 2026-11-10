@@ -181,6 +181,10 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   let firstPerson = false, eyeReady = false, eyeHold = false;
   let paused = false, pausedSpeed = 1;   // 時間が止まっている（刻が変わった直後）
   const headBone = body.findByName('Head');
+  // 鷹目の体温の形に使う骨（render/heat-vision.js）
+  const heatBones = ['Head', 'Spine02', 'Pelvis', 'L_Upperarm', 'L_Forearm', 'L_Hand', 'R_Upperarm', 'R_Forearm', 'R_Hand',
+    'L_Thigh', 'L_Calf', 'L_Foot', 'R_Thigh', 'R_Calf', 'R_Foot'].map((n) => [n, body.findByName(n)]).filter(([, b]) => b);
+  const heatOut = {};
   const spine = ['Spine01', 'Spine02'].map((n) => body.findByName(n)).filter(Boolean);
   const eyeLocal = new pc.Vec3(), eyeTmp = new pc.Vec3(), invRoot = new pc.Mat4(), qAim = new pc.Quat(), qBone = new pc.Quat();
   const lArm = body.findByName('L_Upperarm');
@@ -261,6 +265,15 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     /** 一人称の目の位置（体の向きの座標。前は -Z）。まだ分からなければ null */
     get eyeOffset() { return firstPerson && eyeReady ? eyeLocal : null; },
     setVisible(v) { root.enabled = v; if (!v && nocked) nocked.enabled = false; },
+    /**
+     * 鷹目（弓兵の技能）の体温の形に使う、骨の世界の位置（頭・胸・腰・肩・肘・手・腿・膝・足）。名前 → {x, y, z}。
+     * 模型が映っていない（隠れている）・骨が無いときは null（render/heat-vision.js が体の位置から形を作る）
+     */
+    heatJoints() {
+      if (!root.enabled || !heatBones.length) return null;
+      for (const [name, bone] of heatBones) { const p = bone.getPosition(); heatOut[name] = { x: p.x, y: p.y, z: p.z }; }
+      return heatOut;
+    },
     /** 片付ける（大廳の人物を替えるとき） */
     destroy() { root.destroy(); },
     /** 動きの情報（長さ・繰り返すか）。この模型が持つ動きの名前の一覧は clipNames */

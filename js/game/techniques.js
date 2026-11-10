@@ -96,7 +96,7 @@ export function updateTech(f, a, now, ctx) {
   }
   // 動きの後に隙がある技（疾驅攻撃）：動きが終わったら recover 秒動けない
   const finish = () => { f.action = T.recover ? { kind: 'recover', t: 0, time: T.recover } : null; };
-  if (!set || T.dash) { if (a.t >= T.time) { finish(); f._queued = false; } return; }
+  if (!set || T.single) { if (a.t >= T.time) { finish(); f._queued = false; } return; }   // 1 回だけの技（疾驅攻撃・反擊）：次の段へつながない
   // 先に押しておいた次の段へ（溜攻撃の後は通常攻撃の 1 段目）
   if (f._queued && a.hit && a.t >= T.chain) {
     const step = a.name === 'combo' ? (a.step + 1) % set.combo.length : 0;
