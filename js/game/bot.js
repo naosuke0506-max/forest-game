@@ -14,7 +14,7 @@
 // 後で、逃走・アイテムの使用を足す
 import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
-import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES } from './data.js';
+import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY } from './data.js';
 import { techSetOf } from './techniques.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
 
@@ -43,7 +43,9 @@ export function createBot(fighter, rng, fighters) {
     hideCooldown: 0,     // 次に隠れようとするまで
     knownSpot: null,     // 誰かが隠れるのを見た場所
     seenAssassin: null,  // 回避するか決めた暗殺
-    known: new Map(),    // 気づいた相手 → { x, y, z, age（分かってからの秒）, seen（今見えているか） }
+    known: new Map(),    // 気づいた相手 → { x, y, z, age（分かってからの秒）, seen（今見えているか）, track（居場所が分かる残りの秒）, tracked }
+    rivals: new Map(),   // ほかの bot → { fight（戦うか）, until（いつまでそう決めておくか） }。bot 同士の戦いを減らす（data.js の BOT_RIVALRY）
+    clock: 0,
     look: null,          // 最後に分かった所へ探しに行っている { t（相手）, x, z, arrived, timer, base（見回しの中心の向き）, stuck }
     ambush: null,        // 待ち伏せする壁へ向かっている { spot, side, wait, stuck, lx, lz }
     coverTimer: 0,       // 壁に隠れている残りの時間
@@ -70,27 +72,61 @@ export function createBot(fighter, rng, fighters) {
    */
   function perceive(world, dt) {
     const S = world.senses;
-    for (const [t, k] of b.known) { k.age += dt; if (!t.alive || k.age > SENSES.memory) b.known.delete(t); }
+    for (const [t, k] of b.known) { k.age += dt; k.track = (k.track || 0) - dt; if (!t.alive || k.age > SENSES.memory) b.known.delete(t); }
     for (const t of fighters) {
       if (t === f || !t.alive) continue;
       const see = S ? S.canSee(f, t) : !t.hidden && Math.hypot(t.x - f.x, t.z - f.z) <= 40;
       const k = b.known.get(t);
-      if (see) b.known.set(t, { x: t.x, y: t.y, z: t.z, age: 0, seen: true });
-      else if (k) k.seen = false;
+      // 見つけた相手は、見失っても SENSES.track 秒の間は居場所が分かる（利用者の指示 2026-11-10）。隠れ場所に入った相手は分からない
+      if (see) b.known.set(t, { x: t.x, y: t.y, z: t.z, age: 0, seen: true, track: SENSES.track, tracked: false });
+      else if (k) {
+        k.seen = false;
+        k.tracked = k.track > 0 && !t.hidden;
+        if (k.tracked) { k.x = t.x; k.y = t.y; k.z = t.z; k.age = 0; }
+      }
     }
     if (!S) return;
     for (const n of S.hear(f, fighters)) {
       const k = b.known.get(n.f);
-      if (k?.seen) continue;
-      b.known.set(n.f, { x: n.x, y: n.y, z: n.z, age: 0, seen: false });
+      if (k?.seen || k?.tracked) continue;
+      b.known.set(n.f, { x: n.x, y: n.y, z: n.z, age: 0, seen: false, track: k?.track ?? 0, tracked: false });
     }
   }
+
+  /** ほかの bot と戦うか：攻撃し合った相手とは戦う。ほかは BOT_RIVALRY.fight の確率で決め、fightFor 秒はそのまま（プレイヤーとはいつも戦う） */
+  function wantsFight(t) {
+    if (t.isPlayer) return true;
+    if (t.lastHitBy === f || f.lastHitBy === t) return true;
+    let r = b.rivals.get(t);
+    if (!r || r.until < b.clock) { r = { fight: rng.next() < BOT_RIVALRY.fight, until: b.clock + BOT_RIVALRY.fightFor }; b.rivals.set(t, r); }
+    return r.fight;
+  }
+  /** 暗殺されそう：回避する（毎フレーム見る。猶予は短い）。前・横からの暗殺は 40%、その相手をもう見つけていれば必ず避ける（利用者の指示 2026-11-10）。
+   *  後ろからは、隠れ場所・壁裏から飛び出されたときだけ、ときどき避けられる（game/assassin.js の grace） */
+  function dodgeAssassin() {
+    const assassin = fighters.find((t) => t.action?.kind === 'assassinate' && t.action.target === f && t.action.phase === 'approach');
+    if (!assassin || b.seenAssassin === assassin.action) return;
+    if (f._dodgeHeld) { b.input.dodge = false; return; }   // 回避ボタンを押したままなら、1 フレーム離してから押し直す
+    b.seenAssassin = assassin.action;
+    if (!assassin.action.grace) return;   // 避ける猶予のない暗殺（見られていない後ろから）
+    const k = b.known.get(assassin);
+    const chance = assassin.action.back ? 0.35 : (k && (k.seen || k.tracked) ? 1 : 0.4);
+    if (rng.next() < chance && f.stamina > 8) {
+      if (['charge', 'charge2'].includes(f.action?.kind)) f.action = null;   // 溜めている途中なら、溜めをやめて避ける
+      b.input.dodge = true; b.input.attack = false; b.hold = 0;
+      b.input.dodgeX = (rng.next() < 0.5 ? -1 : 1); b.input.dodgeY = -0.4;
+    }
+  }
+
+  /** 暗殺できる相手（戦わないと決めた bot は狙わない） */
+  const assassinable = (world) => { const c = world.assassinTarget?.(f); return c && wantsFight(c.target) ? c : null; };
 
   /** 狙う相手：今見えている人のうち、近い人。体力の少ない相手は少し狙いやすい */
   function pickTarget() {
     let best = null, bestScore = Infinity;
     for (const [t, k] of b.known) {
-      if (!k.seen || !t.alive || t.hidden) continue;   // 見えている人だけ（隠れている人は見えない）
+      if (!(k.seen || k.tracked) || !t.alive || t.hidden) continue;   // 見えている人と、見つけてから居場所が分かっている人（隠れている人は分からない）
+      if (!wantsFight(t)) continue;                      // 戦わないと決めた bot は狙わない
       const d = Math.hypot(t.x - f.x, t.z - f.z);
       const score = d * (0.7 + 0.3 * (t.stats.hp / t.stats.maxHp)) * (t.helpless > 0 ? 0.3 : 1);   // 無防備な相手は真っ先に
       if (score < bestScore) { bestScore = score; best = t; }
@@ -240,7 +276,7 @@ export function createBot(fighter, rng, fighters) {
       b.input.forward = 0; b.input.strafe = 0; b.input.left = false; b.input.dodge = false;
       const s = f.hidden;
       const near = fighters.some((t) => t !== f && t.alive && !t.hidden && Math.hypot(t.x - s.outX, t.z - s.outZ) < 2.6 && Math.abs((t.y ?? 0) - s.y) < 1.2);
-      if (near && world.assassinTarget?.(f) && rng.next() < 0.7) b.assassin = true;   // 飛び出して暗殺（暗殺ボタン）
+      if (near && assassinable(world) && rng.next() < 0.7) b.assassin = true;   // 飛び出して暗殺（暗殺ボタン）
       if (!near && b.hideTimer <= 0) { world.hideOut?.(f); b.route = { pts: [...s.route].reverse(), i: 0, why: 'leave' }; b.hideCooldown = 20; }
       return;
     }
@@ -250,24 +286,14 @@ export function createBot(fighter, rng, fighters) {
       b.input.forward = 0; b.input.strafe = 0; b.input.left = false; b.input.dodge = false; b.input.guard = false;
       perceive(world, b.lastThink || 0.2);
       const near = fighters.some((t) => t !== f && t.alive && !t.hidden && Math.hypot(t.x - f.x, t.z - f.z) < 3.0 && Math.abs((t.y ?? 0) - (f.y ?? 0)) < 1.2);
-      if (near && world.assassinTarget?.(f) && rng.next() < 0.75) b.assassin = true;   // 壁裏から暗殺（暗殺ボタン）
+      if (near && assassinable(world) && rng.next() < 0.75) b.assassin = true;   // 壁裏から暗殺（暗殺ボタン）
       const seen = pickTarget();
       if (!near && (b.coverTimer <= 0 || (seen && Math.hypot(seen.x - f.x, seen.z - f.z) > 7 && rng.next() < 0.15))) world.cover?.exit(f);
       return;
     }
-    // 暗殺されそう：ときどき回避する（猶予は短い）
-    const assassin = fighters.find((t) => t.action?.kind === 'assassinate' && t.action.target === f);
-    if (assassin && b.seenAssassin !== assassin.action) {
-      b.seenAssassin = assassin.action;
-      if (rng.next() < 0.35 && f.stamina > 15) {
-        b.input.dodge = true;
-        b.input.dodgeX = (rng.next() < 0.5 ? -1 : 1); b.input.dodgeY = -0.4;
-        return;
-      }
-    }
     perceive(world, b.lastThink || 0.2);
     // 見られていない相手がすぐ近くにいれば、どこからでも暗殺する（相手に体の 7 割以上見えていなければ。game/assassin.js）
-    if (!f.action && world.assassinTarget?.(f) && rng.next() < 0.8) { b.assassin = true; return; }
+    if (!f.action && assassinable(world) && rng.next() < 0.8) { b.assassin = true; return; }
     b.target = pickTarget();
     if (b.target) b.look = null;
     if (!b.look) setStance(f, 'stand');   // 探しに行っていなければ立つ（相手が見えたら立って戦う）
@@ -407,6 +433,7 @@ export function createBot(fighter, rng, fighters) {
     knowSpot(spot) { if (!f.hidden) b.knownSpot = spot; },
     update(dt, world) {
       if (!f.alive) return 0;
+      b.clock += dt;
       b.waitTimer -= dt;
       b.thinkTimer -= dt;
       b.attackCooldown -= dt;
@@ -416,6 +443,7 @@ export function createBot(fighter, rng, fighters) {
       b.strafeTimer -= dt;
       if (b.strafeTimer <= 0) { b.strafeTimer = 1 + rng.next() * 2; b.strafeDir = rng.next() < 0.5 ? -1 : 1; }
       if (b.thinkTimer <= 0) { b.lastThink = b.thinkTimer = 0.15 + rng.next() * 0.15; think(world); }
+      dodgeAssassin();   // 考えた後に見る（考えるときに回避ボタンを離すことがあるため）
 
       // 隠れている・壁に隠れている・無防備なときは動かない
       if (f.hidden || f.cover || f.helpless > 0 || SCRIPTED_ACTS.has(f.action?.kind)) return 0;   // 暗殺・隠れる・出る・探す・引きずり出す間は、試合の計算が体を動かす
@@ -447,12 +475,12 @@ export function createBot(fighter, rng, fighters) {
     alert(attacker) {
       if (!attacker || attacker === f || !attacker.alive) return;
       const k = b.known.get(attacker);
-      if (!k?.seen) b.known.set(attacker, { x: attacker.x, y: attacker.y, z: attacker.z, age: 0, seen: false });
+      if (!k?.seen && !k?.tracked) b.known.set(attacker, { x: attacker.x, y: attacker.y, z: attacker.z, age: 0, seen: false, track: k?.track ?? 0, tracked: false });
     },
     /** 確認用：気づいたことを全部忘れる */
     forget() { b.known.clear(); b.look = null; b.target = null; },
     /** 確認用：気づいている相手 */
-    get knows() { return [...b.known].map(([t, k]) => ({ name: t.name, seen: k.seen, age: +k.age.toFixed(1) })); },
+    get knows() { return [...b.known].map(([t, k]) => ({ name: t.name, seen: k.seen, tracked: !!k.tracked, age: +k.age.toFixed(1) })); },
     get looking() { return b.look && { name: b.look.t.name, arrived: b.look.arrived }; },
     /** 戦闘の入力（combat.control に渡す） */
     get combatInput() {

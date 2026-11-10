@@ -1,5 +1,5 @@
 // 練習モードの試合：あなた＋bot 3 体。試合の計算（game/）と、見た目・画面（render/・ui/）をつなぐ
-import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS, SHIELD_SKILLS, SHIELD_MOVES } from './game/data.js';
+import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS, SHIELD_SKILLS, SHIELD_MOVES, SPRINT, DASH } from './game/data.js';
 import { createMinimap } from './ui/minimap.js';
 import { ZONE_NAMES } from './world/zones.js';
 import { TIMES } from './world/time-of-day.js';
@@ -121,6 +121,22 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   if (me.left) setBtn(leftBtn, me.left === 'guard' ? ICONS.shield : me.left === 'switch' ? ICONS.switch : ICONS.heavy, CHARACTERS[me.char].leftLabel);
   leftBtn.classList.toggle('guard', me.left === 'guard');
   setBtn(document.getElementById('btn-dodge'), ICONS.dodge, L.dodge);
+  // 全速力（疾驅ボタン。data.js の SPRINT）：ready（使える）→ 押す → armed（動き出すのを待つ）→ 動き出す → on（time 秒の間、
+  // スティックを倒すと全速力）→ cool（待ち時間）→ ready。もう一度押すか、疾驅攻撃をすると早く終わる。しゃがむ・伏せると使えない
+  const sprintBtn = document.getElementById('btn-sprint');
+  const sprint = { state: 'ready', left: 0 };
+  let sprintShown = '';
+  const showSprint = () => {
+    const sec = sprint.state === 'on' || sprint.state === 'cool' ? Math.ceil(sprint.left) : 0;
+    const key = `${sprint.state}${sec}`;
+    if (key === sprintShown) return;
+    sprintShown = key;
+    setBtn(sprintBtn, ICONS.sprint, sec ? `${L.sprint}<small>${sec}</small>` : L.sprint);
+    for (const c of ['armed', 'on', 'cool']) sprintBtn.classList.toggle(c, sprint.state === c);
+  };
+  const endSprint = () => { if (sprint.state === 'on' || sprint.state === 'armed') { sprint.state = 'cool'; sprint.left = SPRINT.cooldown; } };
+  combat.on('dashAttack', ({ fighter }) => { if (fighter === me) endSprint(); });
+  showSprint();
   // 楯攻撃ボタン：楯の技があるキャラ（楯劍騎士）だけ。名前は楯の技（鳶形楯は楯擊）
   // （ボタンが画面に無いときは、楯擊ボタンを出さないだけにする。無いまま進めると試合が始まらない：2026-11-10 に一度起きた）
   const shieldBtn = document.getElementById('btn-shield') || document.createElement('button');
@@ -143,6 +159,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 右のボタン（出る・隠れる・壁に背を付ける・壁から離れる）
   const useBtn = document.getElementById('btn-use');
   let nearSpot = null, nearWall = null, useTimer = 0;
+  const held = { use: false, sprint: false };   // 前のフレームにボタンを押していたか
   let coverStick = null;   // 壁際を歩く向きの見方（スティックを倒し始めたときのカメラの右と前）
   const searchBtn = document.getElementById('btn-search');
   const assassinBtn = document.getElementById('btn-assassinate');
@@ -276,17 +293,15 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     hideIn: (f, spot) => combat.hideIn(f, spot), hideOut: (f) => combat.hideOut(f) };
   match.on('eliminated', ({ victim }) => { hiding.drop(victim); cover.drop(victim); });
   hiding.on('hide', ({ fighter }) => cover.drop(fighter));
-  // 壁裏隠れ：自分が壁に背を付けたら三人称（体を見せ、手元の武器を隠す）。離れたら元に戻す
+  // 壁裏隠れ：一人称のまま（体の見え方は refreshMyView が毎フレーム合わせる）
   cover.on('enter', ({ fighter }) => {
     if (fighter !== me) return;
-    views.get(me).setVisible(true); viewModel.setVisible(false);
     hud.addFeed('壁に背を付けた（スティックで壁際を歩く。離れるときは「離壁」）');
   });
   cover.on('exit', ({ fighter }) => {
     if (fighter !== me) return;
     player.setCover(null);
     me.x = player.position.x; me.z = player.position.z; me.yaw = player.yaw;
-    views.get(me).setVisible(thirdPerson); viewModel.setVisible(!thirdPerson);
   });
   match.on('eliminated', ({ victim }) => { if (victim === me) player.setFrozen(true); });
   match.on('end', (res) => setTimeout(() => hud.showResult(res), 1200));
@@ -350,8 +365,30 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       player.turnSpeed = BODY_TURN.turn[me.weight] || BODY_TURN.turn.medium;
       player.turnScale = !me.alive ? 0 : (me.stun > 0 ? 0.3 : 1) * (me.stance === 'prone' ? 0.35 : me.stance === 'crouch' ? 0.75 : 1);
       player.noRun = !canRun(me);
+      // ボタンは押した瞬間だけ働かせる（押している間ずっと働くと、指を離すまでの数フレームで入って出てしまう：壁裏隠れ・疾驅）
+      const usePressed = input.use && !held.use, sprintPressed = input.sprint && !held.sprint;
+      held.use = !!input.use; held.sprint = !!input.sprint;
+      // 全速力：押したら動き出すのを待ち、動き出したら SPRINT.time 秒。しゃがむ・伏せる・隠れる・倒れると終わる
+      if (sprintPressed && running && me.alive) {
+        if (sprint.state === 'ready' && canRun(me) && !me.hidden && !me.cover) sprint.state = 'armed';
+        else if (sprint.state === 'armed' || sprint.state === 'on') endSprint();
+      }
+      if ((sprint.state === 'armed' || sprint.state === 'on') && (!me.alive || !canRun(me) || me.hidden || me.cover)) endSprint();
+      if (sprint.state === 'armed' && player.moving > 0.12) { sprint.state = 'on'; sprint.left = SPRINT.time; }
+      if (running && (sprint.state === 'on' || sprint.state === 'cool')) {
+        sprint.left -= dt;
+        if (sprint.left <= 0) { if (sprint.state === 'on') { sprint.state = 'cool'; sprint.left = SPRINT.cooldown; } else sprint.state = 'ready'; }
+      }
+      const sprintOn = sprint.state === 'on';
+      player.sprint = sprintOn && !me.action && !me.guarding;
+      player.sprintSpeed = SPRINT.speed * me.stats.speed;
+      me.sprinting = sprintOn && player.moving > 0.12;   // 全速力で走っている（攻擊ボタンが疾驅攻撃になる。game/combat.js）
+      // 防禦・攻撃・溜め・回避などの間は、体の向きを変えずに歩く（ほかは、移動した向きへ体が回る）
+      player.strafe = !!me.guarding || !!me.action;
+      sprintBtn.hidden = !running || !me.alive || !!me.hidden || !!me.cover;
+      showSprint();
       player.setEyeHeight((config.player.eyeHeight * stanceShape(me).eye) / STANCES.stand.eye);
-      me.gait = player.moving > 0.75 && canRun(me) ? 'run' : player.moving > 0.05 ? 'walk' : 'still';   // 足音の大きさ（bot の耳）
+      me.gait = (player.moving > 0.75 || me.sprinting) && canRun(me) ? 'run' : player.moving > 0.05 ? 'walk' : 'still';   // 足音の大きさ（bot の耳）
       refreshStance();
       // あなたの位置を、試合の記録へ写す（いずれ人間も試合の計算で動かす）
       // 隠れている間は、隠れ場所が自分の位置（体は動かない）。暗殺の動きなど、試合の計算が体を動かす間は写さない（あとで逆に合わせる）
@@ -378,7 +415,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         player.setCover({ x: me.x, y: me.y, z: me.z, nx: sg.nx, nz: sg.nz, px: pd.x, pz: pd.z });
       }
       if (me.hidden) { me.yaw = player.yaw; me.pitch = player.pitch; }
-      if (running) combat.control(me, input);
+      if (running) combat.control(me, { ...input, viewYaw: player.viewYaw });   // 回避の向きは、見ている向きから（スティックの向き）
       // 攻撃ボタン：溜めている間は縁が光り、溜めるほど強く光る（溜攻撃 2 を待つ間は満タンの光）
       {
         const a = me.action, k = a?.kind === 'charge' ? Math.min(1, a.t / a.tech.full) : a?.kind === 'charge2' ? 1 : -1;
@@ -410,7 +447,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         // 暗殺ボタン：暗殺できる相手が近くにいるときだけ出る（見られていない・壁裏・隠れ場所から。game/assassin.js）
         assassinBtn.hidden = !(running && me.alive && combat.assassinTarget(me));
       }
-      if (input.use && running && me.alive) {
+      if (usePressed && running && me.alive) {
         if (me.hidden) combat.hideOut(me);                // 出る動きをしてから出る（game/hide-acts.js）
         else if (me.cover) cover.exit(me);
         else if (nearSpot) combat.hideIn(me, nearSpot);   // 隠れる動きをしてから隠れる。誰かがいれば、覗いて見つけて引きずり出す
@@ -437,7 +474,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       furniture?.update(dt, fighters, frozenTime);   // タンスの扉・ベッドの掛け布（隠れる・探す動きに合わせて）
       // 回避・暗殺の飛びかかり・押されて下がる（重い被弾・よろめき）は試合の計算が体を動かすので、その位置をプレイヤーの操作へ戻す
       const pushed = me.react && me.react.push > 0 && me.react.t <= me.react.time;
-      if (me.alive && (me.action?.kind === 'dodge' || pushed)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
+      const lunging = me.action?.kind === 'attack' && me.action.tech?.dash && me.action.t <= DASH.lungeTime + 0.05;   // 疾驅攻撃の踏み込み
+      if (me.alive && (me.action?.kind === 'dodge' || pushed || lunging)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
       // 暗殺の動きなど：体の位置と向きを、プレイヤーの操作へ合わせる（動きが終わった時の、体の移った所と向きも）
       const scriptedNow = SCRIPTED.has(me.action?.kind);
       const viewBefore = player.viewYaw;

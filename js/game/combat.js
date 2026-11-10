@@ -1,7 +1,7 @@
 // 戦闘（計算だけ）：攻撃・防御・弓と矢・ダメージ・ひるみ・スタミナ。
 // 人間も bot も、同じ形の入力 { attack: 押している, guard: 押している } で動かす。
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES } from './data.js';
+import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH } from './data.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 import { setStance, updateStance, stanceShape, resetStance } from './stance.js';
 import { techSetOf, controlTech, updateTech, interruptTech } from './techniques.js';
@@ -66,7 +66,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   }
 
   /** ダメージを与える。from：攻撃した人（向きの判定に使う） */
-  function damage(target, raw, attacker, { pierce = 0, fromX, fromZ, kind = 'melee', power = 'l' } = {}) {
+  function damage(target, raw, attacker, { pierce = 0, fromX, fromZ, kind = 'melee', power = 'l', physical = true } = {}) {
     if (!target.alive || match.state !== 'running') return;
     // 回避中の、攻撃が当たらない時間
     const a = target.action;
@@ -76,10 +76,13 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     }
     let amount = (raw * (attacker ? attacker.stats.attack : 1) * target.armor) / target.stats.defense;
     let guarded = false, broke = false;
-    // 防御：前から来た攻撃だけ。盾があるほど多く減らせる。減らした分だけスタミナを使う
+    // 防御：前から来た物理の攻撃だけ。楯ごとに減らせる割合が違う（data.js の SHIELDS の cut：鳶形楯・大楯 100%・小楯 70%）。
+    // 減らした分だけスタミナを使う。防禦の上から響く武器（pierce）は、その割合だけ通る
     const dx = fromX - target.x, dz = fromZ - target.z;
-    if (target.guarding && target.stamina > 0 && angleTo(target.yaw, dx, dz) <= COMBAT.guardArc / 2) {
-      const reduce = (target.shield ? COMBAT.guardReduceShield : COMBAT.guardReduce) * (1 - pierce);
+    const impact = amount;   // 受けた一撃の強さ（防禦の受けの動きを、強さで使い分ける）
+    if (physical && target.guarding && target.stamina > 0 && angleTo(target.yaw, dx, dz) <= COMBAT.guardArc / 2) {
+      const cut = target.shield ? (SHIELDS[target.shield]?.cut ?? COMBAT.guardReduceShield) : COMBAT.guardReduce;
+      const reduce = cut * (1 - pierce);
       const blocked = amount * reduce;
       spendStamina(target, blocked * COMBAT.guardStaminaPerDamage);
       amount -= blocked;
@@ -96,7 +99,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     if (target.cover) cover?.exit(target);   // 攻撃を受けたら壁から離れる
     target.lastHitBy = attacker;
     // 受けた動き：被弾（軽い・重い）・よろめき・防禦の受け（game/reactions.js）。ひるむ時間もここで決まる
-    startReact(target, reactKind(target, { guarded, broke, power, pierce }), fromX, fromZ);
+    startReact(target, reactKind(target, { guarded, broke, power, pierce, impact }), fromX, fromZ);
     if (!guarded) {                             // まともに受けるとひるむ（振りかぶり・溜めも止まる）
       const ta = target.action;
       if (ta?.kind === 'assassinate' && !ta.hit) { assassin.cancel(target); target.action = null; }   // 止めを刺す前に斬られた：相手を放す
@@ -347,7 +350,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         let mx = input.moveX || 0, my = input.moveY || 0;
         if (Math.hypot(mx, my) < 0.2) { mx = 0; my = -1; }
         const len = Math.hypot(mx, my);
-        const rad = (f.yaw * Math.PI) / 180;
+        const rad = ((input.viewYaw ?? f.yaw) * Math.PI) / 180;   // プレイヤーは見ている向きから（スティックの向き）。bot は体の向きから
         const fx = -Math.sin(rad), fz = -Math.cos(rad), rx = Math.cos(rad), rz = -Math.sin(rad);
         f.action = { kind: 'dodge', t: 0, dirX: (fx * my + rx * mx) / len, dirZ: (fz * my + rz * mx) / len, moved: 0 };
         f.guarding = false;
@@ -373,6 +376,20 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         }
       }
 
+      // 疾驅攻撃：全速力で走っている間の攻擊ボタン（data.js の DASH_ATTACKS・DASH）。威力が大きい反面、隙も大きい。
+      // 振り始めに前へ滑り、動きの後は DASH.recover 秒動けない。全速力はここで終わる
+      const dashTech = w.kind === 'melee' && f.sprinting && DASH_ATTACKS[f.weapon];
+      if (pressed && dashTech && !f.action && f.stamina >= DASH.stamina * 0.5) {
+        const T = { ...dashTech, dash: true, power: DASH.power, recover: DASH.recover, chain: dashTech.time, stamina: DASH.stamina };
+        spendStamina(f, DASH.stamina);
+        f.action = { kind: 'attack', t: 0, hit: false, heavy: true, tech: T, name: 'dash', step: 0, charge: 0, n: 0, moved: 0 };
+        f._press = { at: clock, follow: false, used: true };   // この押下で通常攻撃・溜めを出さない（game/techniques.js）
+        f.guarding = false;
+        f.sprinting = false;
+        emit('swing', { fighter: f, heavy: true, tech: T });
+        emit('dashAttack', { fighter: f });
+        return;
+      }
       if (w.kind === 'melee') {
         // 強攻撃（左手）を先に見る：両方押したときは重い方
         const heavy = f.left === 'heavy' && leftPressed;
@@ -421,6 +438,15 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         if (a) {
           a.t += dt;
           if (a.kind === 'attack' && a.tech) {
+            // 疾驅攻撃：振り始めに前へ滑る（始めに速く、だんだん遅く）
+            if (a.tech.dash && a.t <= DASH.lungeTime + dt) {
+              const u = Math.min(1, a.t / DASH.lungeTime);
+              const goal = DASH.lunge * (1 - (1 - u) * (1 - u));
+              const step = goal - a.moved;
+              a.moved = goal;
+              const rad = (f.yaw * Math.PI) / 180;
+              shove(f, -Math.sin(rad) * step, -Math.cos(rad) * step);
+            }
             updateTech(f, a, clock, { strike: meleeHit, spend: spendStamina, emit });
           } else if (a.kind === 'attack') {
             const st = attackStats(f.weapon, a.heavy);
@@ -428,6 +454,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
             if (a.t >= st.windup + st.recovery) f.action = null;
           } else if (a.kind === 'release' && a.t >= 0.25) {
             f.action = null;
+          } else if (a.kind === 'recover') {
+            if (a.t >= a.time) f.action = null;   // 疾驅攻撃の後の隙：動けない・何もできない
           } else if (a.kind === 'shield') {
             // 楯の技：決まった時刻に当たる
             if (!a.hit && a.t >= a.skill.hit) { a.hit = true; shieldStrike(f, a.skill); }
@@ -462,7 +490,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
           }
         }
         // 動きの速さ：防御中・攻撃中・ひるみ中は遅い
-        const still = f.hidden || f.helpless > 0 || f.action?.kind === 'dodge' || f.action?.kind === 'finisher' || LOCKED.has(f.action?.kind);
+        const still = f.hidden || f.helpless > 0 || f.action?.kind === 'dodge' || f.action?.kind === 'finisher' || f.action?.kind === 'recover'
+          || (f.action?.tech?.dash && f.action.t <= DASH.lungeTime) || LOCKED.has(f.action?.kind);
         f.moveScale = still ? 0 : f.stun > 0 ? 0.25 : f.guarding ? COMBAT.guardMoveScale
           : (a && a.kind !== 'release') ? COMBAT.attackMoveScale : 1;
       }

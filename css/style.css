@@ -593,6 +593,13 @@ body.in-hall #glare, body.in-hall #dazzle { display: none; }   /* 森の太陽�
 .act-btn.left.guard { background: radial-gradient(circle at 38% 30%, rgba(82, 112, 168, .9), rgba(32, 50, 92, .88) 70%); }
 .act-btn.dodge { right: calc(40px + var(--safe-r)); bottom: calc(180px + var(--safe-b)); width: 76px; height: 76px; font-size: 14px;
   background: radial-gradient(circle at 38% 30%, rgba(86, 140, 96, .9), rgba(32, 70, 42, .88) 70%); }
+/* 全速力（疾驅）：回避ボタンの上。押すと縁が光り（動き出すのを待つ）、走っている間は金に光って残りの秒を出す。終わった後の待ち時間は暗い */
+.act-btn.sprint { right: calc(46px + var(--safe-r)); bottom: calc(268px + var(--safe-b)); width: 66px; height: 66px; font-size: 12px;
+  background: radial-gradient(circle at 38% 30%, rgba(150, 120, 60, .9), rgba(66, 48, 18, .88) 70%); }
+.act-btn.sprint.armed { border-color: var(--gold-hi); }
+.act-btn.sprint.on { border-color: var(--gold-hi); animation: usePulse 0.8s ease-in-out infinite;
+  background: radial-gradient(circle at 38% 30%, rgba(214, 170, 72, .95), rgba(120, 82, 22, .92) 70%); }
+.act-btn.sprint.cool { opacity: .45; }
 /* 姿勢（しゃがむ・伏せる）：左手ボタンの左。しゃがむ・伏せている間は縁が光る */
 .act-btn.stance { right: calc(236px + var(--safe-r)); bottom: calc(28px + var(--safe-b)); width: 68px; height: 68px; font-size: 12px;
   background: radial-gradient(circle at 38% 30%, rgba(92, 100, 88, .9), rgba(34, 40, 32, .88) 70%); }

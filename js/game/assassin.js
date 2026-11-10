@@ -59,7 +59,9 @@ export function createAssassin({ fighters, senses, yOf, move, lethal, emit }) {
     const behind = Math.abs(wrap(yawToward(t, f) - (t.yaw + 180))) < 70;
     const set = ASSASSIN.byWeapon[f.weapon], key = set && (behind ? set.back : set.front);
     const mv = key ? ASSASSIN.moves[key] : null;
-    f.action = { kind: 'assassinate', t: 0, target: t, phase: 'approach', move: mv, back: behind, grace, dodged: false, hit: false };
+    // 前・横から bot を暗殺するときも、避ける猶予がある（bot が 40%、見つけている相手なら必ず避ける。game/bot.js。利用者の指示 2026-11-10）
+    const dodgeable = !!grace || (!behind && !t.isPlayer);
+    f.action = { kind: 'assassinate', t: 0, target: t, phase: 'approach', move: mv, back: behind, grace: dodgeable, dodged: false, hit: false };
     f.guarding = false;
     emit('assassinate', { attacker: f, target: t });
   }
