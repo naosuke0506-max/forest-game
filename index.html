@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-10.1';</script>
+<script>window.__BUILD = '2026-11-10.2';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -198,6 +198,8 @@
   <button id="btn-use" class="act-btn use" type="button" hidden>拾得</button>
   <!-- ベッド・タンスの近くで出る：探す -->
   <button id="btn-search" class="act-btn search" type="button" hidden>搜索</button>
+  <!-- 楯攻撃（楯を持つキャラだけ。楯の技の名前が出る：鳶形楯は楯擊） -->
+  <button id="btn-shield" class="act-btn shield" type="button" hidden>楯擊</button>
   <!-- 暗殺できる相手が近くにいると出る：暗殺（攻撃ボタンとは別） -->
   <button id="btn-assassinate" class="act-btn assassinate" type="button" hidden>暗殺</button>
 

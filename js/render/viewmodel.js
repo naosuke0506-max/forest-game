@@ -59,7 +59,7 @@ export function createViewModel(camera, fighter) {
     if (id === 'spear') weapon.setLocalPosition(0, 0, 0.7);
     shownWeapon = id;
     w = WEAPONS[id];
-    REST = RESTS[id];
+    REST = RESTS[id] || RESTS.mace;   // 表に無い武器でも止まらないように
   }
 
   let shield = null;
@@ -77,6 +77,8 @@ export function createViewModel(camera, fighter) {
     armingsword: { pos: [0.32, -0.32, -0.55], rot: [12, 12, -8] },
     longsword: { pos: [0.3, -0.34, -0.55], rot: [12, 12, -8] },
     mace:      { pos: [0.34, -0.36, -0.55], rot: [18, 10, -10] },
+    warhammer: { pos: [0.3, -0.38, -0.55], rot: [16, 12, -10] },   // 両手で持つ鎚（2026-11-10：無くて試合中に毎コマ止まっていた）
+    lucerne:   { pos: [0.28, -0.34, -0.5], rot: [8, 6, -4] },       // 長柄（槍に近い構え）
     spear:     { pos: [0.28, -0.3, -0.45], rot: [4, 4, 0] },
     dagger:    { pos: [0.3, -0.3, -0.5], rot: [14, 10, -12] },
     longbow:   { pos: [-0.12, -0.12, -0.95], rot: [-90, 0, 12] },   // 弓は縦に立てる（模型は Z の向きに立っている）
