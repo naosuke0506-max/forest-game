@@ -115,7 +115,7 @@ export function createBot(fighter, rng, fighters) {
     if (!assassin || b.seenAssassin === assassin.action) return;
     if (f._dodgeHeld) { b.input.dodge = false; return; }   // 回避ボタンを押したままなら、1 フレーム離してから押し直す
     b.seenAssassin = assassin.action;
-    if (!assassin.action.grace) return;   // 避ける猶予のない暗殺（見られていない後ろから）
+    if (!assassin.action.grace) return;   // 避ける猶予のない暗殺（今は無い。暗殺は隠れ場所・壁裏からだけで、いつも猶予がある）
     const k = b.known.get(assassin);
     const chance = assassin.action.back ? 0.35 : (k && (k.seen || k.tracked) ? 1 : 0.4);
     if (rng.next() < chance && f.stamina > 8) {
@@ -299,8 +299,6 @@ export function createBot(fighter, rng, fighters) {
       return;
     }
     perceive(world, b.lastThink || 0.2);
-    // 見られていない相手がすぐ近くにいれば、どこからでも暗殺する（相手に体の 7 割以上見えていなければ。game/assassin.js）
-    if (!f.action && assassinable(world) && rng.next() < 0.8) { b.assassin = true; return; }
     b.target = pickTarget();
     if (b.target) b.look = null;
     // 技能（專用技能。game/skills.js）：使いどころで、ときどき使う（技能ボタンを 1 フレームだけ押す）

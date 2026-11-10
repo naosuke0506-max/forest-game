@@ -2,6 +2,7 @@
 //   題（蠱毒・読み込み）→「入」→ 大廳（戰鬥・圖鑑・設定）→ 戰鬥（蠱毒）→ 戰場（森）→ 人物・武器 → 兵器・變異 →「開戰」
 //   人物・武器を替えると、大廳に立つ人物も替わる（onShow）
 import { L } from './labels.js';
+import { ruby, rubyIn } from './ruby.js';
 import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, MODES, MAPS, ARMS, MUTATIONS, PHASES } from '../game/data.js';
 import { resolveLoadout } from '../game/match.js';
 import { createCodex } from './codex.js';
@@ -32,6 +33,8 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
   // 題の画面の設定ボタン（題曲の版・音の大きさ）
   const gear = document.getElementById('title-settings');
   gear.innerHTML = ICONS.gear;
+  // index.html に書いた見出し・ボタン・設定の読みにくい漢字に、ふりがなを付ける（ui/ruby.js）
+  rubyIn(document, '[data-ruby], [data-ruby-all] button');
   gear.addEventListener('click', () => onSettings());
   // 最初に触れる画面：触れたら音を出せるようにして題の曲を流し、題の画面を出す。
   // iPad の Safari は、指が触れた瞬間（pointerdown）ではなく、指を離したとき（click）しか音を許さないので click で受ける
@@ -63,7 +66,7 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
     if (step === 'codex' && to !== 'codex') { codex.close(); show(); }
     step = to;
     for (const [k, p] of Object.entries(panes)) p.hidden = k !== to;
-    head.textContent = HEADS[to];
+    head.innerHTML = ruby(HEADS[to]);   // 読みにくい漢字にはふりがな（ui/ruby.js）
     const i = STEPS.indexOf(to);
     stepEl.textContent = i >= 0 ? `${i + 1} / ${STEPS.length}` : '';
     backBtn.hidden = to === 'hall';
@@ -83,13 +86,13 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
   function renderWho() {
     const lo = loadouts[pick.char];
     const gear = [lo.main && nameOf('main', lo.main), lo.shield && nameOf('shield', lo.shield), lo.side && nameOf('side', lo.side)].filter(Boolean);
-    who.innerHTML = `<b>${esc(CHARACTERS[pick.char].name)}</b><span>${gear.map(esc).join('・')}</span>`;
+    who.innerHTML = `<b>${ruby(CHARACTERS[pick.char].name)}</b><span>${gear.map(ruby).join('・')}</span>`;
   }
 
   // ---- 戰鬥・戰場：1 つだけの札（今は蠱毒と森だけ） ----
   function cards(el, table, key) {
     el.innerHTML = Object.entries(table).map(([id, m]) => `<button type="button" class="card${pick[key] === id ? ' sel' : ''}" data-id="${id}" aria-pressed="${pick[key] === id}">
-      <b>${esc(m.name)}</b><span>${esc(m.desc)}</span></button>`).join('');
+      <b>${ruby(m.name)}</b><span>${esc(m.desc)}</span></button>`).join('');
     el.onclick = (e) => {
       const b = e.target.closest('.card');
       if (!b) return;
@@ -113,6 +116,7 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
         return `<button type="button" class="lo-btn${cur[slot] === id ? ' sel' : ''}" data-slot="${slot}" data-id="${id}" aria-pressed="${cur[slot] === id}"${off ? ' disabled' : ''}>${nameOf(slot, id)}${off ? `<small>${L.planned}</small>` : ''}</button>`;
       }).join('')}</div>
     </div>`).join('');
+    rubyIn(loadoutEl, '.lo-btn');
   };
   loadoutEl.addEventListener('click', (e) => {
     const b = e.target.closest('.lo-btn');
@@ -131,7 +135,7 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
     b.type = 'button';
     b.className = 'char-btn';
     b.dataset.id = id;
-    b.textContent = c.name;
+    b.innerHTML = ruby(c.name);
     b.addEventListener('click', () => { pick.char = id; renderChar(); show(); });
     list.appendChild(b);
   }
@@ -147,7 +151,7 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
     el.innerHTML = ids.map((id) => {
       const m = table[id], on = pick[key] === id;
       return `<button type="button" class="pick${on ? ' sel' : ''}" data-id="${id}" aria-pressed="${on}">
-        <span class="pick-name">${esc(m.name)}${m.planned ? `<small>${L.planned}</small>` : ''}</span>
+        <span class="pick-name">${ruby(m.name)}${m.planned ? `<small>${L.planned}</small>` : ''}</span>
         <span class="pick-when">${esc(when(m.tier))}</span>
         <span class="pick-desc">${esc(m.desc)}${extra ? esc(extra(m)) : ''}</span></button>`;
     }).join('');

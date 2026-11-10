@@ -50,7 +50,7 @@ export function attackStats(weaponId, heavy = false) {
  * @param {object} [opt.hiding] 隠れ場所（game/hiding.js）。隠れている人には攻撃が当たらない
  * @param {object} [opt.cover] 壁裏隠れ（game/cover.js）。壁に背を付けた所から暗殺できる
  * @param {object} opt.obstacles 木の幹や岩（矢が刺さる）
- * @param {object} [opt.senses] 目（game/senses.js）。暗殺できるか（相手に見られていないか）に使う
+ * @param {object} [opt.senses] 目（game/senses.js）
  */
 export function createCombat({ match, heightAt, obstacles, groundAt = null, hiding = null, cover = null, senses = null }) {
   const floorAt = groundAt || ((x, z) => heightAt(x, z));
@@ -348,7 +348,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (skillPressed && !f.hidden && useSkill(f)) emit('skill', { fighter: f, skill: skillOf(f) });
 
       // 暗殺ボタン（攻擊ボタンとは別）：近くに暗殺できる相手がいれば（game/assassin.js）。
-      // 隠れ場所・壁裏からは飛び出して（避ける猶予がある）、ほかは見られていなければどこからでも（避けられない）
+      // 隠れ場所・壁裏から飛び出すときだけ（避ける猶予がある。何もない所ではできない）
       if (assassinPressed) {
         const c = assassin.find(f);
         if (c) {

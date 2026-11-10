@@ -74,7 +74,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 戦闘と bot
   // 壁裏隠れ（村の家の外の壁と中の壁に背を付ける）
   const cover = createCover(covers, { isFree: obstacles.isFree, groundAt: groundAt || ((x, z) => terrain.heightAt(x, z)) });
-  // bot の目と耳（game/senses.js）：見える相手・聞こえた音で気づく。音を鳴らす出来事をつなぐ。暗殺できるか（相手に見られていないか）にも使う
+  // bot の目と耳（game/senses.js）：見える相手・聞こえた音で気づく。音を鳴らす出来事をつなぐ
   const senses = createSenses({ sight, heightAt: terrain.heightAt });
   const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt, hiding, cover, senses });
   const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => createBot(f, createRandom(config.seed + 100 + i), fighters));
@@ -471,7 +471,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         const helplessNear = fighters.some((f) => f !== me && f.alive && f.helpless > 0 && Math.hypot(f.x - me.x, f.z - me.z) < 2.6);
         const want = helplessNear ? 'finisher' : '';
         if (want !== attackMode) refreshAttack(want);
-        // 暗殺ボタン：暗殺できる相手が近くにいるときだけ出る（見られていない・壁裏・隠れ場所から。game/assassin.js）
+        // 暗殺ボタン：暗殺できる相手が近くにいるときだけ出る（壁裏隠れ・隠れ場所からだけ。game/assassin.js）
         assassinBtn.hidden = !(running && me.alive && combat.assassinTarget(me));
       }
       if (usePressed && running && me.alive) {

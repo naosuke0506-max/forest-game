@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-10.4';</script>
+<script>window.__BUILD = '2026-11-10.5';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -248,10 +248,10 @@
 <section id="settings" class="panel settings" hidden>
   <h2>設定</h2>
   <div class="set-row">
-    <span>性能表示</span>
+    <span data-ruby>性能表示<small class="set-note">左上に動きの速さ（fps）などの数字を出す</small></span>
     <div class="seg" data-key="stats">
       <button type="button" data-val="on">表示</button>
-      <button type="button" data-val="off">隱</button>
+      <button type="button" data-val="off" data-ruby>隱</button>
     </div>
   </div>
   <div class="set-row">
@@ -264,8 +264,8 @@
     </div>
   </div>
   <div class="set-row">
-    <span>題曲</span>
-    <div class="seg" data-key="titleBgm">
+    <span data-ruby>題曲<small class="set-note">題の画面の曲</small></span>
+    <div class="seg" data-key="titleBgm" data-ruby-all>
       <button type="button" data-val="ja">日本</button>
       <button type="button" data-val="la">羅甸</button>
       <button type="button" data-val="de">獨逸</button>
@@ -274,9 +274,9 @@
       <button type="button" data-val="en">英吉利</button>
     </div>
   </div>
-  <h3 class="test-head">試驗用</h3>
+  <h3 class="test-head" data-ruby>試驗用<small class="set-note">遊びを確かめるための道具</small></h3>
   <div class="set-row">
-    <span>刻之長</span>
+    <span data-ruby>刻之長<small class="set-note">1 つの刻（試合の区切り）の長さ</small></span>
     <div class="seg" data-key="phaseLen">
       <button type="button" data-val="normal">通常</button>
       <button type="button" data-val="60">60 秒</button>
@@ -285,11 +285,11 @@
   </div>
   <p class="test-note">刻の長さは次の試合から変わります</p>
   <div class="test-btns">
-    <button type="button" data-test="skip">進刻</button>
-    <button type="button" data-test="kill-bot">斃傀儡</button>
-    <button type="button" data-test="die">自斃</button>
+    <button type="button" data-test="skip" data-ruby>進刻<small class="sub">次の刻へ進める</small></button>
+    <button type="button" data-test="kill-bot" data-ruby>斃傀儡<small class="sub">相手を 1 人倒す</small></button>
+    <button type="button" data-test="die" data-ruby>自斃<small class="sub">自分が倒れる</small></button>
   </div>
-  <button id="settings-close" class="start" type="button">閉</button>
+  <button id="settings-close" class="start" type="button" data-ruby>閉</button>
 </section>
 
 <!-- 最初に触れる画面（iPad は触れるまで音が出せない）。触れると題の曲が流れ、題の画面になる -->
@@ -315,16 +315,16 @@
 <section id="lobby" class="lobby" hidden>
   <div class="lobby-panel">
     <header class="lobby-head">
-      <button id="lobby-back" class="back-btn" type="button" hidden>歸</button>
+      <button id="lobby-back" class="back-btn" type="button" hidden data-ruby>歸</button>
       <h2 id="lobby-title">大廳</h2>
       <span id="lobby-step" class="lobby-step"></span>
     </header>
     <div class="pane" data-pane="hall">
       <p id="hall-who" class="hall-who"></p>
       <div class="menu">
-        <button type="button" class="menu-btn" data-go="mode">戰鬥</button>
-        <button type="button" class="menu-btn" data-go="codex">圖鑑</button>
-        <button type="button" class="menu-btn" data-act="settings">設定</button>
+        <button type="button" class="menu-btn" data-go="mode" data-ruby>戰鬥<small class="sub">試合を選んで始める</small></button>
+        <button type="button" class="menu-btn" data-go="codex" data-ruby>圖鑑<small class="sub">人物・武器・技・技能の説明</small></button>
+        <button type="button" class="menu-btn" data-act="settings">設定<small class="sub">音・題の曲・表示</small></button>
       </div>
     </div>
     <div class="pane" data-pane="codex" hidden>
@@ -347,12 +347,12 @@
       <button type="button" class="start" data-go="arms">次</button>
     </div>
     <div class="pane" data-pane="arms" hidden>
-      <h3 class="pick-head">兵器</h3>
+      <h3 class="pick-head" data-ruby>兵器<small class="sub">試合の途中で届く乗り物・大きな武器</small></h3>
       <div id="arms-list" class="picks"></div>
-      <h3 class="pick-head">變異</h3>
+      <h3 class="pick-head" data-ruby>變異<small class="sub">試合の途中で届く、飲むと魔物に変わる藥</small></h3>
       <div id="mut-list" class="picks"></div>
-      <p class="lo-note">それぞれ 1 つだけ。強いものほど遅く届く（その刻を越えたときに届く）</p>
-      <button id="fight" type="button" class="start">開戰</button>
+      <p class="lo-note">それぞれ 1 つだけ選ぶ。強いものほど遅く届く。刻（こく）は試合の区切りで、時間が来ると次の刻へ進む。その刻を越えたときに届く</p>
+      <button id="fight" type="button" class="start" data-ruby>開戰</button>
     </div>
   </div>
 </section>
