@@ -38,6 +38,8 @@ export const CHARACTERS = {
 export const WEAPONS = {
   armingsword: { name: '片手劍', kind: 'melee', damage: 22, reach: 2.1, arc: 110, windup: 0.22, recovery: 0.34, stamina: 12, guardPierce: 0.0 },
   longsword: { name: '長劍', kind: 'melee', damage: 28, reach: 2.5, arc: 120, windup: 0.28, recovery: 0.38, stamina: 16, guardPierce: 0.0 },
+  // 雙劍：劍騎士の片手劍を 2 本（二刀流。利用者の指示 2026-11-10）。1 撃は軽いが速い。左手の剣は模型の socket_L2 に付ける（dual）
+  dualsword: { name: '雙劍', kind: 'melee', damage: 19, reach: 2.1, arc: 120, windup: 0.18, recovery: 0.30, stamina: 10, guardPierce: 0.0, stance: 'dw', dual: true },
   mace:      { name: '鎚矛',         kind: 'melee', damage: 32, reach: 1.9, arc: 90,  windup: 0.36, recovery: 0.44, stamina: 18, guardPierce: 0.35 },
   spear:     { name: '槍',           kind: 'melee', damage: 22, reach: 3.1, arc: 34,  windup: 0.22, recovery: 0.30, stamina: 12, guardPierce: 0.0 },
   dagger:    { name: '短劍',         kind: 'melee', damage: 14, reach: 1.5, arc: 90,  windup: 0.16, recovery: 0.26, stamina: 8,  guardPierce: 0.0 },
@@ -69,6 +71,17 @@ export const TECHNIQUES = {
       reach: 2.2, arc: 110, stamina: 20, chain: 0.45, power: 'h' },
     charge2: { name: '旋風斬', clip: 'oh_c2', time: 1.67, hits: [0.54, 1.2], damage: [1.0, 1.5], reach: 2.2, arc: [360, 140], stamina: 24,
       chain: 1.4, power: ['l', 'h'] },
+  },
+  dualsword: {   // 雙劍（二刀流）：右・左・両方と続けて斬る。1 撃は軽いが速い（技の形は Claude の案。tools/characters/dualsword_moves.py）
+    combo: [
+      { name: '右袈裟', clip: 'dw_cut1', time: 0.7, hits: [0.22], damage: 0.9, reach: 2.1, arc: 110, stamina: 9, chain: 0.4, power: 'l' },
+      { name: '左薙', clip: 'dw_cut2', time: 0.73, hits: [0.27], damage: 0.9, reach: 2.1, arc: 140, stamina: 9, chain: 0.44, power: 'l' },
+      { name: '十字斬', clip: 'dw_cut3', time: 0.93, hits: [0.32], damage: 1.5, reach: 2.2, arc: 90, stamina: 14, chain: 0.6, power: 'h' },
+    ],
+    charge: { name: '開斬', in: 'dw_c1_in', hold: 'dw_c1_hold', clip: 'dw_c1_out', time: 0.7, hits: [0.1], damage: [1.3, 1.9], full: 1.0,
+      reach: 2.3, arc: 220, stamina: 20, chain: 0.4, power: 'h' },
+    charge2: { name: '雙旋', clip: 'dw_c2', time: 1.1, hits: [0.31, 0.58], damage: [1.0, 1.3], reach: 2.3, arc: [360, 360], stamina: 24,
+      chain: 0.9, power: ['l', 'h'] },
   },
   longsword: {   // 片手劍より振りが大きく、隙も少し大きい
     combo: [
@@ -137,7 +150,7 @@ export const TECH = { hold: 0.25, comboWindow: 0.4, followWindow: 0.5 };
  */
 export const LOADOUTS = {
   shield:  { main: ['armingsword', 'mace', 'falchion'], shield: ['kite', 'buckler', 'pavise'] },
-  sword:   { main: ['longsword', 'armingsword', 'greatsword', 'falchion'] },
+  sword:   { main: ['longsword', 'dualsword', 'greatsword', 'falchion'] },   // 片手劍は二刀流（雙劍）にした（2026-11-10）
   polearm: { main: ['spear', 'pike', 'halberd'] },
   blunt:   { main: ['mace', 'warhammer', 'lucerne', 'flail'] },
   archer:  { main: ['longbow', 'crossbow'], side: ['dagger', 'falchion', 'battleaxe'] },
@@ -268,10 +281,12 @@ export const ASSASSIN = {
     lucerne_back:   { clip: 'lc_as_back', victim: 'as_blunt_v', gap: 1.85, kill: 1.30, time: 2.2, end: { r: 0, f: 0, yaw: 0 } },
     // 短劍（背後から）：背中を刺す。片手劍の背刺と同じ並び・時刻（される側は as_back_v）
     dagger_back:    { clip: 'dg_as_back', victim: 'as_back_v', gap: 0.64, kill: 0.40, time: 2.03, end: { r: 0, f: 0, yaw: 0 } },
+    // 雙劍（背後から）：2 本を同時に背中へ突き刺し、蹴り飛ばして抜く。片手劍の背刺と同じ並び・時刻（される側は as_back_v）
+    dualsword_back: { clip: 'dw_as_back', victim: 'as_back_v', gap: 0.64, kill: 0.40, time: 2.03, end: { r: 0, f: 0, yaw: 0 } },
   },
   /** 武器ごとの暗殺の動き（back：相手の背中側から・front：前・横から）。無い所は、飛びかかって強い一撃 */
   byWeapon: {
-    armingsword: { back: 'back', front: 'slide' },
+    armingsword: { back: 'back', front: 'slide' }, dualsword: { back: 'dualsword_back', front: 'slide' },
     mace: { back: 'mace_back' }, warhammer: { back: 'warhammer_back' }, lucerne: { back: 'lucerne_back' }, dagger: { back: 'dagger_back' },
   },
 };
@@ -327,6 +342,7 @@ export const DASH_ATTACKS = {
   warhammer:   { name: '疾驅擊', clip: 'wh_c1_out', time: 1.27, hits: [0.2, 0.6], damage: 1.6, reach: 2.3, arc: 90 },
   lucerne:     { name: '疾驅擊', clip: 'lc_cut1', time: 1.0, hits: [0.38], damage: 2.0, reach: 3.3, arc: 50 },
   dagger:      { name: '疾驅刺', clip: 'dg_cut3', time: 0.67, hits: [0.22], damage: 2.2, reach: 1.9, arc: 40 },
+  dualsword:   { name: '疾驅斬', clip: 'dw_cut3', time: 0.93, hits: [0.32], damage: 2.2, reach: 2.3, arc: 90 },
   spear:       { name: '疾驅突', clip: 'heavy', time: 1.27, hits: [0.55], damage: 2.0, reach: 3.3, arc: 60 },
 };
 /** 疾驅攻撃の共通の数値：隙（動けない秒）・前へ滑る距離と時間・スタミナ・威力 */
@@ -363,8 +379,8 @@ export const EXCLUSIVE_SKILLS = {
   // 利用者の指示（2026-11-10）の專用技能。名前・効き目の秒・待ち時間（cd）の数字は Claude の案。effect は game/skills.js と combat.js が見る
   shield:  { name: '反擊', type: 'buff', effect: 'counter', time: 8, cd: 45,
              desc: '8 秒、楯で受けると、すぐに自動で強い反撃を返す（その武器の溜攻撃 1 を、速く・強く）。反撃を受けた相手は大きくひるむ' },
-  sword:   { name: '奧義', type: 'finisher', time: 0, cd: 60, planned: true,
-             desc: '（これから作る）二刀流：剣を交差させて構え、前へ高速で滑り込みながら斬る。長劍・大劍：振り下ろして地面にめり込ませ、引き抜きざまに砂煙ごと斬り上げる' },
+  sword:   { name: '奧義', type: 'finisher', effect: 'ultimate', time: 0, cd: 60,
+             desc: '雙劍：2 本を交差させて低く構え、前へ 7 m を高速で滑りながら、通り抜けざまに左右へ切り裂く（3 回当たる）。長劍・大劍：頭上から振り下ろして切っ先を地面にめり込ませ（周りの敵に当たる）、引き抜きざまに砂煙ごと斬り上げる（2 回当たる）' },
   polearm: { name: '強靱', type: 'buff', effect: 'tough', time: 10, cd: 50,
              desc: '10 秒、体幹と防禦力が上がる（受ける傷が 3 分の 2 になる）。どんな攻撃を受けてもひるまず、振り・溜めも止まらない（楯押でも崩れない）' },
   blunt:   { name: '剛力', type: 'buff', effect: 'might', time: 10, cd: 50,
@@ -374,6 +390,19 @@ export const EXCLUSIVE_SKILLS = {
   cleric:  { name: '神怒', type: 'finisher', time: 0, cd: 90, planned: true,
              desc: '（これから作る）胸の前で腕を交差して宙に浮き、腕を広げて神の衝撃波を広く放つ。人を吹き飛ばし、1 m 未満の物は飛ばし、それより大きな物（天井など）は一部が壊れる。崩れた物の下敷きになると即死' },
 };
+/**
+ * 劍騎士の奧義（必殺技。技能ボタン）：持っている武器ごとの動き（利用者の指示 2026-11-10。数字は Claude の案）。
+ *   clip・time：動きと長さ、hits：当たる時刻、damage・reach・arc：当たるごとの倍率・間合い（m）・角度、power：当たりの重さ、
+ *   slide：前へ滑る（from〜to 秒の間に dist m。雙劍）、dust：砂煙を立てる時刻と、立つ所（体の前 m。長劍・大劍）、pierce：防禦の上から通る割合
+ */
+export const SWORD_ULT = {
+  dualsword: { name: '奧義・交差滑斬', clip: 'dw_ult', time: 1.47, hits: [0.48, 0.62, 0.74], damage: [1.3, 1.3, 2.0], reach: 2.0, arc: [150, 150, 200],
+    power: ['l', 'l', 'h'], slide: { from: 0.30, to: 0.76, dist: 7 }, pierce: 0.3 },
+  longsword: { name: '奧義・地穿昇斬', clip: 'ls_ult', time: 1.87, hits: [0.42, 1.16], damage: [2.6, 2.4], reach: [3.0, 2.8], arc: [80, 100],
+    power: ['h', 'h'], dust: { at: 0.42, ahead: 1.6, lift: 1.16 }, pierce: 0.5 },
+};
+SWORD_ULT.greatsword = SWORD_ULT.longsword;   // 兩手大劍ができたら、同じ奧義を使う
+
 /** 專用技能の効き目の数字（game/combat.js・game/bot.js・render/heat-vision.js が使う） */
 export const SKILL_FX = {
   counter: { damage: 2.4, speed: 1.35, arc: 150, reachAdd: 0.3, reach: 4.0 },   // 反擊：溜攻撃 1 を 1.35 倍の速さで。傷は武器の 2.4 倍。受けた相手が reach m 以内なら返す

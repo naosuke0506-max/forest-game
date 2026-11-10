@@ -116,6 +116,46 @@ def c2_keys(start):
             (0.90, follow, 'o'), (1.06, hold, 'io'), (1.26, mid, 'io'), (1.48, S, 'io')]
 
 
+def _rise(phi):
+    """縦に振るときの刃先と刃（下側の刃）の向き：前から phi 度（上が正）"""
+    a = math.radians(phi)
+    return (0, math.sin(a), math.cos(a)), (0, -math.cos(a), math.sin(a))
+
+
+def ult_keys():
+    """奧義（長劍・大劍。利用者の指示 2026-11-10）：頭上へ高く振りかぶり、大きく踏み込んで真上から振り下ろし、切っ先を地面にめり込ませる。
+    力を込めて引き抜き、砂煙ごと前上へ斬り上げる（砂煙はゲームが出す）。当たるのは振り下ろし（0.42 秒）と斬り上げ（1.16 秒）"""
+    S = STANCE
+    b, e = _rise(-118)
+    high = P(S, hip=(0.0, -0.04, -0.06), hip_rot=(16, -4, 0), chest=(4, -10, 0), look=(0, 6), R_clav=16.0, L_clav=16.0,
+             R={'grip': (-0.25, 0.90, -0.05), 'blade': b, 'edge': e, 'pole': (0.8, -0.2, -0.4)},
+             R_foot=(0.20, -0.25, 30, 20, 0.04))
+    b, e = _rise(80)
+    over = P(high, hip=(0.0, -0.12, 0.16), hip_rot=(8, 10, 0), chest=(2, 4, 0),
+             R={'grip': (-0.30, 0.66, 0.55), 'blade': b, 'edge': e, 'pole': (0.8, -0.4, -0.2)},
+             R_foot=(0.20, 0.05, 25, 15, 0.08))
+    b, e = _rise(-58)
+    slam = P(S, hip=(0.0, -0.40, 0.40), hip_rot=(2, 34, 0), chest=(0, 22, 0), look=(0, 30), R_clav=0.0, L_clav=0.0,
+             R={'grip': (-0.30, -0.72, 0.62), 'blade': b, 'edge': e, 'pole': (0.5, -1, 0.1)},
+             R_foot=(0.17, 0.70, 10, 0, 0), L_foot=(-0.22, 0.05, 15, 25, 0))
+    settle = P(slam, hip=(0.0, -0.43, 0.41), chest=(0, 24, 0))
+    strain1 = P(settle, hip=(0.0, -0.41, 0.38), chest=(0, 18, 0), look=(0, 24), R={'grip': (-0.30, -0.66, 0.60)})
+    strain2 = P(settle, hip=(0.0, -0.42, 0.37), chest=(0, 16, 0), look=(0, 22), R={'grip': (-0.30, -0.64, 0.59)})
+    b, e = _rise(-35)
+    rip = P(strain2, hip=(0.0, -0.32, 0.36), chest=(0, 10, 0), look=(0, 12), R={'grip': (-0.30, -0.45, 0.72), 'blade': b, 'edge': e})
+    b, e = _rise(35)
+    upcut = P(S, hip=(0.0, -0.14, 0.32), hip_rot=(-4, 2, 0), chest=(0, -4, 0), look=(0, -6), R_clav=8.0, L_clav=8.0,
+              R={'grip': (-0.30, 0.10, 0.95), 'blade': b, 'edge': e, 'pole': (0.6, -0.8, -0.1)},
+              R_foot=(0.17, 0.62, 10, 0, 0), L_foot=(-0.22, 0.10, 15, 30, 0.04))
+    b, e = _rise(110)
+    follow = P(upcut, hip=(0.0, -0.06, 0.28), chest=(0, -12, 0), look=(0, -16), R_clav=16.0, L_clav=16.0,
+               R={'grip': (-0.25, 0.85, 0.30), 'blade': b, 'edge': e, 'pole': (0.8, -0.2, -0.3)})
+    hold = P(follow, hip=(0.0, -0.07, 0.27))
+    mid = P(S, hip=(0.0, -0.12, 0.30), L_foot=(-0.20, 0.40, 6, 0, 0.06), R_foot=(0.20, 0.10, 35, 0, 0))
+    return [(0.0, S, None), (0.22, high, 'io'), (0.34, over, 'i'), (0.42, slam, 'l'), (0.52, settle, 'o'), (0.72, strain1, 'io'),
+            (0.95, strain2, 'io'), (1.06, rip, 'i'), (1.16, upcut, 'l'), (1.28, follow, 'o'), (1.45, hold, 'io'), (1.62, mid, 'io'), (1.85, S, 'io')]
+
+
 def build(rig):
     """長劍の技の動きを作る。返り値：[(ゲームの名前, action, 情報)]"""
     out = []
@@ -134,4 +174,6 @@ def build(rig):
     make('ls_c1_out', lambda t: sample(ko, t), ko[-1][0])
     kc = c2_keys(lunge)
     make('ls_c2', lambda t: sample(kc, t), kc[-1][0])
+    ku = ult_keys()
+    make('ls_ult', lambda t: sample(ku, t), ku[-1][0])
     return out

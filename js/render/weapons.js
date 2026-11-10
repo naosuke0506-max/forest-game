@@ -9,6 +9,7 @@ import { BUILD } from '../version.js';
 const MODEL_FILES = {
   armingsword: 'armingsword', longsword: 'longsword', spear: 'spear', shield: 'kite_shield',
   mace: 'mace', warhammer: 'warhammer', lucerne: 'lucerne', dagger: 'dagger',   // 利用者が送った模型（2026-11-09）
+  dualsword: 'armingsword',   // 雙劍（二刀流）：片手劍の模型を両手に 1 本ずつ
 };
 const models = new Map();
 
@@ -63,6 +64,7 @@ export function createWeaponModel(weaponId, { shadows = true } = {}) {
   const P = (type, m, pos, scale, rot) => part(root, type, m, pos, scale, rot, shadows);
   switch (weaponId) {
     case 'armingsword':
+    case 'dualsword':
       P('cylinder', leather(), [0, 0, 0.03], [0.04, 0.16, 0.04], [90, 0, 0]);        // 柄
       P('box', iron(), [0, 0, -0.07], [0.2, 0.03, 0.04]);                            // 鍔
       P('box', steel(), [0, 0, -0.45], [0.05, 0.012, 0.75]);                         // 刃

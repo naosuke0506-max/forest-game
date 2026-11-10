@@ -42,7 +42,7 @@ function powerText(ref) {
 function skillList(list) {
   if (!list?.length) return '';
   return `<ul class="skills">${list.map((s) => {
-    const pw = s.effect !== undefined ? powerText(s.ref) : '';
+    const pw = s.power ?? (s.effect !== undefined ? powerText(s.ref) : '');
     return `<li><b>${esc(s.name)}${s.done ? '' : `<small>${L.planned}</small>`}</b>
     <span class="how">${esc(s.how)}</span><span class="sdesc">${esc(s.effect ?? s.desc)}</span>${pw ? `<span class="spow">威力 ${esc(pw)}</span>` : ''}</li>`;
   }).join('')}</ul>`;

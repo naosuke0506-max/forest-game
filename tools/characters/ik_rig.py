@@ -297,6 +297,11 @@ class Rig:
                     Wh, auto_w = self.grip_solve('R', hh, gp, V(*spec['blade']), spec.get('roll', 0.0), V(*spec['pole']), W, H, self.sR)
                 elif s == 'R' and 'blade' in spec:
                     Wh = frame_from(V(*spec['blade']), V(*spec['edge'])) @ self.sR.to_quaternion().inverted()
+                elif s == 'L' and 'blade' in spec and spec.get('auto', 0) > 0.5:
+                    # 二刀流の左手：右手と同じく、拳の中を柄が通るように握る（左手の握りの点 sL2 は、右手の持ち手の点を体の左右で映したもの。
+                    # ゲームでは模型の socket_L2 に 2 本目の剣を付ける）
+                    gp = hh + V(*spec['grip']) * AR if 'grip' in spec else self.world(spec['grip_w'])
+                    Wh, auto_w = self.grip_solve('L', hh, gp, V(*spec['blade']), spec.get('roll', 0.0), V(*spec['pole']), W, H, self.sL2)
                 elif s == 'L' and 'normal' in spec:
                     Wh = frame_from(V(*spec['up']), V(*spec['normal'])) @ self.sL.to_quaternion().inverted()
                 elif s == 'L' and 'bow_up' in spec and self.sB is not None:   # 弓：socket_bow の +Z 上の弓の先・+X 弦の側
@@ -691,6 +696,8 @@ def hold_weapon(rig, src_action, name, spec_r, spec_l):
             elif s == 'R':
                 Wh = frame_from(C(spec['blade']), C(spec['edge'])) @ sR_q.inverted()
                 wrist = hh + C(spec['grip']) * AR - Wh @ sR_t
+            elif spec.get('auto', 0) > 0.5:   # 二刀流の左手（solve と同じ）
+                Wh, wrist = rig.grip_solve('L', hh, hh + C(spec['grip']) * AR, C(spec['blade']), spec.get('roll', 0.0), C(spec['pole']), W, H, rig.sL2)
             else:
                 sp_r, q_r = R_sock
                 hp = hilt_point(sp_r, q_r @ Vector((0, 0, 1)), spec, K, hh, sum(rig.arm[s]))

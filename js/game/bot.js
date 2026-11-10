@@ -14,7 +14,7 @@
 // 後で、逃走・アイテムの使用を足す
 import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
-import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY, SKILL_FX } from './data.js';
+import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY, SKILL_FX, SWORD_ULT } from './data.js';
 import { skillOf, skillOn, skillReady } from './skills.js';
 import { techSetOf } from './techniques.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
@@ -307,6 +307,9 @@ export function createBot(fighter, rng, fighters) {
       const use = fx === 'counter' ? d < 3.5 && ['attack', 'charge', 'charge2'].includes(t.action?.kind)   // 反擊：相手が振る・溜めるとき
         : fx === 'tough' || fx === 'might' ? d < 4.5                                                    // 強靱・剛力：打ち合う間合いで
         : fx === 'hawk' ? (t ? !b.known.get(t)?.seen : !!b.look)                                        // 鷹目：狙う相手が見えないとき・探しているとき
+        : fx === 'ultimate' ? !!SWORD_ULT[f.weapon] && !f.action && t && b.known.get(t)?.seen               // 奧義：見えている相手が届く所にいるとき
+          && d < (SWORD_ULT[f.weapon].slide ? SWORD_ULT[f.weapon].slide.dist - 0.5 : 2.8)
+          && Math.abs(((yawTo(f, t.x, t.z) - f.yaw + 540) % 360) - 180) < 20
         : false;
       if (use) b.skillTap = true;
     }

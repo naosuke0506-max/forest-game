@@ -1,8 +1,8 @@
 // 戦闘（計算だけ）：攻撃・防御・弓と矢・ダメージ・ひるみ・スタミナ。
 // 人間も bot も、同じ形の入力 { attack: 押している, guard: 押している } で動かす。
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SKILL_FX } from './data.js';
-import { skillOf, skillOn, useSkill, updateSkill } from './skills.js';
+import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SKILL_FX, SWORD_ULT } from './data.js';
+import { skillOf, skillOn, skillReady, useSkill, updateSkill } from './skills.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 import { setStance, updateStance, stanceShape, resetStance } from './stance.js';
 import { techSetOf, controlTech, updateTech, interruptTech } from './techniques.js';
@@ -125,6 +125,18 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       target.guarding = false;
       match.eliminate(target, attacker);
     }
+  }
+
+  /** 劍騎士の奧義：動きを流し、決まった時刻に当てる（雙劍は前へ滑る・長劍は砂煙を立てる。update で進める） */
+  function startUltimate(f, U) {
+    const T = { ...U, single: true, ult: true, stamina: 0, chain: U.time };
+    if (f.cover) cover?.exit(f);
+    f.guarding = false;
+    f.action = { kind: 'attack', t: 0, hit: false, heavy: true, tech: T, name: 'ult', step: 0, charge: 0, n: 0, moved: 0, dusted: false };
+    f._press = { at: clock, follow: false, used: true };   // この押下で通常攻撃を出さない
+    f._queued = false;
+    emit('swing', { fighter: f, heavy: true, tech: T });
+    emit('ultimate', { fighter: f, ult: U });
   }
 
   /**
@@ -344,8 +356,20 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       // 暗殺している・されている・隠れる・出る・探す・引きずり出す間は、ほかのことはできない
       if (LOCKED.has(f.action?.kind)) { f.guarding = false; return; }
       if (f.stun > 0) { f.guarding = false; if (f.action?.kind === 'draw') f.action = null; return; }
-      // 技能：隠れている間・ひるんでいる間・暗殺などの間は使えない。使っても、していることは続ける（効き目が付くだけ）
-      if (skillPressed && !f.hidden && useSkill(f)) emit('skill', { fighter: f, skill: skillOf(f) });
+      // 技能：隠れている間・ひるんでいる間・暗殺などの間は使えない。使っても、していることは続ける（効き目が付くだけ）。
+      // 劍騎士の奧義（一撃の技）は、何もしていないときだけ出せる（持っている武器の動き。data.js の SWORD_ULT）
+      if (skillPressed && !f.hidden) {
+        const sk = skillOf(f);
+        if (sk?.effect === 'ultimate') {
+          const U = SWORD_ULT[f.weapon];
+          if (U && !f.action && skillReady(f)) {
+            useSkill(f);
+            emit('skill', { fighter: f, skill: sk });
+            startUltimate(f, U);
+            return;
+          }
+        } else if (useSkill(f)) emit('skill', { fighter: f, skill: sk });
+      }
 
       // 暗殺ボタン（攻擊ボタンとは別）：近くに暗殺できる相手がいれば（game/assassin.js）。
       // 隠れ場所・壁裏から飛び出すときだけ（避ける猶予がある。何もない所ではできない）
@@ -487,6 +511,22 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         if (a) {
           a.t += dt;
           if (a.kind === 'attack' && a.tech) {
+            // 奧義（雙劍）：決まった間、前へ高速で滑る（同じ速さで）
+            const sl = a.tech.slide;
+            if (sl && a.t > sl.from && a.moved < sl.dist) {
+              const goal = sl.dist * Math.min(1, (a.t - sl.from) / (sl.to - sl.from));
+              const step = goal - a.moved;
+              a.moved = goal;
+              const rad = (f.yaw * Math.PI) / 180;
+              shove(f, -Math.sin(rad) * step, -Math.cos(rad) * step);
+            }
+            // 奧義（長劍・大劍）：切っ先が地面にめり込む所に砂煙を立てる（見た目は render/ult-dust.js）
+            const du = a.tech.dust;
+            if (du && !a.dusted && a.t >= du.at) {
+              a.dusted = true;
+              const rad = (f.yaw * Math.PI) / 180, x = f.x - Math.sin(rad) * du.ahead, z = f.z - Math.cos(rad) * du.ahead;
+              emit('dust', { fighter: f, x, z, y: floorAt(x, z, yOf(f)), lift: du.lift - du.at });
+            }
             // 疾驅攻撃：振り始めに前へ滑る（始めに速く、だんだん遅く）
             if (a.tech.dash && a.t <= DASH.lungeTime + dt) {
               const u = Math.min(1, a.t / DASH.lungeTime);
@@ -540,7 +580,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         }
         // 動きの速さ：防御中・攻撃中・ひるみ中は遅い
         const still = f.hidden || f.helpless > 0 || f.action?.kind === 'dodge' || f.action?.kind === 'finisher' || f.action?.kind === 'recover'
-          || (f.action?.tech?.dash && f.action.t <= DASH.lungeTime) || LOCKED.has(f.action?.kind);
+          || (f.action?.tech?.dash && f.action.t <= DASH.lungeTime) || f.action?.tech?.ult || LOCKED.has(f.action?.kind);
         f.moveScale = still ? 0 : f.stun > 0 ? 0.25 : f.guarding ? COMBAT.guardMoveScale
           : (a && a.kind !== 'release') ? COMBAT.attackMoveScale : 1;
       }
