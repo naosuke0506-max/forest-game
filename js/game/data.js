@@ -160,9 +160,10 @@ export const SHIELD_MOVES = {
 
 /** 楯。planned：模型と動きがまだ無い */
 export const SHIELDS = {
-  kite:    { name: '鳶形楯' },
-  buckler: { name: '小楯', planned: true },
-  pavise:  { name: '大楯', planned: true },
+  // cut：防禦で受けたときに減らす割合（物理の攻撃だけ。利用者の指示 2026-11-10：中盾＝鳶形楯 100%・小楯 70%・大楯 100%）
+  kite:    { name: '鳶形楯', cut: 1.0 },
+  buckler: { name: '小楯', cut: 0.7, planned: true },
+  pavise:  { name: '大楯', cut: 1.0, planned: true },
 };
 /** まだ模型と動きが無い武器の名前（題の画面に「未完」と出す） */
 export const PLANNED = {
@@ -193,6 +194,7 @@ export const SENSES = {
   fov: 120,
   visible: 0.5,
   memory: 25,
+  track: 10,               // 見つけた相手の居場所が、見失ってもこの秒だけ分かる（利用者の指示 2026-11-10）
   lookAround: 4,
   steps: { run: 22, walk: 10 },
   weight: { light: 0.8, medium: 1, heavy: 1.3 },
@@ -249,7 +251,8 @@ export const BODY_TURN = { neckYaw: 70, neckUp: 55, neckDown: 65, headSpeed: 320
  * 暗殺（docs/DESIGN.md「暗殺」）：攻擊ボタンとは別の「暗殺」ボタン。近く（reach）に暗殺できる相手がいると出る
  *   できるとき：相手に体の seen 以上が見えていない（相手の視界の中でも、7 割以上見えていなければよい。game/senses.js）・
  *              壁裏隠れから（見られていてもよい）・隠れ場所から飛び出す（見られていてもよい）
- *   grace：避ける猶予（秒）。壁裏・隠れ場所から飛び出す暗殺だけ。この間に相手が回避すると失敗する（見られていない所からの暗殺は避けられない）
+ *   grace：避ける猶予（秒）。壁裏・隠れ場所から飛び出す暗殺と、bot を前・横から暗殺するとき。この間に相手が回避すると失敗する
+ *          （見られていない後ろからの暗殺は避けられない。bot は前・横からなら 40%、その相手をもう見つけていれば必ず避ける。game/bot.js）
  *   dash：飛びかかる速さ（m/秒）
  *   moves：片手劍の暗殺の動き（onehand_moves.py）。背中側からは背刺、前・横からは滑斬
  *     gap 動き始めの相手との間（m）、kill 止めを刺す時刻（秒）、time 動きの長さ、end 動き終わりの体の位置（右 r・前 f。m）と向き（右回り yaw。度）
@@ -296,7 +299,8 @@ export const COMBAT = {
   staminaRegenDelay: 0.6,  // 使ってから戻り始めるまで（秒）
   maxStamina: 100,
   guardReduce: 0.75,       // 防御で減らせる割合（盾なし）
-  guardReduceShield: 0.9,  // 盾あり
+  guardReduceShield: 0.9,  // 盾あり（楯ごとの割合は SHIELDS の cut。無いときだけこれ）
+  guardHeavyImpact: 26,    // 防禦で受けた一撃がこれより強い（傷の元の大きさ）か、重い攻撃なら「強い受け」（guard_h）。弱ければ「弱い受け」（guard_l）
   guardArc: 120,           // 防御できる角度（前方、度）
   guardStaminaPerDamage: 1.0, // 防御で受けたダメージ 1 ごとに使うスタミナ
   guardMoveScale: 0.5,     // 防御中の移動の速さ
@@ -305,6 +309,33 @@ export const COMBAT = {
   bodyHeight: 1.8,
   gravity: 9.8,
 };
+
+/**
+ * 全速力（疾驅ボタン。利用者の指示 2026-11-10）：押してから動き出すと time 秒の間、移動スティックを倒すと speed m/s で走る。
+ * 終わったら cooldown 秒は使えない（待ち時間は Claude の案）。全速力の間の攻擊ボタンは疾驅攻撃（DASH_ATTACKS）
+ */
+export const SPRINT = { time: 10, cooldown: 10, speed: 8.0 };
+
+/**
+ * 疾驅攻撃（全速力の間の通常攻撃）：威力が大きい反面、隙も大きい（利用者の指示）。動きは、その武器の強い技の動きを使う
+ *   clip・time・hits は技と同じ書き方。damage は武器の damage に掛ける倍率、recover は動きの後に動けない時間（秒。隙）、
+ *   lunge は振り始めに前へ滑る距離（m）と時間（秒）
+ */
+export const DASH_ATTACKS = {
+  armingsword: { name: '疾驅斬', clip: 'oh_c1_out', time: 0.8, hits: [0.16], damage: 2.0, reach: 2.4, arc: 110 },
+  longsword:   { name: '疾驅斬', clip: 'ls_c1_out', time: 0.93, hits: [0.16], damage: 2.0, reach: 3.0, arc: 40 },
+  mace:        { name: '疾驅擊', clip: 'mc_c1_out', time: 0.97, hits: [0.16], damage: 2.0, reach: 2.1, arc: 70 },
+  warhammer:   { name: '疾驅擊', clip: 'wh_c1_out', time: 1.27, hits: [0.2, 0.6], damage: 1.6, reach: 2.3, arc: 90 },
+  lucerne:     { name: '疾驅擊', clip: 'lc_cut1', time: 1.0, hits: [0.38], damage: 2.0, reach: 3.3, arc: 50 },
+  dagger:      { name: '疾驅刺', clip: 'dg_cut3', time: 0.67, hits: [0.22], damage: 2.2, reach: 1.9, arc: 40 },
+  spear:       { name: '疾驅突', clip: 'heavy', time: 1.27, hits: [0.55], damage: 2.0, reach: 3.3, arc: 60 },
+};
+/** 疾驅攻撃の共通の数値：隙（動けない秒）・前へ滑る距離と時間・スタミナ・威力 */
+export const DASH = { recover: 0.75, lunge: 1.6, lungeTime: 0.35, stamina: 24, power: 'h' };
+
+/** bot 同士で戦う確率（利用者の指示 2026-11-10：bot 同士の戦いを減らす）。別の bot を見つけたとき、この確率で戦う（決めたら fightFor 秒は変えない）。
+ *  攻撃してきた相手とは、いつでも戦う */
+export const BOT_RIVALRY = { fight: 0.25, fightFor: 20 };
 
 /** bot の名前（練習モードの相手） */
 export const BOT_NAMES = ['玄馬', '志乃', '伊吹', '颯', '朱音', '鐵心'];

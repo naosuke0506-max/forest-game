@@ -94,7 +94,9 @@ export function updateTech(f, a, now, ctx) {
     // 溜攻撃 1 の一撃：ここから動きの終わりの少し後まで、溜攻撃 2 へつながる
     if (a.name === 'charge' && a.n === 1) f._followUntil = now + (T.time - a.t) + TECH.followWindow;
   }
-  if (!set) { if (a.t >= T.time) f.action = null; return; }
+  // 動きの後に隙がある技（疾驅攻撃）：動きが終わったら recover 秒動けない
+  const finish = () => { f.action = T.recover ? { kind: 'recover', t: 0, time: T.recover } : null; };
+  if (!set || T.dash) { if (a.t >= T.time) { finish(); f._queued = false; } return; }
   // 先に押しておいた次の段へ（溜攻撃の後は通常攻撃の 1 段目）
   if (f._queued && a.hit && a.t >= T.chain) {
     const step = a.name === 'combo' ? (a.step + 1) % set.combo.length : 0;

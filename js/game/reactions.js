@@ -1,7 +1,7 @@
 // 攻撃を受けたときの動き：被弾（軽い・重い）・よろめき・防禦の受け（弱い・強い）。計算だけ（game/combat.js から使う）
 //   被弾とよろめきは、攻撃された向き（前・後ろ・左・右）で動きが変わり、重い被弾とよろめきは押された向きへ下がる
 //   見た目（どの動きを流すか）は render/character-view.js が f.react を見て決める。数値は game/data.js の REACT
-import { REACT } from './data.js';
+import { REACT, COMBAT } from './data.js';
 
 const DEG = Math.PI / 180;
 const wrap = (a) => ((a + 540) % 360) - 180;
@@ -18,11 +18,12 @@ export function hitDir(f, fromX, fromZ) {
 
 /**
  * 受けた動きを決める
- * @param {object} o { guarded（楯で受けた）, broke（防禦が崩れた）, power（l 軽い / h 重い）, pierce（防禦の上から響く割合） }
+ * @param {object} o { guarded（楯で受けた）, broke（防禦が崩れた）, power（l 軽い / h 重い）, pierce（防禦の上から響く割合）, impact（受けた一撃の強さ） }
  */
-export function reactKind(target, { guarded, broke, power, pierce }) {
-  if (broke) return 'stagger';
-  if (guarded) return power === 'h' || pierce > 0 ? 'guard_h' : 'guard_l';
+export function reactKind(target, { guarded, broke, power, pierce, impact = 0 }) {
+  if (broke) return 'stagger';   // 防禦が崩れた（スタミナ切れ）：よろめく
+  // 防禦で受けた：受けた一撃の強さで使い分ける（重い攻撃・強い一撃は「強い受け」で押し込まれる。軽い一撃は「弱い受け」）
+  if (guarded) return power === 'h' || impact >= COMBAT.guardHeavyImpact || pierce >= 0.3 ? 'guard_h' : 'guard_l';
   if (power !== 'h') return 'hit_l';
   // 重い被弾でひるんでいる間に、また重い一撃を受けた：よろめく
   const r = target.react;
