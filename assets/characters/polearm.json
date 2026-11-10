@@ -213,6 +213,11 @@
    "loop": false,
    "speed": 0.0
   },
+  "as_blunt_v": {
+   "duration": 2.2,
+   "loop": false,
+   "speed": 0.0
+  },
   "hide_wd_in": {
    "duration": 1.7,
    "loop": false,

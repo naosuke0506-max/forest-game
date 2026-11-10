@@ -114,12 +114,17 @@
    "speed": 0.0
   },
   "dg_cut1": {
-   "duration": 0.5333,
+   "duration": 0.5667,
    "loop": false,
    "speed": 0.0
   },
   "dg_cut2": {
-   "duration": 0.6,
+   "duration": 0.5667,
+   "loop": false,
+   "speed": 0.0
+  },
+  "dg_cut3": {
+   "duration": 0.6667,
    "loop": false,
    "speed": 0.0
   },
@@ -134,12 +139,22 @@
    "speed": 0.0
   },
   "dg_c1_out": {
+   "duration": 1.0,
+   "loop": false,
+   "speed": 0.0
+  },
+  "dg_c2_hold": {
+   "duration": 1.0,
+   "loop": true,
+   "speed": 0.0
+  },
+  "dg_c2": {
    "duration": 0.8667,
    "loop": false,
    "speed": 0.0
   },
-  "dg_c2": {
-   "duration": 0.9667,
+  "dg_as_back": {
+   "duration": 2.0333,
    "loop": false,
    "speed": 0.0
   },
@@ -240,6 +255,11 @@
   },
   "as_slide_v": {
    "duration": 2.6,
+   "loop": false,
+   "speed": 0.0
+  },
+  "as_blunt_v": {
+   "duration": 2.2,
    "loop": false,
    "speed": 0.0
   },

@@ -33,8 +33,8 @@ function powerText(ref) {
   }
   const set = TECHNIQUES[ref.w], T = ref.t === 'combo' ? set.combo[ref.i] : set[ref.t];
   const nth = (v, i) => (Array.isArray(v) ? v[Math.min(i, v.length - 1)] : v);
-  if (T.full) return `${R(w.damage * T.damage[0])}〜${R(w.damage * T.damage[1])}・間合 ${T.reach} 米・${arcText(T.arc)}`;
-  if (T.hits.length > 1) return `${T.hits.map((_, i) => R(w.damage * nth(T.damage, i))).join('＋')}（${T.hits.length} 回）・間合 ${T.reach} 米・${T.hits.map((_, i) => arcText(nth(T.arc, i))).join('→')}`;
+  if (T.full) return `${R(w.damage * T.damage[0])}〜${R(w.damage * T.damage[1])}${T.hits.length > 1 ? `（${T.hits.length} 回）` : ''}・間合 ${nth(T.reach, 0)} 米・${arcText(nth(T.arc, 0))}`;
+  if (T.hits.length > 1) return `${T.hits.map((_, i) => R(w.damage * nth(T.damage, i))).join('＋')}（${T.hits.length} 回）・間合 ${nth(T.reach, 0)} 米・${T.hits.map((_, i) => arcText(nth(T.arc, i))).join('→')}`;
   return `${R(w.damage * T.damage)}・間合 ${T.reach} 米・${arcText(T.arc)}`;
 }
 /** 技の一覧：名前・出し方・効果・威力（攻撃の説明は効果と威力だけ。ゲームでまだ使えない物は「未完」）。共通の技は説明 */
@@ -60,6 +60,10 @@ const ART_OF_CLIP = (() => {
     }
   }
   out.as_back = WEAPON_ARTS.armingsword.find((a) => a.name === '背刺');
+  // 鈍器・短劍の暗殺（背後から）
+  for (const [w, c] of [['mace', 'mc_as_back'], ['warhammer', 'wh_as_back'], ['lucerne', 'lc_as_back'], ['dagger', 'dg_as_back']]) {
+    out[c] = WEAPON_ARTS[w].find((a) => a.ref?.lethal);
+  }
   out.as_slide = WEAPON_ARTS.armingsword.find((a) => a.name === '滑斬');
   for (const c of ['a1', 'a2', 'a3']) out[c] = { effect: '技の無い武器（槍）の通常攻撃（専用の動きができるまで使う）', power: '武器による' };
   for (const c of ['ma1', 'ma2', 'ma3']) out[c] = { effect: '前の短劍の通常攻撃（今は短劍の技を使う）', ref: { w: 'dagger', t: 'plain' } };

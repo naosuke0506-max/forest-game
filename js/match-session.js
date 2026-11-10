@@ -122,7 +122,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   leftBtn.classList.toggle('guard', me.left === 'guard');
   setBtn(document.getElementById('btn-dodge'), ICONS.dodge, L.dodge);
   // 楯攻撃ボタン：楯の技があるキャラ（楯劍騎士）だけ。名前は楯の技（鳶形楯は楯擊）
-  const shieldBtn = document.getElementById('btn-shield');
+  // （ボタンが画面に無いときは、楯擊ボタンを出さないだけにする。無いまま進めると試合が始まらない：2026-11-10 に一度起きた）
+  const shieldBtn = document.getElementById('btn-shield') || document.createElement('button');
   const shieldMoves = me.left === 'guard' && me.shield ? SHIELD_MOVES[me.shield] : null;
   shieldBtn.hidden = !shieldMoves;
   if (shieldMoves) setBtn(shieldBtn, ICONS.shield, SHIELD_SKILLS[shieldMoves.guardAttack].name);

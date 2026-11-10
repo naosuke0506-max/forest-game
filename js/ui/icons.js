@@ -34,6 +34,6 @@ export const ICONS = {
 
 /** 時間帯の絵（朝・昼は太陽、夕暮れは沈む日、深夜は月） */
 /** 武器の絵 */
-export const weaponIconOf = (id) => ({ longbow: ICONS.bow, mace: ICONS.mace, spear: ICONS.spear, dagger: ICONS.dagger }[id] || ICONS.sword);
+export const weaponIconOf = (id) => ({ longbow: ICONS.bow, mace: ICONS.mace, warhammer: ICONS.mace, lucerne: ICONS.mace, spear: ICONS.spear, dagger: ICONS.dagger }[id] || ICONS.sword);
 
 export const timeIcon = (time) => (time === 'night' ? ICONS.moon : time === 'dusk' ? ICONS.dusk : ICONS.sun);

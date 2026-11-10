@@ -2,7 +2,8 @@
 //   できるとき：相手に体の 7 割以上が見えていない（相手の視界の中でもよい。どこでも・どんな状態でも）、
 //              または壁裏隠れ・隠れ場所から飛び出す（見られていてもよい）
 //   避ける猶予：壁裏・隠れ場所から飛び出す暗殺だけ（ASSASSIN.grace 秒の間に相手が回避すると失敗）。見られていない所からの暗殺は避けられない
-//   動き：片手劍を持つ人は、相手の背中側なら背刺、前・横なら滑斬（相手にもされる側の動きを流す）。ほかの武器は飛びかかって強い一撃
+//   動き：武器ごと（data.js の ASSASSIN.byWeapon）。片手劍は背中側なら背刺・前横なら滑斬、鎚矛・戰鎚・長柄鎚・短劍は背中側からの専用の動き
+//         （相手にもされる側の動きを流す）。専用の動きの無い所は、飛びかかって強い一撃
 //   流れ：飛びかかる（approach。動き始めの所まで素早く寄る）→ 動き（strike。決まった時刻に止めを刺す）→ 動き終わりの所へ体を移す
 // 数値は game/data.js の ASSASSIN
 import { ASSASSIN } from './data.js';
@@ -53,10 +54,11 @@ export function createAssassin({ fighters, senses, yOf, move, lethal, emit }) {
     return best;
   }
 
-  /** 暗殺を始める（隠れ場所・壁裏から出すのは呼ぶ側）。相手の背中側なら背刺、前・横なら滑斬 */
+  /** 暗殺を始める（隠れ場所・壁裏から出すのは呼ぶ側）。相手の背中側か前・横かで、武器ごとの動きを選ぶ */
   function start(f, t, grace) {
     const behind = Math.abs(wrap(yawToward(t, f) - (t.yaw + 180))) < 70;
-    const mv = f.weapon === 'armingsword' ? ASSASSIN.moves[behind ? 'back' : 'slide'] : null;
+    const set = ASSASSIN.byWeapon[f.weapon], key = set && (behind ? set.back : set.front);
+    const mv = key ? ASSASSIN.moves[key] : null;
     f.action = { kind: 'assassinate', t: 0, target: t, phase: 'approach', move: mv, back: behind, grace, dodged: false, hit: false };
     f.guarding = false;
     emit('assassinate', { attacker: f, target: t });

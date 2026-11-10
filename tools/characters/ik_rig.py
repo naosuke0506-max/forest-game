@@ -54,6 +54,20 @@ def frame_from(z, x):
     return Matrix((x, y, z)).transposed().to_quaternion()
 
 
+def auto_grip(z, f, roll_deg=0.0):
+    """拳の中を柄が通る持ち手の点の向き（Tripo の手の socket_R と同じ約束）：+Z は柄の頭の側、+X は拳の甲の向き。
+    拳の甲は前腕の延長の向きなので（右手で測ると、手首をまっすぐにした前腕は持ち手の点の +X とほぼ同じ向き：0.99）、
+    +X は前腕の向き f を柄に直角にした向きにする（腕が柄に埋もれない）。roll：手首の曲げ（度。柄のまわりに回す）"""
+    z = z.normalized()
+    x = f - z * f.dot(z)
+    if x.length < 1e-6:
+        x = z.orthogonal()
+    x.normalize()
+    if roll_deg:
+        x = Quaternion(z, math.radians(roll_deg)) @ x
+    return frame_from(z, x)
+
+
 def hilt_point(sp_r, axis, spec, K, hh, reach):
     """両手持ちの左手で握る柄の点（右手の持ち手の点 sp_r から、柄の向き axis の反対へ hilt m）。
     spec に 'slide' があれば、決めた所に腕が届かないとき、届く所まで右手の側へ滑らせる（長い柄では手が柄の上を滑る）"""
@@ -119,6 +133,13 @@ class Rig:
         self.sR = bones['R_Hand'].matrix_local.inverted() @ (inv @ sock_r.matrix_world)
         self.sL = bones['L_Hand'].matrix_local.inverted() @ (inv @ sock_l.matrix_world)
         self.sB = bones['L_Hand'].matrix_local.inverted() @ (inv @ sock_bow.matrix_world) if sock_bow else None
+        # 左手の握りの点：右手の持ち手の点（休みの姿勢・体の空間）を、体の左右（X）で映す。
+        # 映すと左手の座標になるので、Y を逆にして回転に戻す（+Z 親指の側・+X 拳の甲の向きはそのまま映した向き）
+        mr = bones['R_Hand'].matrix_local @ self.sR
+        S_ = Matrix(((-1, 0, 0), (0, 1, 0), (0, 0, 1)))
+        rl = S_ @ mr.to_3x3() @ Matrix(((1, 0, 0), (0, -1, 0), (0, 0, 1)))
+        ml = Matrix.Translation(S_ @ mr.translation) @ rl.to_4x4()
+        self.sL2 = bones['L_Hand'].matrix_local.inverted() @ ml
         h = self.rest_h
         self.arm = {s: ((h[f'{s}_Forearm'] - h[f'{s}_Upperarm']).length, (h[f'{s}_Hand'] - h[f'{s}_Forearm']).length) for s in 'LR'}
         self.leg = {s: ((h[f'{s}_Calf'] - h[f'{s}_Thigh']).length, (h[f'{s}_Foot'] - h[f'{s}_Calf']).length) for s in 'LR'}
@@ -269,14 +290,21 @@ class Rig:
                 # 手の向き：剣は持ち手の点（socket_R）の +Z 刃先・+X 刃の幅（切る向き）、楯は socket_L の +X 表・+Z 上。
                 # どちらも書いていなければ、手首はまっすぐ（前腕に合わせる）
                 Wh = None
-                if s == 'R' and 'blade' in spec:
+                auto_w = None
+                if s == 'R' and 'blade' in spec and spec.get('auto', 0) > 0.5:
+                    # 拳の向きを、柄の向き（blade）と前腕から決める（edge は使わない。鎚の面は拳の甲の向きになる）
+                    gp = hh + V(*spec['grip']) * AR if 'grip' in spec else self.world(spec['grip_w'])
+                    Wh, auto_w = self.grip_solve('R', hh, gp, V(*spec['blade']), spec.get('roll', 0.0), V(*spec['pole']), W, H, self.sR)
+                elif s == 'R' and 'blade' in spec:
                     Wh = frame_from(V(*spec['blade']), V(*spec['edge'])) @ self.sR.to_quaternion().inverted()
                 elif s == 'L' and 'normal' in spec:
                     Wh = frame_from(V(*spec['up']), V(*spec['normal'])) @ self.sL.to_quaternion().inverted()
                 elif s == 'L' and 'bow_up' in spec and self.sB is not None:   # 弓：socket_bow の +Z 上の弓の先・+X 弦の側
                     Wh = frame_from(V(*spec['bow_up']), V(*spec['bow_x'])) @ self.sB.to_quaternion().inverted()
                 # 手首の位置：持ち手の点（肩から・腕の長さの割合）／楯の真ん中（地面の上の点・m）／地面の上の点（m）／肩から（割合）
-                if 'grip' in spec:
+                if auto_w is not None:
+                    wrist = auto_w
+                elif 'grip' in spec:
                     wrist = hh + V(*spec['grip']) * AR - Wh @ self.sR.translation
                 elif 'grip_w' in spec:   # 持ち手の点を、地面の上の点（m）で
                     wrist = self.world(spec['grip_w']) - Wh @ self.sR.translation
@@ -290,7 +318,11 @@ class Rig:
                     # 両手持ち：右手の持ち手の点から刃と反対（柄頭）の側へ hilt m の所を左手で握る（手首は肩の側へ少し戻した所）
                     sp_r, q_r = side_targets['R_sock']
                     hp = hilt_point(sp_r, q_r @ Vector((0, 0, 1)), spec, self.K, hh, sum(self.arm[s]))
-                    wrist = hp + (hh - hp).normalized() * (0.055 * self.K)
+                    if spec.get('grip2', 0) > 0.5:
+                        # 拳の中に柄を通して握る（親指は右手と同じく頭の側。拳の甲は前腕の向き）
+                        Wh, wrist = self.grip_solve('L', hh, hp, q_r @ Vector((0, 0, 1)), spec.get('roll', 0.0), V(*spec['pole']), W, H, self.sL2)
+                    else:
+                        wrist = hp + (hh - hp).normalized() * (0.055 * self.K)
                 else:
                     wrist = hh + V(*spec['wrist']) * AR
                 # 手首が胴に埋もれないように（前腕の太さだけ離す）。両手持ちの左手は、押し出した右手の持ち手の点に添う
@@ -366,6 +398,22 @@ class Rig:
         ball.z = self.ball_z + lift * self.K
         ankle = ball - Wf @ (h[f'{s}_ToeBase'] - h[f'{s}_Foot'])
         return Wf, ankle, ball
+
+    def grip_solve(self, s, hh, grip_pt, z, roll, pole, W, H, sock):
+        """拳の中を柄が通るように手の向きを決め、手首の位置を返す（返り値：手の向き Wh・手首）。
+        s：'R'・'L'、hh：肩、grip_pt：握る点（柄の上）、z：柄の向き（頭の側）、sock：手の中の握る点（Matrix）。
+        拳の甲は前腕の向きにするので、肩から握る点への向きで 1 回解き、出た肘からの前腕の向きでもう 1 回解き直す"""
+        sq, st = sock.to_quaternion(), sock.translation
+        f = grip_pt - hh
+        l1, l2 = self.arm[s]
+        Wh, wrist = None, grip_pt
+        for _ in range(2):
+            Wh = auto_grip(z, f, roll) @ sq.inverted()
+            wrist = self.push_out(grip_pt - Wh @ st, W, H, 0.05 * self.K)
+            elbow, w2 = two_bone(hh, wrist, l1, l2, pole)
+            elbow = self.elbow_out(hh, elbow, w2, W, H)
+            f = w2 - elbow
+        return Wh, wrist
 
     def _align_twist(self, Wr, axis, rest_dir, toward, fallback):
         """骨 Wr（向き axis）をねじって、休みの姿勢の rest_dir（肘・膝の曲がる側）を toward の側へ向ける。
@@ -638,13 +686,18 @@ def hold_weapon(rig, src_action, name, spec_r, spec_l):
             hh = H[up]
             Wr = W[rig.parent[up]].copy()
             Wh = None
-            if s == 'R':
+            if s == 'R' and spec.get('auto', 0) > 0.5:
+                Wh, wrist = rig.grip_solve('R', hh, hh + C(spec['grip']) * AR, C(spec['blade']), spec.get('roll', 0.0), C(spec['pole']), W, H, rig.sR)
+            elif s == 'R':
                 Wh = frame_from(C(spec['blade']), C(spec['edge'])) @ sR_q.inverted()
                 wrist = hh + C(spec['grip']) * AR - Wh @ sR_t
             else:
                 sp_r, q_r = R_sock
                 hp = hilt_point(sp_r, q_r @ Vector((0, 0, 1)), spec, K, hh, sum(rig.arm[s]))
-                wrist = hp + (hh - hp).normalized() * (0.055 * K)
+                if spec.get('grip2', 0) > 0.5:
+                    Wh, wrist = rig.grip_solve('L', hh, hp, q_r @ Vector((0, 0, 1)), spec.get('roll', 0.0), C(spec['pole']), W, H, rig.sL2)
+                else:
+                    wrist = hp + (hh - hp).normalized() * (0.055 * K)
             wrist = rig.push_out(wrist, W, H, 0.05 * K)
             if s == 'R':
                 R_sock = (wrist + Wh @ sR_t, Wh @ sR_q)

@@ -114,17 +114,22 @@
    "speed": 0.0
   },
   "mc_cut1": {
-   "duration": 0.9667,
-   "loop": false,
-   "speed": 0.0
-  },
-  "mc_cut2": {
    "duration": 0.8667,
    "loop": false,
    "speed": 0.0
   },
+  "mc_cut2": {
+   "duration": 0.8333,
+   "loop": false,
+   "speed": 0.0
+  },
+  "mc_cut3": {
+   "duration": 1.1667,
+   "loop": false,
+   "speed": 0.0
+  },
   "mc_c1_in": {
-   "duration": 0.3667,
+   "duration": 0.3333,
    "loop": false,
    "speed": 0.0
   },
@@ -134,12 +139,22 @@
    "speed": 0.0
   },
   "mc_c1_out": {
-   "duration": 0.9333,
+   "duration": 0.9667,
    "loop": false,
    "speed": 0.0
   },
+  "mc_c2_hold": {
+   "duration": 1.0,
+   "loop": true,
+   "speed": 0.0
+  },
   "mc_c2": {
-   "duration": 1.5333,
+   "duration": 1.2,
+   "loop": false,
+   "speed": 0.0
+  },
+  "mc_as_back": {
+   "duration": 2.2,
    "loop": false,
    "speed": 0.0
   },
@@ -149,7 +164,12 @@
    "speed": 0.0
   },
   "wh_cut2": {
-   "duration": 0.9667,
+   "duration": 0.9333,
+   "loop": false,
+   "speed": 0.0
+  },
+  "wh_cut3": {
+   "duration": 1.7667,
    "loop": false,
    "speed": 0.0
   },
@@ -164,12 +184,22 @@
    "speed": 0.0
   },
   "wh_c1_out": {
-   "duration": 1.1333,
+   "duration": 1.2667,
    "loop": false,
    "speed": 0.0
   },
+  "wh_c2_hold": {
+   "duration": 1.0,
+   "loop": true,
+   "speed": 0.0
+  },
   "wh_c2": {
-   "duration": 1.6,
+   "duration": 1.4,
+   "loop": false,
+   "speed": 0.0
+  },
+  "wh_as_back": {
+   "duration": 2.2,
    "loop": false,
    "speed": 0.0
   },
@@ -194,12 +224,12 @@
    "speed": 1.47
   },
   "lc_cut1": {
-   "duration": 0.7333,
+   "duration": 1.0,
    "loop": false,
    "speed": 0.0
   },
   "lc_cut2": {
-   "duration": 1.0,
+   "duration": 0.9333,
    "loop": false,
    "speed": 0.0
   },
@@ -214,12 +244,22 @@
    "speed": 0.0
   },
   "lc_c1_out": {
-   "duration": 1.0667,
+   "duration": 0.9667,
    "loop": false,
    "speed": 0.0
   },
+  "lc_c2_hold": {
+   "duration": 1.0,
+   "loop": true,
+   "speed": 0.0
+  },
   "lc_c2": {
-   "duration": 1.3667,
+   "duration": 1.4,
+   "loop": false,
+   "speed": 0.0
+  },
+  "lc_as_back": {
+   "duration": 2.2,
    "loop": false,
    "speed": 0.0
   },
@@ -340,6 +380,11 @@
   },
   "as_slide_v": {
    "duration": 2.6,
+   "loop": false,
+   "speed": 0.0
+  },
+  "as_blunt_v": {
+   "duration": 2.2,
    "loop": false,
    "speed": 0.0
   },
