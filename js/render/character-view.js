@@ -3,7 +3,7 @@
 // 模型は tools/characters/build_character.py で作る（assets/characters/<名前>.glb と、動きの長さ・速さの .json）。
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
-import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT } from '../game/data.js';
+import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT, WRATH } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { techSetOf } from '../game/techniques.js';
 import { stanceShape } from '../game/stance.js';
@@ -465,6 +465,9 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
           restart('draw', clip('draw').duration / WEAPONS[fighter.weapon].drawTime);
         } else if (a.kind === 'release') {
           restart('shoot', 1);
+        } else if (a.kind === 'wrath') {
+          // 祓魔僧の神怒：宙に浮いて衝撃波を放つ動き（data.js の WRATH.time に合わせる）
+          if (has(WRATH.clip)) restart(WRATH.clip, clip(WRATH.clip).duration / WRATH.time);
         } else if (a.kind === 'dodge') {
           const d = DODGE[fighter.weight] || DODGE.medium;
           restart(d.anim, clip(d.anim) ? clip(d.anim).duration / d.duration : 1);

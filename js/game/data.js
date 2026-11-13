@@ -387,8 +387,8 @@ export const EXCLUSIVE_SKILLS = {
              desc: '10 秒、一撃の衝撃が大きく上がる（傷が 1.5 倍）。楯の上からでも傷の半分が通り、当たった相手は大きくひるむ（重い一撃はよろめかせる）' },
   archer:  { name: '鷹目', type: 'sense', effect: 'hawk', time: 12, cd: 60,
              desc: '12 秒、目に映る物が白黒になり、80 m 以内の敵が体温で壁越しに見える（隠れ場所の中も）。その間に放つ最初の 1 本は、人も木も壁も貫く矢になる（傷 2 倍・防禦できない）' },
-  cleric:  { name: '神怒', type: 'finisher', time: 0, cd: 90, planned: true,
-             desc: '（これから作る）胸の前で腕を交差して宙に浮き、腕を広げて神の衝撃波を広く放つ。人を吹き飛ばし、1 m 未満の物は飛ばし、それより大きな物（天井など）は一部が壊れる。崩れた物の下敷きになると即死' },
+  cleric:  { name: '神怒', type: 'finisher', effect: 'wrath', time: 0, cd: 90,
+             desc: '胸の前で腕を交差して宙に浮き、腕を広げて神の衝撃波を広く放つ（周り 9 m。楯では防げない）。人を吹き飛ばし、1 m 未満の物（樽・袋）は飛ばし、近くの家の屋根は崩れ落ちる。崩れた屋根の下敷きになると即死' },
 };
 /**
  * 劍騎士の奧義（必殺技。技能ボタン）：持っている武器ごとの動き（利用者の指示 2026-11-10。数字は Claude の案）。
@@ -402,6 +402,13 @@ export const SWORD_ULT = {
     power: ['h', 'h'], dust: { at: 0.42, ahead: 1.6, lift: 1.16 }, pierce: 0.5 },
 };
 SWORD_ULT.greatsword = SWORD_ULT.longsword;   // 兩手大劍ができたら、同じ奧義を使う
+
+/**
+ * 祓魔僧の神怒（必殺。技能ボタン）：動き cl_ult（time 秒）の at 秒で衝撃波を放つ（tools/characters/cleric_moves.py の RELEASE と同じ）。
+ *   radius：届く所（m）、damage：傷（近いほど大きい。端で minK 倍）、push：吹き飛ぶ距離（m。近いほど遠く）、stun：ひるむ秒、
+ *   roofReach：屋根が崩れる家（家の外の面から m 以内）、crushAfter：屋根が落ちきって下敷きになるまでの秒。数字は Claude の案
+ */
+export const WRATH = { clip: 'cl_ult', time: 2.7, at: 1.4, radius: 9, damage: 34, minK: 0.4, push: 7, pushMin: 2.5, stun: 1.6, roofReach: 3, crushAfter: 0.75 };
 
 /** 專用技能の効き目の数字（game/combat.js・game/bot.js・render/heat-vision.js が使う） */
 export const SKILL_FX = {

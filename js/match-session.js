@@ -24,6 +24,8 @@ import { STANCES, BODY_TURN } from './game/data.js';
 import { skillOf, skillOn } from './game/skills.js';
 import { createHeatVision } from './render/heat-vision.js';
 import { createUltDust } from './render/ult-dust.js';
+import { createWrathWave } from './render/wrath-wave.js';
+import { createDestruction } from './world/destruction.js';
 
 const PLAYER_COLOR = '#ffd75e';
 const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
@@ -32,7 +34,7 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, loadout, debug, phaseDuration }
  *   loadout：試合の前に選んだ武器 { main, side, shield }（game/data.js の LOADOUTS から。無ければキャラの最初の物）
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null, destructible = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）。bot の武器は、選べる物から乱数で選ぶ
@@ -254,6 +256,13 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const heat = createHeatVision(player.camera);   // 鷹目（弓兵の技能）の見え方
   const dust = createUltDust(app, player.camera);  // 劍騎士の奧義（長劍・大劍）の砂煙
   combat.on('dust', (e) => dust.burst(e));
+  // 祓魔僧の神怒：光の輪が広がり、小物が飛び、近くの屋根が崩れ落ちる（下敷きは即死）。鷹目の貫く矢は壁に穴を開ける
+  const wave = createWrathWave(app);
+  const wreck = createDestruction(app, destructible, {
+    groundAt: groundAt || ((x, z) => terrain.heightAt(x, z)),
+    onCrush: (f, by) => { combat.crush(f, by); if (f === me) hud.addFeed('崩れた屋根の下敷きになった'); },
+  });
+  combat.on('wrath', (e) => { wave.burst(e); wreck.blast(e); });
   const arrows = createProjectileViews(app, combat);
   let thirdPerson = false;
   // 一人称でも自分の体（模型）を映す：手・腕・盾・脚が見える（頭は隠す。render/character-view.js）。
@@ -521,7 +530,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       }
       refreshMyView();
       heat.update(dt, skillOn(me, 'hawk') && me.alive && !spectating, fighters, me, views);   // 鷹目：白黒にして、敵の体温を壁越しに描く
-      if (!frozenTime) dust.update(dt);
+      if (!frozenTime) { dust.update(dt); wave.update(dt); wreck.update(dt, fighters, combat.projectiles); }
       // 暗殺の動きの間は、一人称の目が体（肩の線）の回った分に付いて回る（動きの始めの肩の向きから。動きの終わりに体の向きが移ると 0 に戻る）
       const ma = me.action, twisting = (ma?.kind === 'assassinate' && ma.phase === 'strike') || (SCRIPTED.has(ma?.kind) && ma?.kind !== 'assassinate');
       if (twisting) {
@@ -553,5 +562,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     sfx,
     senses,
     cover,
+    wreck,   // 確認用（壊れた物の数）
   };
 }

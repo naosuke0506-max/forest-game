@@ -302,6 +302,13 @@ if ch.get('dual'):
     for gname, act, meta_c in dualsword_moves.build(rig6, {a.name: a for a in made}, info):
         made.append(act); info[gname] = meta_c; ik_made.add(gname)
 
+# 祓魔僧の神怒（技能）：胸の前で腕を交差させて宙に浮き、腕を広げて衝撃波を放つ（tools/characters/cleric_moves.py）
+if ch.get('wrath'):
+    import cleric_moves
+    rig7 = new_rig()
+    for gname, act, meta_c in cleric_moves.build(rig7):
+        made.append(act); info[gname] = meta_c; ik_made.add(gname)
+
 # 鎚矛の技（打落・払打・兜割・連碎）：片手。楯劍騎士は楯を構えたまま（tools/characters/mace_moves.py）
 if ch.get('mace'):
     import mace_moves
