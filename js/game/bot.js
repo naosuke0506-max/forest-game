@@ -14,14 +14,14 @@
 // 後で、逃走・アイテムの使用を足す
 import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
-import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY, SKILL_FX } from './data.js';
+import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY, SKILL_FX, SWORD_ULT, WRATH } from './data.js';
 import { skillOf, skillOn, skillReady } from './skills.js';
 import { techSetOf } from './techniques.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
 
 const DEG = Math.PI / 180;
 /** 試合の計算が体の位置と向きを決める行動（その間、bot は体を動かさない・向きを変えない） */
-const SCRIPTED_ACTS = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged']);
+const SCRIPTED_ACTS = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged', 'wrath']);
 const wrap = (a) => ((a + 540) % 360) - 180;
 const yawTo = (f, x, z) => Math.atan2(-(x - f.x), -(z - f.z)) / DEG;
 
@@ -115,7 +115,7 @@ export function createBot(fighter, rng, fighters) {
     if (!assassin || b.seenAssassin === assassin.action) return;
     if (f._dodgeHeld) { b.input.dodge = false; return; }   // 回避ボタンを押したままなら、1 フレーム離してから押し直す
     b.seenAssassin = assassin.action;
-    if (!assassin.action.grace) return;   // 避ける猶予のない暗殺（見られていない後ろから）
+    if (!assassin.action.grace) return;   // 避ける猶予のない暗殺（今は無い。暗殺は隠れ場所・壁裏からだけで、いつも猶予がある）
     const k = b.known.get(assassin);
     const chance = assassin.action.back ? 0.35 : (k && (k.seen || k.tracked) ? 1 : 0.4);
     if (rng.next() < chance && f.stamina > 8) {
@@ -299,8 +299,6 @@ export function createBot(fighter, rng, fighters) {
       return;
     }
     perceive(world, b.lastThink || 0.2);
-    // 見られていない相手がすぐ近くにいれば、どこからでも暗殺する（相手に体の 7 割以上見えていなければ。game/assassin.js）
-    if (!f.action && assassinable(world) && rng.next() < 0.8) { b.assassin = true; return; }
     b.target = pickTarget();
     if (b.target) b.look = null;
     // 技能（專用技能。game/skills.js）：使いどころで、ときどき使う（技能ボタンを 1 フレームだけ押す）
@@ -309,6 +307,10 @@ export function createBot(fighter, rng, fighters) {
       const use = fx === 'counter' ? d < 3.5 && ['attack', 'charge', 'charge2'].includes(t.action?.kind)   // 反擊：相手が振る・溜めるとき
         : fx === 'tough' || fx === 'might' ? d < 4.5                                                    // 強靱・剛力：打ち合う間合いで
         : fx === 'hawk' ? (t ? !b.known.get(t)?.seen : !!b.look)                                        // 鷹目：狙う相手が見えないとき・探しているとき
+        : fx === 'wrath' ? !f.action && t && d < WRATH.radius * 0.7                                       // 神怒：相手が衝撃波の届く所に入ったとき
+        : fx === 'ultimate' ? !!SWORD_ULT[f.weapon] && !f.action && t && b.known.get(t)?.seen               // 奧義：見えている相手が届く所にいるとき
+          && d < (SWORD_ULT[f.weapon].slide ? SWORD_ULT[f.weapon].slide.dist - 0.5 : 2.8)
+          && Math.abs(((yawTo(f, t.x, t.z) - f.yaw + 540) % 360) - 180) < 20
         : false;
       if (use) b.skillTap = true;
     }

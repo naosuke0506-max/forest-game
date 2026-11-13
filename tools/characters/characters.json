@@ -15,6 +15,7 @@
       "source": "sword_knight.glb",
       "group": "2h",
       "onehand": true,
+      "dual": true,
       "longsword": true,
       "fixArms": true
     },
@@ -39,8 +40,9 @@
     "cleric": {
       "source": "cleric.glb",
       "group": "mc",
-      "mace": true
+      "mace": true,
+      "wrath": true
     }
   },
-  "_技": "技の動きを入れるキャラ：onehand 片手劍・longsword 長劍・mace 鎚矛・warhammer 戰鎚・lucerne 長柄鎚・dagger 短劍（tools/characters/*_moves.py）"
+  "_技": "技の動きを入れるキャラ：onehand 片手劍・longsword 長劍・mace 鎚矛・warhammer 戰鎚・lucerne 長柄鎚・dagger 短劍・dual 雙劍（劍騎士の二刀流。左手の剣は socket_L2）（tools/characters/*_moves.py）"
 }

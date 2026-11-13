@@ -18,7 +18,8 @@ export const techSetOf = (weaponId) => TECHNIQUES[weaponId] || null;
 export function techStrike(weaponId, tech, i, charge = 0) {
   const w = WEAPONS[weaponId];
   const mul = tech.full ? lerp(tech.damage[0], tech.damage[1], charge) : nth(tech.damage, i);
-  return { damage: w.damage * mul, reach: nth(tech.reach, i), arc: nth(tech.arc, i), guardPierce: w.guardPierce || 0, power: nth(tech.power, i) };
+  // 防禦の上から通る割合：武器の分か、技の分（奧義など）の大きい方
+  return { damage: w.damage * mul, reach: nth(tech.reach, i), arc: nth(tech.arc, i), guardPierce: Math.max(w.guardPierce || 0, tech.pierce || 0), power: nth(tech.power, i) };
 }
 
 /** 攻撃を受けてひるんだ：押していたボタン・先に押しておいた次の段を忘れる */

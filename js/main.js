@@ -214,6 +214,7 @@ async function boot() {
       app, config: CONFIG, terrain, obstacles, player, myChar, loadout, timeOfDay, zones, buildings: village?.footprints || [],
       trees: trees?.canopies || [],
       groundAt: floors.groundAt, insideHouse: village?.insideHouse, hides: village?.hides || [], covers: village?.covers || [], furniture: village?.furniture || null, sight,
+      destructible: village?.destructible || null,   // 壊せる物（樽・袋・屋根。祓魔僧の神怒・鷹目の矢。world/destruction.js）
       debug: CONFIG.debug,
       // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」
       phaseDuration: CONFIG.phaseDuration ?? (settings.phaseLen === 'normal' ? null : Number(settings.phaseLen)),

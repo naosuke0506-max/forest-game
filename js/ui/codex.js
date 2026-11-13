@@ -2,6 +2,7 @@
 //   後ろの 3D の広間（render/hall.js）に、選んだ人物を立たせて動きを流し、武器は壇の上に浮かべて回して見せる
 //   動きの再生は、動作監督の画面と同じ作り：動きの一覧（見出しごと）・流す／止める・繰り返す・速さ・時刻のつまみ
 import { L } from './labels.js';
+import { ruby, rubyIn } from './ruby.js';
 import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, EXCLUSIVE_SKILLS, SHARED_SKILLS, TECHNIQUES, SHIELD_SKILLS } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { resolveLoadout } from '../game/match.js';
@@ -41,7 +42,7 @@ function powerText(ref) {
 function skillList(list) {
   if (!list?.length) return '';
   return `<ul class="skills">${list.map((s) => {
-    const pw = s.effect !== undefined ? powerText(s.ref) : '';
+    const pw = s.power ?? (s.effect !== undefined ? powerText(s.ref) : '');
     return `<li><b>${esc(s.name)}${s.done ? '' : `<small>${L.planned}</small>`}</b>
     <span class="how">${esc(s.how)}</span><span class="sdesc">${esc(s.effect ?? s.desc)}</span>${pw ? `<span class="spow">威力 ${esc(pw)}</span>` : ''}</li>`;
   }).join('')}</ul>`;
@@ -70,12 +71,15 @@ const ART_OF_CLIP = (() => {
   out.heavy = { effect: '左手の強い一撃・暗殺・誅殺（専用の動きができるまで使う）', power: `武器の ${1.7} 倍` };
   return out;
 })();
-const row = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
+// 武器の性能の言葉に、今の言葉の短い説明を添える（利用者の指示 2026-11-10：漢字が難しくて分からない人にも分かるように）
+const STAT_NOTE = { 威力: '傷の大きさ', 間合: '届く距離', 振幅: '当たる角度の広さ', 出: '振りかぶる時間', 隙: '振った後に動けない時間',
+  氣力: '使うスタミナ', 貫通: '防禦の上から通る割合', 引絞: '弓を引ききる時間', 矢速: '矢の速さ' };
+const row = (k, v) => `<div><dt>${esc(k)}${STAT_NOTE[k] ? `<small>${STAT_NOTE[k]}</small>` : ''}</dt><dd>${v}</dd></div>`;
 
 /** 技能の札（名前・種類・効き目の長さ・待ち時間・説明。まだ使えない物は「未完」） */
 function skillCard(s, main = false) {
-  const meta = [SKILL_TYPES[s.type], s.time ? `${s.time} 秒` : '一撃', `待 ${s.cd} 秒`].map(esc).join('・');
-  return `<div class="skill-card${main ? ' main' : ''}"><div class="sk-head"><b>${esc(s.name)}</b>${s.planned ? `<small>${L.planned}</small>` : ''}<span class="sk-meta">${meta}</span></div>
+  const meta = [SKILL_TYPES[s.type], s.time ? `効き目 ${s.time} 秒` : '一撃', `待ち時間 ${s.cd} 秒`].map(esc).join('・');
+  return `<div class="skill-card${main ? ' main' : ''}"><div class="sk-head"><b>${ruby(s.name)}</b>${s.planned ? `<small>${L.planned}</small>` : ''}<span class="sk-meta">${meta}</span></div>
     <p class="sk-desc">${esc(s.desc)}</p></div>`;
 }
 
@@ -110,7 +114,7 @@ export function createCodex({ hall }) {
   let tab = 'person', char = 'shield', weapon = 'armingsword', group = null, clip = null, open = false, raf = 0;
   let shown = null;   // 大廳に立っている（読み終わった）人物。替えた直後は、読み終わるまで前の人物の動きを出さない
 
-  tabsEl.innerHTML = TABS.map(([id, name]) => `<button type="button" class="tab" data-tab="${id}">${name}</button>`).join('');
+  tabsEl.innerHTML = TABS.map(([id, name]) => `<button type="button" class="tab" data-tab="${id}">${ruby(name)}</button>`).join('');
   tabsEl.addEventListener('click', (e) => {
     const b = e.target.closest('.tab');
     if (b) setTab(b.dataset.tab);
@@ -224,14 +228,14 @@ export function createCodex({ hall }) {
 
   // ---- 兵器・魔物（まだ未完） ----
   function renderArms() {
-    return `<p class="codex-note">兵器の模型と、乗る・撃つ仕組みはこれから作る（${L.planned}）。試合の前に 1 つ選ぶと、その刻を越えたときに届く</p>
+    return `<p class="codex-note">兵器（試合の途中で届く乗り物・大きな武器）の模型と、乗る・撃つ仕組みはこれから作る（${L.planned}）。試合の前に 1 つ選ぶと、その刻（試合の区切り）を越えたときに届く</p>
       <div class="picks">${Object.values(ARMS).map((a) => `<div class="pick"><span class="pick-name">${esc(a.name)}<small>${L.planned}</small></span>
         <span class="pick-when">${esc(PHASES[a.tier - 1]?.name ?? '')}を越えると届く</span><span class="pick-desc">${esc(a.desc)}</span></div>`).join('')}</div>`;
   }
   function renderSkill() {
     return `<p class="codex-note">技能ボタンを押して使う（PC は G）。使うと効き目がしばらく続き、効き目が切れてから待ち時間が過ぎるとまた使える。專用技能は反擊・強靱・剛力・鷹目が使える。共通技能と、${L.planned}の印の付いた技能は、まだゲームでは使えない</p>
       <h4 class="codex-head">共通技能</h4>
-      <p class="codex-note">全キャラ共通。刻を越えるたびの報酬で、ここから 3 つ出て 1 つ選ぶ（最大 4 つ）</p>
+      <p class="codex-note">全キャラ共通。刻（試合の区切り）を越えるたびの褒美で、ここから 3 つ出て 1 つ選ぶ（最大 4 つ）</p>
       ${Object.values(SHARED_SKILLS).map((s) => skillCard(s)).join('')}
       <h4 class="codex-head">專用技能</h4>
       <p class="codex-note">キャラ 1 人に 1 つ。最初から使える</p>
@@ -248,6 +252,8 @@ export function createCodex({ hall }) {
 
   function render() {
     body.innerHTML = tab === 'person' ? renderPerson() : tab === 'skill' ? renderSkill() : tab === 'weapon' ? renderWeapon() : tab === 'arms' ? renderArms() : renderBeast();
+    // 見出し・人物と武器の札・性能の名前・兵器と變異の名前に、ふりがなを付ける（技の名前は難しいままでよい）
+    rubyIn(body, '.codex-head, .char-btn, .g-name, .pick-name, .skill-of, .gear span');
     if (tab === 'person') renderMotions();
   }
 

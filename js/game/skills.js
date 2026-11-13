@@ -24,7 +24,7 @@ export function useSkill(f) {
   const s = skillOf(f);
   if (!s || !skillReady(f)) return false;
   f.skillLeft = s.time;
-  f.skillCool = 0;
+  f.skillCool = s.time > 0 ? 0 : s.cd;   // 一撃の技能（奧義など）は、すぐ待ち時間に入る
   if (s.effect === 'hawk') f.pierceArrow = true;
   return true;
 }

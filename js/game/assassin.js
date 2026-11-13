@@ -1,7 +1,6 @@
 // 暗殺（計算だけ。PlayCanvas に依存しない。game/combat.js から使う）。暗殺ボタン（攻擊ボタンとは別）で、近くの相手を一撃で倒す
-//   できるとき：相手に体の 7 割以上が見えていない（相手の視界の中でもよい。どこでも・どんな状態でも）、
-//              または壁裏隠れ・隠れ場所から飛び出す（見られていてもよい）
-//   避ける猶予：壁裏・隠れ場所から飛び出す暗殺だけ（ASSASSIN.grace 秒の間に相手が回避すると失敗）。見られていない所からの暗殺は避けられない
+//   できるとき：壁裏隠れ・隠れ場所（タンス・ベッド）から飛び出すときだけ（見られていてもよい。利用者の指示 2026-11-10：何もない所ではできない）
+//   避ける猶予：いつもある（ASSASSIN.grace 秒の間に相手が回避すると失敗。bot は game/bot.js の確率で避ける）
 //   動き：武器ごと（data.js の ASSASSIN.byWeapon）。片手劍は背中側なら背刺・前横なら滑斬、鎚矛・戰鎚・長柄鎚・短劍は背中側からの専用の動き
 //         （相手にもされる側の動きを流す）。専用の動きの無い所は、飛びかかって強い一撃
 //   流れ：飛びかかる（approach。動き始めの所まで素早く寄る）→ 動き（strike。決まった時刻に止めを刺す）→ 動き終わりの所へ体を移す
@@ -34,12 +33,10 @@ export function createAssassin({ fighters, senses, yOf, move, lethal, emit }) {
     const ox = f.hidden ? f.hidden.outX : f.x, oz = f.hidden ? f.hidden.outZ : f.z, oy = f.hidden ? f.hidden.y : yOf(f);
     if (Math.hypot(t.x - ox, t.z - oz) > ASSASSIN.reach) return null;
     if (Math.abs(yOf(t) - oy) > 1.3) return null;
-    if (f.hidden || f.cover) return { grace: true };       // 隠れ場所・壁裏から飛び出す：見られていてもよい（避ける猶予がある）
-    if (f.stun > 0 || f.stanceT > 0) return null;
-    if (f.action && !['charge', 'charge2'].includes(f.action.kind)) return null;   // 振っている・避けている途中はできない
-    // 相手に体の 7 割以上が見えていれば、できない（相手の視界の外、または物の陰に 3 割より多く隠れていればよい）
-    if (senses && senses.canSee(t, f, { visible: ASSASSIN.seen })) return null;
-    return { grace: false };
+    // 暗殺できるのは、隠れ場所（タンス・ベッド）と壁裏隠れから飛び出すときだけ（利用者の指示 2026-11-10：何もない所ではできない）。
+    // 見られていてもよいが、避ける猶予がある
+    if (f.hidden || f.cover) return { grace: true };
+    return null;
   }
 
   /** f の近くで暗殺できる、一番近い相手と、その条件 { target, grace } か null */

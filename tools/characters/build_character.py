@@ -249,6 +249,17 @@ def make_socket(sname, side, weapon, kind):
 make_socket('socket_R', 'R', 'w_1h', 'blade')
 make_socket('socket_L', 'L', 's_mid', 'shield')
 make_socket('socket_bow', 'L', 'w_bow', 'bow')
+# 二刀流の左手の剣の位置（socket_L2）：右手の持ち手の点を、体の左右で映して左手に付ける（ik_rig.py の sL2 と同じ作り方）。
+# 二刀流の動きを作るキャラ（characters.json の "dual"）だけ
+if ch.get('dual'):
+    bl = T.data.bones
+    mr = bl['R_Hand'].matrix_local @ (bl['R_Hand'].matrix_local.inverted() @ (T.matrix_world.inverted() @ bpy.data.objects['socket_R'].matrix_world))
+    S_ = Matrix(((-1, 0, 0), (0, 1, 0), (0, 0, 1)))
+    rl = S_ @ mr.to_3x3() @ Matrix(((1, 0, 0), (0, -1, 0), (0, 0, 1)))
+    e = bpy.data.objects.new('socket_L2', None); scn.collection.objects.link(e)
+    e.parent = T; e.parent_type = 'BONE'; e.parent_bone = 'L_Hand'
+    bpy.context.view_layer.update()
+    e.matrix_world = T.matrix_world @ (Matrix.Translation(S_ @ mr.translation) @ rl.to_4x4())
 
 # 手と足の位置で付ける動き（tools/characters/ik_rig.py）の用意：体の模型・1m あたりの大きさ
 sys.path.insert(0, here)
@@ -282,6 +293,20 @@ if ch.get('longsword'):
     import longsword_moves
     rig2 = new_rig()
     for gname, act, meta_c in longsword_moves.build(rig2):
+        made.append(act); info[gname] = meta_c; ik_made.add(gname)
+
+# 二刀流（雙劍）の技と、2 本持つ待機・歩き・後ろ歩き・走り：劍騎士（tools/characters/dualsword_moves.py）
+if ch.get('dual'):
+    import dualsword_moves
+    rig6 = new_rig()
+    for gname, act, meta_c in dualsword_moves.build(rig6, {a.name: a for a in made}, info):
+        made.append(act); info[gname] = meta_c; ik_made.add(gname)
+
+# 祓魔僧の神怒（技能）：胸の前で腕を交差させて宙に浮き、腕を広げて衝撃波を放つ（tools/characters/cleric_moves.py）
+if ch.get('wrath'):
+    import cleric_moves
+    rig7 = new_rig()
+    for gname, act, meta_c in cleric_moves.build(rig7):
         made.append(act); info[gname] = meta_c; ik_made.add(gname)
 
 # 鎚矛の技（打落・払打・兜割・連碎）：片手。楯劍騎士は楯を構えたまま（tools/characters/mace_moves.py）

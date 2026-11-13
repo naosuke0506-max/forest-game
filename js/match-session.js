@@ -23,6 +23,9 @@ import { stanceButton, stanceSpeed, canRun, stanceShape } from './game/stance.js
 import { STANCES, BODY_TURN } from './game/data.js';
 import { skillOf, skillOn } from './game/skills.js';
 import { createHeatVision } from './render/heat-vision.js';
+import { createUltDust } from './render/ult-dust.js';
+import { createWrathWave } from './render/wrath-wave.js';
+import { createDestruction } from './world/destruction.js';
 
 const PLAYER_COLOR = '#ffd75e';
 const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
@@ -31,7 +34,7 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, loadout, debug, phaseDuration }
  *   loadout：試合の前に選んだ武器 { main, side, shield }（game/data.js の LOADOUTS から。無ければキャラの最初の物）
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null, destructible = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）。bot の武器は、選べる物から乱数で選ぶ
@@ -74,7 +77,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 戦闘と bot
   // 壁裏隠れ（村の家の外の壁と中の壁に背を付ける）
   const cover = createCover(covers, { isFree: obstacles.isFree, groundAt: groundAt || ((x, z) => terrain.heightAt(x, z)) });
-  // bot の目と耳（game/senses.js）：見える相手・聞こえた音で気づく。音を鳴らす出来事をつなぐ。暗殺できるか（相手に見られていないか）にも使う
+  // bot の目と耳（game/senses.js）：見える相手・聞こえた音で気づく。音を鳴らす出来事をつなぐ
   const senses = createSenses({ sight, heightAt: terrain.heightAt });
   const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt, hiding, cover, senses });
   const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => createBot(f, createRandom(config.seed + 100 + i), fighters));
@@ -156,7 +159,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     skillBtn.classList.toggle('cool', cool);
   };
   showSkill();
-  combat.on('skill', ({ fighter, skill }) => { if (fighter === me) hud.addFeed(`${skill.name}を使った（${skill.time} 秒）`); });
+  combat.on('skill', ({ fighter, skill }) => { if (fighter === me) hud.addFeed(skill.time ? `${skill.name}を使った（${skill.time} 秒）` : `${skill.name}を放った`); });
   combat.on('counter', ({ fighter, target }) => {
     if (fighter === me) hud.addFeed(`${target.name}に反擊した`);
     else if (target === me) hud.addFeed(`${fighter.name}の反擊を受けた`);
@@ -251,6 +254,15 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   });
   const viewModel = createViewModel(player.camera, me);
   const heat = createHeatVision(player.camera);   // 鷹目（弓兵の技能）の見え方
+  const dust = createUltDust(app, player.camera);  // 劍騎士の奧義（長劍・大劍）の砂煙
+  combat.on('dust', (e) => dust.burst(e));
+  // 祓魔僧の神怒：光の輪が広がり、小物が飛び、近くの屋根が崩れ落ちる（下敷きは即死）。鷹目の貫く矢は壁に穴を開ける
+  const wave = createWrathWave(app);
+  const wreck = createDestruction(app, destructible, {
+    groundAt: groundAt || ((x, z) => terrain.heightAt(x, z)),
+    onCrush: (f, by) => { combat.crush(f, by); if (f === me) hud.addFeed('崩れた屋根の下敷きになった'); },
+  });
+  combat.on('wrath', (e) => { wave.burst(e); wreck.blast(e); });
   const arrows = createProjectileViews(app, combat);
   let thirdPerson = false;
   // 一人称でも自分の体（模型）を映す：手・腕・盾・脚が見える（頭は隠す。render/character-view.js）。
@@ -471,7 +483,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         const helplessNear = fighters.some((f) => f !== me && f.alive && f.helpless > 0 && Math.hypot(f.x - me.x, f.z - me.z) < 2.6);
         const want = helplessNear ? 'finisher' : '';
         if (want !== attackMode) refreshAttack(want);
-        // 暗殺ボタン：暗殺できる相手が近くにいるときだけ出る（見られていない・壁裏・隠れ場所から。game/assassin.js）
+        // 暗殺ボタン：暗殺できる相手が近くにいるときだけ出る（壁裏隠れ・隠れ場所からだけ。game/assassin.js）
         assassinBtn.hidden = !(running && me.alive && combat.assassinTarget(me));
       }
       if (usePressed && running && me.alive) {
@@ -501,7 +513,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       furniture?.update(dt, fighters, frozenTime);   // タンスの扉・ベッドの掛け布（隠れる・探す動きに合わせて）
       // 回避・暗殺の飛びかかり・押されて下がる（重い被弾・よろめき）は試合の計算が体を動かすので、その位置をプレイヤーの操作へ戻す
       const pushed = me.react && me.react.push > 0 && me.react.t <= me.react.time;
-      const lunging = me.action?.kind === 'attack' && me.action.tech?.dash && me.action.t <= DASH.lungeTime + 0.05;   // 疾驅攻撃の踏み込み
+      const lunging = me.action?.kind === 'attack' && ((me.action.tech?.dash && me.action.t <= DASH.lungeTime + 0.05) || me.action.tech?.slide);   // 疾驅攻撃の踏み込み・奧義の滑り
       if (me.alive && (me.action?.kind === 'dodge' || pushed || lunging)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
       // 暗殺の動きなど：体の位置と向きを、プレイヤーの操作へ合わせる（動きが終わった時の、体の移った所と向きも）
       const scriptedNow = SCRIPTED.has(me.action?.kind);
@@ -518,6 +530,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       }
       refreshMyView();
       heat.update(dt, skillOn(me, 'hawk') && me.alive && !spectating, fighters, me, views);   // 鷹目：白黒にして、敵の体温を壁越しに描く
+      if (!frozenTime) { dust.update(dt); wave.update(dt); wreck.update(dt, fighters, combat.projectiles); }
       // 暗殺の動きの間は、一人称の目が体（肩の線）の回った分に付いて回る（動きの始めの肩の向きから。動きの終わりに体の向きが移ると 0 に戻る）
       const ma = me.action, twisting = (ma?.kind === 'assassinate' && ma.phase === 'strike') || (SCRIPTED.has(ma?.kind) && ma?.kind !== 'assassinate');
       if (twisting) {
@@ -549,5 +562,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     sfx,
     senses,
     cover,
+    wreck,   // 確認用（壊れた物の数）
   };
 }

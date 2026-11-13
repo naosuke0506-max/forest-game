@@ -247,6 +247,16 @@ body.in-hall #glare, body.in-hall #dazzle { display: none; }   /* 森の太陽�
 }
 .menu-btn:disabled { color: var(--dim); border-style: dashed; opacity: .6; }
 .menu-btn small, .pick-name small { margin-left: 8px; font-size: 12px; letter-spacing: .05em; text-indent: 0; color: var(--dim); }
+/* ふりがな（js/ui/ruby.js）：読みにくい漢字の上に小さく読みを付ける。字の間を空けた見出しでも、読みは詰めて書く */
+ruby { ruby-position: over; }
+rt { font-size: max(.46em, 9px); font-weight: 400; letter-spacing: .02em; text-indent: 0; opacity: .82; font-family: var(--sans, system-ui), sans-serif; }
+/* 添え書き：見出し・ボタンの下に、今の言葉で何をするかを小さく書く（利用者の指示 2026-11-10：漢字が難しい人にも分かるように） */
+small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; letter-spacing: .04em; text-indent: 0; color: var(--dim); font-family: var(--sans, system-ui), sans-serif; }
+.menu-btn small.sub { margin-left: 0; }
+.set-note { display: block; margin-top: 2px; font-size: 11px; letter-spacing: .02em; color: var(--dim); font-weight: 400; }
+.set-row > span:first-child { flex: 1 1 0; min-width: 0; text-align: left; }
+.settings .test-head { text-align: left; }
+.cx-stats dt small { display: block; font-size: 10px; letter-spacing: 0; color: var(--dim); }
 .menu-btn:not(:disabled):active, .card:active, .pick:active { filter: brightness(1.25); }
 .cards { display: flex; flex-direction: column; gap: 10px; }
 .card, .pick {

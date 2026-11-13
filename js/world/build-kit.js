@@ -68,7 +68,27 @@ export function builder() {
     }
     g.indices.push(b, b + 1, b + 2);
   }
-  return { parts, quad, slope, tri };
+  /**
+   * 壊せる部品（world/destruction.js）：begin と end の間に足した形を、1 つの部品として覚える（質感ごとの三角形と頂点の範囲）。
+   * meta：部品の種類と位置など（kind：'prop' 小物・'roof' 屋根）
+   */
+  const pieces = [];
+  let open = null;
+  function begin(meta) {
+    open = { meta, start: {} };
+    for (const [k, g] of Object.entries(parts)) open.start[k] = [g.indices.length, g.positions.length / 3];
+  }
+  function end() {
+    const p = { meta: open.meta, ranges: {} };
+    for (const [k, g] of Object.entries(parts)) {
+      const [i0, v0] = open.start[k];
+      if (g.indices.length > i0) p.ranges[k] = [i0, g.indices.length, v0, g.positions.length / 3];
+    }
+    open = null;
+    pieces.push(p);
+    return p;
+  }
+  return { parts, quad, slope, tri, begin, end, pieces };
 }
 
 /** 向き（ヨー角）で回した座標系：原点 o、前 f（地面の上の単位ベクトル）、右 r */

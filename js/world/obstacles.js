@@ -22,6 +22,7 @@ export function createObstacles() {
         grid.get(k).push(o);
       }
     }
+    return o;   // 壊れて飛んだ小物は、当たり判定を外す（solid = false。world/destruction.js）
   }
 
   /** 近くにある円の一覧 */

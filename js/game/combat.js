@@ -1,8 +1,8 @@
 // 戦闘（計算だけ）：攻撃・防御・弓と矢・ダメージ・ひるみ・スタミナ。
 // 人間も bot も、同じ形の入力 { attack: 押している, guard: 押している } で動かす。
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SKILL_FX } from './data.js';
-import { skillOf, skillOn, useSkill, updateSkill } from './skills.js';
+import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SKILL_FX, SWORD_ULT, WRATH } from './data.js';
+import { skillOf, skillOn, skillReady, useSkill, updateSkill } from './skills.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 import { setStance, updateStance, stanceShape, resetStance } from './stance.js';
 import { techSetOf, controlTech, updateTech, interruptTech } from './techniques.js';
@@ -50,7 +50,7 @@ export function attackStats(weaponId, heavy = false) {
  * @param {object} [opt.hiding] 隠れ場所（game/hiding.js）。隠れている人には攻撃が当たらない
  * @param {object} [opt.cover] 壁裏隠れ（game/cover.js）。壁に背を付けた所から暗殺できる
  * @param {object} opt.obstacles 木の幹や岩（矢が刺さる）
- * @param {object} [opt.senses] 目（game/senses.js）。暗殺できるか（相手に見られていないか）に使う
+ * @param {object} [opt.senses] 目（game/senses.js）
  */
 export function createCombat({ match, heightAt, obstacles, groundAt = null, hiding = null, cover = null, senses = null }) {
   const floorAt = groundAt || ((x, z) => heightAt(x, z));
@@ -82,6 +82,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     if (might) { amount *= SKILL_FX.might.damage; pierce = Math.max(pierce, SKILL_FX.might.pierce); power = 'h'; }
     const tough = skillOn(target, 'tough');
     if (tough) amount /= SKILL_FX.tough.defense;
+    const steady = tough || target.action?.kind === 'wrath';   // ひるまない（強靱の間・神怒で宙に浮いている間）
     // 防御：前から来た物理の攻撃だけ。楯ごとに減らせる割合が違う（data.js の SHIELDS の cut：鳶形楯・大楯 100%・小楯 70%）。
     // 減らした分だけスタミナを使う。防禦の上から響く武器（pierce）は、その割合だけ通る
     const dx = fromX - target.x, dz = fromZ - target.z;
@@ -109,8 +110,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       && Math.hypot(attacker.x - target.x, attacker.z - target.z) <= SKILL_FX.counter.reach && startCounter(target, attacker);
     // 受けた動き：被弾（軽い・重い）・よろめき・防禦の受け（game/reactions.js）。ひるむ時間もここで決まる。
     // 強靱（長柄騎士の技能）の間は、どんな攻撃でもひるまない（振り・溜めも止まらない）
-    if (!countered && !tough) startReact(target, reactKind(target, { guarded, broke, power, pierce, impact, crush }), fromX, fromZ);
-    if (!guarded && !tough) {                   // まともに受けるとひるむ（振りかぶり・溜めも止まる）
+    if (!countered && !steady) startReact(target, reactKind(target, { guarded, broke, power, pierce, impact, crush }), fromX, fromZ);
+    if (!guarded && !steady) {                   // まともに受けるとひるむ（振りかぶり・溜めも止まる）
       const ta = target.action;
       if (ta?.kind === 'assassinate' && !ta.hit) { assassin.cancel(target); target.action = null; }   // 止めを刺す前に斬られた：相手を放す
       if (ta?.kind === 'drag' && !ta.hit) { if (ta.victim.action?.kind === 'dragged') ta.victim.action = null; target.action = null; }
@@ -125,6 +126,45 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       target.guarding = false;
       match.eliminate(target, attacker);
     }
+  }
+
+  /**
+   * 神怒の衝撃波：周りの人に傷（楯では防げない）を与え、外へ吹き飛ばす（近いほど強く遠く）。
+   * 物が飛ぶ・屋根が崩れるのは、'wrath' の知らせを受けた world/destruction.js（下敷きは crush で倒す）
+   */
+  function wrathBlast(f) {
+    const fy = yOf(f), W = WRATH;
+    for (const t of fighters) {
+      if (t === f || !t.alive || t.hidden) continue;
+      const dx = t.x - f.x, dz = t.z - f.z, d = Math.hypot(dx, dz);
+      if (d > W.radius || Math.abs(yOf(t) - fy) > 4) continue;
+      const k = 1 - d / W.radius;
+      if (t.cover) cover?.exit(t);
+      damage(t, W.damage * (W.minK + (1 - W.minK) * k), f, { fromX: f.x, fromZ: f.z, kind: 'wrath', power: 'h', physical: false });
+      if (!t.alive) continue;
+      // 吹き飛ぶ：していたことは取りやめ、よろめいて遠くへ下がる（強靱の間も吹き飛ぶ）
+      const ta = t.action;
+      if (ta && !LOCKED.has(ta.kind)) t.action = null;
+      t.guarding = false;
+      interruptTech(t);
+      startReact(t, 'stagger', f.x, f.z);
+      t.react.push = W.pushMin + (W.push - W.pushMin) * k;
+      t.react.time = 0.9 + 0.4 * k;
+      t.stun = Math.max(t.stun, W.stun * (0.6 + 0.4 * k));
+    }
+    emit('wrath', { fighter: f, x: f.x, y: fy, z: f.z, radius: W.radius });
+  }
+
+  /** 劍騎士の奧義：動きを流し、決まった時刻に当てる（雙劍は前へ滑る・長劍は砂煙を立てる。update で進める） */
+  function startUltimate(f, U) {
+    const T = { ...U, single: true, ult: true, stamina: 0, chain: U.time };
+    if (f.cover) cover?.exit(f);
+    f.guarding = false;
+    f.action = { kind: 'attack', t: 0, hit: false, heavy: true, tech: T, name: 'ult', step: 0, charge: 0, n: 0, moved: 0, dusted: false };
+    f._press = { at: clock, follow: false, used: true };   // この押下で通常攻撃を出さない
+    f._queued = false;
+    emit('swing', { fighter: f, heavy: true, tech: T });
+    emit('ultimate', { fighter: f, ult: U });
   }
 
   /**
@@ -211,12 +251,16 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   const assassin = createAssassin({ fighters, senses, yOf, move: (f, dx, dz) => shove(f, dx, dz), lethal, emit });
   // タンス・ベッドに隠れる・出る・探す動きと、見つけたら引きずり出して止め（game/hide-acts.js）
   const acts = hiding ? createHideActs({ hiding, move: (f, dx, dz) => shove(f, dx, dz), lethal, emit }) : null;
-  const LOCKED = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged']);   // している間はほかのことができない
+  const LOCKED = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged', 'wrath']);   // している間はほかのことができない（神怒の間も）
   /** 押されて動く（木や岩・壁を避け、歩ける範囲の中・床の高さへ）。実際に動いた分を返す */
   const shove = (f, dx, dz) => {
     const ox = f.x, oz = f.z;
-    f.x += dx; f.z += dz;
-    obstacles.resolve(f, BODY_RADIUS);
+    // 大きく動くとき（神怒で吹き飛ぶ・奧義で滑る）は、壁を通り抜けないように 0.25 m ずつ動かして、そのたびに押し戻す
+    const n = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.25));
+    for (let i = 0; i < n; i++) {
+      f.x += dx / n; f.z += dz / n;
+      obstacles.resolve(f, BODY_RADIUS);
+    }
     keepInside(f, match.areaRadius);
     f.y = floorAt(f.x, f.z, f.y);
     return [f.x - ox, f.z - oz];
@@ -261,6 +305,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       power: piercing || power >= 0.9 ? 'h' : 'l',   // 引き切った矢は重い一撃
       life: piercing ? H.arrowLife : 5,
       pierce: piercing, struck: piercing ? new Set() : null,   // 貫く矢：当たった人（同じ人には 1 度だけ）
+      x0: f.x + dir[0] * 0.5, y0: yOf(f) + 1.5, z0: f.z + dir[2] * 0.5,   // 放った所（貫く矢が最初の一歩で通り抜けた壁にも穴を開ける）
       stuck: 0,               // 刺さってからの時間（見た目用。刺さった矢は少し残す）
       id: Math.random(),
     };
@@ -344,11 +389,33 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       // 暗殺している・されている・隠れる・出る・探す・引きずり出す間は、ほかのことはできない
       if (LOCKED.has(f.action?.kind)) { f.guarding = false; return; }
       if (f.stun > 0) { f.guarding = false; if (f.action?.kind === 'draw') f.action = null; return; }
-      // 技能：隠れている間・ひるんでいる間・暗殺などの間は使えない。使っても、していることは続ける（効き目が付くだけ）
-      if (skillPressed && !f.hidden && useSkill(f)) emit('skill', { fighter: f, skill: skillOf(f) });
+      // 技能：隠れている間・ひるんでいる間・暗殺などの間は使えない。使っても、していることは続ける（効き目が付くだけ）。
+      // 劍騎士の奧義（一撃の技）は、何もしていないときだけ出せる（持っている武器の動き。data.js の SWORD_ULT）
+      if (skillPressed && !f.hidden) {
+        const sk = skillOf(f);
+        if (sk?.effect === 'ultimate') {
+          const U = SWORD_ULT[f.weapon];
+          if (U && !f.action && skillReady(f)) {
+            useSkill(f);
+            emit('skill', { fighter: f, skill: sk });
+            startUltimate(f, U);
+            return;
+          }
+        } else if (sk?.effect === 'wrath') {
+          // 祓魔僧の神怒：宙に浮いて衝撃波を放つ（動きの間は何もできない。攻撃を受けても止まらない）
+          if (!f.action && skillReady(f)) {
+            useSkill(f);
+            if (f.cover) cover?.exit(f);
+            f.guarding = false;
+            f.action = { kind: 'wrath', t: 0, fired: false };
+            emit('skill', { fighter: f, skill: sk });
+            return;
+          }
+        } else if (useSkill(f)) emit('skill', { fighter: f, skill: sk });
+      }
 
       // 暗殺ボタン（攻擊ボタンとは別）：近くに暗殺できる相手がいれば（game/assassin.js）。
-      // 隠れ場所・壁裏からは飛び出して（避ける猶予がある）、ほかは見られていなければどこからでも（避けられない）
+      // 隠れ場所・壁裏から飛び出すときだけ（避ける猶予がある。何もない所ではできない）
       if (assassinPressed) {
         const c = assassin.find(f);
         if (c) {
@@ -487,6 +554,22 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         if (a) {
           a.t += dt;
           if (a.kind === 'attack' && a.tech) {
+            // 奧義（雙劍）：決まった間、前へ高速で滑る（同じ速さで）
+            const sl = a.tech.slide;
+            if (sl && a.t > sl.from && a.moved < sl.dist) {
+              const goal = sl.dist * Math.min(1, (a.t - sl.from) / (sl.to - sl.from));
+              const step = goal - a.moved;
+              a.moved = goal;
+              const rad = (f.yaw * Math.PI) / 180;
+              shove(f, -Math.sin(rad) * step, -Math.cos(rad) * step);
+            }
+            // 奧義（長劍・大劍）：切っ先が地面にめり込む所に砂煙を立てる（見た目は render/ult-dust.js）
+            const du = a.tech.dust;
+            if (du && !a.dusted && a.t >= du.at) {
+              a.dusted = true;
+              const rad = (f.yaw * Math.PI) / 180, x = f.x - Math.sin(rad) * du.ahead, z = f.z - Math.cos(rad) * du.ahead;
+              emit('dust', { fighter: f, x, z, y: floorAt(x, z, yOf(f)), lift: du.lift - du.at });
+            }
             // 疾驅攻撃：振り始めに前へ滑る（始めに速く、だんだん遅く）
             if (a.tech.dash && a.t <= DASH.lungeTime + dt) {
               const u = Math.min(1, a.t / DASH.lungeTime);
@@ -503,6 +586,9 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
             if (a.t >= st.windup + st.recovery) f.action = null;
           } else if (a.kind === 'release' && a.t >= 0.25) {
             f.action = null;
+          } else if (a.kind === 'wrath') {
+            if (!a.fired && a.t >= WRATH.at) { a.fired = true; wrathBlast(f); }
+            if (a.t >= WRATH.time) f.action = null;
           } else if (a.kind === 'recover') {
             if (a.t >= a.time) f.action = null;   // 疾驅攻撃の後の隙：動けない・何もできない
           } else if (a.kind === 'shield') {
@@ -540,7 +626,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         }
         // 動きの速さ：防御中・攻撃中・ひるみ中は遅い
         const still = f.hidden || f.helpless > 0 || f.action?.kind === 'dodge' || f.action?.kind === 'finisher' || f.action?.kind === 'recover'
-          || (f.action?.tech?.dash && f.action.t <= DASH.lungeTime) || LOCKED.has(f.action?.kind);
+          || (f.action?.tech?.dash && f.action.t <= DASH.lungeTime) || f.action?.tech?.ult || LOCKED.has(f.action?.kind);
         f.moveScale = still ? 0 : f.stun > 0 ? 0.25 : f.guarding ? COMBAT.guardMoveScale
           : (a && a.kind !== 'release') ? COMBAT.attackMoveScale : 1;
       }
@@ -557,5 +643,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     hideOut: (f) => acts?.startExit(f) ?? false,
     /** f が今暗殺できる相手 { target, grace } か null（暗殺ボタンを出す・bot が使う） */
     assassinTarget: (f) => assassin.find(f),
+    /** 崩れた屋根の下敷き（world/destruction.js から）：一撃で倒す */
+    crush(target, by) { if (target.alive) lethal(target, by, 'crush'); },
   };
 }

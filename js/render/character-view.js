@@ -3,7 +3,7 @@
 // 模型は tools/characters/build_character.py で作る（assets/characters/<名前>.glb と、動きの長さ・速さの .json）。
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
-import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN } from '../game/data.js';
+import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT, WRATH } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { techSetOf } from '../game/techniques.js';
 import { stanceShape } from '../game/stance.js';
@@ -71,9 +71,11 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     return holder;
   };
   // 手に持つ武器。持ち替え（弓兵の弓 ↔ ダガー）のときは付け直す
-  let weaponHolder = null, shownWeapon = null;
+  let weaponHolder = null, leftHolder = null, shownWeapon = null;
   function showWeapon(id) {
     weaponHolder?.destroy();
+    leftHolder?.destroy();
+    leftHolder = null;
     shownWeapon = id;
     const model = createWeaponModel(id);
     if (WEAPONS[id].kind === 'bow') {
@@ -83,6 +85,8 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     } else {
       // 武器は -Z の向きへ伸びているので、+Y（刃先）へ起こす。槍は後ろ寄りを持つ
       weaponHolder = attach('socket_R', model, [90, 0, 0], id === 'spear' ? [0, 0, 0.55] : [0, 0, 0]);
+      // 二刀流（雙劍）：左手にもう 1 本（模型の socket_L2。右手の持ち手の点を映した所。tools/characters/build_character.py）
+      if (WEAPONS[id].dual) leftHolder = attach('socket_L2', createWeaponModel(id), [90, 0, 0]);
     }
   }
   showWeapon(fighter.weapon);
@@ -233,6 +237,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     for (const [id, set] of Object.entries(TECHNIQUES)) {
       for (const t of [...set.combo, set.charge, set.charge2]) if (t.clip === name || t.in === name || t.hold === name) return id;
     }
+    for (const [id, U] of Object.entries(SWORD_ULT)) if (U.clip === name) return id;   // 劍騎士の奧義（雙劍・長劍）
     for (const [id, m] of Object.entries(ASSASSIN.byWeapon)) {   // 暗殺の動き（片手劍の背刺・滑斬、鈍器・短劍の背後から）
       if (Object.values(m).some((k) => ASSASSIN.moves[k].clip === name)) return id;
     }
@@ -460,6 +465,9 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
           restart('draw', clip('draw').duration / WEAPONS[fighter.weapon].drawTime);
         } else if (a.kind === 'release') {
           restart('shoot', 1);
+        } else if (a.kind === 'wrath') {
+          // 祓魔僧の神怒：宙に浮いて衝撃波を放つ動き（data.js の WRATH.time に合わせる）
+          if (has(WRATH.clip)) restart(WRATH.clip, clip(WRATH.clip).duration / WRATH.time);
         } else if (a.kind === 'dodge') {
           const d = DODGE[fighter.weight] || DODGE.medium;
           restart(d.anim, clip(d.anim) ? clip(d.anim).duration / d.duration : 1);
