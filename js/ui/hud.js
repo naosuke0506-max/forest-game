@@ -14,7 +14,8 @@ function formatTime(sec) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export function createHud(match, me) {
+/** label：決まった見出し（教練の間。時間は進まないので、残り時間の代わりに出す） */
+export function createHud(match, me, { label = null } = {}) {
   const phaseName = $('#phase-name'), phaseTime = $('#phase-time'), phaseIcon = $('#phase-icon');
   let shownTime = null;
   const ranking = $('#ranking'), feed = $('#feed');
@@ -151,9 +152,12 @@ export function createHud(match, me) {
     },
     update(dt) {
       // 左上：フェーズと残り時間
-      phaseName.textContent = `${match.phaseInfo.name}・${TIMES[match.phaseInfo.time]?.name ?? ''}`;
+      phaseName.textContent = label ? label[0] : `${match.phaseInfo.name}・${TIMES[match.phaseInfo.time]?.name ?? ''}`;
       if (shownTime !== match.phaseInfo.time) { shownTime = match.phaseInfo.time; phaseIcon.innerHTML = timeIcon(shownTime); }
-      if (match.overtime) {
+      if (label) {
+        phaseTime.textContent = label[1];
+        phaseTime.classList.remove('overtime');
+      } else if (match.overtime) {
         phaseTime.textContent = L.overtime;
         phaseTime.classList.add('overtime');
       } else {

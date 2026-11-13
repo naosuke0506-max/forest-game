@@ -12,6 +12,8 @@ export const ICONS = {
   shield: svg(`<path fill="currentColor" d="M12 2 20 5v6.5c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5V5zm0 2.2L6 6.4v5.1c0 3.8 2.4 6.7 6 8.3z"/>`),
   heavy: svg(`<path fill="currentColor" d="M14.5 2.5h3v3l-8.9 8.9-3-3zM5 12.1l2.1 2.1L5.4 16l2.6 2.6 1.8-1.7 2.1 2.1-1.4 1.4-1.4-1.4-2.8 2.8-3.6-3.6 2.8-2.8-1.4-1.4z"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M20.5 9.5c.6 3.8-1.4 7.6-5 9.3"/>`),
   switch: svg(`<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 9h12l-3-3M19 15H7l3 3"/>`),
+  // 視點の切り替え：目
+  eye: svg(`<path fill="none" stroke="currentColor" stroke-width="2" d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/>`),
   // 技能（專用技能）：八方へ光を放つ星
   skill: svg(`<path fill="currentColor" d="M12 1.5l2.1 6.2 6.4-2.2-3.9 5.5 5.9 3.1-6.6.6.9 6.6L12 16.6l-4.8 4.7.9-6.6-6.6-.6 5.9-3.1-3.9-5.5 6.4 2.2z"/>`),
   sprint: svg(`<circle cx="15.5" cy="4" r="2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 21l3-6 3 2.5V22M8.5 10.5l3.5-3 3.5 3 3 1M12 7.5l-.8 5.5M2.5 9h4M1.5 13h4M3 17h3"/>`),

@@ -25,7 +25,9 @@ import { skillOf, skillOn } from './game/skills.js';
 import { createHeatVision } from './render/heat-vision.js';
 import { createUltDust } from './render/ult-dust.js';
 import { createWrathWave } from './render/wrath-wave.js';
-import { createDestruction } from './world/destruction.js';
+import { createArrowHoles } from './world/arrow-holes.js';
+import { LESSONS, createTutorBot, createTutorState } from './game/tutorial.js';
+import { createTutorPanel } from './ui/tutor-panel.js';
 
 const PLAYER_COLOR = '#ffd75e';
 const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
@@ -34,7 +36,7 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, loadout, debug, phaseDuration }
  *   loadout：試合の前に選んだ武器 { main, side, shield }（game/data.js の LOADOUTS から。無ければキャラの最初の物）
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null, destructible = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null, houses = [], tutorial = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）。bot の武器は、選べる物から乱数で選ぶ
@@ -45,11 +47,13 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   }
   const names = [...BOT_NAMES];
   const fighters = [createFighter({ id: 0, name: L.you, char: myChar, isPlayer: true, color: PLAYER_COLOR, loadout })];
-  for (let i = 0; i < 3; i++) {
+  // 教練（game/tutorial.js）：相手はその教練で決まった人物と動き。ほかは bot 3 体
+  const lesson = tutorial ? LESSONS[tutorial] : null;
+  const foes = lesson ? lesson.bots : [0, 1, 2].map((i) => ({ char: others[i % others.length] }));
+  foes.forEach((b, i) => {
     const name = names.splice(Math.floor(rng.next() * names.length), 1)[0];
-    const char = others[i % others.length];
-    fighters.push(createFighter({ id: i + 1, name, char, isPlayer: false, color: BOT_COLORS[i], loadout: randomLoadout(char, () => rng.next()) }));
-  }
+    fighters.push(createFighter({ id: i + 1, name, char: b.char, isPlayer: false, color: BOT_COLORS[i % BOT_COLORS.length], loadout: b.loadout || randomLoadout(b.char, () => rng.next()) }));
+  });
   const me = fighters[0];
   const match = createMatch({ fighters, rng, phaseDuration });
 
@@ -80,7 +84,17 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // bot の目と耳（game/senses.js）：見える相手・聞こえた音で気づく。音を鳴らす出来事をつなぐ
   const senses = createSenses({ sight, heightAt: terrain.heightAt });
   const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt, hiding, cover, senses });
-  const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => createBot(f, createRandom(config.seed + 100 + i), fighters));
+  // 教練では、決まった所に置き（自分の近く・家の中・壁の前など）、動きの決まった相手にする（game/tutorial.js）
+  if (lesson) {
+    const foeFighters = fighters.filter((f) => !f.isPlayer);
+    lesson.setup({
+      me, bots: foeFighters, hides, hiding, coverSegs: covers, houses,
+      spawn: (x, z, yaw) => { player.spawn(x, z, yaw); me.x = x; me.z = z; me.yaw = yaw; me.y = player.position.y; },
+    });
+    for (const f of foeFighters) if (!f.hidden) f.y = (groundAt || ((x, z) => terrain.heightAt(x, z)))(f.x, f.z, f.y ?? null);
+  }
+  const bots = fighters.filter((f) => !f.isPlayer).map((f, i) => (lesson ? createTutorBot(f, lesson.bots[i].role, me)
+    : createBot(f, createRandom(config.seed + 100 + i), fighters)));
   const botOf = new Map(bots.map((b) => [b.fighter, b]));
   combat.on('swing', ({ fighter }) => senses.noise(fighter, 'swing'));
   combat.on('hit', ({ attacker, target }) => { senses.noise(attacker, 'hit', target); botOf.get(target)?.alert(attacker); });
@@ -106,7 +120,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     const m = models.get(CHARACTERS[f.char].model);
     return [f, m ? createCharacterView(app, f, terrain, m) : createFighterView(app, f, terrain)];
   }));
-  const hud = createHud(match, me);
+  const hud = createHud(match, me, { label: lesson ? ['教練', lesson.name] : null });   // 教練では残り時間の代わりに教練の名前
   // 試合の前に選んだ兵器・變異：その刻を越えたときに届く（中身はまだ無いので、今は知らせだけ）
   const arms = ARMS[loadout?.arms], mutation = MUTATIONS[loadout?.mutation];
   me.arms = null; me.potion = null;
@@ -256,13 +270,10 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const heat = createHeatVision(player.camera);   // 鷹目（弓兵の技能）の見え方
   const dust = createUltDust(app, player.camera);  // 劍騎士の奧義（長劍・大劍）の砂煙
   combat.on('dust', (e) => dust.burst(e));
-  // 祓魔僧の神怒：光の輪が広がり、小物が飛び、近くの屋根が崩れ落ちる（下敷きは即死）。鷹目の貫く矢は壁に穴を開ける
+  // 祓魔僧の神怒：金色の光の輪が広がる（家が壊れる仕組みは利用者の指示 2026-11-13 で消した）。鷹目の貫く矢は壁に穴を開ける
   const wave = createWrathWave(app);
-  const wreck = createDestruction(app, destructible, {
-    groundAt: groundAt || ((x, z) => terrain.heightAt(x, z)),
-    onCrush: (f, by) => { combat.crush(f, by); if (f === me) hud.addFeed('崩れた屋根の下敷きになった'); },
-  });
-  combat.on('wrath', (e) => { wave.burst(e); wreck.blast(e); });
+  const holes = createArrowHoles(app, houses);
+  combat.on('wrath', (e) => wave.burst(e));
   const arrows = createProjectileViews(app, combat);
   let thirdPerson = false;
   // 一人称でも自分の体（模型）を映す：手・腕・盾・脚が見える（頭は隠す。render/character-view.js）。
@@ -341,7 +352,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     me.x = player.position.x; me.z = player.position.z; me.yaw = player.yaw;
   });
   match.on('eliminated', ({ victim }) => { if (victim === me) player.setFrozen(true); });
-  match.on('end', (res) => setTimeout(() => hud.showResult(res), 1200));
+  match.on('end', (res) => { if (!lesson) setTimeout(() => hud.showResult(res), 1200); });   // 教練では試合の結果を出さない（手順の札に「教練達成」）
   match.on('rewardChosen', ({ fighter }) => { if (fighter === me) player.speedScale = me.stats.speed; });
 
   // bot はフェーズ報酬を少し考えてから選ぶ（手順 3 で、キャラに合った選び方にする）
@@ -352,7 +363,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     }
   });
 
-  hud.centerMsg(`${match.phaseInfo.name}・${TIMES[match.phaseInfo.time].name}`, match.phaseInfo.note);
+  // 教練：手順の札を出し、出来事を数えて手順を進める（game/tutorial.js・ui/tutor-panel.js）
+  const tutor = lesson ? createTutorState(lesson, { me, combat, cover, match }) : null;
+  const tutorPanel = lesson ? createTutorPanel(lesson) : null;
+  if (lesson) hud.centerMsg(`教練・${lesson.name}`, lesson.desc);
+  else hud.centerMsg(`${match.phaseInfo.name}・${TIMES[match.phaseInfo.time].name}`, match.phaseInfo.note);
   // 時間帯：フェーズが進むと変わる（朝 → 昼 → 夕暮れ → 深夜）
   timeOfDay?.set(match.phaseInfo.time, 2);
   match.on('phaseStart', ({ info }) => timeOfDay?.set(info.time, 20));   // 20 秒かけてゆっくり移り変わる
@@ -420,8 +435,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       player.sprint = sprintOn && !me.action && !me.guarding;
       player.sprintSpeed = SPRINT.speed * me.stats.speed;
       me.sprinting = sprintOn && player.moving > 0.12;   // 全速力で走っている（攻擊ボタンが疾驅攻撃になる。game/combat.js）
-      // 防禦・攻撃・溜め・回避などの間は、体の向きを変えずに歩く（ほかは、移動した向きへ体が回る）
-      player.strafe = !!me.guarding || !!me.action;
       sprintBtn.hidden = !running || !me.alive || !!me.hidden || !!me.cover;
       showSprint();
       skillBtn.hidden = !mySkill || !running || !me.alive || !!me.hidden;
@@ -530,7 +543,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       }
       refreshMyView();
       heat.update(dt, skillOn(me, 'hawk') && me.alive && !spectating, fighters, me, views);   // 鷹目：白黒にして、敵の体温を壁越しに描く
-      if (!frozenTime) { dust.update(dt); wave.update(dt); wreck.update(dt, fighters, combat.projectiles); }
+      if (!frozenTime) { dust.update(dt); wave.update(dt); holes.update(combat.projectiles); }
+      if (tutor && tutor.update(dt, { insideHouse })) {
+        tutorPanel.show(tutor.step);
+        if (tutor.step >= lesson.steps.length) hud.centerMsg('教練達成', lesson.name);
+      }
       // 暗殺の動きの間は、一人称の目が体（肩の線）の回った分に付いて回る（動きの始めの肩の向きから。動きの終わりに体の向きが移ると 0 に戻る）
       const ma = me.action, twisting = (ma?.kind === 'assassinate' && ma.phase === 'strike') || (SCRIPTED.has(ma?.kind) && ma?.kind !== 'assassinate');
       if (twisting) {
@@ -562,6 +579,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     sfx,
     senses,
     cover,
-    wreck,   // 確認用（壊れた物の数）
+    holes,   // 確認用（矢の穴）
   };
 }

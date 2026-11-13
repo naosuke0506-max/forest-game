@@ -263,8 +263,6 @@ export function buildHouse(B, h, reg) {
   // ===== 屋根（切妻。棟は奥行きの向き）と妻壁 =====
   const rh = w * (0.55 + rnd.next() * 0.2);       // 棟の高さ（急な屋根）
   const zFr = zf(stories - 1);
-  // 屋根と、家の中の梁・棟木は 1 つの壊せる部品（祓魔僧の神怒で崩れ落ちる。world/destruction.js）
-  B.begin({ kind: 'roof', house: h.index ?? -1, cx, cz, y0, yaw, w, d: d + J, zc: J / 2, floorY: y0 + fy[stories - 1], top: y0 + top, rh });
   const R = P.roof({ w, zF: zFr + 0.42, zB: -d / 2 - 0.42, top, rh, over: 0.5, t: roof === 'thatch' ? 0.34 : 0.13, surf: roof, tone });
   if (S) {
     for (const pl of R.planes) S.addBox(F.at(...pl.c), F.dir(...pl.a), F.dir(...pl.b), F.dir(...pl.n), pl.la, pl.lb, pl.ln);
@@ -276,7 +274,6 @@ export function buildHouse(B, h, reg) {
   // 一番上の階の中：梁と棟木（家の中から見上げる）
   for (let z = -d / 2 + 1.3; z <= zFr - 1.1; z += 1.9) bx('wood', 0, top - 0.2, z, iw * 2, 0.16, 0.2, { shade: tone, bottom: true });
   bx('wood', 0, top + rh - 0.26, (zFr - d / 2) / 2, 0.16, zFr + d / 2 - 0.1, 0.2, { shade: tone * 0.9, bottom: true });
-  B.end();
   // 煙突は屋根から 1m ほど上へ（二階建ては右の壁、一階建ては左の壁の暖炉から）
   const chimneyTop = Math.max(top + rh * 0.5, R.topAt(iw - 0.27) + 0.95);
 

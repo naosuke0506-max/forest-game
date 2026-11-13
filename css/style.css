@@ -247,6 +247,19 @@ body.in-hall #glare, body.in-hall #dazzle { display: none; }   /* 森の太陽�
 }
 .menu-btn:disabled { color: var(--dim); border-style: dashed; opacity: .6; }
 .menu-btn small, .pick-name small { margin-left: 8px; font-size: 12px; letter-spacing: .05em; text-indent: 0; color: var(--dim); }
+/* 教練（チュートリアル）の手順の札：左の真ん中（ミニマップの下）。今の手順は金、できた手順は印と薄い字 */
+/* 画面の真ん中の知らせ（上から 27%）と重ならないよう、42% より下に置く。札は触っても素通り（下の移動スティックを邪魔しない）。歸のボタンだけ押せる */
+.tutor { position: absolute; left: calc(12px + var(--safe-l)); top: max(calc(var(--mm) + 64px + var(--safe-t)), 42%); width: min(300px, 36vw);
+  padding: 10px 14px 12px; background: var(--panel-bg); border: 1px solid var(--edge); border-radius: 6px; pointer-events: none; }
+.tutor .tu-name { margin: 0 0 6px; font-family: var(--serif); color: var(--gold-hi); font-size: 16px; letter-spacing: .12em; }
+.tutor .tu-steps { margin: 0; padding-left: 1.4em; font-size: 13px; line-height: 1.45; color: var(--dim); }
+.tutor .tu-steps li { margin: 3px 0; }
+.tutor .tu-steps li.now { color: var(--ink); font-weight: 600; }
+.tutor .tu-steps li.done { color: var(--dim); text-decoration: line-through; opacity: .7; }
+.tutor .tu-steps li.done::marker { content: '✓ '; color: var(--gold); }
+.tutor .tu-done { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tutor .tu-done p { margin: 0; font-family: var(--serif); color: var(--gold-hi); font-size: 18px; letter-spacing: .2em; }
+.tutor .tu-done button { pointer-events: auto; min-height: 40px; padding: 4px 18px; font: inherit; color: var(--gold-hi); background: rgba(0, 0, 0, .35); border: 1px solid var(--edge); border-radius: 4px; }
 /* ふりがな（js/ui/ruby.js）：読みにくい漢字の上に小さく読みを付ける。字の間を空けた見出しでも、読みは詰めて書く */
 ruby { ruby-position: over; }
 rt { font-size: max(.46em, 9px); font-weight: 400; letter-spacing: .02em; text-indent: 0; opacity: .82; font-family: var(--sans, system-ui), sans-serif; }
@@ -416,6 +429,8 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
   pointer-events: auto;     /* タップで大きな地図を開く */
   cursor: pointer;
 }
+.icon-btn.view-btn { left: calc(28px + var(--mm) + var(--safe-l)); top: calc(62px + var(--safe-t)); padding: 9px; }   /* 設定のすぐ下 */
+.icon-btn.view-btn svg { width: 100%; height: 100%; }
 .icon-btn {
   position: absolute;
   left: calc(28px + var(--mm) + var(--safe-l));

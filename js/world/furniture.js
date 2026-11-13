@@ -25,7 +25,7 @@ export class Furniture {
   }
   solid(x, z, r, floorY) {
     const p = this.F.at(x, 0, z);
-    return this.reg.solid(p[0], p[2], r, { y0: this.y0 + floorY - 0.6, y1: this.y0 + floorY + 0.7 });
+    this.reg.solid(p[0], p[2], r, { y0: this.y0 + floorY - 0.6, y1: this.y0 + floorY + 0.7 });
   }
   /**
    * 隠れ場所を記録する（game/hiding.js が使う）
@@ -118,14 +118,12 @@ export class Furniture {
   /** 袋（穀物の袋）を 2〜3 個 */
   sacks(x, z, y, rnd) {
     const n = 2 + Math.floor(rnd.next() * 2);
-    const c = this.F.at(x, 0, z);
-    this.B.begin({ kind: 'prop', x: c[0], y: this.y0 + y, z: c[2], size: 0.7 });   // 袋は小物（神怒で飛ぶ。world/destruction.js）
     for (let i = 0; i < n; i++) {
       const dx = (i - (n - 1) / 2) * 0.42, h = 0.55 + rnd.next() * 0.15;
       this.bx('cloth', x + dx, y, z, 0.4, 0.36, h, rnd.next() * 30, { shade: [0.7, 0.6, 0.42] });
       this.bx('cloth', x + dx, y + h, z, 0.18, 0.16, 0.12, 0, { shade: [0.6, 0.5, 0.34] });
     }
-    this.B.end().meta.obstacle = this.solid(x, z, 0.45, y);
+    this.solid(x, z, 0.45, y);
     this.block(x, y, z, n * 0.42, 0.36, 0.6, 0);
   }
   /** 暖炉（石。中は暗い）と、屋根の上まで届く煙突。火を焚く口は rot の向きの前 */

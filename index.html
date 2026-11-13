@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-10.7';</script>
+<script>window.__BUILD = '2026-11-13.1';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -176,6 +176,14 @@
   <!-- 左上：ミニマップと設定 -->
   <canvas id="minimap" class="minimap"></canvas>
   <button id="settings-btn" class="icon-btn" type="button" aria-label="設定">⚙</button>
+  <!-- 一人称と三人称を切り替える（利用者の指示 2026-11-13。PC は V） -->
+  <button id="view-btn" class="icon-btn view-btn" type="button" aria-label="視點を切り替える"></button>
+  <!-- 教練（チュートリアル）の手順（js/ui/tutor-panel.js） -->
+  <section id="tutor" class="tutor" hidden>
+    <h3 class="tu-name"></h3>
+    <ol class="tu-steps"></ol>
+    <div class="tu-done" hidden><p>教練達成</p><button id="tutor-back" type="button">歸</button></div>
+  </section>
   <!-- 右上：ポイントのランキング -->
   <ol id="ranking" class="ranking"></ol>
   <!-- 左：ポイントの知らせ（移動スティックの上） -->
@@ -255,6 +263,13 @@
     </div>
   </div>
   <div class="set-row">
+    <span data-ruby>視點<small class="set-note">自分の目から見るか、後ろから自分の体を見るか（試合中は左上の目のボタンでも替わる。PC は V）</small></span>
+    <div class="seg" data-key="view" data-ruby-all>
+      <button type="button" data-val="first">一人稱</button>
+      <button type="button" data-val="third">三人稱</button>
+    </div>
+  </div>
+  <div class="set-row">
     <span>音</span>
     <div class="seg" data-key="sound">
       <button type="button" data-val="high">大</button>
@@ -322,10 +337,15 @@
     <div class="pane" data-pane="hall">
       <p id="hall-who" class="hall-who"></p>
       <div class="menu">
+        <button type="button" class="menu-btn" data-go="tutorial" data-ruby>教練<small class="sub">遊び方を覚える（基本・暗殺・人物ごとの技）</small></button>
         <button type="button" class="menu-btn" data-go="mode" data-ruby>戰鬥<small class="sub">試合を選んで始める</small></button>
         <button type="button" class="menu-btn" data-go="codex" data-ruby>圖鑑<small class="sub">人物・武器・技・技能の説明</small></button>
         <button type="button" class="menu-btn" data-act="settings">設定<small class="sub">音・題の曲・表示</small></button>
       </div>
+    </div>
+    <div class="pane" data-pane="tutorial" hidden>
+      <p class="lo-note">選ぶとすぐ始まる。手順は画面の左に出る。人物の名前が付いた教練は、その人物で行う（ほかは大廳で選んでいる人物で）</p>
+      <div id="lesson-list" class="picks"></div>
     </div>
     <div class="pane" data-pane="codex" hidden>
       <div id="codex-tabs" class="tabs"></div>

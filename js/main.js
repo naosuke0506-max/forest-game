@@ -34,6 +34,7 @@ import { createTitleScene } from './render/title-scene.js';
 import { createMusic } from './audio/music.js';
 import { playTimeStart, TIME_START_PEAK } from './audio/ui-sounds.js';
 import { createSettings, loadSettings } from './ui/settings.js';
+import { ICONS } from './ui/icons.js';
 import { startPracticeMatch } from './match-session.js';
 import { BUILD } from './version.js';
 import { refreshIfStale } from './core/freshness.js';
@@ -195,11 +196,18 @@ async function boot() {
   window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air, floors, sight };
 
   // 設定のうち森に関わる分（視点）。変わるたびに反映する
-  applyWorld = () => {
-    // 視点は一人称だけ（三人称は観戦のときと、確認用の ?view=third だけ）
-    player.setViewMode(CONFIG.view);
-    session?.showMyBody(CONFIG.view === 'third');
+  applyWorld = (st = settings) => {
+    // 視點：一人称か三人称（利用者の指示 2026-11-13。設定・左上の目のボタン・PC の V で切り替える。?view=third でも三人称）
+    const view = CONFIG.view === 'third' || st.view === 'third' ? 'third' : 'first';
+    player.setViewMode(view);
+    session?.showMyBody(view === 'third');
   };
+  // 左上の目のボタン・V キー：一人称 ↔ 三人称
+  const toggleView = () => { settings.view = settings.view === 'third' ? 'first' : 'third'; settings.save?.(); applyWorld(settings); };
+  const viewBtn = document.getElementById('view-btn');
+  viewBtn.innerHTML = ICONS.eye;
+  viewBtn.addEventListener('click', toggleView);
+  window.addEventListener('keydown', (e) => { if (e.code === 'KeyV' && !e.repeat && session) toggleView(); });
   applyWorld(settings);
   debugRef = (act) => session?.debugAction(act);
 
@@ -214,10 +222,11 @@ async function boot() {
       app, config: CONFIG, terrain, obstacles, player, myChar, loadout, timeOfDay, zones, buildings: village?.footprints || [],
       trees: trees?.canopies || [],
       groundAt: floors.groundAt, insideHouse: village?.insideHouse, hides: village?.hides || [], covers: village?.covers || [], furniture: village?.furniture || null, sight,
-      destructible: village?.destructible || null,   // 壊せる物（樽・袋・屋根。祓魔僧の神怒・鷹目の矢。world/destruction.js）
+      houses: village?.houses || [],   // 家の一覧（鷹目の貫く矢で壁に穴を開ける。world/arrow-holes.js）
       debug: CONFIG.debug,
-      // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」
-      phaseDuration: CONFIG.phaseDuration ?? (settings.phaseLen === 'normal' ? null : Number(settings.phaseLen)),
+      tutorial: loadout?.tutorial || null,   // 教練（大廳の「教練」から。game/tutorial.js）
+      // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」。教練では時間で刻が進まない
+      phaseDuration: loadout?.tutorial ? 1e6 : CONFIG.phaseDuration ?? (settings.phaseLen === 'normal' ? null : Number(settings.phaseLen)),
     });
     // 大廳を片付けて、森のカメラに戻す
     hall.setActive(false, player.camera);
