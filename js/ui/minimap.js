@@ -175,9 +175,10 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
 
   // エリアの名前を書く場所（そのエリアの中心あたり）
   const labels = zones ? [
-    { key: 'mixed', x: 0, z: 18 },
-    { key: 'deep', x: 0, z: -areaRadius * 0.68 },
-    { key: 'prairie', x: areaRadius * 0.66, z: 8 },
+    { key: 'mixed', x: -30, z: 30 },
+    // 深い森・大草原は、その広がり（world/zones.js の blobs）の真ん中
+    { key: 'deep', x: zones.blobs?.deep.x ?? 0, z: zones.blobs?.deep.z ?? -areaRadius * 0.68 },
+    { key: 'prairie', x: zones.blobs?.prairie.x ?? areaRadius * 0.66, z: (zones.blobs?.prairie.z ?? 0) + 8 },
     { key: 'castle', x: zones.castle.x, z: zones.castle.z - 40 },
   ] : [];
 
