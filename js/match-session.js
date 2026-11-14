@@ -68,6 +68,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       const p = { x: Math.cos(a) * r, z: Math.sin(a) * r };
       if (!obstacles.isFree(p.x, p.z, 3.5, true)) continue; // 木の幹や岩から 3.5m 以上（低い枝の中に出ないように）
       if (zones?.wet && zones.wet(p.x, p.z) > 0.05) continue;   // 川と岸には出さない
+      if (zones?.caveArea && zones.caveArea(p.x, p.z) > 0) continue;   // 洞窟の中と切り通しには出さない
       best = p;
       if (spots.every((s) => Math.hypot(s.x - p.x, s.z - p.z) > 80)) break;   // 広い森なので、最初は互いに遠く離す
     }
@@ -579,7 +580,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         zoneTimer = 0.5;
         const z = zones.zoneAt(me.x, me.z);
         // 村は 3 つあるので、村の中なら村の名前（山邑・川邑・野邑）
-        const name = z === 'castle' ? (zones.villageAt?.(me.x, me.z)?.name || ZONE_NAMES.castle) : ZONE_NAMES[z];
+        const name = zones.caveAt?.(me.x, me.z, me.y) > 0.5 ? '風穴'   // 洞窟の中
+          : z === 'castle' ? (zones.villageAt?.(me.x, me.z)?.name || ZONE_NAMES.castle) : ZONE_NAMES[z];
         if (name !== zoneNow) { zoneNow = name; hud.addFeed(`${name}に入った`); }
       }
       // 敵の頭上の名前と体力は出さない（見つけるのも、相手の残りを見極めるのも自分の目で）

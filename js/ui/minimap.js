@@ -127,6 +127,11 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       fctx.setLineDash([3, 2]);
       fctx.stroke();
       fctx.setLineDash([]);
+    } else if (b.type === 'cave') {
+      // 洞窟の口：黒い半円（中の通り道は描かない。中は自分で確かめる）
+      fctx.fillStyle = '#1c140c';
+      fctx.beginPath(); fctx.arc(bx, by, 2.4 * kD, Math.PI, 0); fctx.closePath(); fctx.fill();
+      fctx.strokeStyle = 'rgba(150, 130, 100, .9)'; fctx.lineWidth = 1.2; fctx.stroke();
     } else if (b.type === 'bridge') {
       // 橋：板の色の細長い四角
       fctx.save(); fctx.translate(bx, by); fctx.rotate((-b.yaw * Math.PI) / 180);
@@ -183,12 +188,18 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
   const labels = zones ? [
     { key: 'mixed', x: -48, z: -4 },
     // 深い森・大草原は、その広がり（world/zones.js の blobs）の真ん中
-    { key: 'deep', x: zones.blobs?.deep.x ?? 0, z: zones.blobs?.deep.z ?? -areaRadius * 0.68 },
+    { key: 'deep', x: (zones.blobs?.deep.x ?? 0) + 30, z: (zones.blobs?.deep.z ?? -areaRadius * 0.68) + 36 },   // 風穴（洞窟）の名前と重ならないよう南東へ
     { key: 'prairie', x: (zones.blobs?.prairie.x ?? areaRadius * 0.6) + 12, z: (zones.blobs?.prairie.z ?? 0) + 46 },   // 野邑（大草原の真ん中）と重ならないよう南へ
     // 村は 3 つ（world/villages.js）：それぞれの名前（山邑・川邑・野邑）を村の少し北に
     ...(zones.villages?.length ? zones.villages.map((v) => ({ key: 'castle', name: v.name, x: v.x, z: v.z - v.r * 0.75 }))
       : [{ key: 'castle', x: zones.castle.x, z: zones.castle.z - 40 }]),
   ] : [];
+
+  // 洞窟（風穴）の名前：2 つの口の真ん中の少し東
+  {
+    const mouths = buildings.filter((b) => b.type === 'cave');
+    if (mouths.length) labels.push({ key: 'cave', name: '風穴', x: mouths.reduce((s, b) => s + b.x, 0) / mouths.length + 6, z: mouths.reduce((s, b) => s + b.z, 0) / mouths.length });
+  }
 
   // ===== 小さな地図：今いるエリアの範囲を映す =====
   const ctx = canvas.getContext('2d');

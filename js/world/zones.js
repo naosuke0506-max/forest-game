@@ -61,14 +61,18 @@ export function createZones(seed, radius, land = null, plan = null) {
   /** 水辺（0〜1。川の中と岸。world/landform.js）・岩場（0〜1。山の高い所） */
   const wet = (x, z) => (land ? land.wet(x, z) : 0);
   const rocky = (x, z) => (land ? land.rocky(x, z) : 0);
-  /** 木の多さ（中央の森を 1 とした倍率）。道の上・村の家のまわり・川と岸には置かない。山の高い所はまばら */
+  /** 洞窟の通り道とその切り通しのまわり（0〜1。木・草・小物を置かない。world/cave-shape.js） */
+  const caveArea = (x, z) => (land?.cave ? land.cave.area(x, z) : 0);
+  /** 洞窟の中か（0〜1。y があれば岩山の上は外） */
+  const caveAt = (x, z, y = null) => (land?.cave ? land.cave.inside(x, z, y) : 0);
+  /** 木の多さ（中央の森を 1 とした倍率）。道の上・村の家のまわり・川と岸・洞窟には置かない。山の高い所はまばら */
   function treeDensity(x, z) {
     const w = weights(x, z);
-    return (w.mixed * 1 + w.deep * 3.2 + w.prairie * 0.06) * (1 - path(x, z)) * (1 - wet(x, z)) * (1 - 0.8 * rocky(x, z));
+    return (w.mixed * 1 + w.deep * 3.2 + w.prairie * 0.06) * (1 - path(x, z)) * (1 - wet(x, z)) * (1 - 0.8 * rocky(x, z)) * (1 - caveArea(x, z));
   }
   /** 一番近い村（その広がりの中なら。名前を出す・村の音） */
   const villageAt = (x, z) => (plan ? plan.villageAt(x, z) : null);
 
   const plazas = plan ? plan.wells.map((w) => w.plaza) : [];   // 村の広場（石畳の足音。audio/sfx.js）
-  return { weights, zoneAt, path, treeDensity, wet, rocky, castle, villages, villageAt, plazas, paths, centerR, sectors, blobs };
+  return { weights, zoneAt, path, treeDensity, wet, rocky, caveArea, caveAt, castle, villages, villageAt, plazas, paths, centerR, sectors, blobs };
 }
