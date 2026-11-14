@@ -3,7 +3,7 @@
 //   長押し（hold）：伏せる（少し時間がかかり、その間は動けない）。起き上がるのも同じ
 //   しゃがんでいて攻撃・左手・回避を押すと、すぐ立って、そのまま動く。伏せているときは、まず起き上がる（その押下では何もしない）
 //   隠れる・見つかる・倒れるなどで、立った姿勢に戻る
-import { STANCES, STANCE_TIME } from './data.js';
+import { STANCES, STANCE_TIME, SWIM } from './data.js';
 
 /** 戦う人に姿勢の記録を付ける */
 export function initStance(f) {
@@ -15,6 +15,7 @@ export function initStance(f) {
 /** 姿勢を変える */
 export function setStance(f, want) {
   if (!f.alive || f.hidden || f.helpless > 0) return;
+  if (want !== 'stand' && f.waterDepth > 0.35) return;   // 水の中ではしゃがめない・伏せられない
   const now = f.stanceTo || f.stance;
   if (want === now) return;
   // 伏せる・伏せから起き上がるのは時間がかかる。しゃがむ・立つはすぐ
@@ -48,8 +49,8 @@ export function updateStance(f, dt) {
 export const canMove = (f) => !(f.stanceT > 0);
 /** 歩く速さの倍率（走れない姿勢は、歩きの速さまで） */
 export const stanceSpeed = (f) => (f.stanceT > 0 ? 0 : STANCES[f.stance || 'stand'].speed);
-/** 走れるか */
-export const canRun = (f) => (f.stance || 'stand') === 'stand' && !(f.stanceT > 0);
+/** 走れるか（立っていて、息が切れていない。川の深めの所では走れない。息切れは game/combat.js のスタミナ） */
+export const canRun = (f) => (f.stance || 'stand') === 'stand' && !(f.stanceT > 0) && !f.winded && !(f.waterDepth > SWIM.noRun);
 
 /**
  * 目と体の高さ（伏せる・起き上がる途中は、間を取る）

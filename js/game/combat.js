@@ -1,7 +1,7 @@
 // 戦闘（計算だけ）：攻撃・防御・弓と矢・ダメージ・ひるみ・スタミナ。
 // 人間も bot も、同じ形の入力 { attack: 押している, guard: 押している } で動かす。
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SKILL_FX, SWORD_ULT, WRATH } from './data.js';
+import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SKILL_FX, SWORD_ULT, WRATH, SWIM } from './data.js';
 import { skillOf, skillOn, skillReady, useSkill, updateSkill } from './skills.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 import { setStance, updateStance, stanceShape, resetStance } from './stance.js';
@@ -392,6 +392,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       f._skillHeld = !!input.skill;
       // 暗殺している・されている・隠れる・出る・探す・引きずり出す間は、ほかのことはできない
       if (LOCKED.has(f.action?.kind)) { f.guarding = false; return; }
+      // 泳いでいる間は、攻撃・防禦・回避・技能はできない（利用者の指示 2026-11-14：川は泳げる。game/swim.js）。していたことも止まる
+      if (f.swimming) { f.guarding = false; if (f.action && f.action.kind !== 'dodge') f.action = null; return; }
       if (f.stun > 0) { f.guarding = false; if (f.action?.kind === 'draw') f.action = null; return; }
       // 技能：隠れている間・ひるんでいる間・暗殺などの間は使えない。使っても、していることは続ける（効き目が付くだけ）。
       // 劍騎士の奧義（一撃の技）は、何もしていないときだけ出せる（持っている武器の動き。data.js の SWORD_ULT）
@@ -549,9 +551,18 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         f.hitFlash = Math.max(0, f.hitFlash - dt);
         if (f.helpless > 0) f.helpless = Math.max(0, f.helpless - dt);
         updateSkill(f, dt);   // 技能の効き目と待ち時間
-        // スタミナ：使ってから少しして戻る（防御中は半分）
+        // スタミナ：走っている間（全速力はもっと）と、防禦を構えている間は減り続け、その間は戻らない（利用者の指示 2026-11-14）。
+        // 防禦で受けた分も、今までどおり減る（damage）。走って使い切ると息が切れ、COMBAT.windedRecover まで戻るまで走れない（game/stance.js の canRun）
+        const running = f.gait === 'run' && !f.action && !f.guarding;   // 防禦の構えで歩いているのは走りではない
+        const drain = (running ? (f.sprinting ? COMBAT.sprintStamina : COMBAT.runStamina) : 0) + (f.guarding ? COMBAT.guardHoldStamina : 0)
+          + (f.swimming ? SWIM.stamina : 0);   // 泳いでいる間も減る（尽きると泳ぐのが遅くなる。game/swim.js）
+        if (drain > 0) {
+          spendStamina(f, drain * dt);
+          if (running && f.stamina <= 0) f.winded = true;
+        }
         f.staminaDelay -= dt;
-        if (f.staminaDelay <= 0) f.stamina = Math.min(f.stats.maxStamina, f.stamina + COMBAT.staminaRegen * (f.guarding ? 0.5 : 1) * dt);
+        if (f.staminaDelay <= 0) f.stamina = Math.min(f.stats.maxStamina, f.stamina + COMBAT.staminaRegen * dt);
+        if (f.winded && f.stamina >= COMBAT.windedRecover) f.winded = false;
         // 行動を進める
         const a = f.action;
         const w = WEAPONS[f.weapon];
@@ -628,11 +639,11 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
             if (a.t >= d.duration) f.action = null;
           }
         }
-        // 動きの速さ：防御中・攻撃中・ひるみ中は遅い
-        const still = f.hidden || f.helpless > 0 || f.action?.kind === 'dodge' || f.action?.kind === 'finisher' || f.action?.kind === 'recover'
-          || (f.action?.tech?.dash && f.action.t <= DASH.lungeTime) || f.action?.tech?.ult || LOCKED.has(f.action?.kind);
-        f.moveScale = still ? 0 : f.stun > 0 ? 0.25 : f.guarding ? COMBAT.guardMoveScale
-          : (a && a.kind !== 'release') ? COMBAT.attackMoveScale : 1;
+        // 動きの速さ：攻撃・溜め・弓を引く・回避・楯の技・技能の動き・ひるみなど、何かの動きをしている間は、移動スティックを倒していても
+        // 止まる（利用者の指示 2026-11-14：動きながら滑って動くのはおかしい。回避はスティックの向きへ、動きそのものが体を運ぶ）。
+        // 防禦の構えの間だけは、ゆっくり歩ける
+        const busy = f.hidden || f.helpless > 0 || f.stun > 0 || !!f.action;
+        f.moveScale = busy ? COMBAT.attackMoveScale : f.guarding ? COMBAT.guardMoveScale : 1;
       }
       for (let i = projectiles.length - 1; i >= 0; i--) {
         if (!stepProjectile(projectiles[i], dt)) projectiles.splice(i, 1);

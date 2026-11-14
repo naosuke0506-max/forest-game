@@ -1,4 +1,6 @@
-// 地面：起伏のある格子。高さを求める heightAt() は、歩行の接地や物の配置にも使う
+// 地面：起伏のある格子。高さを求める heightAt() は、歩行の接地や物の配置にも使う。
+// 形（周りの山・川の谷と川床・盆地の丘）は world/landform.js。ここは村の場所を平らにして、色を付けて描くだけ。
+// waterAt()：川の水面と深さ（泳ぐ・水を歩く。game/water.js）
 import * as pc from 'playcanvas';
 import { fbm } from '../core/random.js';
 import { createMesh, createVertexColorMaterial, sceneBudget } from '../core/mesh-utils.js';
@@ -9,28 +11,30 @@ const smoothstep = (a, b, x) => {
   return t * t * (3 - 2 * t);
 };
 
-export function createTerrain(app, config, seed, textures = null, zones = null) {
-  const { terrainSize: size, terrainSegments: seg, playRadius } = config.world;
+export function createTerrain(app, config, seed, textures = null, zones = null, land = null) {
+  const { terrainSize: size, terrainSegments: seg } = config.world;
 
   /** 地点 (x, z) の地面の高さ（m） */
   const heightAt = (x, z) => {
-    const r = Math.hypot(x, z);
-    const hills = (fbm(x * 0.018, z * 0.018, seed) - 0.5) * 9;
-    const bumps = (fbm(x * 0.09, z * 0.09, seed + 7) - 0.5) * 1.1;
-    const flat = smoothstep(4, 22, r);              // 開始地点の周りは平らに
-    const rim = smoothstep(playRadius - 8, size * 0.5, r) * 7; // 外周は盛り上げて境目を隠す
-    const h = (hills * flat + bumps * (0.3 + 0.7 * flat)) + rim;
+    const h = land.heightAt(x, z);
     if (!zones) return h;
     // 村の場所は平らにならす（建物を建てるため）
     const w = zones.weights(x, z);
-    return h + ((castleH ?? h) - h) * w.castle;
+    return w.castle > 0 ? h + ((castleH ?? h) - h) * w.castle : h;
   };
   // 村の場所の高さ：中心の地面の高さ（ならす前の式で求める）
   let castleH = null;
   if (zones) {
     const { x, z } = zones.castle;
-    castleH = (fbm(x * 0.018, z * 0.018, seed) - 0.5) * 9;
+    castleH = land.heightAt(x, z);
   }
+  /** 地点 (x, z) の川の水：{ surface（水面の高さ）, depth（水の深さ）} か、水が無ければ null */
+  const waterAt = (x, z) => {
+    const w = land.waterLevel(x, z);
+    if (!w) return null;
+    const depth = w.surface - heightAt(x, z);
+    return depth > 0 ? { surface: w.surface, depth } : null;
+  };
 
   /** 地点 (x, z) の地面の向き（法線） */
   const normalAt = (x, z) => {
@@ -55,14 +59,20 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
   const deepMoss = textures ? [0.56, 0.62, 0.46] : [0.12, 0.18, 0.08];  // 深い森：苔（落ち葉と苔の画像に掛ける）
   const meadow = textures ? [0.62, 0.74, 0.38] : [0.40, 0.42, 0.18];    // 大草原：明るい草
   const dirt = textures ? [0.78, 0.64, 0.5] : [0.40, 0.32, 0.22];       // 道・村の場所：土
+  const gravel = textures ? [0.62, 0.6, 0.56] : [0.36, 0.35, 0.32];     // 川床・川原：灰色の砂利
+  const mud = textures ? [0.5, 0.42, 0.34] : [0.24, 0.2, 0.15];         // 水際：濡れた土
+  const rock = textures ? [0.66, 0.64, 0.6] : [0.42, 0.41, 0.39];       // 山の高い所：岩肌（草はまばら）
 
+  // 先に高さを全部求める（色を付けるときに、隣の高さから斜面の傾きを求める）
+  const H = new Float32Array(verts * verts);
+  for (let iz = 0; iz < verts; iz++) for (let ix = 0; ix < verts; ix++) H[iz * verts + ix] = heightAt(-half + (ix / seg) * size, -half + (iz / seg) * size);
   for (let iz = 0; iz < verts; iz++) {
     for (let ix = 0; ix < verts; ix++) {
       const i = iz * verts + ix;
       const x = -half + (ix / seg) * size;
       const z = -half + (iz / seg) * size;
       positions[i * 3] = x;
-      positions[i * 3 + 1] = heightAt(x, z);
+      positions[i * 3 + 1] = H[i];
       positions[i * 3 + 2] = z;
       // 場所から決まる UV：画像 1 枚が実物の大きさ（2m 四方）で並ぶ
       uvs[i * 2] = x / tile;
@@ -86,6 +96,15 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
         grassW *= (1 - tSoil * 1.2) * (1 - pw);
         litterW *= 1 - pw;
       }
+      // 川と山（world/landform.js）：水の中は砂利、水際は濡れた土、山の高い所と急な斜面は岩肌
+      const wq = land.waterLevel(x, z);
+      const under = wq ? Math.min(1, Math.max(0, (wq.surface - positions[i * 3 + 1] + 0.25) / 0.5)) : 0;   // 水面より下
+      const wetK = land.wet(x, z);
+      const hx = (H[iz * verts + Math.min(seg, ix + 1)] - H[iz * verts + Math.max(0, ix - 1)]), hz = (H[Math.min(seg, iz + 1) * verts + ix] - H[Math.max(0, iz - 1) * verts + ix]);
+      const sl = Math.hypot(hx, hz) / (2 * size / seg);   // 斜面の傾き（高さ / 長さ）
+      const rockK = Math.max(land.rocky(x, z), smoothstep(0.75, 1.3, sl) * 0.8);
+      grassW *= (1 - under) * (1 - rockK * 0.85) * (1 - wetK * 0.35);
+      litterW *= (1 - under) * (1 - rockK * 0.6);
       for (let c = 0; c < 3; c++) {
         let v = moss[c] + (soil[c] - moss[c]) * tSoil;
         v += (dryGrass[c] - v) * tDry;
@@ -95,6 +114,9 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
           v += (dirt[c] - v) * zw.castle * 0.55;
           v += (dirt[c] - v) * pw * 0.9;
         }
+        v += (rock[c] - v) * rockK;
+        v += (mud[c] - v) * Math.max(0, wetK - under) * 0.55;
+        v += (gravel[c] - v) * under;
         colors[i * 4 + c] = Math.min(1, v * (0.85 + 0.3 * n2));
       }
       colors[i * 4 + 3] = Math.min(1, Math.max(0, 0.5 + 0.5 * (grassW - litterW)));
@@ -123,7 +145,7 @@ export function createTerrain(app, config, seed, textures = null, zones = null) 
   app.root.addChild(entity);
 
   return {
-    entity, heightAt, normalAt,
+    entity, heightAt, normalAt, waterAt, land,
     /** 草地と落ち葉の画像を貼る（起動の後に裏で読んだ物） */
     setGroundTextures: (grass, litter) => blend?.setTextures(grass, litter),
   };

@@ -14,6 +14,17 @@ export const HIDE_BREATH = 1.2;  // 隠れている間は、息遣いが 1.2 倍
 export const HEAR_REACH = 4.5;   // 隠れている人の息が聞こえる近さ（m）
 
 /**
+ * (x, z) が部屋の内側か（room：world/house-builder.js が隠れ場所に付ける { x, z, yaw, hw, z0, z1 }。家の中の座標で、
+ * 横 -hw〜hw・前後 z0〜z1 が壁の内側）。壁の厚さの分だけ内へ寄せて見る。部屋の無い隠れ場所（確かめ用）は、どこからでもよい
+ */
+export function inRoom(room, x, z, margin = 0.05) {
+  if (!room) return true;
+  const a = (room.yaw * Math.PI) / 180, dx = x - room.x, dz = z - room.z;
+  const lx = dx * Math.cos(a) - dz * Math.sin(a), lz = dx * Math.sin(a) + dz * Math.cos(a);
+  return Math.abs(lx) <= room.hw - margin && lz >= room.z0 + margin && lz <= room.z1 - margin;
+}
+
+/**
  * 息遣いの大きさ（0〜1 くらい）：スタミナが減るほど荒い。隠れている間は 1.2 倍
  * 音（audio/sfx.js）と、bot が隠れている人に気づく確からしさ（game/bot.js）に使う
  */
@@ -45,12 +56,16 @@ export function createHiding(spots) {
     spots,
     on(type, fn) { (listeners[type] ||= []).push(fn); return m; },
 
-    /** f の近くの隠れ場所（同じ階で、reach 以内の一番近い所） */
+    /**
+     * f の近くの隠れ場所（同じ家の同じ階の部屋の中にいて、reach 以内の一番近い所）。
+     * 家の外から、壁越しに隠れたり探したりはできない（利用者の指示 2026-11-14）
+     */
     nearest(f, reach = HIDE_REACH) {
       let best = null, bd = reach;
       const y = f.y ?? 0;
       for (const s of spots) {
         if (s.occupant === f || Math.abs(s.y - y) > 1.0) continue;
+        if (!inRoom(s.room, f.x, f.z)) continue;
         const d = Math.hypot(s.x - f.x, s.z - f.z);
         if (d < bd) { bd = d; best = s; }
       }

@@ -4,7 +4,7 @@
 //   ミニマップをタップ：画面の 8 割ほどの大きな地図（羊皮紙に描いた地図の見た目）で、マップ全体を見られる（もう一度タップで閉じる）
 // 地図の絵は最初に 1 回だけ描く：
 //   1. エリアの色に、地面の起伏の陰影（北西から光が当たる）と細かなむらを重ねる（1 画素 ≒ 1m）
-//   2. 2 倍の細かさの絵に広げ、木の葉の広がり（上から見た丸）・道・村の家と柵・外周の柵を描く
+//   2. 2 倍の細かさの絵に広げ、木の葉の広がり（上から見た丸）・道・村の家と柵・歩ける範囲の縁（点線）を描く。川は青、山の高い所は岩の色
 // 毎回は、自分の矢印と見ている向きだけを重ねる。ほかのプレイヤーは描かない（見つけるのは自分の目で）
 import { L } from './labels.js';
 import { ZONE_NAMES } from '../world/zones.js';
@@ -27,7 +27,7 @@ const INK = '#3b2a17';
  * @param {HTMLCanvasElement} canvas 左上の小さな地図
  * @param {{ areaRadius: number, zones: object, buildings: object[], heightAt: Function, trees: {x, z, r}[] }} opt
  */
-export function createMinimap(canvas, { areaRadius, zones = null, buildings = [], heightAt = null, trees = [] }) {
+export function createMinimap(canvas, { areaRadius, zones = null, buildings = [], heightAt = null, trees = [], waterAt = null }) {
   const view = areaRadius + 8;                      // 地図に入れる範囲の半径（m）
   const toPx = (x, z) => [(x / view * 0.5 + 0.5) * RES, (z / view * 0.5 + 0.5) * RES];
   const toD = (x, z) => [(x / view * 0.5 + 0.5) * DRES, (z / view * 0.5 + 0.5) * DRES];
@@ -61,8 +61,14 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       }
       // 細かなむら（草地の濃淡）
       const n = 0.92 + 0.16 * fbm(x * 0.09, z * 0.09, 991);
+      // 山の高い所は岩の色（2026-11-14：周りの山。world/landform.js）
+      const rk = zones?.rocky ? zones.rocky(x, z) : 0;
+      if (rk > 0) col = col.map((c, k) => c + ([142, 136, 124][k] - c) * rk);
       col = col.map((c) => c * shade * n);
-      if (r > areaRadius) col = col.map((c) => c * 0.4);  // 柵の外は暗く
+      // 川：深いほど濃い青（陰影は付けない）
+      const wa = waterAt ? waterAt(x, z) : null;
+      if (wa) { const k = Math.min(1, wa.depth / 2); col = [78 - 30 * k, 122 - 30 * k, 148 - 20 * k]; }
+      if (r > areaRadius) col = col.map((c) => c * 0.55);  // 歩ける範囲の外（周りの山）は暗く
       else zoneOf[i] = zi;
       img.data[i * 4] = col[0]; img.data[i * 4 + 1] = col[1]; img.data[i * 4 + 2] = col[2]; img.data[i * 4 + 3] = 255;
     }
@@ -136,18 +142,14 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       fctx.restore();
     }
   }
-  // 外周の柵：杭の並び
+  // 歩ける範囲の縁：点線（2026-11-14：外周の柵を無くし、周りの山が端になった）
   {
     const R = (areaRadius / view) * DRES / 2;
+    fctx.save();
+    fctx.setLineDash([7, 5]);
     fctx.beginPath(); fctx.arc(DRES / 2, DRES / 2, R, 0, Math.PI * 2);
-    fctx.strokeStyle = 'rgba(52, 34, 18, .95)'; fctx.lineWidth = 4; fctx.stroke();
-    fctx.strokeStyle = 'rgba(150, 112, 66, .9)'; fctx.lineWidth = 1.6;
-    for (let a = 0; a < Math.PI * 2; a += 0.025) {
-      fctx.beginPath();
-      fctx.moveTo(DRES / 2 + Math.cos(a) * (R - 3), DRES / 2 + Math.sin(a) * (R - 3));
-      fctx.lineTo(DRES / 2 + Math.cos(a) * (R + 3), DRES / 2 + Math.sin(a) * (R + 3));
-      fctx.stroke();
-    }
+    fctx.strokeStyle = 'rgba(52, 34, 18, .85)'; fctx.lineWidth = 2.2; fctx.stroke();
+    fctx.restore();
   }
 
   // エリアごとの「暗くする覆い」（そのエリアの外を暗くする）と、エリアの範囲（小さな地図で映す四角）
@@ -173,9 +175,10 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
 
   // エリアの名前を書く場所（そのエリアの中心あたり）
   const labels = zones ? [
-    { key: 'mixed', x: 0, z: 18 },
-    { key: 'deep', x: 0, z: -areaRadius * 0.68 },
-    { key: 'prairie', x: areaRadius * 0.66, z: 8 },
+    { key: 'mixed', x: -48, z: -4 },
+    // 深い森・大草原は、その広がり（world/zones.js の blobs）の真ん中
+    { key: 'deep', x: zones.blobs?.deep.x ?? 0, z: zones.blobs?.deep.z ?? -areaRadius * 0.68 },
+    { key: 'prairie', x: zones.blobs?.prairie.x ?? areaRadius * 0.66, z: (zones.blobs?.prairie.z ?? 0) + 8 },
     { key: 'castle', x: zones.castle.x, z: zones.castle.z - 40 },
   ] : [];
 

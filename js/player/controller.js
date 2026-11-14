@@ -3,7 +3,8 @@
 // 見回す（なぞる）と首だけが動く（首の範囲まで。体の向きは変わらない）。首が限界まで回ってから、さらに同じ向きへなぞったときだけ、
 // 体がその場で足踏みしながら、見ている向きへ回る（回る速さは鎧の重さまで。体が向き直ると首は正面に戻る）
 import * as pc from 'playcanvas';
-import { BODY_TURN } from '../game/data.js';
+import { BODY_TURN, SWIM } from '../game/data.js';
+import { wadeScale } from '../game/swim.js';
 
 const wrapDeg = (a) => ((a + 540) % 360) - 180;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -48,6 +49,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   let thirdDist = THIRD_DIST;           // 三人称のカメラの距離（地面に当たると縮める）
 
   let eyeH = p.eyeHeight, eyeWant = p.eyeHeight;   // 目の高さ（しゃがむ・伏せると低い。なめらかに変える）
+  let waterDepth = 0, waterSurface = null, swimming = false;   // 川（game/swim.js）：足もとの水の深さ・水面・泳いでいるか
   let eyeOff = null;                    // 一人称で自分の体を映すときの目の位置（体の向きの座標。模型の頭から決める）
   function speedFor(mag) {
     // 全速力（疾驅ボタン。match-session.js が決める）：スティックを倒していれば、倒し方によらず全速力
@@ -140,6 +142,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
 
     eyeH += (eyeWant - eyeH) * Math.min(1, dt * 9);
     if (hide) {
+      headYaw = 0; twist = 0;   // 隠れている間の目は、外を見る向き（yaw）だけで決まる
       yaw -= input.lookX;
       pitch = Math.max(-p.pitchLimit, Math.min(p.pitchLimit, pitch - input.lookY));
       // 隠れている間は、外を見る向きの左右 50 度・上下の決まった範囲だけ見回せる。動かない
@@ -177,7 +180,10 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     if (!frozen) updateLook(dt, input);
     else headYaw = clamp(headYaw - input.lookX, -BODY_TURN.neckYaw, BODY_TURN.neckYaw);
     if (mag > 0) {
-      const speed = speedFor(Math.min(1, mag)) * (api.speedScale || 1);
+      // speedScale が 0（攻撃・回避などの動きの間。game/combat.js の moveScale）なら止まる（前は || 1 で 0 が 1 になり、動きの間も歩けていた）
+      // 川（game/swim.js）：深い所は泳ぐ（ゆっくり。swimSpeed は match-session.js が決める）、浅い所は遅く歩く
+      const speed = swimming ? api.swimSpeed * Math.min(1, mag / 0.75) * (api.speedScale ?? 1)
+        : speedFor(Math.min(1, mag)) * (api.speedScale ?? 1) * wadeScale(waterDepth);
       const rad = (yaw * Math.PI) / 180;
       // 前（-Z）と右（+X）を、その向きに合わせて回す
       const fx = -Math.sin(rad), fz = -Math.cos(rad);
@@ -195,8 +201,13 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     const r = Math.hypot(pos.x, pos.z);
     if (r > areaRadius) { pos.x *= areaRadius / r; pos.z *= areaRadius / r; }
 
-    // 地面（床）の高さへなめらかに合わせる（段差でカメラががくっとしないように）
-    const target = groundAt(pos.x, pos.z, pos.y);
+    // 地面（床）の高さへなめらかに合わせる（段差でカメラががくっとしないように）。泳いでいる間は水面に浮く
+    let target = groundAt(pos.x, pos.z, pos.y);
+    const w = api.water ? api.water(pos.x, pos.z) : null;
+    waterDepth = w ? w.depth : 0;
+    swimming = waterDepth > SWIM.depth;
+    if (swimming) target = w.surface - SWIM.float;
+    waterSurface = w ? w.surface : null;
     pos.y = target;
     groundY += (target - groundY) * Math.min(1, dt * 12);
 
@@ -211,6 +222,11 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     update,
     position: pos,
     speedScale: 1,
+    swimSpeed: SWIM.speed,   // 泳ぐ速さ（match-session.js がキャラの速さとスタミナで決める。game/swim.js の swimSpeed）
+    water: null,             // 川の水（world/terrain.js の waterAt）。main.js が付ける
+    get waterDepth() { return waterDepth; },
+    get waterSurface() { return waterSurface; },
+    get swimming() { return swimming; },
     noRun: false,   // しゃがむ・伏せているときは走れない
     /** 目の高さ（m。しゃがむ・伏せると低い。なめらかに移る） */
     setEyeHeight(h) { eyeWant = h; },
@@ -236,7 +252,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       hide = { ...spot, camX: spot.x - Math.sin(a) * 0.15, camZ: spot.z - Math.cos(a) * 0.15, camH: spot.kind === 'bed' ? 1.35 : 2.35,
         pitchMin: -55, pitchMax: 8 };
       pos.x = spot.x; pos.z = spot.z; pos.y = spot.y; groundY = spot.y;
-      yaw = spot.yaw + 180; pitch = -20;
+      yaw = spot.yaw + 180; pitch = -20; headYaw = 0; twist = 0; look = yaw;   // 首と体のねじれは使わない（外を見る向きだけ）
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
     },
     /** 隠れ場所から出た：x, z, y に立ち、yaw を向く */

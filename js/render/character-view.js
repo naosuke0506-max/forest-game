@@ -3,7 +3,7 @@
 // 模型は tools/characters/build_character.py で作る（assets/characters/<名前>.glb と、動きの長さ・速さの .json）。
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
-import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT, WRATH } from '../game/data.js';
+import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT, WRATH, HIDE_ACTS } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { techSetOf } from '../game/techniques.js';
 import { stanceShape } from '../game/stance.js';
@@ -126,6 +126,9 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   // 攻撃を受けた動き（game/reactions.js の fighter.react）：流している受けた動きの番号と残りの時間。
   // 押されて下がった分（knock）：動きの中で体が下がっているので、位置をその分だけ戻して描く（受けた動きが終わったら BLEND の間に 0 へ）
   let reactId = 0, reactLeft = 0, reactShift = 0;   // reactShift：受けた動きの中で体が下がる距離（m）
+  // 泳ぐ（game/swim.js）：体の足もとは水面の 1.28 m 下（立ち泳ぎで肩まで水）。泳いで進む間は、這う動き（crawl）を水面まで持ち上げる
+  const SWIM_LIFT = 1.06;
+  let swimLift = 0, swimLiftWant = 0;
   const knock = { x: 0, z: 0, fade: 0, fx: 0, fz: 0 };
   const knockV = new pc.Vec3();
   // snap：動き終わりに体の位置と向きが移った（暗殺の滑斬など。fighter.snapPose）。次の動きへは混ぜずにすぐ移る（移った所で姿が合っている）
@@ -318,8 +321,12 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         px = fighter.x; pz = fighter.z; vel = 0; fwd = 0; pYaw = fighter.yaw; yawRate = 0; eyeReady = false;
         eyeHold = true;   // 骨はまだ前の動きの最後の姿（体だけ移った）なので、目の位置は次の姿が出てから測る
       }
-      const target = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z));
+      // タンス・ベッドに隠れている間も、体はそこにいる（利用者の指示 2026-11-14：見つかった時に急に出てこないように）。
+      // 隠れる動き（hide_*_in）は家具の前の「出る所」に家具の方を向いて立った所が元なので、その所と向きで、動きの最後の姿のまま描く
+      const hid = fighter.hidden;
+      const target = hid ? hid.y : (fighter.y ?? terrain.heightAt(fighter.x, fighter.z));
       groundY += (target - groundY) * Math.min(1, dt * 12);
+      if (hid) groundY = target;
       // 壁裏隠れ：背中が壁に付くように、壁の側へ少し寄せて描く（位置の計算は壁から離れた所）
       const cv = fighter.cover?.seg;
       // 押されて下がった分：受けた動きの間は下がった分だけ戻し、終わったら動きの戻り（BLEND）と同じ間に 0 へ
@@ -333,8 +340,12 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         const k = Math.max(0, 1 - knock.fade / BLEND);
         knock.x = knock.fx * k; knock.z = knock.fz * k;
       }
-      root.setPosition(fighter.x - knock.x - (cv ? cv.nx * 0.14 : 0), groundY, fighter.z - knock.z - (cv ? cv.nz * 0.14 : 0));
-      root.setEulerAngles(0, fighter.yaw, 0);
+      swimLift += ((fighter.swimming ? swimLiftWant : 0) - swimLift) * Math.min(1, dt * 5);
+      if (hid) { root.setPosition(hid.outX, groundY, hid.outZ); root.setEulerAngles(0, hid.yaw, 0); }
+      else {
+        root.setPosition(fighter.x - knock.x - (cv ? cv.nx * 0.14 : 0), groundY + swimLift, fighter.z - knock.z - (cv ? cv.nz * 0.14 : 0));
+        root.setEulerAngles(0, fighter.yaw, 0);
+      }
 
       // 質感の画像を消さない程度に、うっすら赤くする。倒れた後は光らせない
       const flash = fighter.alive && fighter.hitFlash > 0;
@@ -370,7 +381,28 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         if (!deathStarted) { deathStarted = true; if (!VICTIM.test(current)) restart('death', 1); }
         return;
       }
+      // 隠れている：隠れる動きの最後の姿（タンスの中に立つ・ベッドの下に伏せる）のまま。隠れる動きを見ていなかった（初めから
+      // 隠れていた）ときは、その動きの最後へ飛ぶ
+      if (hid) {
+        const inClip = (HIDE_ACTS[hid.kind] || HIDE_ACTS.wardrobe).inClip;
+        if (current !== inClip && has(inClip)) {
+          body.anim.speed = 1;
+          body.anim.baseLayer.transition(inClip, 0, 0.999);
+          current = inClip;
+        }
+        return;
+      }
 
+      // 泳いでいる（利用者の指示 2026-11-14：川は泳げる）：進んでいる間は這う動きを水面に浮かべて泳ぐ形に、止まっていれば待機の動きを
+      // 肩まで水に沈めて立ち泳ぎ（泳ぐ専用の動きは、まだ無い）
+      if (fighter.swimming) {
+        const moving = vel > 0.25 && has('crawl');
+        swimLiftWant = moving ? SWIM_LIFT : 0;
+        if (moving) play('crawl', Math.min(2.5, Math.max(0.6, vel / ((clip('crawl').speed || 0.5) * meta.scale))), 0.3);
+        else play(loco('idle'), 0.7, 0.3);
+        lastAction = null;
+        return;
+      }
       // 攻撃を受けた：被弾（軽い・重い）・よろめきは攻撃された向きの動き、楯で受けたら受けの動き（game/reactions.js）。
       // 動きの間はほかの動きに替えない（新しい行動を始めたら、そちらへ移る）。向きの動きが無い模型は、今までの hit・stagger
       const r = fighter.react;

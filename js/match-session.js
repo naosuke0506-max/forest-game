@@ -19,7 +19,8 @@ import { L } from './ui/labels.js';
 import { createSfx, wireSounds } from './audio/sfx.js';
 import { ICONS, weaponIconOf } from './ui/icons.js';
 import { createSenses } from './game/senses.js';
-import { stanceButton, stanceSpeed, canRun, stanceShape } from './game/stance.js';
+import { stanceButton, stanceSpeed, canRun, stanceShape, resetStance } from './game/stance.js';
+import { swimSpeed } from './game/swim.js';
 import { STANCES, BODY_TURN } from './game/data.js';
 import { skillOf, skillOn } from './game/skills.js';
 import { createHeatVision } from './render/heat-vision.js';
@@ -62,10 +63,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   for (const f of fighters) {
     let best = null;
     for (let k = 0; k < 200; k++) {
-      const r = 6 + Math.sqrt(rng.next()) * (match.areaRadius - 9);
+      const r = 6 + Math.sqrt(rng.next()) * (match.areaRadius - 30);   // 周りの山の斜面には出さない
       const a = rng.next() * Math.PI * 2;
       const p = { x: Math.cos(a) * r, z: Math.sin(a) * r };
       if (!obstacles.isFree(p.x, p.z, 3.5, true)) continue; // 木の幹や岩から 3.5m 以上（低い枝の中に出ないように）
+      if (zones?.wet && zones.wet(p.x, p.z) > 0.05) continue;   // 川と岸には出さない
       best = p;
       if (spots.every((s) => Math.hypot(s.x - p.x, s.z - p.z) > 80)) break;   // 広い森なので、最初は互いに遠く離す
     }
@@ -129,7 +131,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (arms && phase === arms.tier) { me.arms = loadout.arms; hud.addFeed(`兵器「${arms.name}」が届いた${arms.planned ? '（使う仕組みはこれから）' : ''}`); }
     if (mutation && phase === mutation.tier) { me.potion = loadout.mutation; hud.addFeed(`變異の藥「${mutation.name}」が届いた${mutation.planned ? '（飲む仕組みはこれから）' : ''}`); }
   });
-  const minimap = createMinimap(document.getElementById('minimap'), { areaRadius: AREA_RADIUS, zones, buildings, heightAt: terrain.heightAt, trees });
+  const minimap = createMinimap(document.getElementById('minimap'), { areaRadius: AREA_RADIUS, zones, buildings, heightAt: terrain.heightAt, trees, waterAt: terrain.waterAt });
   // 別のエリアに入ったら、左の知らせに出す
   let zoneNow = zones ? zones.zoneAt(me.x, me.z) : null, zoneTimer = 0;
   // ボタン：絵と文字。右手・左手の文字をキャラに合わせる（左手：盾持ちは防御、ほかは強攻撃・持ち替え など）
@@ -282,8 +284,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   /** 自分の見え方を、今の状態（一人称・三人称・壁裏・隠れている・観戦）に合わせる（毎フレーム） */
   function refreshMyView() {
     const v = views.get(me);
-    const gone = !!me.hidden || !!spectating;           // 隠れている・観戦している：自分の体は出さない
     const third = thirdPerson;                           // 三人称（確認用）。壁裏隠れも一人称
+    // 隠れている・観戦している・一人称で泳いでいる（体が水平になり、目の前をふさぐ）：自分の体は出さない
+    const gone = !!me.hidden || !!spectating || (!!me.swimming && !third);
     const body = !gone && (third || (fpBody && me.alive));   // 倒れた後は（観戦に移るまで）一人称で自分の体を出さない
     v.setVisible(body);
     v.setFirstPerson?.(body && !third);
@@ -334,7 +337,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   });
   match.on('end', () => { spectateEl.hidden = true; });
 
-  const world = { obstacles, groundAt, hiding, cover, sight, senses, get areaRadius() { return match.areaRadius; },
+  const world = { obstacles, groundAt, hiding, cover, sight, senses, water: terrain.waterAt || null, get areaRadius() { return match.areaRadius; },
     /** f が今暗殺できる相手 { target, grace } か null（bot が暗殺ボタンを押すか決める） */
     assassinTarget: (f) => combat.assassinTarget(f),
     /** 隠れる・出る（動きをしてから。game/hide-acts.js） */
@@ -446,6 +449,12 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // 隠れている間は、隠れ場所が自分の位置（体は動かない）。暗殺の動きなど、試合の計算が体を動かす間は写さない（あとで逆に合わせる）
       const scripted = SCRIPTED.has(me.action?.kind);
       if (me.alive && !me.hidden && !me.cover && !scripted) { me.x = player.position.x; me.z = player.position.z; me.y = player.position.y; me.yaw = player.yaw; me.pitch = player.pitch; me.headYaw = player.headYaw; }
+      // 川（game/swim.js）：足もとの水の深さ・泳いでいるか。泳ぐ速さはキャラの速さとスタミナで決まる
+      if (me.alive && !me.hidden) {
+        me.waterDepth = player.waterDepth; me.waterSurface = player.waterSurface; me.swimming = player.swimming;
+        if (me.waterDepth > 0.35 && me.stance && me.stance !== 'stand') resetStance(me);   // 水の中ではしゃがめない・伏せられない
+      }
+      player.swimSpeed = swimSpeed(me);
       // 壁裏隠れ：離れるのは「離壁」か暗殺のときだけ。移動スティックを倒すと、壁に背を付けたまま壁際を歩く
       // （スティックの向きを画面の向きで地面の向きにし、壁に沿った分だけ進む）。カメラは三人称で覗く向きを見る
       // 歩く向きの見方（カメラの右と前）は、スティックを倒し始めたときのものを、離すまで使う
@@ -518,7 +527,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         const moving = running ? b.update(dt, world) : 0;
         if (running) combat.control(b.fighter, b.combatInput);
         views.get(b.fighter).update(dt, moving);
-        views.get(b.fighter).setVisible(!b.fighter.hidden);   // 隠れている人は見えない
+        // 隠れている人も、タンスの中・ベッドの下にいる（render/character-view.js。扉や掛け布の隙間から見えることがある）
       }
       if (running) combat.update(dt);
       if (!frozenTime) { senses.update(dt); sfx.update(dt, fighters); }   // 時間が止まっている間は、見聞きも息遣いも止まる
@@ -531,7 +540,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // 暗殺の動きなど：体の位置と向きを、プレイヤーの操作へ合わせる（動きが終わった時の、体の移った所と向きも）
       const scriptedNow = SCRIPTED.has(me.action?.kind);
       const viewBefore = player.viewYaw;
-      if (me.alive && (scriptedNow || wasScripted)) player.follow(me.x, me.y, me.z, me.yaw);
+      // 隠れている間は合わせない（隠れた時の外を見る向き player.setHide を、家具の方を向いた体の向きで上書きしないように）
+      if (me.alive && !me.hidden && (scriptedNow || wasScripted)) player.follow(me.x, me.y, me.z, me.yaw);
       wasScripted = scriptedNow;
       views.get(me).update(dt, player.moving);
       viewModel.update(dt, player.moving);
@@ -558,7 +568,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         player.setTwist((((sy - me.yaw - twistBase) + 540) % 360) - 180);
       } else {
         // 動きが終わった：体の向きが移っても、見ている向きはそのまま（首の向きへ引き継ぐ）
-        if (twistBase !== null) { player.setTwist(0); player.keepView(viewBefore); }
+        // ただし隠れた時は引き継がない（タンスに後ろ向きに入る 180 度の回りが首の向きに残り、隠れている間の目が横の壁を向いていた。2026-11-14 に直した）
+        if (twistBase !== null) { player.setTwist(0); if (!me.hidden) player.keepView(viewBefore); }
         twistBase = null; player.setTwist(0);
       }
       hud.update(dt);

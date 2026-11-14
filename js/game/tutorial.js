@@ -1,6 +1,8 @@
 // 教練（チュートリアル。利用者の指示 2026-11-13）：大廳の「教練」から選ぶ。試合と同じ森と村で、決まった相手（動きの決まった傀儡）を置き、
 // 手順を 1 つずつこなす。手順は画面の左に出て、できた物に印が付く（ui/tutor-panel.js）。全部できたら達成。
-//   共通：基本（動く・見回す・疾驅・攻擊・迴避）、暗殺・搜索（タンスに隠れた敵を見つけて倒す）、暗殺・壁潛（壁に背を付けて待ち、通りかかった敵を暗殺）
+//   共通：基本（動く・見回す・疾驅・攻擊・迴避）、暗殺・簞笥（タンスに隠れた敵を見つけて倒す）、暗殺・寢臺（ベッドの下に隠れた敵を見つけて倒す）、
+//         暗殺・潛伏（タンスかベッドに隠れて待ち、部屋に入ってきた敵を暗殺）、暗殺・壁潛（壁に背を付けて待ち、通りかかった敵を暗殺）。
+//         寢臺・潛伏は利用者の指示（2026-11-14）
 //   人物ごと：楯劍騎士（防禦と反擊）・劍騎士（奧義）・長柄騎士（強靱）・打擊騎士（剛力）・弓兵（鷹目）・祓魔僧（神怒）
 // 教練では時間で刻が進まず、自分は倒れない（体力が 3 割を切ると戻る）。計算だけ（PlayCanvas に依存しない）
 import { moveFighter } from './movement.js';
@@ -15,8 +17,30 @@ const fwd = (yaw) => [-Math.sin(yaw * DEG), -Math.cos(yaw * DEG)];
  * 教練の一覧。char：使う人物（null は大廳で選んでいる人物）、bots：相手（char・role・loadout）、
  * setup(ctx)：自分と相手を置く、steps：手順（text：画面に出す文、done(S)：できたか。S は試合の出来事から数えた記録）
  *   role：dummy（立っているだけ。倒れない）・guard（楯を構えて立つ。倒れない）・attacker（近づいて攻撃してくる。弱い）・
- *         patrol（2 か所の間を歩く。こちらに気づかない）・hidden（タンスに隠れている）
+ *         patrol（f.patrol の点を順に行き来する。こちらに気づかない。f.patrolGate があれば、それが true になるまで待つ。
+ *         f.patrolWait 秒、端で立ち止まる）・hidden（タンス・ベッドに隠れている）
  */
+/** 一階建ての家の、一階のタンスとベッドの隠れ場所（家ごと）。道順（外 → 扉の内 → 部屋の奥）が 3 点ある家 */
+function groundRooms(hides) {
+  const byRoute = new Map();
+  for (const s of hides) {
+    if (!(s.route?.length >= 3)) continue;
+    if (!byRoute.has(s.route)) byRoute.set(s.route, {});
+    byRoute.get(s.route)[s.kind] = s;
+  }
+  return [...byRoute.values()];
+}
+/** 隠れている敵を探す教練（タンス・ベッド）の置き方：その家の扉の外に、家の方を向いて立つ */
+function setupSearch(kind) {
+  return ({ bots, hides, hiding, spawn }) => {
+    const room = groundRooms(hides).find((r) => r[kind]);
+    const spot = room?.[kind] || hides.find((s) => s.kind === kind);
+    if (!spot) return;
+    hiding.hide(bots[0], spot);
+    const [a, b] = spot.route;
+    spawn(a.x, a.z, yawTo(a, b.x, b.z));
+  };
+}
 export const LESSONS = {
   basic: {
     name: '基本', char: null, desc: '動く・見回す・疾驅・攻擊・迴避を覚える。案山子が 1 人立っている',
@@ -31,19 +55,52 @@ export const LESSONS = {
     ],
   },
   search: {
-    name: '暗殺・搜索', char: null, desc: 'タンスに隠れている敵を見つけ出し、倒す',
+    name: '暗殺・簞笥', char: null, desc: 'タンスに隠れている敵を見つけ出し、倒す',
     bots: [{ char: 'archer', role: 'hidden' }],
-    setup({ me, bots, hides, hiding, spawn }) {
-      const spot = hides.find((s) => s.kind === 'wardrobe' && s.route?.length >= 3) || hides.find((s) => s.kind === 'wardrobe');
-      if (!spot) return;
-      hiding.hide(bots[0], spot);
-      const [a, b] = spot.route;
-      spawn(a.x, a.z, yawTo(a, b.x, b.z));   // 家の扉の外に立ち、家の方を向く
-    },
+    setup: setupSearch('wardrobe'),
     steps: [
-      { text: '目の前の家に入る。どこかのタンスに敵が隠れている', done: (S) => S.inside },
+      { text: '目の前の家に入る。どこかのタンスに敵が隠れている（家の外からは探せない）', done: (S) => S.inside },
       { text: 'タンスの前で搜索ボタン（PC は F）を押して、中を探す', done: (S) => S.searched >= 1 },
       { text: '見つけた敵を倒す', done: (S) => S.kills >= 1 },
+    ],
+  },
+  searchBed: {
+    name: '暗殺・寢臺', char: null, desc: 'ベッドの下に隠れている敵を見つけ出し、倒す',
+    bots: [{ char: 'polearm', role: 'hidden' }],
+    setup: setupSearch('bed'),
+    steps: [
+      { text: '目の前の家に入る。ベッドの下に敵が隠れている（よく見ると、掛け布の陰に体が見える）', done: (S) => S.inside },
+      { text: 'ベッドの前で搜索ボタン（PC は F）を押して、下を探す', done: (S) => S.searched >= 1 },
+      { text: '見つけた敵を倒す', done: (S) => S.kills >= 1 },
+    ],
+  },
+  ambush: {
+    name: '暗殺・潛伏', char: null, desc: 'タンスかベッドに隠れて待ち、部屋に入ってきた敵を暗殺する',
+    bots: [{ char: 'blunt', role: 'patrol' }],
+    setup({ me, bots, hides, isFree, spawn }) {
+      // タンスとベッドが一階にある一階建ての家。扉の外に立ち、敵は扉の前の通りで待つ。自分が隠れたら、敵が部屋の奥まで入ってきて戻る
+      const room = groundRooms(hides).find((r) => r.wardrobe && r.bed) || groundRooms(hides)[0];
+      const spot = room?.wardrobe || room?.bed;
+      if (!spot) return;
+      const [a, b, c] = spot.route;
+      spawn(a.x, a.z, yawTo(a, b.x, b.z));
+      const ox = a.x - b.x, oz = a.z - b.z, ol = Math.hypot(ox, oz) || 1;
+      let wait = { x: a.x + (ox / ol) * 2, z: a.z + (oz / ol) * 2 };
+      for (const k of [6, 5, 4, 3]) {
+        const p = { x: a.x + (ox / ol) * k, z: a.z + (oz / ol) * k };
+        if (!isFree || isFree(p.x, p.z, 0.6)) { wait = p; break; }
+      }
+      const f = bots[0];
+      f.x = wait.x; f.z = wait.z; f.yaw = yawTo(f, a.x, a.z);
+      f.patrol = [wait, a, b, c];
+      f.patrolWait = 2.5;
+      f.patrolGate = () => !!me.hidden;
+    },
+    steps: [
+      { text: '目の前の家に入る', done: (S) => S.inside },
+      { text: 'タンスかベッドの前で潛伏ボタン（PC は E）を押して隠れる。隠れると、外の敵が家に入ってくる', done: (S) => S.hid },
+      { text: '敵が近くに来たら、暗殺ボタン（PC は R）で飛び出す', done: (S) => S.assassinTries >= 1 },
+      { text: '暗殺で倒す', done: (S) => S.assassinKills >= 1 },
     ],
   },
   cover: {
@@ -142,7 +199,7 @@ export const LESSONS = {
   },
 };
 /** 大廳に並べる順 */
-export const LESSON_ORDER = ['basic', 'search', 'cover', 'shield', 'sword', 'polearm', 'blunt', 'archer', 'cleric'];
+export const LESSON_ORDER = ['basic', 'search', 'searchBed', 'ambush', 'cover', 'shield', 'sword', 'polearm', 'blunt', 'archer', 'cleric'];
 
 /** 相手を、自分の向きから右へ ang 度の向きに d m、さらに右へ side m ずらして置き、こちらを向かせる */
 function place(f, me, d, ang = 0, side = 0) {
@@ -160,7 +217,7 @@ function place(f, me, d, ang = 0, side = 0) {
  */
 export function createTutorBot(f, role, me) {
   const input = { forward: 0, strafe: 0, run: false, yaw: f.yaw, pitch: 0 };
-  let tap = false, cd = 1.2, leg = 1, stuck = 0;
+  let tap = false, cd = 1.2, leg = 1, dir = 1, wait = 0, stuck = 0, started = false;
   // 倒れない案山子（dummy・guard）。攻めてくる相手は弱くする（教練で自分が倒れないように）
   if (role === 'dummy' || role === 'guard') { f.stats.maxHp = f.stats.hp = 5000; }
   if (role === 'attacker') f.stats.attack *= 0.35;
@@ -173,10 +230,17 @@ export function createTutorBot(f, role, me) {
       input.forward = 0; input.strafe = 0; input.run = false;
       let want = f.yaw;
       if (role === 'patrol' && f.patrol) {
-        const g = f.patrol[leg];
-        if (Math.hypot(g.x - f.x, g.z - f.z) < 0.5) leg = 1 - leg;
-        want = yawTo(f, f.patrol[leg].x, f.patrol[leg].z);
-        input.forward = 0.55;   // ゆっくり歩く（こちらには気づかない）
+        // 点を順に行き来する（端で立ち止まって引き返す）。待つ条件（patrolGate）があれば、それまでその場に立つ
+        if (!started) started = !f.patrolGate || f.patrolGate();
+        if (started && (wait -= dt) <= 0) {
+          const g = f.patrol[leg];
+          if (Math.hypot(g.x - f.x, g.z - f.z) < 0.5) {
+            if (leg + dir < 0 || leg + dir >= f.patrol.length) { dir = -dir; wait = f.patrolWait || 0; }
+            leg += dir;
+          }
+          want = yawTo(f, f.patrol[leg].x, f.patrol[leg].z);
+          if (wait <= 0) input.forward = 0.55;   // ゆっくり歩く（こちらには気づかない）
+        }
       } else if (me.alive) {
         want = yawTo(f, me.x, me.z);
         if (role === 'attacker') {
@@ -192,8 +256,8 @@ export function createTutorBot(f, role, me) {
       const mag = moveFighter(f, input, dt, world);
       // 見回り：何かにつかえて 1 秒進めなければ、引き返す
       if (role === 'patrol') {
-        stuck = Math.hypot(f.x - px, f.z - pz) < 0.2 * dt ? stuck + dt : 0;
-        if (stuck > 1) { leg = 1 - leg; stuck = 0; }
+        stuck = input.forward > 0 && Math.hypot(f.x - px, f.z - pz) < 0.2 * dt ? stuck + dt : 0;   // 歩こうとしているのに進まない
+        if (stuck > 1) { dir = -dir; leg = Math.max(0, Math.min(f.patrol.length - 1, leg + dir)); stuck = 0; }
       }
       f.gait = mag > 0.05 ? 'walk' : 'still';
       return mag;
@@ -212,7 +276,7 @@ export function createTutorBot(f, role, me) {
  * @param {{ me, combat, cover, match, hiding }} o
  */
 export function createTutorState(lesson, { me, combat, cover, match }) {
-  const S = { moved: 0, turned: 0, sprinted: false, hits: 0, dodges: 0, inside: false, searched: 0, kills: 0, covered: false,
+  const S = { moved: 0, turned: 0, sprinted: false, hits: 0, dodges: 0, inside: false, searched: 0, kills: 0, covered: false, hid: false,
     assassinTries: 0, assassinKills: 0, guarded: 0, skill: false, counters: 0, ultTargets: 0, skillHits: 0, blocked: 0, pierced: 0,
     pierceHits: 0, wrathHits: 0 };
   const ultHit = new Set();
@@ -249,6 +313,7 @@ export function createTutorState(lesson, { me, combat, cover, match }) {
       lastX = me.x; lastZ = me.z; lastYaw = me.yaw;
       if (me.sprinting) S.sprinted = true;
       if (insideHouse && insideHouse(me.x, me.z)) S.inside = true;
+      if (me.hidden) S.hid = true;
       // 教練では自分は倒れない：体力が 3 割を切ったら戻す
       if (me.alive && me.stats.hp < me.stats.maxHp * 0.3) me.stats.hp = me.stats.maxHp;
       let moved = false;

@@ -72,7 +72,9 @@ export function createSenses({ sight = null, heightAt }) {
   /** 足音が届く距離（m）。止まっていれば 0 */
   function stepRadius(t) {
     if (!t.alive || t.hidden || !t.gait || t.gait === 'still') return 0;
-    return (SENSES.steps[t.gait] || 0) * STANCES[t.stance || 'stand'].noise * (SENSES.weight[t.weight] ?? 1) * (t.cover ? 0.35 : 1);   // 壁に沿った横歩きは静か
+    // 水の中を歩く・泳ぐと水音が立つ（走る足音と同じくらい遠くまで聞こえる。game/swim.js）
+    const splash = t.waterDepth > 0.15 ? SENSES.steps.run : 0;
+    return Math.max(splash, (SENSES.steps[t.gait] || 0) * STANCES[t.stance || 'stand'].noise * (SENSES.weight[t.weight] ?? 1) * (t.cover ? 0.35 : 1));   // 壁に沿った横歩きは静か
   }
 
   return {

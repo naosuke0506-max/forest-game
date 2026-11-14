@@ -6,6 +6,7 @@
 //   流れ：飛びかかる（approach。動き始めの所まで素早く寄る）→ 動き（strike。決まった時刻に止めを刺す）→ 動き終わりの所へ体を移す
 // 数値は game/data.js の ASSASSIN
 import { ASSASSIN } from './data.js';
+import { inRoom } from './hiding.js';
 
 const DEG = Math.PI / 180;
 const wrap = (a) => ((a + 540) % 360) - 180;
@@ -33,6 +34,9 @@ export function createAssassin({ fighters, senses, yOf, move, lethal, emit }) {
     const ox = f.hidden ? f.hidden.outX : f.x, oz = f.hidden ? f.hidden.outZ : f.z, oy = f.hidden ? f.hidden.y : yOf(f);
     if (Math.hypot(t.x - ox, t.z - oz) > ASSASSIN.reach) return null;
     if (Math.abs(yOf(t) - oy) > 1.3) return null;
+    // 壁越しにはできない：タンス・ベッドからは同じ部屋の中の相手だけ、壁裏隠れからは壁の前（外へ向く側）の相手だけ
+    if (f.hidden && !inRoom(f.hidden.room, t.x, t.z, -0.3)) return null;
+    if (f.cover && (t.x - f.x) * f.cover.seg.nx + (t.z - f.z) * f.cover.seg.nz < -0.15) return null;
     // 暗殺できるのは、隠れ場所（タンス・ベッド）と壁裏隠れから飛び出すときだけ（利用者の指示 2026-11-10：何もない所ではできない）。
     // 見られていてもよいが、避ける猶予がある
     if (f.hidden || f.cover) return { grace: true };
