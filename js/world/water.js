@@ -43,6 +43,8 @@ function streakTexture(device) {
   c.width = W; c.height = H;
   const g = c.getContext('2d');
   g.clearRect(0, 0, W, H);
+  g.fillStyle = 'rgba(255,255,255,0.32)';   // 下地：薄い白（筋の間も水の幕に見えるように）
+  g.fillRect(0, 0, W, H);
   let seed = 3;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let i = 0; i < 90; i++) {
@@ -100,8 +102,12 @@ export function createWater(app, land) {
   const ACROSS = [-1, -0.55, 0, 0.55, 1];
   const pos = [], nor = [], uv = [], idx = [];
   const stride = 2;   // 川の線の区切り 2 つごと（約 3 m）に、横に並べた 5 点
+  // 滝の落ち口から 3 m の間（水面が 8 m 落ちる所）は水面を描かない：暗い水面が滝の幕の前に来て、滝が見えなくなるため。そこは滝の幕が覆う
+  const gap = (s) => s > R.sLip - 0.4 && s < R.sLip + 3;
   let rows = 0;
+  const keep = [];
   for (let i = 0; i < P.length; i += stride) {
+    if (gap(S[i])) continue;
     const j0 = Math.max(0, i - 1), j1 = Math.min(P.length - 1, i + 1);
     let tx = P[j1][0] - P[j0][0], tz = P[j1][1] - P[j0][1];
     const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
@@ -112,10 +118,12 @@ export function createWater(app, land) {
       nor.push(0, 1, 0);
       uv.push(a * hw / 3, s / 3);                     // 絵 1 枚が 3 m 四方（大きいと、まだらな模様に見える）
     }
+    keep.push(i);
     rows++;
   }
   const W = ACROSS.length;
   for (let r = 0; r < rows - 1; r++) for (let k = 0; k < W - 1; k++) {
+    if (keep[r + 1] - keep[r] > stride) continue;   // 滝の所はつながない
     const a = r * W + k, b = a + 1, c = a + W, d = c + 1;
     idx.push(a, c, b, b, c, d);
   }
@@ -139,8 +147,8 @@ export function createWater(app, land) {
   // ---- 滝の幕：落ち口の少し手前から、滝壺の水面まで。流れの向きへ少しせり出して垂れる ----
   const F = R.fall;
   const fallMat = new pc.StandardMaterial();
-  fallMat.diffuse = new pc.Color(0.82, 0.86, 0.88);
-  fallMat.emissive = new pc.Color(0.32, 0.35, 0.38);
+  fallMat.diffuse = new pc.Color(0.85, 0.89, 0.92);
+  fallMat.emissive = new pc.Color(0.45, 0.48, 0.52);
   const streak = streakTexture(device);
   fallMat.opacityMap = streak; fallMat.opacityMapChannel = 'a';
   fallMat.diffuseMap = streak;
@@ -153,7 +161,7 @@ export function createWater(app, land) {
     const nx = -F.dz, nz = F.dx, hw = F.width / 2 + 0.6, ROWS = 10;
     for (let r = 0; r <= ROWS; r++) {
       const t = r / ROWS;
-      const out = -0.6 + 1.8 * Math.sin(t * Math.PI * 0.5) ** 0.7;   // 上は落ち口の手前、下ほど前へせり出す
+      const out = -0.3 + 3.0 * Math.sin(t * Math.PI * 0.5) ** 0.7;   // 上は落ち口の少し手前、下ほど前へせり出す（崖の前に垂れる）
       const y = F.top + 0.05 + (F.bottom - F.top - 0.05) * t;
       for (const a of [-1, -0.5, 0, 0.5, 1]) {
         fp.push(F.x + F.dx * out + nx * hw * a * (1 + t * 0.25), y, F.z + F.dz * out + nz * hw * a * (1 + t * 0.25));
