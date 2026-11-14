@@ -20,10 +20,10 @@ export function createCave(app, land, { obstacles, floors, sight = null, rockTex
   const positions = [], normals = [], uvs = [], colors = [], indices = [];
   let tris = 0;
   const mouths = C.mouths;
-  /** 口からの近さで、奥ほど暗い色（0.25〜0.85） */
+  /** 口からの近さで、奥ほど暗い色（0.35〜0.85。暗すぎると戦えないので、行き止まりでも少し見える） */
   const shadeAt = (x, z) => {
     const d = Math.min(...mouths.map(([mx, mz]) => Math.hypot(x - mx, z - mz)));
-    return 0.85 - 0.6 * smooth(6, 26, d);
+    return 0.85 - 0.5 * smooth(6, 26, d);
   };
   /** ほかの通り道の中か（分かれ道の所の壁を開ける） */
   const insideOther = (t, x, y, z) => {
