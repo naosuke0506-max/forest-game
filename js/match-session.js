@@ -531,8 +531,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // 暗殺の動きなど：体の位置と向きを、プレイヤーの操作へ合わせる（動きが終わった時の、体の移った所と向きも）
       const scriptedNow = SCRIPTED.has(me.action?.kind);
       const viewBefore = player.viewYaw;
-      // 隠れる動きが終わって隠れた時は合わせない（隠れた時の外を見る向き player.setHide を、家具の方を向いた体の向きで上書きして、
-      // 隠れている間の目が壁の方を向いていた。2026-11-14 に直した）
+      // 隠れている間は合わせない（隠れた時の外を見る向き player.setHide を、家具の方を向いた体の向きで上書きしないように）
       if (me.alive && !me.hidden && (scriptedNow || wasScripted)) player.follow(me.x, me.y, me.z, me.yaw);
       wasScripted = scriptedNow;
       views.get(me).update(dt, player.moving);
@@ -560,7 +559,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         player.setTwist((((sy - me.yaw - twistBase) + 540) % 360) - 180);
       } else {
         // 動きが終わった：体の向きが移っても、見ている向きはそのまま（首の向きへ引き継ぐ）
-        if (twistBase !== null) { player.setTwist(0); player.keepView(viewBefore); }
+        // ただし隠れた時は引き継がない（タンスに後ろ向きに入る 180 度の回りが首の向きに残り、隠れている間の目が横の壁を向いていた。2026-11-14 に直した）
+        if (twistBase !== null) { player.setTwist(0); if (!me.hidden) player.keepView(viewBefore); }
         twistBase = null; player.setTwist(0);
       }
       hud.update(dt);

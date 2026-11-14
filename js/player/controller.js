@@ -140,6 +140,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
 
     eyeH += (eyeWant - eyeH) * Math.min(1, dt * 9);
     if (hide) {
+      headYaw = 0; twist = 0;   // 隠れている間の目は、外を見る向き（yaw）だけで決まる
       yaw -= input.lookX;
       pitch = Math.max(-p.pitchLimit, Math.min(p.pitchLimit, pitch - input.lookY));
       // 隠れている間は、外を見る向きの左右 50 度・上下の決まった範囲だけ見回せる。動かない
@@ -237,7 +238,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       hide = { ...spot, camX: spot.x - Math.sin(a) * 0.15, camZ: spot.z - Math.cos(a) * 0.15, camH: spot.kind === 'bed' ? 1.35 : 2.35,
         pitchMin: -55, pitchMax: 8 };
       pos.x = spot.x; pos.z = spot.z; pos.y = spot.y; groundY = spot.y;
-      yaw = spot.yaw + 180; pitch = -20;
+      yaw = spot.yaw + 180; pitch = -20; headYaw = 0; twist = 0; look = yaw;   // 首と体のねじれは使わない（外を見る向きだけ）
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
     },
     /** 隠れ場所から出た：x, z, y に立ち、yaw を向く */
