@@ -182,7 +182,7 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models, 
   };
   const bushDensity = (x, z) => {
     const w = zones.weights(x, z);
-    return (w.mixed * 1 + w.deep * 0.8 + w.prairie * 0.25) * (1 - zones.path(x, z)) * (1 - (zones.wet?.(x, z) ?? 0)) * (1 - 0.7 * (zones.rocky?.(x, z) ?? 0));
+    return (w.mixed * 1 + w.deep * 0.8 + w.prairie * 0.25) * (1 - zones.path(x, z)) * (1 - (zones.wet?.(x, z) ?? 0)) * (1 - 0.7 * (zones.rocky?.(x, z) ?? 0)) * (1 - (zones.caveArea?.(x, z) ?? 0));
   };
   const avgOf = (fn) => {
     if (!zones) return 1;

@@ -6,6 +6,7 @@ import { createEnvironment } from './world/environment.js';
 import { createTimeOfDay } from './world/time-of-day.js';
 import { createLandform } from './world/landform.js';
 import { planVillages } from './world/villages.js';
+import { createCave } from './world/cave.js';
 import { createWater } from './world/water.js';
 import { createVillage } from './world/castle.js';
 import { createFloors } from './world/floors.js';
@@ -128,6 +129,8 @@ async function boot() {
   for (const t of trees?.trunks || []) sight.addCyl(t.x, t.z, t.r, terrain.heightAt(t.x, t.z) - 0.3, t.top);
   for (const b of props?.blockers || []) sight.addCyl(b.x, b.z, b.r, b.y0, b.y1);
   const village = createVillage(app, CONFIG, terrain, obstacles, zones, floors, sight, plan);
+  // 洞窟（風穴。北西の深い森の岩山。world/cave.js）：壁と天井・床・口の岩の縁。岩山の上の床と、中の壁の当たり判定も登録する
+  const cave = createCave(app, land, { obstacles, floors, sight, rockTex: tex.rock, seed: CONFIG.seed });
   // 地面を覆う草（自分の周りだけ。短い草・穂・白い花・大草原の背の高い草）
   const groundCover = grassTex ? createGroundCover(app, CONFIG, CONFIG.seed, terrain, obstacles, grassTex, zones) : null;
 
@@ -159,7 +162,7 @@ async function boot() {
   hall.setActive(false);
   player.camera.enabled = false;   // 題の画面・大廳の間は、森のカメラで描かない
 
-  let playing = false, session = null, deepK = 0;
+  let playing = false, session = null, deepK = 0, caveK = 0;
   app.on('update', (dt) => {
     // 題の画面・大廳にいる間は、その 3D だけを動かす（森は描かず、動かさない。森の音も止める）
     const lobbyOn = hall.active || titleScene.active || !playing;
@@ -176,7 +179,10 @@ async function boot() {
     const cp = player.camera.getPosition();
     const deep = zones.weights(cp.x, cp.z).deep;
     deepK += (deep - deepK) * Math.min(1, dt * 1.5);
-    timeOfDay.setLocal({ fog: 1 + 1.3 * deepK, light: 1 - 0.35 * deepK });
+    // 洞窟の中は暗い（奥ほど暗いのは洞窟の頂点の色。ここは光を弱くする。岩山の上にいるときは外）
+    const inCave = land.cave.inside(cp.x, cp.z, cp.y);
+    caveK += (inCave - caveK) * Math.min(1, dt * 2);
+    timeOfDay.setLocal({ fog: 1 + 1.3 * deepK, light: (1 - 0.35 * deepK) * (1 - 0.62 * caveK) });
     trees?.setDrawDistance?.(CONFIG.world.drawDistance * (1 - 0.45 * deepK));
     timeOfDay.update(dt);
     sunGlare.update(dt);
@@ -184,7 +190,7 @@ async function boot() {
     water.update(dt);   // 川のさざ波・滝の筋を流す
     air.update(dt);
     // 音：聞く人の位置と向き。家の中では外の音がこもる
-    const inside = village?.insideHouse?.(cp.x, cp.z) && player.position.y > terrain.heightAt(cp.x, cp.z) + 0.25 ? 1 : 0;
+    const inside = Math.max(village?.insideHouse?.(cp.x, cp.z) && player.position.y > terrain.heightAt(cp.x, cp.z) + 0.25 ? 1 : 0, caveK);   // 家の中・洞窟の中は外の音がこもる
     indoorK += (inside - indoorK) * Math.min(1, dt * 3);
     audio.setListener(cp.x, cp.y, cp.z, player.yaw, indoorK);
     ambience.update(dt);
@@ -200,7 +206,7 @@ async function boot() {
     .then(([grass, litter]) => terrain.setGroundTextures(grass, litter));
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air, floors, sight, land, water, plan };
+  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air, floors, sight, land, water, plan, cave };
 
   // 設定のうち森に関わる分（視点）。変わるたびに反映する
   applyWorld = (st = settings) => {
@@ -226,7 +232,7 @@ async function boot() {
     audio.unlock();
     input.reset();
     session = await startPracticeMatch({
-      app, config: CONFIG, terrain, obstacles, player, myChar, loadout, timeOfDay, zones, buildings: village?.footprints || [],
+      app, config: CONFIG, terrain, obstacles, player, myChar, loadout, timeOfDay, zones, buildings: [...(village?.footprints || []), ...(cave?.footprints || [])],
       trees: trees?.canopies || [],
       groundAt: floors.groundAt, insideHouse: village?.insideHouse, hides: village?.hides || [], covers: village?.covers || [], furniture: village?.furniture || null, sight,
       houses: village?.houses || [],   // 家の一覧（鷹目の貫く矢で壁に穴を開ける。world/arrow-holes.js）

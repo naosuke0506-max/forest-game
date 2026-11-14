@@ -136,6 +136,7 @@ export function createGroundCover(app, config, seed, terrain, obstacles, texture
         if (zones && zones.path(x, z) > 0.5 && rnd.next() > PATH_DENSITY) continue;
         // 川の中には生えない（岸は少し。world/landform.js の wet）
         if (zones?.wet && rnd.next() < zones.wet(x, z) * 1.2) continue;
+        if (zones?.caveArea && zones.caveArea(x, z) > 0.2) continue;   // 洞窟の中と切り通しには生えない
         if (!obstacles.isFree(x, z, 0.25, true)) continue;
         // ところどころ薄くする（全部が同じ密度だと単調なので、ノイズでむらを付ける）
         if (fbm(x * 0.08, z * 0.08, seed + 55) < 0.35 && rnd.next() < 0.6) continue;

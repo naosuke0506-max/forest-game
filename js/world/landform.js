@@ -5,6 +5,7 @@
 //   谷：川の周りは掘り下げる（真ん中ほど深い谷）。丘：盆地の中はなだらかな起伏
 // 地図の上で北は -Z、東は +X。村の場所を平らにするのは world/terrain.js（エリア分けの world/zones.js を使う）
 import { fbm } from '../core/random.js';
+import { createCaveShape } from './cave-shape.js';
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -155,9 +156,14 @@ export function createLandform(seed, { playRadius, size }) {
     return bd <= REACH ? { d: bd, s: bs } : null;
   }
 
-  /** 地面の高さ（村を平らにする前）：盆地の丘と山に、川の谷と川床を掘る */
+  // 洞窟（3 回目。world/cave-shape.js）：北西の深い森の岩山と、その中の通り道。岩山は地面に足し、通り道は床の高さまで掘る
+  const cave = createCaveShape(seed, natural);
+  /** 地面の高さ（村を平らにする前）：盆地の丘と山（と洞窟の岩山）に、川の谷と川床を掘り、洞窟の通り道を掘る */
   function heightAt(x, z) {
-    const h0 = natural(x, z);
+    return cave.carve(x, z, riverHeight(x, z));
+  }
+  function riverHeight(x, z) {
+    const h0 = natural(x, z) + cave.hill(x, z);
     const q = nearest(x, z);
     if (!q) return h0;
     const hw = widthAt(q.s) / 2, V = levelAt(q.s);
@@ -185,7 +191,7 @@ export function createLandform(seed, { playRadius, size }) {
     return 1 - smooth(widthAt(q.s) / 2 + 2, widthAt(q.s) / 2 + 10, q.d);
   }
   /** 岩場の度合い（0〜1）：山の高い所（木がまばらで、岩が多い） */
-  const rocky = (x, z) => smooth(14, 34, mountain(x, z));
+  const rocky = (x, z) => Math.max(smooth(14, 34, mountain(x, z)), smooth(3, 9, cave.hill(x, z)));   // 山の高い所と洞窟の岩山
 
   // 滝の形（world/water.js が描く）：落ち口の位置・流れの向き・幅・上と下の水面の高さ
   const iLip = sAt.findIndex((s) => s >= sLip);
@@ -195,7 +201,9 @@ export function createLandform(seed, { playRadius, size }) {
     top: levelAt(sLip - 0.1), bottom: levelAt(sLip + 3), poolS: sLip + 10 };
 
   return {
-    heightAt, natural, mountain, nearest, waterLevel, wet, rocky,
+    heightAt, natural, mountain, nearest, waterLevel, wet, rocky, cave,
+    /** 洞窟の通り道を掘る前の高さ（岩山の上の高さ。world/cave.js が岩山の上の床に使う） */
+    uncarved: (x, z) => riverHeight(x, z),
     river: { points: S, s: sAt, length, sLip, fords: fordS, levelAt, widthAt, depthAt, fall },
   };
 }
