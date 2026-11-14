@@ -11,23 +11,14 @@ const smoothstep = (a, b, x) => {
   return t * t * (3 - 2 * t);
 };
 
-export function createTerrain(app, config, seed, textures = null, zones = null, land = null) {
+export function createTerrain(app, config, seed, textures = null, zones = null, land = null, plan = null) {
   const { terrainSize: size, terrainSegments: seg } = config.world;
 
-  /** 地点 (x, z) の地面の高さ（m） */
+  /** 地点 (x, z) の地面の高さ（m）。村の家の下と広場だけ平らにする（坂では段々になる。world/villages.js の pads） */
   const heightAt = (x, z) => {
     const h = land.heightAt(x, z);
-    if (!zones) return h;
-    // 村の場所は平らにならす（建物を建てるため）
-    const w = zones.weights(x, z);
-    return w.castle > 0 ? h + ((castleH ?? h) - h) * w.castle : h;
+    return plan ? plan.padHeight(x, z, h) : h;
   };
-  // 村の場所の高さ：中心の地面の高さ（ならす前の式で求める）
-  let castleH = null;
-  if (zones) {
-    const { x, z } = zones.castle;
-    castleH = land.heightAt(x, z);
-  }
   /** 地点 (x, z) の川の水：{ surface（水面の高さ）, depth（水の深さ）} か、水が無ければ null */
   const waterAt = (x, z) => {
     const w = land.waterLevel(x, z);
@@ -62,6 +53,7 @@ export function createTerrain(app, config, seed, textures = null, zones = null, 
   const gravel = textures ? [0.62, 0.6, 0.56] : [0.36, 0.35, 0.32];     // 川床・川原：灰色の砂利
   const mud = textures ? [0.5, 0.42, 0.34] : [0.24, 0.2, 0.15];         // 水際：濡れた土
   const rock = textures ? [0.66, 0.64, 0.6] : [0.42, 0.41, 0.39];       // 山の高い所：岩肌（草はまばら）
+  const plowed = textures ? [0.6, 0.46, 0.34] : [0.3, 0.22, 0.15];      // 野邑の畑：耕した土
 
   // 先に高さを全部求める（色を付けるときに、隣の高さから斜面の傾きを求める）
   const H = new Float32Array(verts * verts);
@@ -100,6 +92,8 @@ export function createTerrain(app, config, seed, textures = null, zones = null, 
       const wq = land.waterLevel(x, z);
       const under = wq ? Math.min(1, Math.max(0, (wq.surface - positions[i * 3 + 1] + 0.25) / 0.5)) : 0;   // 水面より下
       const wetK = land.wet(x, z);
+      const fieldK = plan ? plan.fieldAt(x, z) : 0;   // 畑（草は生えない）
+      grassW *= 1 - fieldK;
       const hx = (H[iz * verts + Math.min(seg, ix + 1)] - H[iz * verts + Math.max(0, ix - 1)]), hz = (H[Math.min(seg, iz + 1) * verts + ix] - H[Math.max(0, iz - 1) * verts + ix]);
       const sl = Math.hypot(hx, hz) / (2 * size / seg);   // 斜面の傾き（高さ / 長さ）
       const rockK = Math.max(land.rocky(x, z), smoothstep(0.75, 1.3, sl) * 0.8);
@@ -115,6 +109,7 @@ export function createTerrain(app, config, seed, textures = null, zones = null, 
           v += (dirt[c] - v) * pw * 0.9;
         }
         v += (rock[c] - v) * rockK;
+        v += (plowed[c] - v) * fieldK;
         v += (mud[c] - v) * Math.max(0, wetK - under) * 0.55;
         v += (gravel[c] - v) * under;
         colors[i * 4 + c] = Math.min(1, v * (0.85 + 0.3 * n2));

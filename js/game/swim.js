@@ -16,7 +16,8 @@ export const wadeScale = (depth) => 1 - (1 - SWIM.wade) * smooth(0.15, 1.2, dept
  * @param {(x: number, z: number) => ({surface: number, depth: number} | null)} water world/terrain.js の waterAt
  */
 export function applyWater(f, water) {
-  const w = water ? water(f.x, f.z) : null;
+  let w = water ? water(f.x, f.z) : null;
+  if (w && !f.swimming && (f.y ?? -Infinity) > w.surface + 0.05) w = null;   // 橋の上に立っている（水の上）
   f.waterDepth = w ? w.depth : 0;
   f.waterSurface = w ? w.surface : null;
   f.swimming = f.waterDepth > SWIM.depth;
