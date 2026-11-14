@@ -21,7 +21,7 @@ export const LESSONS = {
   basic: {
     name: '基本', char: null, desc: '動く・見回す・疾驅・攻擊・迴避を覚える。案山子が 1 人立っている',
     bots: [{ char: 'polearm', role: 'dummy' }],
-    setup({ me, bots }) { place(bots[0], me, 5, 0); },
+    setup({ me, bots }) { place(bots[0], me, 8, 0); },   // 8 m 前（まっすぐ 5 m 歩いてもぶつからない）
     steps: [
       { text: '移動スティック（PC は W A S D）で 5 m 歩く', done: (S) => S.moved >= 5 },
       { text: '画面の右側をなぞって（PC はマウスで引いて）、向きを 90 度変える', done: (S) => S.turned >= 90 },
@@ -54,7 +54,8 @@ export const LESSONS = {
       if (!seg) return;
       const len = Math.hypot(seg.bx - seg.ax, seg.bz - seg.az), tx = (seg.bx - seg.ax) / len, tz = (seg.bz - seg.az) / len;
       const mx = (seg.ax + seg.bx) / 2, mz = (seg.az + seg.bz) / 2;
-      spawn(mx + seg.nx * 0.9, mz + seg.nz * 0.9, Math.atan2(seg.nx, seg.nz) / DEG);   // 壁の前に、壁の方を向いて立つ
+      // 壁の前に、壁の方を向いて立つ（壁潛ボタンが出る 0.9 m（game/cover.js の COVER_REACH）より内側）
+      spawn(mx + seg.nx * 0.55, mz + seg.nz * 0.55, Math.atan2(seg.nx, seg.nz) / DEG);
       const L = Math.min(6, len / 2 + 2);
       bots[0].patrol = [{ x: mx - tx * L + seg.nx * 2.0, z: mz - tz * L + seg.nz * 2.0 }, { x: mx + tx * L + seg.nx * 2.0, z: mz + tz * L + seg.nz * 2.0 }];
       bots[0].x = bots[0].patrol[0].x; bots[0].z = bots[0].patrol[0].z;
@@ -68,7 +69,7 @@ export const LESSONS = {
   shield: {
     name: '防禦と反擊', char: 'shield', desc: '楯で攻撃を受け止め、技能「反擊」で返す（楯劍騎士）',
     bots: [{ char: 'sword', role: 'attacker', loadout: { main: 'longsword' } }],
-    setup({ me, bots }) { place(bots[0], me, 5, 0); },
+    setup({ me, bots }) { place(bots[0], me, 8, 0); },   // 8 m 前（まっすぐ 5 m 歩いてもぶつからない）
     steps: [
       { text: '左手ボタン（防禦。PC は K）を押したまま、敵の攻撃を楯で 3 回受ける', done: (S) => S.guarded >= 3 },
       { text: '技能ボタン（PC は G）で「反擊」を使う', done: (S) => S.skill },
