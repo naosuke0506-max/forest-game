@@ -88,7 +88,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   if (lesson) {
     const foeFighters = fighters.filter((f) => !f.isPlayer);
     lesson.setup({
-      me, bots: foeFighters, hides, hiding, coverSegs: covers, houses,
+      me, bots: foeFighters, hides, hiding, coverSegs: covers, houses, isFree: (x, z, r) => obstacles.isFree(x, z, r, true),
       spawn: (x, z, yaw) => { player.spawn(x, z, yaw); me.x = x; me.z = z; me.yaw = yaw; me.y = player.position.y; },
     });
     for (const f of foeFighters) if (!f.hidden) f.y = (groundAt || ((x, z) => terrain.heightAt(x, z)))(f.x, f.z, f.y ?? null);

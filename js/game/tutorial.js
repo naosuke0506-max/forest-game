@@ -49,16 +49,24 @@ export const LESSONS = {
   cover: {
     name: '暗殺・壁潛', char: null, desc: '壁に背を付けて待ち、通りかかった敵を暗殺する',
     bots: [{ char: 'blunt', role: 'patrol' }],
-    setup({ me, bots, coverSegs, spawn }) {
-      const seg = coverSegs.filter((s) => !s.inside).sort((p, q) => Math.hypot(q.bx - q.ax, q.bz - q.az) - Math.hypot(p.bx - p.ax, p.bz - p.az))[0];
-      if (!seg) return;
-      const len = Math.hypot(seg.bx - seg.ax, seg.bz - seg.az), tx = (seg.bx - seg.ax) / len, tz = (seg.bz - seg.az) / len;
-      const mx = (seg.ax + seg.bx) / 2, mz = (seg.az + seg.bz) / 2;
+    setup({ me, bots, coverSegs, isFree, spawn }) {
+      // 壁を選ぶ：家の外の壁のうち、見回りの道（壁から 2 m 外を、壁に沿って 2L m）に木・ほかの家の壁・樽などが無い、なるべく長い壁。
+      // 家と家の間の狭い路地の壁を選ぶと、見回りの敵が向かいの家にぶつかって通れない（2026-11-13 の確かめで分かった）
+      const plan = (s) => {
+        const len = Math.hypot(s.bx - s.ax, s.bz - s.az), tx = (s.bx - s.ax) / len, tz = (s.bz - s.az) / len;
+        const mx = (s.ax + s.bx) / 2, mz = (s.az + s.bz) / 2, L = Math.min(6, len / 2 + 2);
+        const a = { x: mx - tx * L + s.nx * 2, z: mz - tz * L + s.nz * 2 }, b = { x: mx + tx * L + s.nx * 2, z: mz + tz * L + s.nz * 2 };
+        let ok = true;
+        const n = Math.ceil((2 * L) / 0.5);
+        for (let i = 0; i <= n && ok && isFree; i++) ok = isFree(a.x + ((b.x - a.x) * i) / n, a.z + ((b.z - a.z) * i) / n, 0.55);
+        return { s, len, mx, mz, a, b, ok };
+      };
+      const pl = coverSegs.filter((s) => !s.inside).map(plan).sort((p, q) => (q.ok - p.ok) || (q.len - p.len))[0];
+      if (!pl) return;
       // 壁の前に、壁の方を向いて立つ（壁潛ボタンが出る 0.9 m（game/cover.js の COVER_REACH）より内側）
-      spawn(mx + seg.nx * 0.55, mz + seg.nz * 0.55, Math.atan2(seg.nx, seg.nz) / DEG);
-      const L = Math.min(6, len / 2 + 2);
-      bots[0].patrol = [{ x: mx - tx * L + seg.nx * 2.0, z: mz - tz * L + seg.nz * 2.0 }, { x: mx + tx * L + seg.nx * 2.0, z: mz + tz * L + seg.nz * 2.0 }];
-      bots[0].x = bots[0].patrol[0].x; bots[0].z = bots[0].patrol[0].z;
+      spawn(pl.mx + pl.s.nx * 0.55, pl.mz + pl.s.nz * 0.55, Math.atan2(pl.s.nx, pl.s.nz) / DEG);
+      bots[0].patrol = [pl.a, pl.b];
+      bots[0].x = pl.a.x; bots[0].z = pl.a.z;
     },
     steps: [
       { text: '壁の近くで壁潛ボタン（PC は E）を押して、壁に背を付ける', done: (S) => S.covered },
@@ -152,7 +160,7 @@ function place(f, me, d, ang = 0, side = 0) {
  */
 export function createTutorBot(f, role, me) {
   const input = { forward: 0, strafe: 0, run: false, yaw: f.yaw, pitch: 0 };
-  let tap = false, cd = 1.2, leg = 1;
+  let tap = false, cd = 1.2, leg = 1, stuck = 0;
   // 倒れない案山子（dummy・guard）。攻めてくる相手は弱くする（教練で自分が倒れないように）
   if (role === 'dummy' || role === 'guard') { f.stats.maxHp = f.stats.hp = 5000; }
   if (role === 'attacker') f.stats.attack *= 0.35;
@@ -180,7 +188,13 @@ export function createTutorBot(f, role, me) {
       // 向きは鎧の重さの速さで変える（bot と同じ）
       const turn = (BODY_TURN.turn[f.weight] || BODY_TURN.turn.medium) * dt, dy = wrap(want - f.yaw);
       input.yaw = f.yaw + Math.sign(dy) * Math.min(Math.abs(dy), turn);
+      const px = f.x, pz = f.z;
       const mag = moveFighter(f, input, dt, world);
+      // 見回り：何かにつかえて 1 秒進めなければ、引き返す
+      if (role === 'patrol') {
+        stuck = Math.hypot(f.x - px, f.z - pz) < 0.2 * dt ? stuck + dt : 0;
+        if (stuck > 1) { leg = 1 - leg; stuck = 0; }
+      }
       f.gait = mag > 0.05 ? 'walk' : 'still';
       return mag;
     },
