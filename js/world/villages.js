@@ -222,21 +222,24 @@ export function planVillages(seed, land, { size, playRadius }) {
   ];
   const PC = 8, padGrid = new Map();
   pads.forEach((p, i) => {
-    const R = Math.hypot(p.w, p.d) / 2 + p.fade;
+    const R = Math.hypot(p.w, p.d) / 2 + p.fade + 8;   // 高さの差で広がる分（padHeight）も入れる
     for (let gx = Math.floor((p.x - R) / PC); gx <= Math.floor((p.x + R) / PC); gx++) for (let gz = Math.floor((p.z - R) / PC); gz <= Math.floor((p.z + R) / PC); gz++) {
       const k = gx * 65536 + gz;
       if (!padGrid.has(k)) padGrid.set(k, []);
       padGrid.get(k).push(i);
     }
   });
-  /** 平らにした地面の高さ：h（元の高さ）を、近くの平らにする所の高さへ寄せる */
+  /**
+   * 平らにした地面の高さ：h（元の高さ）を、近くの平らにする所の高さへ寄せる。
+   * 寄せる幅は、高さの差が大きいほど広い（差 1 m で約 2.2 m 広げる。坂が急な壁にならず、なだらかな土手になる）
+   */
   function padHeight(x, z, h) {
     const l = padGrid.get(Math.floor(x / PC) * 65536 + Math.floor(z / PC));
     if (!l) return h;
     let bw = 0, by = h;
     for (const i of l) {
       const p = pads[i];
-      const w = 1 - smooth(0, p.fade, rectDist(p, x, z));
+      const w = 1 - smooth(0, p.fade + 2.2 * Math.abs(h - p.y), rectDist(p, x, z));
       if (w > bw) { bw = w; by = p.y; }
     }
     return h + (by - h) * bw;

@@ -159,7 +159,12 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
     for (let k = 0; k < SEG; k++) {
       const t0 = k / SEG, t1 = (k + 1) / SEG, tm = (t0 + t1) / 2;
       const cx = b.ax + dx * tm, cz = b.az + dz * tm, y = (yAt(t0) + yAt(t1)) / 2;
-      box(B, 'wood', cx, y - 0.16, cz, b.width, L / SEG + 0.02, 0.16, yaw, { shade: 0.9 + ((k * 37) % 7) * 0.02 });       // 床板
+      // 床板：区切りごとに坂の傾きに合わせて傾ける（段にならないように）
+      { const segL = L / SEG, dy = yAt(t1) - yAt(t0), sl = Math.hypot(segL, dy);
+        const along = [tx * segL / sl, dy / sl, tz * segL / sl], across = [nx, 0, nz];
+        const up = [along[1] * across[2] - along[2] * across[1], along[2] * across[0] - along[0] * across[2], along[0] * across[1] - along[1] * across[0]];
+        const nUp = up[1] < 0 ? up.map((v) => -v) : up;
+        obox(B, 'wood', [cx - nUp[0] * 0.08, y - nUp[1] * 0.08, cz - nUp[2] * 0.08], across, along, nUp, b.width, sl + 0.04, 0.16, 0.9 + ((k * 37) % 7) * 0.02); }
       for (const s of [-1, 1]) {
         box(B, 'wood', cx + nx * s * (hw - 0.06), y - 0.36, cz + nz * s * (hw - 0.06), 0.18, L / SEG + 0.02, 0.22, yaw, { shade: 0.75 });   // 桁
         box(B, 'wood', cx + nx * s * (hw - 0.05), y + 0.86, cz + nz * s * (hw - 0.05), 0.09, L / SEG + 0.02, 0.09, yaw, { shade: 0.85 });   // 欄干の横木

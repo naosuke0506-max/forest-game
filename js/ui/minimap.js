@@ -184,7 +184,7 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     { key: 'mixed', x: -48, z: -4 },
     // 深い森・大草原は、その広がり（world/zones.js の blobs）の真ん中
     { key: 'deep', x: zones.blobs?.deep.x ?? 0, z: zones.blobs?.deep.z ?? -areaRadius * 0.68 },
-    { key: 'prairie', x: zones.blobs?.prairie.x ?? areaRadius * 0.66, z: (zones.blobs?.prairie.z ?? 0) + 8 },
+    { key: 'prairie', x: (zones.blobs?.prairie.x ?? areaRadius * 0.6) + 12, z: (zones.blobs?.prairie.z ?? 0) + 46 },   // 野邑（大草原の真ん中）と重ならないよう南へ
     // 村は 3 つ（world/villages.js）：それぞれの名前（山邑・川邑・野邑）を村の少し北に
     ...(zones.villages?.length ? zones.villages.map((v) => ({ key: 'castle', name: v.name, x: v.x, z: v.z - v.r * 0.75 }))
       : [{ key: 'castle', x: zones.castle.x, z: zones.castle.z - 40 }]),
