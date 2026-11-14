@@ -13,9 +13,9 @@ const K = 12;   // 断面の区切り（床の左端 → 天井 → 床の右端
 
 /**
  * @param {object} land world/landform.js（cave と uncarved）
- * @param {{ obstacles, floors, sight, rockTex, seed }} o
+ * @param {{ obstacles, floors, sight, rockTex, seed, terrain }} o  terrain があれば、岩山の蓋の上の面を地面と同じ見た目にする
  */
-export function createCave(app, land, { obstacles, floors, sight = null, rockTex = null, seed = 1 }) {
+export function createCave(app, land, { obstacles, floors, sight = null, rockTex = null, seed = 1, terrain = null }) {
   const C = land.cave;
   const positions = [], normals = [], uvs = [], colors = [], indices = [];
   let tris = 0;
@@ -120,22 +120,37 @@ export function createCave(app, land, { obstacles, floors, sight = null, rockTex
   // ---- 岩山の蓋：通り道の溝の上を、掘る前の岩山の高さで覆う ----
   // （溝は床まで掘ってあるので、筒の継ぎ目や分かれ道の所に隙間があると空が見えていた。蓋があれば、隙間からは暗い岩が見える。
   //   外から見ても、岩山の上の溝の縁が見えない）
+  // 蓋は 2 枚：上の面は地面と同じ見た目（地面のマテリアルと頂点色。上から見ると岩山と見分けが付かない）、
+  //   その 0.36m 下に岩の面（両面。中から隙間越しに見える）。岩山は天井の上に少なくとも 5.6m あるので、下の面が中に出ることはない
+  const skin = { positions: [], uvs: [], colors: [], indices: [] };
+  const tile = terrain?.uvTile || 2;
   C.tunnels.forEach((t, ti) => {
     const P = t.P, ACROSS = 7;
-    let prev = null;
+    let prev = null, prevS = null;
     for (let i = 0; i < P.length; i++) {
-      if (t.covered[i] < 0.5) { prev = null; continue; }
+      if (t.covered[i] < 0.5) { prev = prevS = null; continue; }
       const j0 = Math.max(0, i - 1), j1 = Math.min(P.length - 1, i + 1);
       let tx = P[j1][0] - P[j0][0], tz = P[j1][1] - P[j0][1];
       const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
       const nx = -tz, nz = tx, hw = t.width[i] / 2 + 4.3;
-      const row = [];
+      const row = [], rowS = [];
       for (let k = 0; k < ACROSS; k++) {
         const a = (k / (ACROSS - 1)) * 2 - 1, x = P[i][0] + nx * hw * a, z = P[i][1] + nz * hw * a;
-        row.push(vert(x, land.uncarved(x, z) + 0.06 + ti * 0.015, z, 0, 1, 0, x / 3, z / 3, 0.62));
+        const top = land.uncarved(x, z) + ti * 0.015;
+        row.push(vert(x, top - 0.3, z, 0, 1, 0, x / 3, z / 3, 0.62));
+        if (terrain) {
+          skin.positions.push(x, top + 0.06, z); skin.uvs.push(x / tile, z / tile); skin.colors.push(...terrain.colorAt(x, z));
+          rowS.push(skin.positions.length / 3 - 1);
+        }
       }
       if (prev) for (let k = 0; k < ACROSS - 1; k++) indices.push(prev[k], row[k], prev[k + 1], prev[k + 1], row[k], row[k + 1]);
-      prev = row;
+      if (prevS) for (let k = 0; k < ACROSS - 1; k++) for (const tri of [[prevS[k], rowS[k], prevS[k + 1]], [prevS[k + 1], rowS[k], rowS[k + 1]]]) {
+        // 地面と同じく、上から見て表になる向きにそろえる（片面なので）
+        const q = skin.positions, [i0, i1, i2] = tri.map((v) => v * 3);
+        const ux = q[i1] - q[i0], uz = q[i1 + 2] - q[i0 + 2], vx = q[i2] - q[i0], vz = q[i2 + 2] - q[i0 + 2];
+        if (uz * vx - ux * vz > 0) skin.indices.push(...tri); else skin.indices.push(tri[0], tri[2], tri[1]);
+      }
+      prev = row; prevS = rowS.length ? rowS : null;
     }
   });
   tris = indices.length / 3;
@@ -157,9 +172,32 @@ export function createCave(app, land, { obstacles, floors, sight = null, rockTex
   e.addComponent('render', { meshInstances: [new pc.MeshInstance(mesh, mat)], castShadows: true, receiveShadows: true });
   app.root.addChild(e);
   sceneBudget.triangles += tris;
+  // 蓋の上の面（地面と同じ見た目）：描画命令がもう 1 つ（見える時だけ）
+  let skinTris = 0;
+  if (terrain && skin.indices.length) {
+    const skinMesh = createMesh(app.graphicsDevice, skin);
+    const se = new pc.Entity('cave-hill-skin');
+    se.addComponent('render', { meshInstances: [new pc.MeshInstance(skinMesh, terrain.material)], castShadows: false, receiveShadows: true });
+    app.root.addChild(se);
+    skinTris = skin.indices.length / 3;
+    sceneBudget.triangles += skinTris;
+  }
 
   // ---- 歩ける・ぶつかる・見えない ----
   const footprints = [];
+  // 岩山の上：掘った溝のうち覆われた所（筒の上）では、掘る前の岩山の面を床にする（溝の上を歩いても中へ落ちない。見た目の蓋と同じ高さ）。
+  //   掘る範囲（world/cave-shape.js の carve：壁から 3.9 m）と同じ物差しで決めるので、曲がり角でも隙間ができない。
+  //   覆われていない所（口の外の切り通し）は床にしない。岩山は天井の上に少なくとも 5.6 m あるので、中の人がこの面に上がることはない
+  const hillTop = (x, z) => {
+    const q = C.nearest(x, z);
+    if (!q || q.e > 4.2 || q.cover < 0.5) return null;
+    return land.uncarved(x, z);
+  };
+  {
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const t of C.tunnels) for (const [x, z] of t.P) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+    floors.addSurface({ cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, yaw: 0, hw: (x1 - x0) / 2 + 8, hd: (z1 - z0) / 2 + 8, at: hillTop });
+  }
   for (const t of C.tunnels) {
     const P = t.P;
     for (let i = 0; i < P.length - 1; i++) {
@@ -175,9 +213,7 @@ export function createCave(app, land, { obstacles, floors, sight = null, rockTex
         obstacles.add(ox, oz, 0.4, true, { y0: fy - 0.6, y1: fy + ceil + 0.3 });
       }
       if (cov < 0.5) continue;
-      // 岩山の上：通り道の上に床を登録する（溝の上を歩いても、中へ落ちない）
       const top = Math.min(land.uncarved(mx, mz), land.uncarved(mx + nx * (w / 2 + 3.6), mz + nz * (w / 2 + 3.6)), land.uncarved(mx - nx * (w / 2 + 3.6), mz - nz * (w / 2 + 3.6)));
-      if (top > fy + ceil + 0.8) floors.addFloor({ cx: mx, cz: mz, yaw, hw: w / 2 + 4.3, hd: L / 2 + 0.08, y: top });
       // bot の目：天井から岩山の上までをさえぎる
       sight?.addYawBox(mx, fy + ceil, mz, w + 1, L + 0.1, Math.max(0.5, top - fy - ceil), yaw);
     }
@@ -188,5 +224,5 @@ export function createCave(app, land, { obstacles, floors, sight = null, rockTex
     }
   }
   for (const [x, z] of mouths) footprints.push({ type: 'cave', x, z });
-  return { triangles: tris, footprints, mesh: e };
+  return { triangles: tris + skinTris, footprints, mesh: e };
 }

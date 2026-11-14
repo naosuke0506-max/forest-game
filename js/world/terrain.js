@@ -139,8 +139,24 @@ export function createTerrain(app, config, seed, textures = null, zones = null, 
   });
   app.root.addChild(entity);
 
+  // 地面の色（色味と質感の混ぜ方）を後から読めるように、小さくして残す（洞窟の岩山の蓋を地面と同じ見た目にするため。約 160KB）
+  const colorGrid = Uint8Array.from(colors, (v) => Math.round(Math.min(1, Math.max(0, v)) * 255));
+  /** その場所の地面の頂点色（RGBA。格子の 4 点から補間） */
+  const colorAt = (x, z) => {
+    const fx = Math.min(seg - 1e-6, Math.max(0, ((x + half) / size) * seg)), fz = Math.min(seg - 1e-6, Math.max(0, ((z + half) / size) * seg));
+    const ix = Math.floor(fx), iz = Math.floor(fz), ax = fx - ix, az = fz - iz;
+    const out = [0, 0, 0, 0];
+    for (let c = 0; c < 4; c++) {
+      const g = (jx, jz) => colorGrid[((iz + jz) * verts + ix + jx) * 4 + c] / 255;
+      out[c] = (g(0, 0) * (1 - ax) + g(1, 0) * ax) * (1 - az) + (g(0, 1) * (1 - ax) + g(1, 1) * ax) * az;
+    }
+    return out;
+  };
+
   return {
     entity, heightAt, normalAt, waterAt, land,
+    /** 地面と同じ見た目の物を作るとき用：マテリアル・頂点色・質感画像 1 枚の大きさ（m） */
+    material, colorAt, uvTile: tile,
     /** 草地と落ち葉の画像を貼る（起動の後に裏で読んだ物） */
     setGroundTextures: (grass, litter) => blend?.setTextures(grass, litter),
   };

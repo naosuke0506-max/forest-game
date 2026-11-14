@@ -130,7 +130,7 @@ async function boot() {
   for (const b of props?.blockers || []) sight.addCyl(b.x, b.z, b.r, b.y0, b.y1);
   const village = createVillage(app, CONFIG, terrain, obstacles, zones, floors, sight, plan);
   // 洞窟（風穴。北西の深い森の岩山。world/cave.js）：壁と天井・床・口の岩の縁。岩山の上の床と、中の壁の当たり判定も登録する
-  const cave = createCave(app, land, { obstacles, floors, sight, rockTex: tex.rock, seed: CONFIG.seed });
+  const cave = createCave(app, land, { obstacles, floors, sight, rockTex: tex.rock, seed: CONFIG.seed, terrain });
   // 地面を覆う草（自分の周りだけ。短い草・穂・白い花・大草原の背の高い草）
   const groundCover = grassTex ? createGroundCover(app, CONFIG, CONFIG.seed, terrain, obstacles, grassTex, zones) : null;
 
