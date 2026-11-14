@@ -20,6 +20,8 @@ export function createHud(match, me, { label = null } = {}) {
   let shownTime = null;
   const ranking = $('#ranking'), feed = $('#feed');
   const center = $('#center-msg');
+  // 教練の間は、得点の順位と、得点・倒した知らせ（左下）を出さない（得点は意味が無く、左の手順の札と重なる）
+  $('#hud').classList.toggle('tutoring', !!label);
   const reward = $('#reward');
   let centerTimer = 0, lastRankKey = '', shownReward = null;
 

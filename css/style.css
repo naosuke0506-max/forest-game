@@ -473,6 +473,8 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .ranking li.out { opacity: .45; text-decoration: line-through; }
 
 /* 左：知らせ（移動スティックの上） */
+/* 教練の間（ui/hud.js）：順位と左下の知らせは隠す */
+#hud.tutoring .ranking, #hud.tutoring .feed { display: none; }
 .feed {
   position: absolute;
   left: calc(12px + var(--safe-l));
