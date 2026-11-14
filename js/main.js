@@ -182,7 +182,8 @@ async function boot() {
     // 洞窟の中は暗い（奥ほど暗いのは洞窟の頂点の色。ここは光を弱くする。岩山の上にいるときは外）
     const inCave = land.cave.inside(cp.x, cp.z, cp.y);
     caveK += (inCave - caveK) * Math.min(1, dt * 2);
-    timeOfDay.setLocal({ fog: 1 + 1.3 * deepK, light: (1 - 0.35 * deepK) * (1 - 0.62 * caveK) });
+    // 洞窟の中は霧も薄くする（霧の色は明るいので、奥が明るく光って見えてしまう）
+    timeOfDay.setLocal({ fog: (1 + 1.3 * deepK) * (1 - 0.85 * caveK), light: (1 - 0.35 * deepK) * (1 - 0.62 * caveK) });
     trees?.setDrawDistance?.(CONFIG.world.drawDistance * (1 - 0.45 * deepK));
     timeOfDay.update(dt);
     sunGlare.update(dt);

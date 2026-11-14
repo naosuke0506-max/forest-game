@@ -117,6 +117,27 @@ export function createCave(app, land, { obstacles, floors, sight = null, rockTex
       }
     }
   }
+  // ---- 岩山の蓋：通り道の溝の上を、掘る前の岩山の高さで覆う ----
+  // （溝は床まで掘ってあるので、筒の継ぎ目や分かれ道の所に隙間があると空が見えていた。蓋があれば、隙間からは暗い岩が見える。
+  //   外から見ても、岩山の上の溝の縁が見えない）
+  C.tunnels.forEach((t, ti) => {
+    const P = t.P, ACROSS = 7;
+    let prev = null;
+    for (let i = 0; i < P.length; i++) {
+      if (t.covered[i] < 0.5) { prev = null; continue; }
+      const j0 = Math.max(0, i - 1), j1 = Math.min(P.length - 1, i + 1);
+      let tx = P[j1][0] - P[j0][0], tz = P[j1][1] - P[j0][1];
+      const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+      const nx = -tz, nz = tx, hw = t.width[i] / 2 + 4.3;
+      const row = [];
+      for (let k = 0; k < ACROSS; k++) {
+        const a = (k / (ACROSS - 1)) * 2 - 1, x = P[i][0] + nx * hw * a, z = P[i][1] + nz * hw * a;
+        row.push(vert(x, land.uncarved(x, z) + 0.06 + ti * 0.015, z, 0, 1, 0, x / 3, z / 3, 0.62));
+      }
+      if (prev) for (let k = 0; k < ACROSS - 1; k++) indices.push(prev[k], row[k], prev[k + 1], prev[k + 1], row[k], row[k + 1]);
+      prev = row;
+    }
+  });
   tris = indices.length / 3;
 
   // ---- 形にして描く（両面。内側から見るため） ----

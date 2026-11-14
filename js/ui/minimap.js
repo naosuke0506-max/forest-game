@@ -188,7 +188,7 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
   const labels = zones ? [
     { key: 'mixed', x: -48, z: -4 },
     // 深い森・大草原は、その広がり（world/zones.js の blobs）の真ん中
-    { key: 'deep', x: zones.blobs?.deep.x ?? 0, z: zones.blobs?.deep.z ?? -areaRadius * 0.68 },
+    { key: 'deep', x: (zones.blobs?.deep.x ?? 0) + 30, z: (zones.blobs?.deep.z ?? -areaRadius * 0.68) + 36 },   // 風穴（洞窟）の名前と重ならないよう南東へ
     { key: 'prairie', x: (zones.blobs?.prairie.x ?? areaRadius * 0.6) + 12, z: (zones.blobs?.prairie.z ?? 0) + 46 },   // 野邑（大草原の真ん中）と重ならないよう南へ
     // 村は 3 つ（world/villages.js）：それぞれの名前（山邑・川邑・野邑）を村の少し北に
     ...(zones.villages?.length ? zones.villages.map((v) => ({ key: 'castle', name: v.name, x: v.x, z: v.z - v.r * 0.75 }))
