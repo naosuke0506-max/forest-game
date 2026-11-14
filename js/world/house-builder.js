@@ -285,7 +285,10 @@ export function buildHouse(B, h, reg) {
     twoStory ? [W2(0, d / 2 + 1.3), W2(0, id - 0.9)] : [W2(0, d / 2 + 1.3), W2(0, id - 0.9), W2(0, -id + 1.55)],
     [W2(0, d / 2 + 1.3), W2(0, id - 0.9), W2((sx0 + sx1) / 2, zb + 0.45), W2((sx0 + sx1) / 2, zt - 0.45), W2(sx1 + 0.75, zt - 0.45)],
   ];
-  const furniture = new Furniture(B, F, y0, yaw, reg, range, routes);
+  // 部屋の内側の広さ（家の中の座標。隠れ場所に付けて、家の外から隠れたり探したりできないようにする。game/hiding.js の inRoom）
+  //   一階は前後 -id〜id、一番上の階（二階建ての二階）は前へ張り出した分だけ広い（-id〜idF）
+  const rooms = [{ x: cx, z: cz, yaw, hw: iw, z0: -id, z1: id }, { x: cx, z: cz, yaw, hw: iw, z0: -id, z1: idF }];
+  const furniture = new Furniture(B, F, y0, yaw, reg, range, routes, rooms);
   if (twoStory) {
     const g = fy[0], u = fy[1];
     // 一階：暖炉（右の壁）、机と腰掛け、長持、タンス（後ろの壁）、袋（後ろの右の隅。階段の前は空ける）

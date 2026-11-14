@@ -177,7 +177,8 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     if (!frozen) updateLook(dt, input);
     else headYaw = clamp(headYaw - input.lookX, -BODY_TURN.neckYaw, BODY_TURN.neckYaw);
     if (mag > 0) {
-      const speed = speedFor(Math.min(1, mag)) * (api.speedScale || 1);
+      // speedScale が 0（攻撃・回避などの動きの間。game/combat.js の moveScale）なら止まる（前は || 1 で 0 が 1 になり、動きの間も歩けていた）
+      const speed = speedFor(Math.min(1, mag)) * (api.speedScale ?? 1);
       const rad = (yaw * Math.PI) / 180;
       // 前（-Z）と右（+X）を、その向きに合わせて回す
       const fx = -Math.sin(rad), fz = -Math.cos(rad);

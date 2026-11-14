@@ -311,6 +311,11 @@ export const HIDE_ACTS = {
 export const COMBAT = {
   staminaRegen: 22,        // 1 秒に戻るスタミナ
   staminaRegenDelay: 0.6,  // 使ってから戻り始めるまで（秒）
+  // 走る・防禦を構えるとスタミナが減り続ける（利用者の指示 2026-11-14。数は Claude の仮の値）：1 秒に減る分
+  runStamina: 6,           // 走る（満タンから約 16 秒走れる）
+  sprintStamina: 7,        // 疾驅（全速力。10 秒で 70）
+  guardHoldStamina: 5,     // 防禦を構えている（受けた傷の分は guardStaminaPerDamage で別に減る）
+  windedRecover: 40,       // 走って使い切ったら、ここまで戻るまで走れない（息切れ。約 2.4 秒）
   maxStamina: 100,
   guardReduce: 0.75,       // 防御で減らせる割合（盾なし）
   guardReduceShield: 0.9,  // 盾あり（楯ごとの割合は SHIELDS の cut。無いときだけこれ）
@@ -318,7 +323,7 @@ export const COMBAT = {
   guardArc: 120,           // 防御できる角度（前方、度）
   guardStaminaPerDamage: 1.0, // 防御で受けたダメージ 1 ごとに使うスタミナ
   guardMoveScale: 0.5,     // 防御中の移動の速さ
-  attackMoveScale: 0.55,   // 攻撃中の移動の速さ
+  attackMoveScale: 0,      // 攻撃・回避などの動きの間の移動の速さ（止まる。利用者の指示 2026-11-14。前は 0.55）
   bodyRadius: 0.4,         // 当たり判定の体の太さ（m）
   bodyHeight: 1.8,
   gravity: 9.8,

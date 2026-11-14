@@ -518,7 +518,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         const moving = running ? b.update(dt, world) : 0;
         if (running) combat.control(b.fighter, b.combatInput);
         views.get(b.fighter).update(dt, moving);
-        views.get(b.fighter).setVisible(!b.fighter.hidden);   // 隠れている人は見えない
+        // 隠れている人も、タンスの中・ベッドの下にいる（render/character-view.js。扉や掛け布の隙間から見えることがある）
       }
       if (running) combat.update(dt);
       if (!frozenTime) { senses.update(dt); sfx.update(dt, fighters); }   // 時間が止まっている間は、見聞きも息遣いも止まる
@@ -531,7 +531,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // 暗殺の動きなど：体の位置と向きを、プレイヤーの操作へ合わせる（動きが終わった時の、体の移った所と向きも）
       const scriptedNow = SCRIPTED.has(me.action?.kind);
       const viewBefore = player.viewYaw;
-      if (me.alive && (scriptedNow || wasScripted)) player.follow(me.x, me.y, me.z, me.yaw);
+      // 隠れる動きが終わって隠れた時は合わせない（隠れた時の外を見る向き player.setHide を、家具の方を向いた体の向きで上書きして、
+      // 隠れている間の目が壁の方を向いていた。2026-11-14 に直した）
+      if (me.alive && !me.hidden && (scriptedNow || wasScripted)) player.follow(me.x, me.y, me.z, me.yaw);
       wasScripted = scriptedNow;
       views.get(me).update(dt, player.moving);
       viewModel.update(dt, player.moving);

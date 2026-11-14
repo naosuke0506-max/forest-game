@@ -11,7 +11,7 @@ export const BLANKETS = [[0.55, 0.16, 0.12], [0.2, 0.32, 0.5], [0.3, 0.42, 0.22]
 
 /** 家具（家の中の座標で置く）。ぶつかる範囲はその階の高さだけ */
 export class Furniture {
-  constructor(B, F, y0, yaw, reg, range, routes) { Object.assign(this, { B, F, y0, yaw, reg, range, routes }); }
+  constructor(B, F, y0, yaw, reg, range, routes, rooms = []) { Object.assign(this, { B, F, y0, yaw, reg, range, routes, rooms }); }
   /** 視線をさえぎる箱（家の中の座標。bot の目。game/sight.js） */
   block(x, y, z, w, d, h, rot) { this.reg.block?.(x, y, z, w, d, h, rot); }
   bx(surf, x, y, z, w, d, h, rot, opt = {}) {
@@ -39,6 +39,7 @@ export class Furniture {
       kind, x: p[0], z: p[2], y: this.y0 + floorY, yaw: this.yaw + lookRot,
       eyeX: e[0], eyeZ: e[2], eyeH, outX: o[0], outZ: o[2],
       route: this.routes[floorY > 2 ? 1 : 0],
+      room: this.rooms[floorY > 2 ? 1 : 0] || null,   // その階の部屋の内側（game/hiding.js の inRoom。家の外から隠れられないように）
     };
     this.reg.hides.push(spot);
     return spot;

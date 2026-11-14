@@ -3,7 +3,7 @@
 // 模型は tools/characters/build_character.py で作る（assets/characters/<名前>.glb と、動きの長さ・速さの .json）。
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
-import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT, WRATH } from '../game/data.js';
+import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT, WRATH, HIDE_ACTS } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { techSetOf } from '../game/techniques.js';
 import { stanceShape } from '../game/stance.js';
@@ -318,8 +318,12 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         px = fighter.x; pz = fighter.z; vel = 0; fwd = 0; pYaw = fighter.yaw; yawRate = 0; eyeReady = false;
         eyeHold = true;   // 骨はまだ前の動きの最後の姿（体だけ移った）なので、目の位置は次の姿が出てから測る
       }
-      const target = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z));
+      // タンス・ベッドに隠れている間も、体はそこにいる（利用者の指示 2026-11-14：見つかった時に急に出てこないように）。
+      // 隠れる動き（hide_*_in）は家具の前の「出る所」に家具の方を向いて立った所が元なので、その所と向きで、動きの最後の姿のまま描く
+      const hid = fighter.hidden;
+      const target = hid ? hid.y : (fighter.y ?? terrain.heightAt(fighter.x, fighter.z));
       groundY += (target - groundY) * Math.min(1, dt * 12);
+      if (hid) groundY = target;
       // 壁裏隠れ：背中が壁に付くように、壁の側へ少し寄せて描く（位置の計算は壁から離れた所）
       const cv = fighter.cover?.seg;
       // 押されて下がった分：受けた動きの間は下がった分だけ戻し、終わったら動きの戻り（BLEND）と同じ間に 0 へ
@@ -333,8 +337,11 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         const k = Math.max(0, 1 - knock.fade / BLEND);
         knock.x = knock.fx * k; knock.z = knock.fz * k;
       }
-      root.setPosition(fighter.x - knock.x - (cv ? cv.nx * 0.14 : 0), groundY, fighter.z - knock.z - (cv ? cv.nz * 0.14 : 0));
-      root.setEulerAngles(0, fighter.yaw, 0);
+      if (hid) { root.setPosition(hid.outX, groundY, hid.outZ); root.setEulerAngles(0, hid.yaw, 0); }
+      else {
+        root.setPosition(fighter.x - knock.x - (cv ? cv.nx * 0.14 : 0), groundY, fighter.z - knock.z - (cv ? cv.nz * 0.14 : 0));
+        root.setEulerAngles(0, fighter.yaw, 0);
+      }
 
       // 質感の画像を消さない程度に、うっすら赤くする。倒れた後は光らせない
       const flash = fighter.alive && fighter.hitFlash > 0;
@@ -368,6 +375,17 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       if (!fighter.alive) {
         // 倒れた：倒れる動き。ただし、暗殺された・引きずり出された（される側の動きの途中）なら、その動きの最後の姿のまま
         if (!deathStarted) { deathStarted = true; if (!VICTIM.test(current)) restart('death', 1); }
+        return;
+      }
+      // 隠れている：隠れる動きの最後の姿（タンスの中に立つ・ベッドの下に伏せる）のまま。隠れる動きを見ていなかった（初めから
+      // 隠れていた）ときは、その動きの最後へ飛ぶ
+      if (hid) {
+        const inClip = (HIDE_ACTS[hid.kind] || HIDE_ACTS.wardrobe).inClip;
+        if (current !== inClip && has(inClip)) {
+          body.anim.speed = 1;
+          body.anim.baseLayer.transition(inClip, 0, 0.999);
+          current = inClip;
+        }
         return;
       }
 
