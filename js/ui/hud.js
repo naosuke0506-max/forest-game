@@ -14,11 +14,14 @@ function formatTime(sec) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export function createHud(match, me) {
+/** label：決まった見出し（教練の間。時間は進まないので、残り時間の代わりに出す） */
+export function createHud(match, me, { label = null } = {}) {
   const phaseName = $('#phase-name'), phaseTime = $('#phase-time'), phaseIcon = $('#phase-icon');
   let shownTime = null;
   const ranking = $('#ranking'), feed = $('#feed');
   const center = $('#center-msg');
+  // 教練の間は、得点の順位と、得点・倒した知らせ（左下）を出さない（得点は意味が無く、左の手順の札と重なる）
+  $('#hud').classList.toggle('tutoring', !!label);
   const reward = $('#reward');
   let centerTimer = 0, lastRankKey = '', shownReward = null;
 
@@ -151,9 +154,12 @@ export function createHud(match, me) {
     },
     update(dt) {
       // 左上：フェーズと残り時間
-      phaseName.textContent = `${match.phaseInfo.name}・${TIMES[match.phaseInfo.time]?.name ?? ''}`;
+      phaseName.textContent = label ? label[0] : `${match.phaseInfo.name}・${TIMES[match.phaseInfo.time]?.name ?? ''}`;
       if (shownTime !== match.phaseInfo.time) { shownTime = match.phaseInfo.time; phaseIcon.innerHTML = timeIcon(shownTime); }
-      if (match.overtime) {
+      if (label) {
+        phaseTime.textContent = label[1];
+        phaseTime.classList.remove('overtime');
+      } else if (match.overtime) {
         phaseTime.textContent = L.overtime;
         phaseTime.classList.add('overtime');
       } else {

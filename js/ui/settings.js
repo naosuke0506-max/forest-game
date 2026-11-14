@@ -1,6 +1,6 @@
 // 設定：性能表示、テスト用（フェーズの長さ・フェーズを飛ばす など）。設定はこの端末に保存する（保存できない環境でも動く）
 const KEY = 'forest-game.settings';
-const DEFAULTS = { stats: 'on', phaseLen: 'normal', sound: 'mid', titleBgm: 'ja' };   // titleBgm：題曲の版（日本・羅甸・獨逸・伊太利・西班牙・英吉利）
+const DEFAULTS = { stats: 'on', phaseLen: 'normal', sound: 'mid', titleBgm: 'ja', view: 'first' };   // view：視點（一人稱・三人稱）   // titleBgm：題曲の版（日本・羅甸・獨逸・伊太利・西班牙・英吉利）
 
 /** この端末に保存した設定（無ければ初めの値）。設定の画面を作る前に読むとき用 */
 export function loadSettings() { return load(); }
@@ -39,6 +39,8 @@ export function createSettings(onChange, onTest = () => {}) {
   document.getElementById('settings-btn').addEventListener('click', open);
   // 大廳の「設定」からも開く（保存する設定には入れない）
   Object.defineProperty(settings, 'open', { value: open, enumerable: false });
+  // 設定の画面の外（試合中の視點のボタン）で変えたときに保存する
+  Object.defineProperty(settings, 'save', { value: () => { save(settings); render(); }, enumerable: false });
   document.getElementById('settings-close').addEventListener('click', () => { panel.hidden = true; });
 
   render();

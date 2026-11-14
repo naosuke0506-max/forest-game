@@ -10,7 +10,6 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 // 三人称のカメラ：頭の少し上を中心に、後ろへ THIRD_DIST、右へ THIRD_SIDE
 const THIRD_DIST = 3.4, THIRD_SIDE = 0.55, THIRD_PIVOT = 1.7;
-const MOVE_TURN_BOOST = 2.2;   // 歩きながら進む向きへ回るときは、その場で回るより速い（鎧の重さの速さの倍）
 
 export function createPlayer(app, config, terrain, obstacles, fogColor) {
   const p = config.player;
@@ -39,7 +38,6 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   let twist = 0;                        // 暗殺などの動きの間、体（肩の線）が回った分（度）。目もそれに付いて回る（体と一緒に回る）
   let coverHead = 0;                    // 壁裏隠れの首の向きの元（覗く向きへ 62 度。覗く向きが変わるとなめらかに振り向く）
   const turn = { target: null, keyHeld: false };   // 体が向かっている向き（PC の Z・C で回すとき）。keyHeld：Z・C を押している
-  const move = { on: false, ref: 0, yaw: null };    // 移動：倒し始めたときに見ていた向き（ref）と、体が向かう進む向き（yaw）
   const qHead = new pc.Quat(), qPitch = new pc.Quat(), qEye = new pc.Quat();
   let viewMode = 'first';               // first / third
   let areaRadius = config.world.playRadius;
@@ -117,36 +115,23 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   }
 
   /**
-   * 見回す（なぞる）：見ている向き（look）を動かす。首の範囲（体の向きから左右 neckYaw 度）までしか見られない（利用者の指示 2026-11-10：
-   * 首の範囲を越えても体の向きは変えない）。体の向きは、移動した向き（move.yaw）と PC の Z・C（体が左・右へ 90 度回る）で変わる。
-   * 体が回るときは、見ている向きも一緒に回る（移動のときは進む向きへ、Z・C のときは体と同じだけ）
+   * 見回す（なぞる）：なぞった分だけ、体の向きがそのまま変わる（利用者の指示 2026-11-13：全キャラ共通。視点の操作でキャラの向きが変わる）。
+   * 左右の首は使わない（一人称の目は体の正面）。上下はなぞった分だけ（pitch）。PC の Z・C は、体が左・右へ 90 度回る（鎧の重さの速さで）
    */
   function updateLook(dt, input) {
     const key = input.turnX || 0;
     if (key && !turn.keyHeld) turn.target = (turn.target ?? yaw) - key * 90;
     turn.keyHeld = !!key;
-    look -= input.lookX;
-    move.ref -= input.lookX;   // 移動の向きの元も、なぞった分だけ回す（歩きながら見回すと、進む向きも変わる）
-    // 体を回す：Z・C で決めた向き、または進む向き（moveYaw）へ。決まった速さまで（鎧が重いほど遅い）
-    const want = turn.target ?? (move.yaw ?? null);
-    if (want !== null) {
-      const rem = wrapDeg(want - yaw);
-      const sp = (api.turnSpeed || BODY_TURN.turn.medium) * (api.turnScale ?? 1) * (turn.target === null ? MOVE_TURN_BOOST : 1) * dt;
-      const step = Math.sign(rem) * Math.min(Math.abs(rem), sp);
-      yaw += step;
-      if (turn.target !== null) {
-        look += step;   // Z・C で回るときは、見ている向きも体と一緒に回る
-        if (Math.abs(wrapDeg(turn.target - yaw)) < 0.5) turn.target = null;
-      } else {
-        // 進む向きへ回るときは、見ている向きも同じ速さで進む向きへ回す（一人称で、走っていく先が見えるように。
-        // 首の範囲で止めるだけだと、後ろへ走ると横を見たまま走ることになる）
-        const remL = wrapDeg(want - look);
-        look += Math.sign(remL) * Math.min(Math.abs(remL), sp);
-      }
+    yaw -= input.lookX;
+    if (turn.target !== null) {
+      turn.target -= input.lookX;
+      const rem = wrapDeg(turn.target - yaw);
+      const sp = (api.turnSpeed || BODY_TURN.turn.medium) * (api.turnScale ?? 1) * dt;
+      yaw += Math.sign(rem) * Math.min(Math.abs(rem), sp);
+      if (Math.abs(wrapDeg(turn.target - yaw)) < 0.5) turn.target = null;
     }
-    // 首：見ている向きまで（首の範囲まで）。届かない分は、見ている向きの方を首の範囲へ戻す
-    headYaw = clamp(wrapDeg(look - yaw), -BODY_TURN.neckYaw, BODY_TURN.neckYaw);
-    look = yaw + headYaw;
+    headYaw = 0;
+    look = yaw;
   }
 
   function update(dt, input) {
@@ -187,22 +172,13 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       return;
     }
 
-    // 移動の向き：スティックの向きを、倒し始めたときに見ていた向き（move.ref。なぞると一緒に回る）から決める。
-    // 体はその向きへ回る（利用者の指示 2026-11-10：移動している方向をキャラが向く）。防禦・攻撃・溜めの間（api.strafe）は、
-    // 体の向きを変えずに、見ている向きを元に横・後ろへ歩く
+    // 移動：スティックを倒しても、体と視点の向きは変わらない（利用者の指示 2026-11-13）。体の向きを元に、前後・横へ歩く
     const mag = Math.hypot(input.moveX, input.moveY);
-    if (frozen || mag < 0.12) { move.on = false; move.yaw = null; }
-    else {
-      if (!move.on) { move.on = true; move.ref = yaw + headYaw; }
-      move.yaw = api.strafe ? null : move.ref + (Math.atan2(-input.moveX, input.moveY) * 180) / Math.PI;
-    }
     if (!frozen) updateLook(dt, input);
     else headYaw = clamp(headYaw - input.lookX, -BODY_TURN.neckYaw, BODY_TURN.neckYaw);
     if (mag > 0) {
       const speed = speedFor(Math.min(1, mag)) * (api.speedScale || 1);
-      // 進む向き：体の向きへ回り切る前でも、スティックの向きへ進む（防禦などの間は、見ている向きから横・後ろへ）
-      const base = move.on ? (api.strafe ? yaw + headYaw : move.ref) : yaw;
-      const rad = (base * Math.PI) / 180;
+      const rad = (yaw * Math.PI) / 180;
       // 前（-Z）と右（+X）を、その向きに合わせて回す
       const fx = -Math.sin(rad), fz = -Math.cos(rad);
       const rx = Math.cos(rad), rz = -Math.sin(rad);
@@ -251,7 +227,6 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     turnSpeed: BODY_TURN.turn.medium,
     sprint: false,        // 全速力の間（match-session.js が決める）：スティックを倒すと sprintSpeed で走る
     sprintSpeed: 8,
-    strafe: false,        // 防禦・攻撃・溜めの間：体の向きを変えずに歩く
     turnScale: 1,
     setAreaRadius(r) { areaRadius = r; },
     /** 隠れる（ベッドの下・タンスの中）：三人称。家具の上の少し後ろから、外を見る向きを見る。null で解除 */
@@ -299,7 +274,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
      */
     follow(x, y, z, faceYaw) {
       pos.x = x; pos.z = z; pos.y = y;
-      yaw = faceYaw; look = yaw + headYaw; turn.target = null; move.on = false;
+      yaw = faceYaw; look = yaw + headYaw; turn.target = null;
     },
     /** 動きの間に体（肩の線）が回った分（度）。一人称の目もそれに付いて回る。0 で戻す */
     setTwist(v) { twist = v; },
@@ -319,7 +294,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     setLook(faceYaw, facePitch) { yaw = faceYaw; headYaw = 0; turn.target = null; look = yaw; pitch = Math.max(-p.pitchLimit, Math.min(p.pitchLimit, facePitch)); },
     /** 出現する場所と向き */
     spawn(x, z, faceYaw) {
-      pos.x = x; pos.z = z; yaw = faceYaw; pitch = -2; headYaw = 0; turn.target = null; look = yaw; move.on = false;
+      pos.x = x; pos.z = z; yaw = faceYaw; pitch = -2; headYaw = 0; turn.target = null; look = yaw;
       pos.y = groundAt(x, z, null);
       groundY = pos.y;
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });

@@ -355,6 +355,44 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
       ironStrike(d, at, 293.7, 0.2);           // カーン（D4）
       ironStrike(d, at + 0.8, 293.7, 0.23);    // カーン！
     },
+    /**
+     * 祓魔僧の神怒（利用者の指示 2026-11-13：大きめの音）。溜め：宙に浮く間、低いうなりが上がっていき、聖歌のような和音と風が膨らむ。
+     * 遠くまで聞こえる（ほかの人の神怒も 150 m ほど先まで）
+     */
+    wrathCharge(f, dur = 1.4) {
+      const d = at(f, 1.3, { ref: 20, max: 160 });
+      if (!d) return;
+      const c = audio.ctx, t0 = c.currentTime;
+      if (audio.reverb) { const send = c.createGain(); send.gain.value = 0.6; d.connect(send); send.connect(audio.reverb); }
+      // 低いうなり（上がっていく）
+      const hum = c.createOscillator(), hg = c.createGain();
+      hum.type = 'sawtooth'; hum.frequency.setValueAtTime(70, t0); hum.frequency.exponentialRampToValueAtTime(150, t0 + dur);
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
+      hg.gain.setValueAtTime(0.0001, t0); hg.gain.exponentialRampToValueAtTime(0.22, t0 + dur * 0.9); hg.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 0.15);
+      hum.connect(lp); lp.connect(hg); hg.connect(d); hum.start(t0); hum.stop(t0 + dur + 0.2);
+      // 聖歌のような和音（ゆっくり揺れる。だんだん大きく）
+      for (const [fr, g] of [[220, 0.06], [277.2, 0.05], [329.6, 0.05], [440, 0.035]]) {
+        const o = c.createOscillator(), og = c.createGain(), vib = c.createOscillator(), vg = c.createGain();
+        o.type = 'triangle'; o.frequency.value = fr;
+        vib.frequency.value = 5.2; vg.gain.value = fr * 0.006; vib.connect(vg); vg.connect(o.frequency);
+        og.gain.setValueAtTime(0.0001, t0); og.gain.exponentialRampToValueAtTime(g, t0 + dur); og.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 0.25);
+        o.connect(og); og.connect(d); o.start(t0); vib.start(t0); o.stop(t0 + dur + 0.3); vib.stop(t0 + dur + 0.3);
+      }
+      // 吹き上がる風
+      noiseHit(d, { t: t0, dur: dur + 0.1, type: 'bandpass', freq: 400, freqEnd: 1800, q: 0.8, attack: dur * 0.8, gain: 0.35 });
+    },
+    /** 神怒の衝撃波：地を揺らす大きな爆音と、光のきらめき、長い響き */
+    wrathBlast(f) {
+      const d = at(f, 1.7, { ref: 25, max: 180 });
+      if (!d) return;
+      const c = audio.ctx, t0 = c.currentTime;
+      if (audio.reverb) { const send = c.createGain(); send.gain.value = 0.9; d.connect(send); send.connect(audio.reverb); }
+      toneHit(d, { t: t0, dur: 1.6, f0: 95, f1: 28, type: 'sine', attack: 0.004, gain: 0.9 });          // 地を揺らす低い爆音
+      toneHit(d, { t: t0, dur: 0.9, f0: 180, f1: 45, type: 'triangle', attack: 0.003, gain: 0.35 });
+      noiseHit(d, { t: t0, dur: 1.2, type: 'lowpass', freq: 2600, freqEnd: 180, q: 0.7, attack: 0.002, gain: 0.85 });   // 吹き飛ばす風圧
+      noiseHit(d, { t: t0, dur: 0.18, type: 'highpass', freq: 2500, attack: 0.001, gain: 0.5 });                         // はじける音
+      metal(d, { t: t0 + 0.02, base: 1320, ratios: [1, 1.5, 2.01, 2.76, 3.4], dur: 2.2, gain: 0.16, decay: 0.8 });       // 光のきらめき（鐘のような長い響き）
+    },
   };
   return api;
 }
@@ -368,6 +406,8 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   combat.on('shieldSkill', ({ fighter }) => sfx.shieldSwing(fighter));
   combat.on('shieldStrike', ({ fighter, skill, hits }) => { if (hits) sfx.shieldHit(fighter, !!skill.push); });
   combat.on('fire', ({ fighter }) => sfx.bowRelease(fighter));
+  combat.on('skill', ({ fighter, skill }) => { if (skill?.effect === 'wrath') sfx.wrathCharge(fighter); });   // 神怒：溜めの音
+  combat.on('wrath', ({ fighter }) => sfx.wrathBlast(fighter));                                              // 神怒：衝撃波の大きな音
   combat.on('projectileStuck', ({ projectile }) => sfx.arrowStuck(projectile));
   combat.on('dodge', ({ fighter }) => sfx.dodge(fighter));
   combat.on('dodged', ({ target }) => sfx.perfectDodge(target));

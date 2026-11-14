@@ -6,6 +6,7 @@ import { ruby, rubyIn } from './ruby.js';
 import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, MODES, MAPS, ARMS, MUTATIONS, PHASES } from '../game/data.js';
 import { resolveLoadout } from '../game/match.js';
 import { createCodex } from './codex.js';
+import { LESSONS, LESSON_ORDER } from '../game/tutorial.js';
 import { ICONS } from './icons.js';
 
 // 武器を選ぶ枠：右手（主の武器）・左手（楯）・持替（弓兵の近接武器）
@@ -17,8 +18,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 // 画面の順番と見出し（大廳は数えない）
 const STEPS = ['mode', 'map', 'char', 'arms'];
-const HEADS = { hall: L.hall, codex: L.codex, mode: L.battle, map: L.map, char: `${L.person}・${L.weapon}`, arms: `${L.arms}・${L.mutation}` };
-const BACK = { codex: 'hall', mode: 'hall', map: 'mode', char: 'map', arms: 'char' };
+const HEADS = { hall: L.hall, codex: L.codex, tutorial: '教練', mode: L.battle, map: L.map, char: `${L.person}・${L.weapon}`, arms: `${L.arms}・${L.mutation}` };
+const BACK = { codex: 'hall', tutorial: 'hall', mode: 'hall', map: 'mode', char: 'map', arms: 'char' };
 
 /**
  * @param {object} o
@@ -88,6 +89,24 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
     const gear = [lo.main && nameOf('main', lo.main), lo.shield && nameOf('shield', lo.shield), lo.side && nameOf('side', lo.side)].filter(Boolean);
     who.innerHTML = `<b>${ruby(CHARACTERS[pick.char].name)}</b><span>${gear.map(ruby).join('・')}</span>`;
   }
+
+  // ---- 教練（チュートリアル。game/tutorial.js）：札を選ぶとすぐ始まる ----
+  let startFn = null;   // 試合を始める（ready で受け取る）
+  const lessonEl = document.getElementById('lesson-list');
+  lessonEl.innerHTML = LESSON_ORDER.map((id) => {
+    const t = LESSONS[id], who = t.char ? CHARACTERS[t.char].name : '大廳で選んでいる人物';
+    return `<button type="button" class="pick" data-lesson="${id}"><span class="pick-name">${ruby(t.name)}</span>
+      <span class="pick-when">${esc(who)}</span><span class="pick-desc">${esc(t.desc)}</span></button>`;
+  }).join('');
+  rubyIn(lessonEl, '.pick-when');
+  lessonEl.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-lesson]');
+    if (!b || !startFn || lessonEl.dataset.busy) return;
+    lessonEl.dataset.busy = '1';
+    b.querySelector('.pick-desc').textContent = `${L.loading}…`;
+    const id = b.dataset.lesson, char = LESSONS[id].char || pick.char;
+    try { await startFn(char, { ...loadouts[char], tutorial: id }); } finally { lobby.hidden = true; }
+  });
 
   // ---- 戰鬥・戰場：1 つだけの札（今は蠱毒と森だけ） ----
   function cards(el, table, key) {
@@ -177,6 +196,7 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
      * @param {(char: string, loadout: object) => Promise<void>} onStart 「開戰」：試合を始める（loadout に兵器・變異・戰鬥・戰場も入れる）
      */
     ready(onStart) {
+      startFn = onStart;   // 教練の札からも始める
       enterBtn.disabled = false;
       enterBtn.textContent = L.enter;
       enterBtn.addEventListener('click', () => {

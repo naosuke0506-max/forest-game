@@ -67,7 +67,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   }
 
   /** ダメージを与える。from：攻撃した人（向きの判定に使う） */
-  function damage(target, raw, attacker, { pierce = 0, fromX, fromZ, kind = 'melee', power = 'l', physical = true } = {}) {
+  function damage(target, raw, attacker, { pierce = 0, through = false, fromX, fromZ, kind = 'melee', power = 'l', physical = true } = {}) {
     if (!target.alive || match.state !== 'running') return;
     // 回避中の、攻撃が当たらない時間
     const a = target.action;
@@ -79,17 +79,22 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     let guarded = false, broke = false;
     // 技能（game/skills.js）：剛力（攻めた人）は傷 1.5 倍・楯の上から半分通る・当たりが重い。強靱（受けた人）は受ける傷が減る
     const might = physical && skillOn(attacker, 'might'), crush = might && power === 'h';
-    if (might) { amount *= SKILL_FX.might.damage; pierce = Math.max(pierce, SKILL_FX.might.pierce); power = 'h'; }
+    // 楯を通る割合：pierce は武器の「防禦の上から響く」分、skillPierce は楯の上からでも通ると決めた技能の分（剛力・鷹目の貫く矢 through）
+    let skillPierce = through ? 1 : 0;
+    if (might) { amount *= SKILL_FX.might.damage; pierce = Math.max(pierce, SKILL_FX.might.pierce); skillPierce = Math.max(skillPierce, SKILL_FX.might.pierce); power = 'h'; }
     const tough = skillOn(target, 'tough');
     if (tough) amount /= SKILL_FX.tough.defense;
     const steady = tough || target.action?.kind === 'wrath';   // ひるまない（強靱の間・神怒で宙に浮いている間）
     // 防御：前から来た物理の攻撃だけ。楯ごとに減らせる割合が違う（data.js の SHIELDS の cut：鳶形楯・大楯 100%・小楯 70%）。
-    // 減らした分だけスタミナを使う。防禦の上から響く武器（pierce）は、その割合だけ通る
+    // 減らした分だけスタミナを使う。防禦の上から響く武器（pierce）は、その割合だけ通る。
+    // ただし鳶形楯・大楯（100%）は、物理の攻撃を全部止める（鈍器・奧義の響く分も止める。利用者の指示 2026-11-13）。
+    // 通るのは、楯の上から通ると決めた技能だけ（打擊騎士の剛力 50%・鷹目の貫く矢）
     const dx = fromX - target.x, dz = fromZ - target.z;
     const impact = amount;   // 受けた一撃の強さ（防禦の受けの動きを、強さで使い分ける）
     if (physical && target.guarding && target.stamina > 0 && angleTo(target.yaw, dx, dz) <= COMBAT.guardArc / 2) {
       const cut = target.shield ? (SHIELDS[target.shield]?.cut ?? COMBAT.guardReduceShield) : COMBAT.guardReduce;
-      const reduce = cut * (1 - pierce);
+      const full = !!target.shield && cut >= 1;
+      const reduce = cut * (1 - (full ? skillPierce : pierce));
       const blocked = amount * reduce;
       spendStamina(target, blocked * COMBAT.guardStaminaPerDamage);
       amount -= blocked;
@@ -129,8 +134,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   }
 
   /**
-   * 神怒の衝撃波：周りの人に傷（楯では防げない）を与え、外へ吹き飛ばす（近いほど強く遠く）。
-   * 物が飛ぶ・屋根が崩れるのは、'wrath' の知らせを受けた world/destruction.js（下敷きは crush で倒す）
+   * 神怒の衝撃波：周りの人に傷（楯では防げない）を与え、外へ吹き飛ばす（近いほど強く遠く）。光の輪と音は 'wrath' の知らせで出す
    */
   function wrathBlast(f) {
     const fy = yOf(f), W = WRATH;
@@ -331,7 +335,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         if (p.pierce) {   // 貫く矢：当たっても止まらず、次の人へ
           if (p.struck.has(t)) continue;
           p.struck.add(t);
-          damage(t, p.damage, p.owner, { fromX: ox, fromZ: oz, kind: 'arrow', power: p.power, pierce: 1 });
+          damage(t, p.damage, p.owner, { fromX: ox, fromZ: oz, kind: 'arrow', power: p.power, pierce: 1, through: true });
           emit('projectileHit', { projectile: p, target: t, through: true });
           continue;
         }
@@ -643,7 +647,5 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     hideOut: (f) => acts?.startExit(f) ?? false,
     /** f が今暗殺できる相手 { target, grace } か null（暗殺ボタンを出す・bot が使う） */
     assassinTarget: (f) => assassin.find(f),
-    /** 崩れた屋根の下敷き（world/destruction.js から）：一撃で倒す */
-    crush(target, by) { if (target.alive) lethal(target, by, 'crush'); },
   };
 }

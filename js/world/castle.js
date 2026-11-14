@@ -44,7 +44,7 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
   const f = C.f, r = C.r;                            // 森の中央への向きと右（zones.js の長方形と同じ）
   const yawF = (Math.atan2(f[0], f[1]) * 180) / Math.PI;
   const at = (fx, rx) => [C.x + f[0] * fx + r[0] * rx, C.z + f[1] * fx + r[1] * rx];
-  const solid = (x, z, rad, range) => obstacles.add(x, z, rad, true, range);   // 当たり判定の円（壊れた小物は外すので返す）
+  const solid = (x, z, rad, range) => obstacles.add(x, z, rad, true, range);
   /** 線に沿って当たり判定の円を並べる */
   const solidLine = (ax, az, bx, bz, rad) => {
     const n = Math.ceil(Math.hypot(bx - ax, bz - az) / (rad * 0.9));
@@ -116,17 +116,12 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
     const k = rndProp.next();
     if (k < 0.4) {
       // 扉の横に樽 1〜2 つ
-      // 樽は小物（神怒で飛ぶ。world/destruction.js）
-      const q = F.at(ps * (w / 2 - 0.45), 0, d / 2 + 0.55);
+      const q = put(ps * (w / 2 - 0.45), d / 2 + 0.55, 0.36);
       const by = terrain.heightAt(q[0], q[2]);
-      B.begin({ kind: 'prop', x: q[0], y: by, z: q[2], size: 0.86, obstacle: solid(q[0], q[2], 0.36) });
       barrel(B, q[0], by - 0.02, q[2]); sight?.addCyl(q[0], q[2], 0.32, by - 0.02, by + 0.84);
-      B.end();
       if (rndProp.next() < 0.5) {
-        const q2 = F.at(ps * (w / 2 - 1.1), 0, d / 2 + 0.5), by2 = terrain.heightAt(q2[0], q2[2]);
-        B.begin({ kind: 'prop', x: q2[0], y: by2, z: q2[2], size: 0.74, obstacle: solid(q2[0], q2[2], 0.33) });
+        const q2 = put(ps * (w / 2 - 1.1), d / 2 + 0.5, 0.33), by2 = terrain.heightAt(q2[0], q2[2]);
         barrel(B, q2[0], by2 - 0.02, q2[2], 0.27, 0.74); sight?.addCyl(q2[0], q2[2], 0.28, by2 - 0.02, by2 + 0.72);
-        B.end();
       }
     } else if (k < 0.75 && w >= 5.4) {
       // 壁に沿った長椅子
@@ -166,8 +161,8 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
       const yaw = yawF + (row.face > 0 ? 0 : 180) + (rnd.next() - 0.5) * 3;
       const roof = rnd.next() < 0.55 ? 'thatch' : 'tiles';
       const y0 = terrain.heightAt(x, z);
-      buildHouse(B, { cx: x, cz: z, y0, yaw, w, d, stories: two ? 2 : 1, roof, wall: walls[i++ % walls.length], rnd, deco: createRandom(config.seed + 1000 + houses.length), index: houses.length }, reg);
-      houses.push({ x, z, w, d, yaw, y0, stories: two ? 2 : 1 });
+      buildHouse(B, { cx: x, cz: z, y0, yaw, w, d, stories: two ? 2 : 1, roof, wall: walls[i++ % walls.length], rnd, deco: createRandom(config.seed + 1000 + houses.length) }, reg);
+      houses.push({ x, z, w, d, yaw, y0, stories: two ? 2 : 1 });   // y0：地面の高さ（鷹目の矢の穴。world/arrow-holes.js）
       footprints.push({ type: 'rect', x, z, w, d, yaw, roof });
       houseProps(x, y0, z, yaw, w, d);
       s += w + 2.0 + rnd.next() * 2.6;
@@ -193,12 +188,10 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
 
   // ---- 形にして描く（質感ごとに 1 つ） ----
   const materials = {};
-  const meshes = {};   // 壊せる部品のために：質感ごとの形と、三角形の番号の写し（壊れた部品の三角形を消して描き直す。world/destruction.js）
   let tris = 0;
   for (const [surf, g] of Object.entries(B.parts)) {
     if (!g.indices.length) continue;
     const mesh = createMesh(app.graphicsDevice, g);
-    meshes[surf] = { mesh, idx: Uint32Array.from(g.indices), dirty: false };
     const m = new pc.StandardMaterial();
     m.diffuse = new pc.Color(1, 1, 1);
     m.diffuseVertexColor = true;
@@ -230,18 +223,5 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
       m.update();
     });
   }
-  // 壊せる部品（樽・袋・屋根）：その部品の形だけを小さな配列に写しておく（飛ぶ・崩れ落ちる形を作るため。大きな配列は捨てる）
-  const pieces = B.pieces.map((p) => {
-    const geo = {};
-    for (const [surf, [i0, i1, v0, v1]] of Object.entries(p.ranges)) {
-      const g = B.parts[surf];
-      geo[surf] = {
-        positions: Float32Array.from(g.positions.slice(v0 * 3, v1 * 3)), normals: Float32Array.from(g.normals.slice(v0 * 3, v1 * 3)),
-        uvs: Float32Array.from(g.uvs.slice(v0 * 2, v1 * 2)), colors: Float32Array.from(g.colors.slice(v0 * 4, v1 * 4)),
-        indices: Uint32Array.from(g.indices.slice(i0, i1), (k) => k - v0),
-      };
-    }
-    return { meta: p.meta, ranges: p.ranges, geo, gone: false };
-  });
-  return { houses, triangles: tris, footprints, hides, covers, insideHouse, furniture, destructible: { pieces, meshes, materials, houses } };
+  return { houses, triangles: tris, footprints, hides, covers, insideHouse, furniture };
 }
