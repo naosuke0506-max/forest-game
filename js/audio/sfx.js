@@ -41,9 +41,9 @@ const SWING = {
 };
 
 /**
- * @param {{ terrain: object, zones: object, villageCenter: {x, z} }} world
+ * @param {{ terrain: object, zones: object, plazas: {x, z, r}[] }} world plazas：村の広場（石畳。world/villages.js）
  */
-export function createSfx({ terrain, zones = null, villageCenter = null }) {
+export function createSfx({ terrain, zones = null, plazas = [] }) {
   /** 音の出口：自分の音は真ん中、ほかの人の音は位置から。聞こえないほど遠ければ null */
   function at(f, gain = 1, opts = {}) {
     if (!audio.ready) return null;
@@ -66,7 +66,7 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
     const g = terrain.heightAt(f.x, f.z);
     if ((f.y ?? g) > g + 0.25) return 'wood';
     if (!zones) return 'grass';
-    if (villageCenter && Math.hypot(f.x - villageCenter.x, f.z - villageCenter.z) < 6.5) return 'stone';
+    if (plazas.some((p) => Math.hypot(f.x - p.x, f.z - p.z) < p.r)) return 'stone';   // 村の広場の石畳（橋の上は 'wood'）
     if (zones.path(f.x, f.z) > 0.5) return 'dirt';
     const w = zones.weights(f.x, f.z);
     if (w.castle > 0.6) return 'dirt';

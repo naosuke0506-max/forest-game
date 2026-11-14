@@ -127,6 +127,12 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       fctx.setLineDash([3, 2]);
       fctx.stroke();
       fctx.setLineDash([]);
+    } else if (b.type === 'bridge') {
+      // 橋：板の色の細長い四角
+      fctx.save(); fctx.translate(bx, by); fctx.rotate((-b.yaw * Math.PI) / 180);
+      fctx.fillStyle = '#7a5434'; fctx.fillRect((-b.w / 2) * kD, (-b.d / 2) * kD, b.w * kD, b.d * kD);
+      fctx.strokeStyle = 'rgba(40, 26, 14, .9)'; fctx.lineWidth = 1; fctx.strokeRect((-b.w / 2) * kD, (-b.d / 2) * kD, b.w * kD, b.d * kD);
+      fctx.restore();
     } else if (b.type === 'circle') {
       fctx.fillStyle = '#8c8478';
       fctx.beginPath(); fctx.arc(bx, by, b.r * kD, 0, Math.PI * 2); fctx.fill();
@@ -178,17 +184,25 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     { key: 'mixed', x: -48, z: -4 },
     // 深い森・大草原は、その広がり（world/zones.js の blobs）の真ん中
     { key: 'deep', x: zones.blobs?.deep.x ?? 0, z: zones.blobs?.deep.z ?? -areaRadius * 0.68 },
-    { key: 'prairie', x: zones.blobs?.prairie.x ?? areaRadius * 0.66, z: (zones.blobs?.prairie.z ?? 0) + 8 },
-    { key: 'castle', x: zones.castle.x, z: zones.castle.z - 40 },
+    { key: 'prairie', x: (zones.blobs?.prairie.x ?? areaRadius * 0.6) + 12, z: (zones.blobs?.prairie.z ?? 0) + 46 },   // 野邑（大草原の真ん中）と重ならないよう南へ
+    // 村は 3 つ（world/villages.js）：それぞれの名前（山邑・川邑・野邑）を村の少し北に
+    ...(zones.villages?.length ? zones.villages.map((v) => ({ key: 'castle', name: v.name, x: v.x, z: v.z - v.r * 0.75 }))
+      : [{ key: 'castle', x: zones.castle.x, z: zones.castle.z - 40 }]),
   ] : [];
 
   // ===== 小さな地図：今いるエリアの範囲を映す =====
   const ctx = canvas.getContext('2d');
-  let size = 0, timer = 0, zoneNow = null;
+  let size = 0, timer = 0, zoneNow = null, villageNow = null;   // villageNow：村の中なら、その村（名前と映す範囲）
   const cam = { cx: RES / 2, cy: RES / 2, half: RES / 2 };      // 映している範囲（起伏の絵の画素で）
   const target = { cx: RES / 2, cy: RES / 2, half: RES / 2 };
 
   function aim(zone, px, py) {
+    // 村の中：その村のまわりだけを映す（村は 3 つに分かれているので、エリア全体の四角では広すぎる）
+    if (zone === 'castle' && villageNow) {
+      const [vx, vy] = toPx(villageNow.x, villageNow.z);
+      Object.assign(target, { cx: vx, cy: vy, half: ((villageNow.r + 16) / view) * RES / 2 });
+      return;
+    }
     const b = bounds[zone];
     if (!b || b.x1 < b.x0) { Object.assign(target, { cx: RES / 2, cy: RES / 2, half: RES / 2 }); return; }
     // エリアの四角に少し余白をつける。広すぎるエリア（中央の森など）は、自分の周り 100m までに絞る
@@ -254,9 +268,10 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     ctx.fillText(L.north, size / 2, size / 10);
     if (zoneNow) {
       ctx.font = `700 ${Math.round(size / 10)}px "Hiragino Mincho ProN", serif`;
-      ctx.strokeText(ZONE_NAMES[zoneNow], size / 2, size - size / 9);
+      const name = villageNow?.name || ZONE_NAMES[zoneNow];
+      ctx.strokeText(name, size / 2, size - size / 9);
       ctx.fillStyle = '#fff3cf';
-      ctx.fillText(ZONE_NAMES[zoneNow], size / 2, size - size / 9);
+      ctx.fillText(name, size / 2, size - size / 9);
     }
   }
 
@@ -312,8 +327,9 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     for (const l of labels) {
       const x = cx + l.x * scale, y = cy + l.z * scale;
       g.font = `700 ${Math.round(s / 24)}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
-      g.lineWidth = s / 110; g.strokeStyle = 'rgba(240, 225, 190, .85)'; g.strokeText(ZONE_NAMES[l.key], x, y);
-      g.fillStyle = '#2b1d0e'; g.fillText(ZONE_NAMES[l.key], x, y);
+      const name = l.name || ZONE_NAMES[l.key];
+      g.lineWidth = s / 110; g.strokeStyle = 'rgba(240, 225, 190, .85)'; g.strokeText(name, x, y);
+      g.fillStyle = '#2b1d0e'; g.fillText(name, x, y);
     }
     // 題
     g.font = `700 ${Math.round(s / 20)}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
@@ -400,6 +416,7 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
         const zi = zoneOf[Math.min(RES - 1, Math.max(0, py | 0)) * RES + Math.min(RES - 1, Math.max(0, px | 0))];
         const z = ZONE_KEYS[zi] || zoneNow || 'mixed';
         if (z !== zoneNow) zoneNow = z;
+        villageNow = z === 'castle' && zones.villageAt ? zones.villageAt(me.x, me.z) : null;
         aim(zoneNow, px, py);
       }
       // 映す範囲はなめらかに動かす

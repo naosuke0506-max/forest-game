@@ -226,7 +226,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const hideView = document.getElementById('hideview');
 
   // 効果音（足音・戦闘・隠れる・鐘など）
-  const sfx = createSfx({ terrain, zones, insideHouse, villageCenter: zones?.castle });
+  const sfx = createSfx({ terrain, zones, insideHouse, plazas: zones?.plazas || [] });
   wireSounds(sfx, { combat, match, hiding, me });
 
   // 隠れる・探す：自分が隠れたら隙間から覗く見た目に。近くの bot に見られていたら、その bot は場所を覚えて探しに来る
@@ -578,7 +578,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       if (zones && me.alive && (zoneTimer -= dt) <= 0) {
         zoneTimer = 0.5;
         const z = zones.zoneAt(me.x, me.z);
-        if (z !== zoneNow) { zoneNow = z; hud.addFeed(`${ZONE_NAMES[z]}に入った`); }
+        // 村は 3 つあるので、村の中なら村の名前（山邑・川邑・野邑）
+        const name = z === 'castle' ? (zones.villageAt?.(me.x, me.z)?.name || ZONE_NAMES.castle) : ZONE_NAMES[z];
+        if (name !== zoneNow) { zoneNow = name; hud.addFeed(`${name}に入った`); }
       }
       // 敵の頭上の名前と体力は出さない（見つけるのも、相手の残りを見極めるのも自分の目で）
     },

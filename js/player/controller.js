@@ -203,7 +203,8 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
 
     // 地面（床）の高さへなめらかに合わせる（段差でカメラががくっとしないように）。泳いでいる間は水面に浮く
     let target = groundAt(pos.x, pos.z, pos.y);
-    const w = api.water ? api.water(pos.x, pos.z) : null;
+    let w = api.water ? api.water(pos.x, pos.z) : null;
+    if (w && !swimming && target > w.surface + 0.05) w = null;   // 橋の上（水の上の床）に立っている
     waterDepth = w ? w.depth : 0;
     swimming = waterDepth > SWIM.depth;
     if (swimming) target = w.surface - SWIM.float;

@@ -175,13 +175,19 @@ export const LESSONS = {
   archer: {
     name: '鷹目', char: 'archer', desc: '技能「鷹目」で、家の中の敵を壁越しに見つけ、貫く矢で射抜く（弓兵）',
     bots: [{ char: 'polearm', role: 'dummy' }],
-    setup({ me, bots, houses, spawn }) {
-      const hh = houses.find((h) => h.stories === 1) || houses[0];
-      if (!hh) return;
-      const a = hh.yaw * DEG, R = [Math.cos(a), -Math.sin(a)];
-      bots[0].x = hh.x; bots[0].z = hh.z; bots[0].y = hh.y0 + 0.5;
-      const x = hh.x + R[0] * (hh.w / 2 + 7), z = hh.z + R[1] * (hh.w / 2 + 7);
-      spawn(x, z, Math.atan2(-(hh.x - x), -(hh.z - z)) / DEG);   // 家の横の壁から 7 m 離れて、家の方を向く
+    setup({ me, bots, houses, isFree, spawn }) {
+      // 家の横の壁から 7 m 離れて、家の方を向く。村の家は向きも間もばらばらなので、両側を試し、空いている方（ほかの家や木の無い所）に立つ
+      const ones = houses.filter((h) => h.stories === 1);
+      for (const hh of ones.length ? ones : houses) {
+        const a = hh.yaw * DEG, R = [Math.cos(a), -Math.sin(a)];
+        for (const s of [1, -1]) {
+          const x = hh.x + R[0] * s * (hh.w / 2 + 7), z = hh.z + R[1] * s * (hh.w / 2 + 7);
+          if (isFree && !isFree(x, z, 1.2)) continue;
+          bots[0].x = hh.x; bots[0].z = hh.z; bots[0].y = hh.y0 + 0.5;
+          spawn(x, z, Math.atan2(-(hh.x - x), -(hh.z - z)) / DEG);
+          return;
+        }
+      }
     },
     steps: [
       { text: '技能ボタン（PC は G）で「鷹目」を使い、壁の向こうの敵を体温で見つける', done: (S) => S.skill },

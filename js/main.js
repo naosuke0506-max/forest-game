@@ -5,6 +5,7 @@ import { createTerrain } from './world/terrain.js';
 import { createEnvironment } from './world/environment.js';
 import { createTimeOfDay } from './world/time-of-day.js';
 import { createLandform } from './world/landform.js';
+import { planVillages } from './world/villages.js';
 import { createWater } from './world/water.js';
 import { createVillage } from './world/castle.js';
 import { createFloors } from './world/floors.js';
@@ -95,8 +96,10 @@ async function boot() {
   // 世界を組み立てる（置く順番が大事：木 → 岩 → 草。草は木や岩を避けて生える）
   // 地形の形（周りの山・川と谷・盆地の丘。world/landform.js）と、エリア分け（森・北西の深い森・東の大草原・南西の村・道）
   const land = createLandform(CONFIG.seed, { playRadius: CONFIG.world.playRadius, size: CONFIG.world.terrainSize });
-  const zones = createZones(CONFIG.seed, CONFIG.world.playRadius, land);
-  const terrain = createTerrain(app, CONFIG, CONFIG.seed, tex.ground, zones, land);
+  // 村 3 つ・道・橋の配置（world/villages.js）。家の下を平らにするので、地面より先に決める
+  const plan = planVillages(CONFIG.seed, land, { size: CONFIG.world.terrainSize, playRadius: CONFIG.world.playRadius });
+  const zones = createZones(CONFIG.seed, CONFIG.world.playRadius, land, plan);
+  const terrain = createTerrain(app, CONFIG, CONFIG.seed, tex.ground, zones, land, plan);
   // 川の水面と滝（world/water.js）
   const water = createWater(app, land, terrain);
   const env = createEnvironment(app, CONFIG, sky);
@@ -124,7 +127,7 @@ async function boot() {
   });
   for (const t of trees?.trunks || []) sight.addCyl(t.x, t.z, t.r, terrain.heightAt(t.x, t.z) - 0.3, t.top);
   for (const b of props?.blockers || []) sight.addCyl(b.x, b.z, b.r, b.y0, b.y1);
-  const village = createVillage(app, CONFIG, terrain, obstacles, zones, floors, sight);
+  const village = createVillage(app, CONFIG, terrain, obstacles, zones, floors, sight, plan);
   // 地面を覆う草（自分の周りだけ。短い草・穂・白い花・大草原の背の高い草）
   const groundCover = grassTex ? createGroundCover(app, CONFIG, CONFIG.seed, terrain, obstacles, grassTex, zones) : null;
 
@@ -197,7 +200,7 @@ async function boot() {
     .then(([grass, litter]) => terrain.setGroundTextures(grass, litter));
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air, floors, sight, land, water };
+  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air, floors, sight, land, water, plan };
 
   // 設定のうち森に関わる分（視点）。変わるたびに反映する
   applyWorld = (st = settings) => {
