@@ -67,7 +67,6 @@ const ART_OF_CLIP = (() => {
   }
   out.as_slide = WEAPON_ARTS.armingsword.find((a) => a.name === '滑斬');
   for (const c of ['a1', 'a2', 'a3']) out[c] = { effect: '技の無い武器（槍）の通常攻撃（専用の動きができるまで使う）', power: '武器による' };
-  for (const c of ['ma1', 'ma2', 'ma3']) out[c] = { effect: '前の短劍の通常攻撃（今は短劍の技を使う）', ref: { w: 'dagger', t: 'plain' } };
   out.heavy = { effect: '左手の強い一撃・暗殺・誅殺（専用の動きができるまで使う）', power: `武器の ${1.7} 倍` };
   return out;
 })();

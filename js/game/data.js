@@ -9,7 +9,8 @@
  *   speed      ：移動の速さの倍率（鎧が重いほど遅い）
  *   weight     ：装備の重さ（light 軽装 / medium 中装 / heavy 重装）。回避の仕方が変わる（DODGE）
  *   left       ：左手ボタンでできること（guard 盾で防御 / heavy 強攻撃 / switch 近接武器と持ち替え / null 無し）、leftLabel：ボタンの文字
- *                劍騎士は左手ボタンが無い（重擊は無くした。強い一撃は攻擊ボタンの長押しの溜攻撃）
+ *                劍騎士・打擊騎士・祓魔僧は左手ボタンが無い（重擊・擊碎は無くした。強い一撃は攻擊ボタンの長押しの溜攻撃。
+ *                打擊騎士・祓魔僧は利用者の指示 2026-11-14）
  *   armorName  ：専用の防具の名前（防具は 1 つだけ）
  *   sight      ：見える距離（m）。bot がこの距離まで目で気づける（兜の覗き穴が狭いほど短い。game/senses.js）
  * 防具はキャラごとに 1 つ（強化は無い）。扱える武器の全体は docs/DESIGN.md
@@ -21,11 +22,11 @@ export const CHARACTERS = {
              desc: '両手の剣と二刀流。振りが大きく、広く斬れる（中装より少し重い鎧）' },
   polearm: { name: '長柄騎士', model: 'polearm', weight: 'heavy', left: 'heavy', leftLabel: '薙拂', armorName: '鋲打重鎧', armor: 0.7,  speed: 0.9,  maxHp: 120, sight: 35,
              desc: '長柄の武器。間合いが一番長く、近づく前に突ける（重めの重装）' },
-  blunt:   { name: '打擊騎士', model: 'blunt', weight: 'heavy', left: 'heavy', leftLabel: '擊碎',   armorName: '大兜鎧', armor: 0.75, speed: 0.92, maxHp: 120, sight: 30,
+  blunt:   { name: '打擊騎士', model: 'blunt', weight: 'heavy', left: null, leftLabel: null,   armorName: '大兜鎧', armor: 0.75, speed: 0.92, maxHp: 120, sight: 30,
              desc: '打撃武器。一撃が重く、防御の上からも響く（重装より少し軽い鎧）' },
   archer:  { name: '弓兵',     model: 'archer', weight: 'light', left: 'switch', leftLabel: '持替',  armorName: '革鎖輕鎧', armor: 0.95, speed: 1.05, maxHp: 90, sight: 55,
              desc: '弓で遠くから射る。引くほど強い。近寄られると弱い（軽装より少し重い）' },
-  cleric:  { name: '祓魔僧',   model: 'cleric', weight: 'light', left: 'heavy', leftLabel: '重擊',  armorName: '祓魔法衣', armor: 1.0,  speed: 1.08, maxHp: 95, sight: 45,
+  cleric:  { name: '祓魔僧',   model: 'cleric', weight: 'light', left: null, leftLabel: null,  armorName: '祓魔法衣', armor: 1.0,  speed: 1.08, maxHp: 95, sight: 45,
              desc: '聖なる奇跡を扱う（奇跡は後で追加）。今はメイスで戦う（軽装）' },
 };
 
