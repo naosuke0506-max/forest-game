@@ -5,7 +5,7 @@
 /** 動きの名前（圖鑑の一覧のボタン） */
 export const CLIP_NAMES = {
   idle: '待機', walk: '步行', back: '後退', run: '疾走',
-  a1: '攻擊1', a2: '攻擊2', a3: '攻擊3', heavy: '強擊', draw: '引弓', shoot: '放矢', ma1: '短劍1', ma2: '短劍2', ma3: '短劍3',
+  a1: '攻擊1', a2: '攻擊2', a3: '攻擊3', heavy: '強擊', draw: '引弓', shoot: '放矢',
   oh_thrust: '踏込突', oh_rise: '逆袈裟', oh_c1_in: '袈裟斬・入', oh_c1_hold: '袈裟斬・溜', oh_c1_out: '袈裟斬・放', oh_c2: '旋風斬',
   ls_cut1: '唐竹', ls_cut2: '横薙', ls_c1_in: '長突・入', ls_c1_hold: '長突・溜', ls_c1_out: '長突・放', ls_c2: '斬返', ls_ult: '奧義・地穿昇斬',
   dw_cut1: '右袈裟', dw_cut2: '左薙', dw_cut3: '十字斬', dw_c1_in: '開斬・入', dw_c1_hold: '開斬・溜', dw_c1_out: '開斬・放', dw_c2: '雙旋',
@@ -35,7 +35,6 @@ export const CLIP_NAMES = {
 export const CLIP_DESC = {
   idle: '立って構えている', walk: '歩く', back: '後ろへ歩く', run: '走る',
   a1: '通常攻撃の 1 段目', a2: '通常攻撃の 2 段目', a3: '通常攻撃の 3 段目', heavy: '左手ボタンの強い一撃', draw: '弓を引き絞る', shoot: '矢を放つ',
-  ma1: '短劍の攻撃 1 段目', ma2: '短劍の攻撃 2 段目', ma3: '短劍の攻撃 3 段目',
   oh_thrust: '右足を踏み込み、体を巻き込むように回して、右腕を真っ直ぐ突き出す', oh_rise: '左斜め下に溜めた右腕を、右斜め上へ振り払う',
   oh_c1_in: '袈裟斬の溜めに入る', oh_c1_hold: '右腕を右斜め上の後ろへ伸ばしたまま、強く溜める', oh_c1_out: '右斜め上から左下へ振り下ろす',
   oh_c2: '右回りに一回転して払い、逆の左回りに回って最後の一撃',
@@ -88,7 +87,7 @@ export const CLIP_DESC = {
 /** 動きの分け方（圖鑑の見出し）。キャラが持っていない動きは出さない */
 export const CLIP_GROUPS = [
   ['移動', ['idle', 'walk', 'back', 'run', 'turn_r', 'turn_l']],
-  ['攻擊', ['a1', 'a2', 'a3', 'heavy', 'draw', 'shoot', 'ma1', 'ma2', 'ma3']],
+  ['攻擊', ['a1', 'a2', 'a3', 'heavy', 'draw', 'shoot']],
   ['片手劍之技', ['oh_thrust', 'oh_rise', 'oh_c1_in', 'oh_c1_hold', 'oh_c1_out', 'oh_c2']],
   ['長劍之技', ['ls_cut1', 'ls_cut2', 'ls_c1_in', 'ls_c1_hold', 'ls_c1_out', 'ls_c2', 'ls_ult']],
   ['雙劍之技', ['dw_cut1', 'dw_cut2', 'dw_cut3', 'dw_c1_in', 'dw_c1_hold', 'dw_c1_out', 'dw_c2', 'dw_ult', 'dw_as_back', 'dw_idle', 'dw_walk', 'dw_back', 'dw_run']],

@@ -484,10 +484,9 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
           }
         } else if (a.kind === 'attack') {
           // 攻撃のたびに、3 種類の斬り（a1 → a2 → a3）を順に使う。長さは武器の振りの時間に合わせる
-          // 強攻撃（左手）は heavy の動き。ふつうは 3 種類の斬りを順に。持ち替えた近接武器は ma1〜ma3
+          // 強攻撃（左手）は heavy の動き。ふつうは 3 種類の斬りを順に（短劍の前の動き ma1〜ma3 は 2026-11-14 に消した。短劍は技を使う）
           const st = attackStats(fighter.weapon, a.heavy);
-          const melee2 = fighter.weapon !== fighter.primary && has('ma1');
-          const name = a.heavy && has('heavy') ? 'heavy' : (melee2 ? ['ma1', 'ma2', 'ma3'] : ['a1', 'a2', 'a3'])[swingIndex++ % 3];
+          const name = a.heavy && has('heavy') ? 'heavy' : ['a1', 'a2', 'a3'][swingIndex++ % 3];
           if (has(name)) restart(name, clip(name).duration / (st.windup + st.recovery));   // 動きの無い模型では何もしない
         } else if (a.kind === 'finisher') {
           // 致命の一撃：強攻撃の大きな振り（専用の動きができるまで）
