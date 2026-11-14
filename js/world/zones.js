@@ -35,7 +35,7 @@ export function createZones(seed, radius, land = null) {
   };
   // 深い森（北西）と大草原（東）の広がり：真ん中と半径。縁はノイズで揺らす
   const blobs = {
-    deep: { x: -82, z: -96, r: 92 },
+    deep: { x: -110, z: -64, r: 78 },   // 滝と滝壺は入れない（深い森は霧が濃く、滝が見えなくなるため）
     prairie: { x: 108, z: -8, r: 78 },
   };
   const sectors = { deep: { ang: 320, half: 50 }, prairie: { ang: 95, half: 45 } };   // 道の向き（ミニマップの名前の位置などで使う）

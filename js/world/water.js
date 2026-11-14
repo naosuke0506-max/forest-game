@@ -110,7 +110,7 @@ export function createWater(app, land) {
     for (const a of ACROSS) {
       pos.push(P[i][0] + nx * hw * a, y, P[i][1] + nz * hw * a);
       nor.push(0, 1, 0);
-      uv.push(a * hw / 6, s / 6);                     // 絵 1 枚が 6 m 四方
+      uv.push(a * hw / 3, s / 3);                     // 絵 1 枚が 3 m 四方（大きいと、まだらな模様に見える）
     }
     rows++;
   }
@@ -122,11 +122,12 @@ export function createWater(app, land) {
   tris += idx.length / 3;
   const ripple = rippleNormals(device);
   const mat = new pc.StandardMaterial();
-  mat.diffuse = new pc.Color(0.035, 0.075, 0.08);
-  mat.useMetalness = true; mat.metalness = 0; mat.gloss = 0.88;
-  mat.normalMap = ripple; mat.bumpiness = 0.55;
-  mat.normalDetailMap = ripple; mat.normalDetailMapTiling = new pc.Vec2(2.7, 2.3); mat.normalDetailMapBumpiness = 0.5;
-  mat.opacity = 0.8;
+  // 色：浅い川の緑がかった青。少し透けて川床が見え、斜めから見ると空を映す（2026-11-14：最初は黒っぽく、波が荒く見えたので明るく・穏やかに）
+  mat.diffuse = new pc.Color(0.12, 0.2, 0.2);
+  mat.useMetalness = true; mat.metalness = 0; mat.gloss = 0.93;
+  mat.normalMap = ripple; mat.bumpiness = 0.22;
+  mat.normalDetailMap = ripple; mat.normalDetailMapTiling = new pc.Vec2(2.7, 2.3); mat.normalDetailMapBumpiness = 0.18;
+  mat.opacity = 0.7;
   mat.blendType = pc.BLEND_NORMAL;
   mat.depthWrite = false;
   mat.cull = pc.CULLFACE_NONE;
