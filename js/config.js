@@ -46,8 +46,8 @@ export const CONFIG = {
   seed: Number(params.get('seed')) || 20261031,
 
   world: {
-    terrainSize: 440,       // 地面の一辺（m）
-    terrainSegments: 160,   // 地面の分割数（多いほど滑らかで重い。約 2.75m ごと）
+    terrainSize: 520,       // 地面の一辺（m）。周りの山まで（2026-11-14：440 → 520）
+    terrainSegments: 200,   // 地面の分割数（多いほど滑らかで重い。2.6m ごと。川の谷を描けるように 160 → 200）
     playRadius: 175,        // 歩ける範囲の半径（m）。端から端まで 350m。game/data.js の AREA_RADIUS と同じ値にする
     forestRadius: 200,      // 木を置く範囲の半径（m）。柵の外まで木を置き、森の外縁がむき出しに見えないように
     clearingRadius: 7,      // 開始地点の周りの空き地（m）

@@ -11,8 +11,9 @@ import { audio, placeOf, outlet, playSample } from './engine.js';
 const R = Math.random;
 const lerp = (a, b, t) => a + (b - a) * t;
 
-export function createAmbience({ timeOfDay, wind, zones = null }) {
+export function createAmbience({ timeOfDay, wind, zones = null, land = null, fall = null }) {
   let ctx = null, bus = null, busLP = null, windLP = null, windGain = null, leafGain = null;
+  let riverGain = null, fallGain = null, fallLP = null;   // 川のせせらぎ・滝の轟き（2026-11-14。world/landform.js の川）
   let flutter = 0, birdLoop = null, crickets = [], crowTimer = 8, chirpTimer = 5;
 
   /** 最初に音が出せるようになったとき、ずっと鳴る音（風・葉）を用意する */
@@ -35,6 +36,22 @@ export function createAmbience({ timeOfDay, wind, zones = null }) {
     leafGain = ctx.createGain(); leafGain.gain.value = 0;
     leafSrc.connect(hp); hp.connect(pk); pk.connect(leafGain); leafGain.connect(bus);
     leafSrc.start();
+    // 川のせせらぎ（さらさらした中高音）と、滝の轟き（低いざわめき）
+    if (land) {
+      const rs = ctx.createBufferSource(); rs.buffer = audio.white; rs.loop = true; rs.playbackRate.value = 0.8;
+      const rb = ctx.createBiquadFilter(); rb.type = 'bandpass'; rb.frequency.value = 1300; rb.Q.value = 0.6;
+      const rl = ctx.createBiquadFilter(); rl.type = 'lowpass'; rl.frequency.value = 4200;
+      riverGain = ctx.createGain(); riverGain.gain.value = 0;
+      rs.connect(rb); rb.connect(rl); rl.connect(riverGain); riverGain.connect(bus); rs.start();
+    }
+    if (fall) {
+      const fs = ctx.createBufferSource(); fs.buffer = audio.brown; fs.loop = true;
+      const fw = ctx.createBufferSource(); fw.buffer = audio.white; fw.loop = true; fw.playbackRate.value = 0.6;
+      fallLP = ctx.createBiquadFilter(); fallLP.type = 'lowpass'; fallLP.frequency.value = 900;
+      fallGain = ctx.createGain(); fallGain.gain.value = 0;
+      const wg = ctx.createGain(); wg.gain.value = 0.35;
+      fs.connect(fallLP); fw.connect(wg); wg.connect(fallLP); fallLP.connect(fallGain); fallGain.connect(bus); fs.start(); fw.start();
+    }
   }
 
   /** 繰り返す録音を、音量 0 で流し始める（読めていなければ null） */
@@ -105,6 +122,19 @@ export function createAmbience({ timeOfDay, wind, zones = null }) {
       const insects = (fx.insects ?? 0) * (1 - 0.4 * w.castle);
       if (insects > 0.01 && !crickets.length) crickets = [loopOf('amb_crickets', -0.6, 1), loopOf('amb_crickets', 0.6, 0.97)].filter(Boolean);
       for (const c of crickets) c.out.gain.setTargetAtTime(insects * 1.1, now, 1.5);
+
+      // 川：岸に近いほど大きく（水の中では一番大きい）。滝：近いほど大きく、遠いと低い音だけ届く
+      if (riverGain) {
+        const q = land.nearest(L.x, L.z);
+        const edge = q ? Math.max(0, q.d - land.river.widthAt(q.s) / 2) : 99;
+        riverGain.gain.setTargetAtTime(0.16 * (1 - Math.min(1, Math.max(0, (edge - 2) / 40))) ** 1.5, now, 0.5);
+      }
+      if (fallGain) {
+        const d = Math.hypot(L.x - fall.x, L.y - fall.y, L.z - fall.z);
+        const k = Math.max(0, 1 - d / 120) ** 1.6;
+        fallGain.gain.setTargetAtTime(0.85 * k, now, 0.5);
+        fallLP.frequency.setTargetAtTime(500 + 1600 * k, now, 0.5);
+      }
 
       // カラス：昼・夕暮れ・夜に、ときどき
       const crows = fx.crows ?? 0;

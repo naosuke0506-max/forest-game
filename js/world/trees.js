@@ -169,8 +169,8 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models, 
   // エリアごとの木の多さ（中央の森を 1 とした倍率。深い森は 3 倍以上、大草原はまばら、村と道には置かない）。
   // 本数は「森全体が中央の森と同じ多さ」のときの数なので、平均の多さを掛けて実際の本数にする
   // 茂み（bush）だけは、深い森でも増やしすぎない（下草として森全体にほどよく）
-  // 外周の柵の外（柵から 1.5〜7m 先から）は、大きな木を深い森ほど密にする：柵の向こうも森が続いて見え、
-  // 柵が霧の中に白い壁のように浮かない。茂みと若木は柵に隠れて見えないので、柵の外には置かない
+  // 歩ける範囲の外（縁から 1.5〜7m 先から）は、大きな木を少し密にする：周りの山の斜面にも森が続いて見える。
+  // 山の高い所（岩場）は少なくする（2026-11-14：外周の柵を無くし、山が端になった）。茂みと若木は範囲の外には置かない
   const beltOf = (x, z) => {
     const t = Math.min(1, Math.max(0, (Math.hypot(x, z) - (w.playRadius + 1.5)) / 5.5));
     return t * t * (3 - 2 * t);
@@ -178,11 +178,11 @@ export function createModelTrees(app, config, seed, terrain, obstacles, models, 
   const densityOf = (name) => {
     if (!zones) return () => 1;
     if (name in SMALL) return (x, z) => (name === 'bush' ? bushDensity(x, z) : zones.treeDensity(x, z)) * (1 - beltOf(x, z));
-    return (x, z) => { const d = zones.treeDensity(x, z), b = beltOf(x, z); return d + (2.6 - d) * b; };
+    return (x, z) => { const d = zones.treeDensity(x, z), b = beltOf(x, z) * (1 - (zones.rocky?.(x, z) ?? 0)); return d + (1.8 - d) * b; };
   };
   const bushDensity = (x, z) => {
     const w = zones.weights(x, z);
-    return (w.mixed * 1 + w.deep * 0.8 + w.prairie * 0.25) * (1 - zones.path(x, z));
+    return (w.mixed * 1 + w.deep * 0.8 + w.prairie * 0.25) * (1 - zones.path(x, z)) * (1 - (zones.wet?.(x, z) ?? 0)) * (1 - 0.7 * (zones.rocky?.(x, z) ?? 0));
   };
   const avgOf = (fn) => {
     if (!zones) return 1;

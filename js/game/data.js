@@ -307,6 +307,15 @@ export const HIDE_ACTS = {
     drag: { clip: 'drag_bed', victim: 'drag_bed_v', kill: 1.40, time: 2.27, end: { r: 0.02, f: -0.48, yaw: 40 } } },
 };
 
+/**
+ * 川の中を歩く・泳ぐ（利用者の指示 2026-11-14：川は泳げる。数は Claude の仮の値。game/swim.js）
+ *   depth：これより深いと泳ぐ（m）、float：泳いでいる間、足の高さは水面からこれだけ下（頭と肩が水の上）、speed：泳ぐ速さ（m/s。キャラの速さを掛ける）、
+ *   tired：スタミナが尽きたら、この割合の速さ、stamina：泳いでいる間 1 秒に減るスタミナ、
+ *   wade：水の中を歩く速さ（腰の深さ 1.2 m で、ふだんのこの割合。浅いほど 1 に近い）、noRun：これより深いと走れない（m）
+ *   泳いでいる間は、攻撃・防禦・回避・技能・隠れることはできない
+ */
+export const SWIM = { depth: 1.25, float: 1.28, speed: 1.7, tired: 0.55, stamina: 4, wade: 0.5, noRun: 0.7 };
+
 /** 戦闘の決まりごと */
 export const COMBAT = {
   staminaRegen: 22,        // 1 秒に戻るスタミナ

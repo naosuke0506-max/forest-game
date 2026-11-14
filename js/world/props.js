@@ -159,7 +159,11 @@ export function createProps(app, config, seed, terrain, obstacles, types, zones 
   const zoneMul = (id, x, z) => {
     if (!zones) return 1;
     const w = zones.weights(x, z), m = ZONE_MUL[id];
-    const v = w.mixed * m.mixed + w.deep * m.deep + w.prairie * m.prairie + w.castle * m.castle;
+    let v = w.mixed * m.mixed + w.deep * m.deep + w.prairie * m.prairie + w.castle * m.castle;
+    // 川と岸には置かない（岩だけは川原と山の岩場に多め）。山の高い所は草・シダ・落ち枝が少ない
+    const wet = zones.wet ? zones.wet(x, z) : 0, rk = zones.rocky ? zones.rocky(x, z) : 0;
+    if (id.startsWith('rock')) v = v * (1 - wet * 0.5) + wet * 0.5 + rk * 1.2;
+    else v *= (1 - wet) * (1 - rk * 0.7);
     return id === 'grass' || id === 'fern' ? v * (1 - zones.path(x, z) * 0.85) : v * (1 - zones.path(x, z));
   };
 

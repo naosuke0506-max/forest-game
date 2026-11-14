@@ -2,6 +2,7 @@
 // bot はこれを使う。人間のプレイヤーも、いずれこれに寄せる（オンライン化のとき、同じ計算で動かすため）
 // しゃがむ・伏せると遅くなり、走れない（game/stance.js）。伏せる・起き上がる途中は動けない
 import { stanceSpeed, canRun } from './stance.js';
+import { applyWater, swimSpeed, wadeScale } from './swim.js';
 
 export const WALK_SPEED = 3.0; // m/s
 export const RUN_SPEED = 5.2;
@@ -16,7 +17,9 @@ export function moveFighter(f, input, dt, world) {
   f.yaw = input.yaw;
   const mag = Math.min(1, Math.hypot(input.forward, input.strafe));
   if (mag > 0) {
-    const speed = (input.run && canRun(f) ? RUN_SPEED : WALK_SPEED) * f.stats.speed * (f.moveScale ?? 1) * stanceSpeed(f); // 防御中・攻撃中は遅い
+    // 防御中・攻撃中は遅い。川の中は遅く、深い所は泳ぐ（game/swim.js）
+    const speed = f.swimming ? swimSpeed(f) * (f.moveScale ?? 1)
+      : (input.run && canRun(f) ? RUN_SPEED : WALK_SPEED) * f.stats.speed * (f.moveScale ?? 1) * stanceSpeed(f) * wadeScale(f.waterDepth);
     const rad = (f.yaw * Math.PI) / 180;
     const fx = -Math.sin(rad), fz = -Math.cos(rad);  // 前（-Z を向きで回したもの）
     const rx = Math.cos(rad), rz = -Math.sin(rad);   // 右
@@ -27,6 +30,7 @@ export function moveFighter(f, input, dt, world) {
   world.obstacles.resolve(f, BODY_RADIUS);
   keepInside(f, world.areaRadius);
   if (world.groundAt) f.y = world.groundAt(f.x, f.z, f.y);   // 家の床・階段の高さ
+  if (world.water) applyWater(f, world.water);               // 川の中を歩く・泳ぐ（泳いでいれば水面に浮く）
   return mag;
 }
 

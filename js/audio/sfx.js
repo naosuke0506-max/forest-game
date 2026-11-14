@@ -78,8 +78,25 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
   /** 足音 1 歩（録音。地面で選ぶ） */
   // 自分の足音の大きさ：自分の音は距離で小さくならず、いつも一番大きく鳴るので、うるさくないように下げる（利用者の指示）
   const OWN_STEP = 0.35;
+  /** 川の中の 1 歩・泳ぎの 1 かき（作った音。利用者の指示 2026-11-14：川は泳げる）。深いほど低く大きい */
+  function splash(f, run) {
+    const own = f.isPlayer ? OWN_STEP * 1.6 : 1;
+    if (f.swimming) {
+      const d = at(f, 0.75 * own, { ref: 3, max: 34 });
+      if (!d) return;
+      noiseHit(d, { dur: 0.32, type: 'bandpass', freq: 900 * jitter(0.15), freqEnd: 420, q: 0.9, attack: 0.03, gain: 0.32 });
+      noiseHit(d, { t: 0.05, dur: 0.18, type: 'highpass', freq: 2600, q: 0.5, gain: 0.12 });
+      return;
+    }
+    const deep = Math.min(1, (f.waterDepth || 0) / 1.0);
+    const d = at(f, (run ? 1 : 0.8) * own, { ref: 2, max: 30 });
+    if (!d) return;
+    noiseHit(d, { dur: 0.12 + deep * 0.14, type: 'bandpass', freq: (1900 - deep * 900) * jitter(0.12), freqEnd: 700, q: 0.8, gain: 0.3 + deep * 0.15 });
+    toneHit(d, { dur: 0.08, f0: 260 - deep * 90, f1: 140, gain: 0.08 + deep * 0.06 });
+  }
   function step(f, run) {
     steps++;
+    if (f.swimming || f.waterDepth > 0.08) { splash(f, run); return; }   // 川の中は水音
     const own = f.isPlayer ? OWN_STEP : 1;
     // しゃがむと足音が小さく、伏せていれば体を引きずる布ずれ（bot にも聞こえにくい。game/senses.js）
     const st = f.stance || 'stand';
@@ -180,7 +197,7 @@ export function createSfx({ terrain, zones = null, villageCenter = null }) {
         if (speed < (f.stance === 'prone' ? 0.2 : 0.4) || f.action?.kind === 'dodge') { w.still = (w.still || 0) + dt; if (w.still > 0.25) w.d = Math.min(w.d, 0.4); continue; }
         w.still = 0;
         w.d += moved;
-        const stride = f.stance === 'prone' ? 0.45 : f.stance === 'crouch' ? 0.55 : speed > 4.2 ? 0.95 : 0.72;
+        const stride = f.swimming ? 1.4 : f.stance === 'prone' ? 0.45 : f.stance === 'crouch' ? 0.55 : speed > 4.2 ? 0.95 : 0.72;   // 泳ぎは 1 かきが長い
         if (w.d >= stride) { w.d -= stride; step(f, speed > 4.2); }
       }
     },

@@ -4,7 +4,8 @@ import { createApp } from './core/app.js';
 import { createTerrain } from './world/terrain.js';
 import { createEnvironment } from './world/environment.js';
 import { createTimeOfDay } from './world/time-of-day.js';
-import { createFence } from './world/fence.js';
+import { createLandform } from './world/landform.js';
+import { createWater } from './world/water.js';
 import { createVillage } from './world/castle.js';
 import { createFloors } from './world/floors.js';
 import { createZones } from './world/zones.js';
@@ -14,7 +15,6 @@ import { createSkyLights } from './render/sky-lights.js';
 import { createAirParticles } from './render/air-particles.js';
 import { audio, loadSounds } from './audio/engine.js';
 import { createAmbience } from './audio/ambience.js';
-import { createRandom } from './core/random.js';
 import { AREA_RADIUS } from './game/data.js';
 import { createObstacles } from './world/obstacles.js';
 import { createSight } from './game/sight.js';
@@ -93,14 +93,16 @@ async function boot() {
   ]);
 
   // 世界を組み立てる（置く順番が大事：木 → 岩 → 草。草は木や岩を避けて生える）
-  // エリア分け（中央の森・北の深い森・東の大草原・南西の城と村・道）
-  const zones = createZones(CONFIG.seed, CONFIG.world.playRadius);
-  const terrain = createTerrain(app, CONFIG, CONFIG.seed, tex.ground, zones);
+  // 地形の形（周りの山・川と谷・盆地の丘。world/landform.js）と、エリア分け（森・北西の深い森・東の大草原・南西の村・道）
+  const land = createLandform(CONFIG.seed, { playRadius: CONFIG.world.playRadius, size: CONFIG.world.terrainSize });
+  const zones = createZones(CONFIG.seed, CONFIG.world.playRadius, land);
+  const terrain = createTerrain(app, CONFIG, CONFIG.seed, tex.ground, zones, land);
+  // 川の水面と滝（world/water.js）
+  const water = createWater(app, land, terrain);
   const env = createEnvironment(app, CONFIG, sky);
   const wind = createWind(app, CONFIG);
   const obstacles = createObstacles();
-  // 外周の柵（高さ約 10m）。ここから先へは行けない
-  createFence(app, terrain, AREA_RADIUS, createRandom(CONFIG.seed + 55), tex.bark);
+  // 外周の柵は無くした（2026-11-14。利用者の指示：周りの山が端になる。通れない仕組みは今までどおりの見えない円）
   // 木：Tripo AI の模型。読み込めなかったときは仮の木
   const trees = treeModels
     ? createModelTrees(app, CONFIG, CONFIG.seed, terrain, obstacles, treeModels, zones)
@@ -128,12 +130,13 @@ async function boot() {
 
   const player = createPlayer(app, CONFIG, terrain, obstacles, env.fogColor);
   player.setGround(floors.groundAt);
+  player.water = terrain.waterAt;   // 川の中を歩く・泳ぐ（game/swim.js）
   // 時間帯（朝・昼・夕暮れ・深夜）。霧の色が変わったら、空の無い所の背景色も合わせる
   env.onFogColor = (c) => { player.camera.camera.clearColor = c; };
   const timeOfDay = createTimeOfDay(app, env, CONFIG, player.camera);
   const sunGlare = createSunGlare(player.camera, env.sun, timeOfDay, {
     canopies: trees?.canopies || [], trunks: trees?.trunks || [],
-    fence: { radius: AREA_RADIUS + 0.4, height: 10 }, heightAt: terrain.heightAt,
+    heightAt: terrain.heightAt,
   });
   // 太陽と月の円盤・木漏れ日の光の筋、空気の中の塵・舞い落ちる葉・蛍
   const skyLights = createSkyLights(app, player.camera, env.sun, timeOfDay, {
@@ -143,7 +146,7 @@ async function boot() {
   // 環境音（風・葉・鳥・虫・カラス）。音は試合を始めるボタンを押したときから出る（iPad の決まり）。
   // 録音の音のファイルは、今のうちに裏で取りに行く
   loadSounds();
-  const ambience = createAmbience({ timeOfDay, wind, zones });
+  const ambience = createAmbience({ timeOfDay, wind, zones, land, fall: water.fall });
   let indoorK = 0;
   const touchLayer = document.getElementById('touch-layer');
   const input = createInput(touchLayer, document.getElementById('stick'), CONFIG);
@@ -175,6 +178,7 @@ async function boot() {
     timeOfDay.update(dt);
     sunGlare.update(dt);
     skyLights.update(dt);
+    water.update(dt);   // 川のさざ波・滝の筋を流す
     air.update(dt);
     // 音：聞く人の位置と向き。家の中では外の音がこもる
     const inside = village?.insideHouse?.(cp.x, cp.z) && player.position.y > terrain.heightAt(cp.x, cp.z) + 0.25 ? 1 : 0;
@@ -193,7 +197,7 @@ async function boot() {
     .then(([grass, litter]) => terrain.setGroundTextures(grass, litter));
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air, floors, sight };
+  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air, floors, sight, land, water };
 
   // 設定のうち森に関わる分（視点）。変わるたびに反映する
   applyWorld = (st = settings) => {

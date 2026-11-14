@@ -126,6 +126,9 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   // 攻撃を受けた動き（game/reactions.js の fighter.react）：流している受けた動きの番号と残りの時間。
   // 押されて下がった分（knock）：動きの中で体が下がっているので、位置をその分だけ戻して描く（受けた動きが終わったら BLEND の間に 0 へ）
   let reactId = 0, reactLeft = 0, reactShift = 0;   // reactShift：受けた動きの中で体が下がる距離（m）
+  // 泳ぐ（game/swim.js）：体の足もとは水面の 1.28 m 下（立ち泳ぎで肩まで水）。泳いで進む間は、這う動き（crawl）を水面まで持ち上げる
+  const SWIM_LIFT = 1.06;
+  let swimLift = 0, swimLiftWant = 0;
   const knock = { x: 0, z: 0, fade: 0, fx: 0, fz: 0 };
   const knockV = new pc.Vec3();
   // snap：動き終わりに体の位置と向きが移った（暗殺の滑斬など。fighter.snapPose）。次の動きへは混ぜずにすぐ移る（移った所で姿が合っている）
@@ -337,9 +340,10 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         const k = Math.max(0, 1 - knock.fade / BLEND);
         knock.x = knock.fx * k; knock.z = knock.fz * k;
       }
+      swimLift += ((fighter.swimming ? swimLiftWant : 0) - swimLift) * Math.min(1, dt * 5);
       if (hid) { root.setPosition(hid.outX, groundY, hid.outZ); root.setEulerAngles(0, hid.yaw, 0); }
       else {
-        root.setPosition(fighter.x - knock.x - (cv ? cv.nx * 0.14 : 0), groundY, fighter.z - knock.z - (cv ? cv.nz * 0.14 : 0));
+        root.setPosition(fighter.x - knock.x - (cv ? cv.nx * 0.14 : 0), groundY + swimLift, fighter.z - knock.z - (cv ? cv.nz * 0.14 : 0));
         root.setEulerAngles(0, fighter.yaw, 0);
       }
 
@@ -389,6 +393,16 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         return;
       }
 
+      // 泳いでいる（利用者の指示 2026-11-14：川は泳げる）：進んでいる間は這う動きを水面に浮かべて泳ぐ形に、止まっていれば待機の動きを
+      // 肩まで水に沈めて立ち泳ぎ（泳ぐ専用の動きは、まだ無い）
+      if (fighter.swimming) {
+        const moving = vel > 0.25 && has('crawl');
+        swimLiftWant = moving ? SWIM_LIFT : 0;
+        if (moving) play('crawl', Math.min(2.5, Math.max(0.6, vel / ((clip('crawl').speed || 0.5) * meta.scale))), 0.3);
+        else play(loco('idle'), 0.7, 0.3);
+        lastAction = null;
+        return;
+      }
       // 攻撃を受けた：被弾（軽い・重い）・よろめきは攻撃された向きの動き、楯で受けたら受けの動き（game/reactions.js）。
       // 動きの間はほかの動きに替えない（新しい行動を始めたら、そちらへ移る）。向きの動きが無い模型は、今までの hit・stagger
       const r = fighter.react;

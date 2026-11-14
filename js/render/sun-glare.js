@@ -21,7 +21,7 @@ export function createSunGlare(camera, sun, timeOfDay, { canopies = [], trunks =
   /** カメラから太陽の向きへの線が、何にもさえぎられていないか（0〜1。葉の縁は少し透ける） */
   function openSky() {
     const ox = camPos.x, oy = camPos.y, oz = camPos.z, dx = dir.x, dy = dir.y, dz = dir.z;
-    // 外周の柵：線が柵の円に届いた所で、柵の高さより下なら見えない
+    // 外周の柵（今は無い。fence を渡したときだけ）：線が柵の円に届いた所で、柵の高さより下なら見えない
     if (fence) {
       const a = dx * dx + dz * dz;
       if (a > 1e-6) {
@@ -33,7 +33,8 @@ export function createSunGlare(camera, sun, timeOfDay, { canopies = [], trunks =
     }
     // 地面の起伏：線の上を何か所か調べ、地面より下を通るなら見えない
     if (heightAt) {
-      for (let t = 4; t <= 90; t += 6) {
+      // 近くは細かく、遠くは粗く、周りの山の向こうまで（2026-11-14：外周の柵の代わりに山が太陽をさえぎる）
+      for (let t = 4; t <= 240; t += t < 90 ? 6 : 15) {
         if (oy + dy * t < heightAt(ox + dx * t, oz + dz * t)) return 0;
       }
     }
