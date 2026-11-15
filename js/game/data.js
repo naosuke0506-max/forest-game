@@ -31,6 +31,14 @@ export const CHARACTERS = {
 };
 
 /**
+ * 坂の上り下り（game/slope.js）。勾配は「高さ ÷ 水平の長さ」（0.36 ＝ 20 度、0.58 ＝ 30 度、1.0 ＝ 45 度）
+ *   free：ここまでは平地と同じ速さ、up：上りの遅くなり方（大きいほど遅い）、upMin：上りの一番遅い倍率、
+ *   wall：この勾配の間で上れなくなる（[1.25, 1.55] ＝ 51〜57 度）、downBoost：ゆるい下りで速くなる分、downSteep：急な下りの倍率、
+ *   probe：傾きを確かめる先の長さ（m）、lean：体を坂に合わせて傾ける割合（見た目。render/character-view.js）
+ */
+export const SLOPE = { free: 0.1, up: 1.5, upMin: 0.24, wall: [1.25, 1.55], downBoost: 0.06, downSteep: 0.7, probe: 0.6, lean: 0.45 };
+
+/**
  * 武器。近接は「振りかぶり（windup）→ 当たり → 戻り（recovery）」の順に動く。
  *   damage：ダメージ、reach：間合い（m）、arc：当たる角度（度）、stamina：振るのに使うスタミナ
  *   guardPierce：防御されても通る割合（打撃武器は防御の上から響く）

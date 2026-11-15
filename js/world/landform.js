@@ -20,6 +20,10 @@ const RIVER = [
 ];
 const LIP = [-21, -162];   // 滝の落ち口
 const FORDS = [[-30, -88], [102, 104]];   // 浅瀬（歩いて渡れる）
+// 橋の架かる所（道が川を渡る所。world/villages.js の ROADS）：川幅を広げて、橋を長くする（利用者の指示 2026-11-14）。
+// 2 つの橋は近いので、その間はひと続きの広い流れになる
+const WIDE = [[28, 55], [30, 0]];
+const WIDE_WIDTH = 24;     // 橋の所の川幅（m。ほかは 7〜12 m）
 const STEP = 1.5;          // 川の線を区切る長さ（m）
 const REACH = 64;          // 川から離れて谷の形が届く遠さ（m）
 const CELL = 8;            // 近くの川の区切りを探すための升目（m）
@@ -80,10 +84,12 @@ export function createLandform(seed, { playRadius, size }) {
   const nearestIndex = (x, z) => { let b = 0, bd = Infinity; for (let i = 0; i < n; i++) { const d = Math.hypot(S[i][0] - x, S[i][1] - z); if (d < bd) { bd = d; b = i; } } return b; };
   const sLip = sAt[nearestIndex(LIP[0], LIP[1])];
   const fordS = FORDS.map(([x, z]) => sAt[nearestIndex(x, z)]);
-  // 幅（m）：滝の上は細い流れ、滝壺は広い、盆地では 9〜12 m、峡谷は少し細い
+  const wideS = WIDE.map(([x, z]) => sAt[nearestIndex(x, z)]);
+  // 幅（m）：滝の上は細い流れ、滝壺は広い、盆地では 7〜12 m、橋の架かる所は広い（24 m）、峡谷は少し細い
   const widthAt = (s) => {
-    const base = 9.5 + (fbm(s * 0.02, 1.7, seed + 311) - 0.5) * 5;
+    let base = 9.5 + (fbm(s * 0.02, 1.7, seed + 311) - 0.5) * 5;
     if (s < sLip) return 5.5;
+    for (const ws of wideS) base = lerp(WIDE_WIDTH, base, smooth(10, 42, Math.abs(s - ws)));
     const pool = 1 - smooth(4, 22, Math.abs(s - (sLip + 10)));
     return lerp(base, 15, pool);
   };

@@ -338,7 +338,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   });
   match.on('end', () => { spectateEl.hidden = true; });
 
-  const world = { obstacles, groundAt, hiding, cover, sight, senses, water: terrain.waterAt || null, get areaRadius() { return match.areaRadius; },
+  const world = { obstacles, groundAt, heightAt: terrain.heightAt, hiding, cover, sight, senses, water: terrain.waterAt || null, get areaRadius() { return match.areaRadius; },
     /** f が今暗殺できる相手 { target, grace } か null（bot が暗殺ボタンを押すか決める） */
     assassinTarget: (f) => combat.assassinTarget(f),
     /** 隠れる・出る（動きをしてから。game/hide-acts.js） */

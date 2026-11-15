@@ -137,6 +137,19 @@ async function boot() {
   const player = createPlayer(app, CONFIG, terrain, obstacles, env.fogColor);
   player.setGround(floors.groundAt);
   player.water = terrain.waterAt;   // 川の中を歩く・泳ぐ（game/swim.js）
+  // 三人称のカメラは、家の壁・床・屋根の向こうや、洞窟の壁や天井の外へ出ない（出ると、壁の中や岩の裏、外の地面が見えてしまう）。
+  //   家：頭からカメラまでの線が、壁・床・屋根（bot の目をさえぎる物と同じ。game/sight.js）に当たらない所まで近づける
+  //   洞窟：中にいる間だけ確かめる。通り道の断面（半分の楕円）の内側で、壁・天井から少し離れた所だけに置ける
+  player.cameraClear = (x, y, z) => {
+    const cp = player.position;
+    const fy = cp.y ?? terrain.heightAt(cp.x, cp.z);
+    if (sight.blocked([cp.x, fy + 1.6, cp.z], [x, y, z], { wallsOnly: true })) return false;
+    if (!land.cave.inside(cp.x, cp.z, cp.y)) return true;
+    const q = land.cave.nearest(x, z);
+    if (!q) return false;
+    const a = Math.max(0.2, q.w / 2 - 0.35), b = Math.max(0.5, q.ceil - 0.35);
+    return y > q.floor + 0.25 && (q.d / a) ** 2 + ((y - q.floor) / b) ** 2 < 1;
+  };
   // 時間帯（朝・昼・夕暮れ・深夜）。霧の色が変わったら、空の無い所の背景色も合わせる
   env.onFogColor = (c) => { player.camera.camera.clearColor = c; };
   const timeOfDay = createTimeOfDay(app, env, CONFIG, player.camera);

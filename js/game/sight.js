@@ -118,11 +118,12 @@ export function createSight(heightAt, { grassAt = null } = {}) {
     const t = (e2[0] * qx + e2[1] * qy + e2[2] * qz) * inv;
     return t > EPS && t < 1 - EPS;
   }
+  let wallsOnly = false;   // blocked の opt.wallsOnly：円柱（木の幹・岩・杭）は数えない
   function hit(o, p, d) {
     if (o.stamp === stamp) return false;
     o.stamp = stamp;
     if (o.t === 0) return hitBox(o, p, d);
-    if (o.t === 1) return hitCyl(o, p, d);
+    if (o.t === 1) return wallsOnly ? false : hitCyl(o, p, d);
     if (o.t === 2) return hitTri(o, p, d);
     // 家：外側の箱に当たれば、中の物
     if (!hitBox(o, p, d)) return false;
@@ -148,12 +149,17 @@ export function createSight(heightAt, { grassAt = null } = {}) {
     return false;
   }
 
-  /** p から q が見通せないか（何かに当たれば true） */
-  function blocked(p, q) {
+  /**
+   * p から q が見通せないか（何かに当たれば true）
+   * @param {{ wallsOnly?: boolean }} [opt] wallsOnly：箱と三角（家の壁・床・屋根・家具など）だけを見る。木の幹などの円柱・地面・草は見ない
+   *   （三人称のカメラが壁の向こうへ出ないようにするのに使う。細い幹でカメラが寄ったり離れたりしないように）
+   */
+  function blocked(p, q, opt = null) {
     const d = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
     const len = Math.hypot(d[0], d[1], d[2]);
     if (len < 0.05) return false;
     stamp++;
+    wallsOnly = !!opt?.wallsOnly;
     // 升を順にたどる（線分が通る升だけ）
     let gx = Math.floor(p[0] / CELL), gz = Math.floor(p[2] / CELL);
     const ex = Math.floor(q[0] / CELL), ez = Math.floor(q[2] / CELL);
@@ -168,7 +174,7 @@ export function createSight(heightAt, { grassAt = null } = {}) {
       if (tmx < tmz) { if (tmx > 1) break; gx += sx; tmx += tdx; }
       else { if (tmz > 1) break; gz += sz; tmz += tdz; }
     }
-    return groundBlocks(p, d, len);
+    return wallsOnly ? false : groundBlocks(p, d, len);
   }
 
   return { addBox, addYawBox, addCyl, addTri, beginGroup, endGroup, blocked, get count() { return count; } };

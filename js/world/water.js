@@ -130,12 +130,14 @@ export function createWater(app, land) {
   tris += idx.length / 3;
   const ripple = rippleNormals(device);
   const mat = new pc.StandardMaterial();
-  // 色：浅い川の緑がかった青。少し透けて川床が見え、斜めから見ると空を映す（2026-11-14：最初は黒っぽく、波が荒く見えたので明るく・穏やかに）
-  mat.diffuse = new pc.Color(0.12, 0.2, 0.2);
+  // 色：緑がかった青。斜めから見ると空を映す（2026-11-14：最初は黒っぽく、波が荒く見えたので明るく・穏やかに）。
+  // 同じ日の利用者の指示「川の中が見えやすいので、見えづらく」：透け具合を 0.7 → 0.92 にして、川床や泳ぐ人がほとんど見えないようにした
+  // （濁りのある川。透けない分、色そのものが見えるので少し明るい色にした）
+  mat.diffuse = new pc.Color(0.15, 0.25, 0.24);
   mat.useMetalness = true; mat.metalness = 0; mat.gloss = 0.93;
   mat.normalMap = ripple; mat.bumpiness = 0.22;
   mat.normalDetailMap = ripple; mat.normalDetailMapTiling = new pc.Vec2(2.7, 2.3); mat.normalDetailMapBumpiness = 0.18;
-  mat.opacity = 0.7;
+  mat.opacity = 0.92;
   mat.blendType = pc.BLEND_NORMAL;
   mat.depthWrite = false;
   mat.cull = pc.CULLFACE_NONE;
