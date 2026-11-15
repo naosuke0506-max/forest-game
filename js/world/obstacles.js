@@ -6,6 +6,7 @@ const CELL = 8; // m
 export function createObstacles() {
   const grid = new Map();
   const all = [];
+  const fields = [];   // 円では書けない壁（洞窟の壁）：{ resolve(p, radius) }。円の後に呼ぶ
   const key = (gx, gz) => gx * 73856093 ^ gz * 19349663;
 
   /**
@@ -22,6 +23,7 @@ export function createObstacles() {
         grid.get(k).push(o);
       }
     }
+    return o;   // o.off = true にすると、無い物として扱う（開け閉めする扉。world/doors.js）
   }
 
   /** 近くにある円の一覧 */
@@ -32,7 +34,7 @@ export function createObstacles() {
   /** 位置 p（{x, z}、あれば足の高さ y）を、半径 radius の円として障害物から押し出す */
   function resolve(p, radius) {
     for (const o of near(p.x, p.z)) {
-      if (!o.solid) continue;
+      if (!o.solid || o.off) continue;
       if (p.y !== undefined && (p.y < o.y0 || p.y > o.y1)) continue;   // 別の階の物にはぶつからない
       const dx = p.x - o.x, dz = p.z - o.z;
       const min = o.r + radius;
@@ -43,6 +45,7 @@ export function createObstacles() {
         p.z = o.z + (dz / d) * min;
       }
     }
+    for (const f of fields) f.resolve(p, radius);
   }
 
   /**
@@ -53,7 +56,7 @@ export function createObstacles() {
     for (let gx = Math.floor((x - r) / CELL) - 1; gx <= Math.floor((x + r) / CELL) + 1; gx++) {
       for (let gz = Math.floor((z - r) / CELL) - 1; gz <= Math.floor((z + r) / CELL) + 1; gz++) {
         for (const o of grid.get(key(gx, gz)) || []) {
-          if (solidOnly && !o.solid) continue;
+          if (o.off || (solidOnly && !o.solid)) continue;
           if (Math.hypot(x - o.x, z - o.z) < o.r + r) return false;
         }
       }
@@ -61,5 +64,8 @@ export function createObstacles() {
     return true;
   }
 
-  return { add, resolve, isFree, all };
+  /** 円では書けない壁を足す（洞窟の壁。world/cave-plan.js）：{ resolve(p, radius) } */
+  function addField(f) { fields.push(f); }
+
+  return { add, addField, resolve, isFree, all };
 }

@@ -3,7 +3,7 @@
 // 模型は tools/characters/build_character.py で作る（assets/characters/<名前>.glb と、動きの長さ・速さの .json）。
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
-import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT, WRATH, HIDE_ACTS } from '../game/data.js';
+import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT, WRATH, HIDE_ACTS, SLOPE } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { techSetOf } from '../game/techniques.js';
 import { stanceShape } from '../game/stance.js';
@@ -168,6 +168,10 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
 
   let groundY = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z)), flashOn = false;
   let px = fighter.x, pz = fighter.z, vel = 0, fwd = 0;
+  // 坂での体の傾き（見た目だけ）：上るときは進む向きへ少し前のめり、下るときは少し後ろへ（利用者の指示 2026-11-14：坂の上り下りが不自然）。
+  // 傾きは、進む向きの勾配（高さの変わる速さ ÷ 進む速さ）から決める。止まっているとき・泳ぐ・伏せる・倒れた後は傾けない
+  let pTarget = groundY, climb = 0, side = 0, leanF = 0, leanS = 0;
+  const qYaw = new pc.Quat(), qLean = new pc.Quat(), qRoot = new pc.Quat();
   let pYaw = fighter.yaw, yawRate = 0;   // 体の向きが変わる速さ（度/秒。左回りが正）：その場で回る足踏みの動きに使う
   // 首の向き（fighter.headYaw。体の向きからの左右）：首と頭の骨に分けて回す（ほかの人から、どちらを見ているか分かる）
   const neckBone = body.findByName('NeckTwist01');
@@ -344,7 +348,10 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       if (hid) { root.setPosition(hid.outX, groundY, hid.outZ); root.setEulerAngles(0, hid.yaw, 0); }
       else {
         root.setPosition(fighter.x - knock.x - (cv ? cv.nx * 0.14 : 0), groundY + swimLift, fighter.z - knock.z - (cv ? cv.nz * 0.14 : 0));
-        root.setEulerAngles(0, fighter.yaw, 0);
+        if (Math.abs(leanF) > 0.05 || Math.abs(leanS) > 0.05) {
+          // 前のめり＝横の軸（X）まわりに負の向き、右へ傾く＝前後の軸（Z）まわりに負の向き
+          root.setRotation(qRoot.mul2(qYaw.setFromEulerAngles(0, fighter.yaw, 0), qLean.setFromEulerAngles(-leanF, 0, -leanS)));
+        } else root.setEulerAngles(0, fighter.yaw, 0);
       }
 
       // 質感の画像を消さない程度に、うっすら赤くする。倒れた後は光らせない
@@ -362,7 +369,21 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         const k = Math.min(1, dt * 10);
         vel += (Math.hypot(dx, dz) - vel) * k;
         fwd += (f - fwd) * k;
+        // 坂での傾き：地面（床）の高さの変わる速さから、上っているか下っているかを求める
+        const r = Math.cos(yaw) * dx - Math.sin(yaw) * dz;      // 右への速さ
+        side += (r - side) * k;
+        const dyG = Math.max(-6, Math.min(6, (target - pTarget) / dt));
+        climb += (dyG - climb) * Math.min(1, dt * 6);
+        let wantF = 0, wantS = 0;
+        if (fighter.alive && !fighter.hidden && !fighter.swimming && fighter.stance !== 'prone' && vel > 0.4 && fighter.action?.kind !== 'dodge') {
+          const g = climb / Math.max(0.8, vel);                  // 進む向きの勾配
+          const deg = Math.max(-9, Math.min(14, (Math.atan(g) * 180 / Math.PI) * SLOPE.lean * (g > 0 ? 1 : 0.6)));   // 上りは前へ最大 14 度、下りは後ろへ最大 9 度
+          wantF = deg * (fwd / vel); wantS = deg * (side / vel);
+        }
+        leanF += (wantF - leanF) * Math.min(1, dt * 5);
+        leanS += (wantS - leanS) * Math.min(1, dt * 5);
       }
+      pTarget = target;
       px = fighter.x; pz = fighter.z;
       if (dt > 0) {
         const dy = ((fighter.yaw - pYaw + 540) % 360) - 180;
@@ -484,10 +505,9 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
           }
         } else if (a.kind === 'attack') {
           // 攻撃のたびに、3 種類の斬り（a1 → a2 → a3）を順に使う。長さは武器の振りの時間に合わせる
-          // 強攻撃（左手）は heavy の動き。ふつうは 3 種類の斬りを順に。持ち替えた近接武器は ma1〜ma3
+          // 強攻撃（左手）は heavy の動き。ふつうは 3 種類の斬りを順に（短劍の前の動き ma1〜ma3 は 2026-11-14 に消した。短劍は技を使う）
           const st = attackStats(fighter.weapon, a.heavy);
-          const melee2 = fighter.weapon !== fighter.primary && has('ma1');
-          const name = a.heavy && has('heavy') ? 'heavy' : (melee2 ? ['ma1', 'ma2', 'ma3'] : ['a1', 'a2', 'a3'])[swingIndex++ % 3];
+          const name = a.heavy && has('heavy') ? 'heavy' : ['a1', 'a2', 'a3'][swingIndex++ % 3];
           if (has(name)) restart(name, clip(name).duration / (st.windup + st.recovery));   // 動きの無い模型では何もしない
         } else if (a.kind === 'finisher') {
           // 致命の一撃：強攻撃の大きな振り（専用の動きができるまで）

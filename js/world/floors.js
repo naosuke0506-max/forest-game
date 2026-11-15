@@ -1,4 +1,4 @@
-// 歩ける床（地面のほかに乗れる面）：家の一階・二階の床、階段（坂として扱う）。
+// 歩ける床（地面のほかに乗れる面）：家の一階・二階の床、階段（坂として扱う）、橋、地面の下の洞窟の床。
 // groundAt(x, z, y)：今の高さ y から「段差として上がれる（STEP 以内）」面のうち、一番高い面の高さを返す。
 //   一階にいる人の真上に二階の床があっても、高すぎて上がれないので一階に立つ。階段は少しずつ上がるので、二階まで上がれる。
 //   どの面にも乗っていなければ地面（terrain.heightAt）
@@ -10,6 +10,9 @@ const CELL = 8;
 export const STEP = 0.65;   // 一度に上がれる段差（m）
 
 export function createFloors(heightAt) {
+  // 地面の下の層（洞窟。world/cave-plan.js の layer）：(x, z, 今の足の高さ) → { floor } か null。
+  // 洞窟の中にいる人（天井より下にいる人）だけが、その床に立つ。地面の上にいる人には関係ない
+  let under = null;
   const grid = new Map();
   const key = (gx, gz) => gx * 73856093 ^ gz * 19349663;
   const list = [];
@@ -42,6 +45,8 @@ export function createFloors(heightAt) {
 
   return {
     list,
+    /** 地面の下の層（洞窟）を登録する */
+    setUnder(fn) { under = fn; },
     /** 平らな床 */
     addFloor: ({ cx, cz, yaw, hw, hd, y }) => add({ cx, cz, yaw, hw, hd, y }),
     /** 坂（階段）：-hd の端で y0、+hd の端で y1 */
@@ -53,6 +58,7 @@ export function createFloors(heightAt) {
      * @param {number|null|undefined} y 今の足の高さ（無ければ地面から上がれる面）
      */
     groundAt(x, z, y = null) {
+      if (under && y !== null && y !== undefined) { const q = under(x, z, y); if (q) return q.floor; }
       const ground = heightAt(x, z);
       const from = y ?? ground;
       let best = ground;

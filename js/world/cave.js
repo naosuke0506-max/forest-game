@@ -1,162 +1,253 @@
-// 洞窟（風穴）の形：通り道の壁と天井（岩の筒）・床・口のまわりの岩の縁。形と通り道は world/cave-shape.js（world/landform.js の cave）。
-// 利用者の指示（2026-11-14）：「抜けられる洞窟ひとつ。口は二つだが、中には別れ道があり、行き止まりもある」
-//   中は奥ほど暗い（頂点の色。main.js が中にいる間は光も弱くする）。分かれ道は、ほかの通り道に入る所の壁を開ける。
-//   行き止まりの奥は小さな広間で、突き当たりを岩でふさぐ
-//   岩山の上も歩ける（通り道の上に床を登録する。world/floors.js）。中の壁は通れない（当たり判定）。岩山は bot の目をさえぎる
-// 全部で 1 つの形（描画命令 1 つ）。質感は岩の写真（Poly Haven。起動の時に読む地面・岩の質感）
+// 洞窟の見た目（岩の床・壁・天井の殻、口の岩の面、口のまわりの細かい地面）と、床・壁の登録。
+// 配置と形は world/cave-plan.js（world/landform.js の cave）。利用者の指示（2026-11-14）：
+//   「洞窟内から外が見えたりする」→ 中は、すき間の無い 1 つの殻にする（床・壁・天井がつながった袋。口だけが開いている）
+//   「洞窟内にはとても広い空洞なども」「マップの地下を洞窟が占領」→ 形は 0.8 m の升目（cave-plan.js が焼く）から作るので、
+//     通り道も広間も柱も、同じ作り方で 1 つにつながる
+// 作り方：
+//   殻：升目の「中」の升ごとに、床と天井の面を作る。中と外の境目には、床から天井の縁まで壁を立てる（境目の線は升の辺の上で補間）。
+//       口の所は、口の面（切り通しとの境）でちょうど切って、そこには壁を立てない
+//   口の岩の面：口の面に立てる岩の壁（洞窟の穴の形にくり抜く）。上は岩山の地面、下は切り通しの地面まで
+//   口のまわりの地面：地面の網（2.6 m ごと）では口の形が出ないので、口のまわりだけ 0.7 m ごとの細かい地面を作る
+//       （地面と同じ質感と色。world/terrain.js は、ここの網を抜き、足の高さは計算の高さを使う）
+//   当たり：床は world/floors.js の「地面の下の層」、壁は world/obstacles.js の「場」に登録する（どちらも cave-plan.js の升目を読む）
+// 重さ：殻は 40 m 四方ごとに分けて、近くの物だけ描く。地上にいて口から遠いときは、どれも描かない
 import * as pc from 'playcanvas';
 import { createMesh, sceneBudget } from '../core/mesh-utils.js';
 import { fbm } from '../core/random.js';
+import { PATCH } from './cave-plan.js';
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-const K = 12;   // 断面の区切り（床の左端 → 天井 → 床の右端）
+const TILE = 40;        // 殻を分ける大きさ（m）
+const SHOW = 75;        // この距離より近い殻だけ描く（m）
+const MOUTH_NEAR = 60;  // 地上にいるとき、口からこの距離より近ければ殻を描く（m）
 
 /**
  * @param {object} land world/landform.js（cave と uncarved）
- * @param {{ obstacles, floors, sight, rockTex, seed, terrain }} o  terrain があれば、岩山の蓋の上の面を地面と同じ見た目にする
+ * @param {{ obstacles, floors, rockTex, seed, terrain }} o terrain：world/terrain.js（地面の質感・色・計算の高さ）
  */
-export function createCave(app, land, { obstacles, floors, sight = null, rockTex = null, seed = 1, terrain = null }) {
-  const C = land.cave;
-  const positions = [], normals = [], uvs = [], colors = [], indices = [];
-  let tris = 0;
-  const mouths = C.mouths;
-  /** 口からの近さで、奥ほど暗い色（0.35〜0.85。暗すぎると戦えないので、行き止まりでも少し見える） */
-  const shadeAt = (x, z) => {
-    const d = Math.min(...mouths.map(([mx, mz]) => Math.hypot(x - mx, z - mz)));
-    return 0.85 - 0.5 * smooth(6, 26, d);
-  };
-  /** ほかの通り道の中か（分かれ道の所の壁を開ける） */
-  const insideOther = (t, x, y, z) => {
-    for (const u of C.tunnels) {
-      if (u === t) continue;
-      const q = C.nearest(x, z, u);
-      if (q && q.e < -0.05 && y < q.floor + q.ceil + 0.25) return true;
+export function createCave(app, land, { obstacles, floors, rockTex = null, seed = 1, terrain = null }) {
+  const C = land.cave, B = C.baked, G = B.G, nx = B.nx, nz = B.nz;
+  const device = app.graphicsDevice;
+
+  // ---- 殻に使う「壁からの距離」：口の面より前（切り通し）は外にする。口の面でちょうど 0 になる ----
+  const D = new Float32Array(nx * nz);
+  for (let iz = 0; iz < nz; iz++) for (let ix = 0; ix < nx; ix++) {
+    const k = iz * nx + ix, x = B.x0 + ix * G, z = B.z0 + iz * G;
+    let d = B.D[k];
+    for (const m of C.mouths) {
+      const [s, l] = C.frame(m, x, z);
+      if (s < 4 && s > -m.len - 8 && Math.abs(l) < m.hw + 7) d = Math.max(d, -s);
     }
-    return false;
+    D[k] = d;
+  }
+  const xOf = (ix) => B.x0 + ix * G, zOf = (iz) => B.z0 + iz * G;
+  /** 升目の値を、4 点の間をなめらかに読む */
+  const sample = (A, x, z) => {
+    const fx = Math.min(nx - 1.001, Math.max(0, (x - B.x0) / G)), fz = Math.min(nz - 1.001, Math.max(0, (z - B.z0) / G));
+    const ix = Math.floor(fx), iz = Math.floor(fz), tx = fx - ix, tz = fz - iz, k = iz * nx + ix;
+    return (A[k] * (1 - tx) + A[k + 1] * tx) * (1 - tz) + (A[k + nx] * (1 - tx) + A[k + nx + 1] * tx) * tz;
   };
-  const vert = (x, y, z, nx, ny, nz, u, v, c) => {
-    positions.push(x, y, z); normals.push(nx, ny, nz); uvs.push(u, v); colors.push(c, c * 0.97, c * 0.93, 1);
-    return positions.length / 3 - 1;
+  /** 口からの道のりで決まる明るさ（口の近くは明るく、奥は暗い） */
+  const shadeOf = (dist) => 0.85 - 0.5 * smooth(5, 36, dist);
+
+  // ---- 明かり：光る結晶（奥は真っ暗なので、広間と通り道の所々に置く。見た目の飾りで、岩の色に明かりを焼き込む。動く光は使わない） ----
+  let rs = (seed * 9301 + 49297) >>> 0;
+  const rnd = () => ((rs = (Math.imul(rs, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const lights = [];   // { x, y, z, r（届く遠さ）, k（強さ）, tint: [r, g, b] }
+  const TINTS = [[0.35, 0.9, 1.0], [0.45, 1.0, 0.75], [0.6, 0.75, 1.0]];
+  const addLight = (x, z, r, k) => {
+    const q = C.at(x, z);
+    if (!q || q.d > -0.3 || q.open > 0.5) return;
+    lights.push({ x, y: q.floor + 0.5, z, r, k, tint: TINTS[Math.floor(rnd() * TINTS.length)] });
+  };
+  for (const sm of C.samples) {
+    if (!sm.room) continue;
+    // 広間：壁ぎわに、広さに合わせた数（大空洞は 8 つ）
+    const n = Math.max(2, Math.round(sm.room.r / 2.7));
+    for (let k = 0; k < n; k++) {
+      const a = ((k + rnd() * 0.7) / n) * Math.PI * 2;
+      let r = sm.room.r * 0.3;
+      while (r < sm.room.r + 3 && sample(D, sm.x + Math.cos(a) * (r + 0.8), sm.z + Math.sin(a) * (r + 0.8)) < -0.5) r += 0.5;
+      addLight(sm.x + Math.cos(a) * r, sm.z + Math.sin(a) * r, 8 + sm.room.r * 0.25, 0.7 + rnd() * 0.3);
+    }
+  }
+  for (const pl of C.pillars) { const a = rnd() * 6.28; addLight(pl.x + Math.cos(a) * (pl.r + 1.1), pl.z + Math.sin(a) * (pl.r + 1.1), 10, 0.9); }
+  for (const ps of C.passages) {
+    // 通り道：約 34 m ごとに 1 つ、壁ぎわ（口の近く 14 m は外の光があるので置かない）
+    let acc = 14 + rnd() * 20;
+    for (let i = 1; i < ps.samples.length - 1; i++) {
+      const a = ps.samples[i - 1], b = ps.samples[i], L = Math.hypot(b.x - a.x, b.z - a.z);
+      acc -= L;
+      if (acc > 0 || b.dist < 14 || b.room) continue;
+      acc = 28 + rnd() * 14;
+      const sd = rnd() < 0.5 ? -1 : 1, off = Math.max(0.2, b.hw - 0.55);
+      addLight(b.x - ((b.z - a.z) / L) * sd * off, b.z + ((b.x - a.x) / L) * sd * off, 7.5, 0.6 + rnd() * 0.3);
+    }
+  }
+  const LB = 12, lightBins = new Map();
+  for (const l of lights) for (let gx = Math.floor((l.x - l.r) / LB); gx <= Math.floor((l.x + l.r) / LB); gx++) for (let gz = Math.floor((l.z - l.r) / LB); gz <= Math.floor((l.z + l.r) / LB); gz++) {
+    const k = gx * 4096 + gz;
+    if (!lightBins.has(k)) lightBins.set(k, []);
+    lightBins.get(k).push(l);
+  }
+  /** その点に届く結晶の明かり [r, g, b]（近いほど明るい） */
+  const glow = [0, 0, 0];
+  const glowAt = (x, y, z) => {
+    glow[0] = glow[1] = glow[2] = 0;
+    const list = lightBins.get(Math.floor(x / LB) * 4096 + Math.floor(z / LB));
+    if (!list) return glow;
+    for (const l of list) {
+      const d = Math.hypot(x - l.x, (y - l.y) * 0.6, z - l.z);
+      if (d >= l.r) continue;
+      const w = l.k * (1 - d / l.r) ** 2 * 0.55;
+      glow[0] += l.tint[0] * w; glow[1] += l.tint[1] * w; glow[2] += l.tint[2] * w;
+    }
+    return glow;
   };
 
-  for (const t of C.tunnels) {
-    const P = t.P;
-    // 覆われた所だけ筒にする（本道の口の外は屋根の無い切り通し）
-    let i0 = 0, i1 = P.length - 1;
-    while (i0 < P.length - 1 && t.covered[i0] < 0.5) i0++;
-    while (i1 > 0 && t.covered[i1] < 0.5) i1--;
-    if (i1 <= i0) continue;
-    const rings = [];
-    for (let i = i0; i <= i1; i++) {
-      const j0 = Math.max(0, i - 1), j1 = Math.min(P.length - 1, i + 1);
-      let tx = P[j1][0] - P[j0][0], tz = P[j1][1] - P[j0][1];
-      const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
-      const nx = -tz, nz = tx;   // 左
-      const hw = t.width[i] / 2, ceil = t.ceiling[i], fy = t.floor[i];
-      const ring = [];
-      for (let k = 0; k <= K; k++) {
-        const th = -0.12 + (Math.PI + 0.24) * (k / K);            // 床の少し下から、天井を回って、反対の床の少し下まで
-        const c = Math.cos(th), s = Math.sin(th);
-        // 岩のごつごつ：断面の外へ押し出す（天井の真ん中ほど大きく）
-        const bump = (fbm(t.s[i] * 0.35, k * 0.8, seed + 71) - 0.5) * 0.7 * (0.5 + 0.5 * s);
-        const ex = -c * (hw + bump), ey = Math.max(-0.25, s * (ceil + bump * 0.6));
-        const x = P[i][0] + nx * ex, z = P[i][1] + nz * ex, y = fy + ey;
-        // 法線は筒の内側へ
-        const ix = -nx * -c, iz = -nz * -c;
-        const l = Math.hypot(ix, s, iz) || 1;
-        ring.push({ x, y, z, nx: ix / l, ny: -s / l, nz: iz / l, u: t.s[i] / 2.5, v: (k / K) * (Math.PI * (hw + ceil) / 2) / 2.5 });
+  // ---- 殻を作る（40 m 四方ごとの入れ物に分ける） ----
+  const tiles = new Map();
+  const tileAt = (x, z) => {
+    const key = Math.floor((x - B.x0) / TILE) * 1000 + Math.floor((z - B.z0) / TILE);
+    let t = tiles.get(key);
+    if (!t) { t = { positions: [], normals: [], uvs: [], colors: [], indices: [], verts: new Map(), cx: 0, cz: 0, n: 0, gem: { positions: [], colors: [], indices: [] } }; tiles.set(key, t); }
+    return t;
+  };
+  const tileOf = (ix, iz) => tileAt(B.x0 + ix * G, B.z0 + iz * G);
+  const pushVert = (t, x, y, z, nxn, nyn, nzn, u, v, c) => {
+    const g = glowAt(x, y, z);
+    t.positions.push(x, y, z); t.normals.push(nxn, nyn, nzn); t.uvs.push(u, v);
+    t.colors.push(Math.min(1, c + g[0]), Math.min(1, c * 0.97 + g[1]), Math.min(1, c * 0.93 + g[2]), 1);
+    return t.positions.length / 3 - 1;
+  };
+  const vert = (t, key, x, y, z, nxn, nyn, nzn, u, v, c) => {
+    let i = t.verts.get(key);
+    if (i !== undefined) return i;
+    i = pushVert(t, x, y, z, nxn, nyn, nzn, u, v, c);
+    t.verts.set(key, i);
+    t.cx += x; t.cz += z; t.n++;
+    return i;
+  };
+  /** 三角形を足す。向き（表）は want（面の表の向き）に合わせる */
+  const tri = (t, a, b, c, wx, wy, wz) => {
+    const P = t.positions, ax = P[a * 3], ay = P[a * 3 + 1], az = P[a * 3 + 2];
+    const ux = P[b * 3] - ax, uy = P[b * 3 + 1] - ay, uz = P[b * 3 + 2] - az, vx = P[c * 3] - ax, vy = P[c * 3 + 1] - ay, vz = P[c * 3 + 2] - az;
+    const nxn = uy * vz - uz * vy, nyn = uz * vx - ux * vz, nzn = ux * vy - uy * vx;
+    if (Math.abs(nxn) + Math.abs(nyn) + Math.abs(nzn) < 1e-9) return;
+    if (nxn * wx + nyn * wy + nzn * wz >= 0) t.indices.push(a, b, c); else t.indices.push(a, c, b);
+  };
+  const e = G;
+  const gradOf = (A, x, z) => [(sample(A, x + e, z) - sample(A, x - e, z)) / (2 * e), (sample(A, x, z + e) - sample(A, x, z - e)) / (2 * e)];
+  /** 升の角・辺の上の点（kind：f 床 / c 天井 / w0〜w2 壁の下・中・上） */
+  const pointAt = (a, b) => {
+    // a・b：升目の点の番号。a === b なら角、違えば辺の上の、距離が 0 になる所
+    if (a === b) return { x: xOf(a % nx), z: zOf(Math.floor(a / nx)), F: B.F[a], C: B.C[a], S: B.S[a], W: B.W[a], key: `n${a}`, mouth: false };
+    const t = D[a] / (D[a] - D[b]);
+    const x = xOf(a % nx) + (xOf(b % nx) - xOf(a % nx)) * t, z = zOf(Math.floor(a / nx)) + (zOf(Math.floor(b / nx)) - zOf(Math.floor(a / nx))) * t;
+    const F = B.F[a] + (B.F[b] - B.F[a]) * t, W = B.W[a] + (B.W[b] - B.W[a]) * t;
+    // 口の面の上の点か（元の距離ではまだ中）：天井は洞窟の天井のまま。ふつうの壁の上の点：天井の縁は壁の高さ
+    const mouth = B.D[a] + (B.D[b] - B.D[a]) * t < -0.05;
+    const Cc = mouth ? B.C[a] + (B.C[b] - B.C[a]) * t : F + W;
+    return { x, z, F, C: Cc, S: B.S[a] + (B.S[b] - B.S[a]) * t, W, key: a < b ? `e${a}_${b}` : `e${b}_${a}`, mouth };
+  };
+  const floorVert = (t, p) => {
+    const [gx, gz] = gradOf(B.F, p.x, p.z), l = Math.hypot(gx, 1, gz);
+    return vert(t, 'f' + p.key, p.x, p.F + 0.02, p.z, -gx / l, 1 / l, -gz / l, p.x / 3, p.z / 3, shadeOf(p.S) * 0.82);
+  };
+  const ceilVert = (t, p) => {
+    const [gx, gz] = gradOf(B.C, p.x, p.z), l = Math.hypot(gx, 1, gz);
+    return vert(t, 'c' + p.key, p.x, p.C, p.z, gx / l, -1 / l, gz / l, p.x / 3.4, p.z / 3.4, shadeOf(p.S) * 0.92);
+  };
+  const wallVert = (t, p, row) => {
+    // 壁の向き：中へ向く（距離が減る向き）
+    let [gx, gz] = gradOf(D, p.x, p.z);
+    const l = Math.hypot(gx, gz) || 1; gx /= l; gz /= l;
+    const h = [0, 0.52, 1][row] * (p.C - p.F);
+    // 真ん中の段は、外へ少しふくらませる（岩のごつごつ。まっすぐな板に見えないように）
+    const out = row === 1 ? 0.08 + 0.3 * fbm(p.x * 0.9 + p.F, p.z * 0.9, seed + 71) : 0;
+    const u = Math.abs(gx) > Math.abs(gz) ? p.z : p.x;
+    return vert(t, `w${row}` + p.key, p.x + gx * out, p.F + h + (row === 0 ? 0.02 : 0), p.z + gz * out, -gx, 0, -gz, u / 3, (p.F + h) / 3, shadeOf(p.S) * (0.78 + 0.12 * row));
+  };
+  const onMouthPlane = (p) => p.mouth;
+
+  let tris = 0;
+  for (let iz = 0; iz < nz - 1; iz++) for (let ix = 0; ix < nx - 1; ix++) {
+    const k = iz * nx + ix;
+    const corner = [k, k + 1, k + nx + 1, k + nx];
+    const ins = corner.map((c) => D[c] < 0);
+    if (!ins[0] && !ins[1] && !ins[2] && !ins[3]) continue;
+    const t = tileOf(ix, iz);
+    // 升をひと回りして、中にある所の多角形を作る（角と、辺の上の境目の点）
+    const poly = [];
+    for (let i = 0; i < 4; i++) {
+      const a = corner[i], b = corner[(i + 1) % 4];
+      if (ins[i]) poly.push(pointAt(a, a));
+      if (ins[i] !== ins[(i + 1) % 4]) poly.push(ins[i] ? pointAt(a, b) : pointAt(b, a));
+    }
+    if (poly.length < 3) continue;
+    const fv = poly.map((p) => floorVert(t, p)), cv = poly.map((p) => ceilVert(t, p));
+    for (let i = 1; i < poly.length - 1; i++) { tri(t, fv[0], fv[i], fv[i + 1], 0, 1, 0); tri(t, cv[0], cv[i], cv[i + 1], 0, -1, 0); }
+    // 壁：境目の点が 2 つ続く所（その間が外）。口の面の上は開けておく
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i], q = poly[(i + 1) % poly.length];
+      if (p.key[0] !== 'e' || q.key[0] !== 'e') continue;
+      if (onMouthPlane(p) && onMouthPlane(q)) continue;
+      const mx = (p.x + q.x) / 2, mz = (p.z + q.z) / 2;
+      const [gx, gz] = gradOf(D, mx, mz);
+      const rows = [0, 1, 2].map((r) => [wallVert(t, p, r), wallVert(t, q, r)]);
+      for (let r = 0; r < 2; r++) {
+        tri(t, rows[r][0], rows[r][1], rows[r + 1][1], -gx, 0, -gz);
+        tri(t, rows[r][0], rows[r + 1][1], rows[r + 1][0], -gx, 0, -gz);
       }
-      rings.push(ring);
+      // 壁の上の縁と天井の縁の間（壁の上の段はふくらませていないので、同じ所にある。念のため細い面でつなぐ）
     }
-    // 筒の面：分かれ道の所（ほかの通り道の中）の面は作らない
-    for (let r = 0; r < rings.length - 1; r++) for (let k = 0; k < K; k++) {
-      const a = rings[r][k], b = rings[r][k + 1], c = rings[r + 1][k], d = rings[r + 1][k + 1];
-      const mx = (a.x + b.x + c.x + d.x) / 4, my = (a.y + b.y + c.y + d.y) / 4, mz = (a.z + b.z + c.z + d.z) / 4;
-      if (insideOther(t, mx, my, mz)) continue;
-      const ids = [a, b, c, d].map((p) => vert(p.x, p.y, p.z, p.nx, p.ny, p.nz, p.u, p.v, shadeAt(p.x, p.z)));
-      indices.push(ids[0], ids[2], ids[1], ids[1], ids[2], ids[3]);
+  }
+
+  // ---- 鍾乳石：広間の天井から下がる岩のつらら（通り道の天井には、高い所だけ）。頭の上 2.6 m は空ける ----
+  const cone = (t, x, yTop, z, len, r, shade) => {
+    const SIDES = 5, base = [];
+    const a0 = rnd() * 6.28;
+    for (let i = 0; i < SIDES; i++) {
+      const a = a0 + (i / SIDES) * Math.PI * 2, cx = Math.cos(a), cz = Math.sin(a);
+      base.push(pushVert(t, x + cx * r, yTop + 0.25, z + cz * r, cx, -0.25, cz, i / SIDES, 0, shade));
     }
-    // 床：通り道の幅の、岩の床（地面の格子より細かく、平らに）
-    for (let i = i0 - (i0 > 0 ? 1 : 0); i < i1 + (i1 < P.length - 1 ? 1 : 0); i++) {
-      const seg = [i, i + 1].map((j) => {
-        const j0 = Math.max(0, j - 1), j1 = Math.min(P.length - 1, j + 1);
-        let tx = P[j1][0] - P[j0][0], tz = P[j1][1] - P[j0][1];
-        const tl = Math.hypot(tx, tz) || 1;
-        return { x: P[j][0], z: P[j][1], nx: -tz / tl, nz: tx / tl, hw: t.width[j] / 2 + 0.25, y: t.floor[j] + 0.03 + C.tunnels.indexOf(t) * 0.004, s: t.s[j] };
-      });
-      const q = [];
-      for (const p of seg) for (const side of [-1, 1]) q.push(vert(p.x + p.nx * p.hw * side, p.y, p.z + p.nz * p.hw * side, 0, 1, 0, p.s / 2.5, side * p.hw / 2.5, shadeAt(p.x, p.z) * 0.8));
-      indices.push(q[0], q[2], q[1], q[1], q[2], q[3]);
+    const tip = pushVert(t, x + (rnd() - 0.5) * r * 0.5, yTop - len, z + (rnd() - 0.5) * r * 0.5, 0, -1, 0, 0.5, len / 2, shade * 0.9);
+    for (let i = 0; i < SIDES; i++) t.indices.push(base[i], tip, base[(i + 1) % SIDES]);
+  };
+  for (const sm of C.samples) {
+    if (!sm.room) continue;
+    const n = Math.round((Math.PI * sm.room.r * sm.room.r) / 26);
+    for (let k = 0; k < n; k++) {
+      const a = rnd() * 6.28, r = Math.sqrt(rnd()) * sm.room.r * 0.95, x = sm.x + Math.cos(a) * r, z = sm.z + Math.sin(a) * r;
+      const q = C.at(x, z);
+      if (!q || q.d > -1.2 || q.open > 0.5) continue;
+      const room = q.ceil - q.floor, len = Math.min(room - 2.6, (0.4 + rnd() * rnd() * 3.2) * Math.min(1, room / 7));
+      if (len < 0.35) continue;
+      cone(tileAt(x, z), x, q.ceil, z, len, 0.14 + len * 0.11, shadeOf(q.dist) * 0.9);
     }
-    // 行き止まりの奥：最後の輪から、奥の少し先の真ん中へ集めてふさぐ
-    if (t.end) {
-      const last = rings[rings.length - 1], [ex, ez] = P[i1], [px, pz] = P[i1 - 1];
-      const fx = ex - px, fz = ez - pz, fl = Math.hypot(fx, fz) || 1;
-      const cx = ex + (fx / fl) * 0.8, cz = ez + (fz / fl) * 0.8, cy = t.floor[i1] + t.ceiling[i1] * 0.45;
-      const center = vert(cx, cy, cz, -fx / fl, 0, -fz / fl, 0, 0, 0.25);
-      for (let k = 0; k < K; k++) {
-        const a = last[k], b = last[k + 1];
-        const ia = vert(a.x, a.y, a.z, -fx / fl, 0, -fz / fl, a.v, 0.6, 0.25), ib = vert(b.x, b.y, b.z, -fx / fl, 0, -fz / fl, b.v, 0.6, 0.25);
-        indices.push(center, ia, ib);
+  }
+  // ---- 結晶の形：明かりごとに、とがった柱を 3〜6 本（光って見える。影は付けない） ----
+  for (const l of lights) {
+    const t = tileAt(l.x, l.z), g = t.gem, n = 3 + Math.floor(rnd() * 4);
+    for (let k = 0; k < n; k++) {
+      const a = rnd() * 6.28, d = rnd() * 0.55, bx = l.x + Math.cos(a) * d, bz = l.z + Math.sin(a) * d, by = l.y - 0.55;
+      const h = 0.35 + rnd() * 0.75, w = 0.07 + h * 0.1, tilt = 0.35, tx = (rnd() - 0.5) * tilt, tz = (rnd() - 0.5) * tilt;
+      const base = g.positions.length / 3, br = 0.55 + rnd() * 0.45;
+      for (let i = 0; i < 4; i++) {
+        const c = Math.cos(a + i * Math.PI / 2) * w, sn = Math.sin(a + i * Math.PI / 2) * w;
+        g.positions.push(bx + c, by, bz + sn); g.colors.push(l.tint[0] * br * 0.5, l.tint[1] * br * 0.5, l.tint[2] * br * 0.5, 1);
+        g.positions.push(bx + c * 0.8 + tx * h, by + h * 0.72, bz + sn * 0.8 + tz * h); g.colors.push(l.tint[0] * br, l.tint[1] * br, l.tint[2] * br, 1);
       }
-    }
-    // 本道の口：筒の端のまわりに、外へ広がる岩の縁（筒の端と岩山の崖の間をふさぐ）
-    if (t.id === 'main') {
-      for (const [r, dir] of [[0, -1], [rings.length - 1, 1]]) {
-        const ring = rings[r];
-        const flange = ring.map((p) => {
-          const ox = p.x - (ring[0].x + ring[K].x) / 2, oz = p.z - (ring[0].z + ring[K].z) / 2, oy = p.y - Math.min(ring[0].y, ring[K].y);
-          const l = Math.hypot(ox, oy, oz) || 1;
-          return { x: p.x + (ox / l) * 2.2, y: p.y + (oy / l) * 2.2, z: p.z + (oz / l) * 2.2 };
-        });
-        for (let k = 0; k < K; k++) {
-          const a = ring[k], b = ring[k + 1], c = flange[k], d = flange[k + 1];
-          const ids = [a, b, c, d].map((p, n) => vert(p.x, p.y, p.z, 0, 1, 0, n < 2 ? a.v : a.v + 0.8, n % 2, 0.7));
-          indices.push(ids[0], ids[2], ids[1], ids[1], ids[2], ids[3]);
-        }
+      g.positions.push(bx + tx * h * 1.35, by + h, bz + tz * h * 1.35); g.colors.push(Math.min(1, l.tint[0] * br * 1.3), Math.min(1, l.tint[1] * br * 1.3), Math.min(1, l.tint[2] * br * 1.3), 1);
+      const tip = base + 8;
+      for (let i = 0; i < 4; i++) {
+        const a0 = base + i * 2, a1 = a0 + 1, b0 = base + ((i + 1) % 4) * 2, b1 = b0 + 1;
+        g.indices.push(a0, a1, b0, b0, a1, b1, a1, tip, b1);
       }
     }
   }
-  // ---- 岩山の蓋：通り道の溝の上を、掘る前の岩山の高さで覆う ----
-  // （溝は床まで掘ってあるので、筒の継ぎ目や分かれ道の所に隙間があると空が見えていた。蓋があれば、隙間からは暗い岩が見える。
-  //   外から見ても、岩山の上の溝の縁が見えない）
-  // 蓋は 2 枚：上の面は地面と同じ見た目（地面のマテリアルと頂点色。上から見ると岩山と見分けが付かない）、
-  //   その 0.36m 下に岩の面（両面。中から隙間越しに見える）。岩山は天井の上に少なくとも 5.6m あるので、下の面が中に出ることはない
-  const skin = { positions: [], uvs: [], colors: [], indices: [] };
-  const tile = terrain?.uvTile || 2;
-  C.tunnels.forEach((t, ti) => {
-    const P = t.P, ACROSS = 7;
-    let prev = null, prevS = null;
-    for (let i = 0; i < P.length; i++) {
-      if (t.covered[i] < 0.5) { prev = prevS = null; continue; }
-      const j0 = Math.max(0, i - 1), j1 = Math.min(P.length - 1, i + 1);
-      let tx = P[j1][0] - P[j0][0], tz = P[j1][1] - P[j0][1];
-      const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
-      const nx = -tz, nz = tx, hw = t.width[i] / 2 + 4.3;
-      const row = [], rowS = [];
-      for (let k = 0; k < ACROSS; k++) {
-        const a = (k / (ACROSS - 1)) * 2 - 1, x = P[i][0] + nx * hw * a, z = P[i][1] + nz * hw * a;
-        const top = land.uncarved(x, z) + ti * 0.015;
-        row.push(vert(x, top - 0.3, z, 0, 1, 0, x / 3, z / 3, 0.62));
-        if (terrain) {
-          skin.positions.push(x, top + 0.06, z); skin.uvs.push(x / tile, z / tile); skin.colors.push(...terrain.colorAt(x, z));
-          rowS.push(skin.positions.length / 3 - 1);
-        }
-      }
-      if (prev) for (let k = 0; k < ACROSS - 1; k++) indices.push(prev[k], row[k], prev[k + 1], prev[k + 1], row[k], row[k + 1]);
-      if (prevS) for (let k = 0; k < ACROSS - 1; k++) for (const tri of [[prevS[k], rowS[k], prevS[k + 1]], [prevS[k + 1], rowS[k], rowS[k + 1]]]) {
-        // 地面と同じく、上から見て表になる向きにそろえる（片面なので）
-        const q = skin.positions, [i0, i1, i2] = tri.map((v) => v * 3);
-        const ux = q[i1] - q[i0], uz = q[i1 + 2] - q[i0 + 2], vx = q[i2] - q[i0], vz = q[i2 + 2] - q[i0 + 2];
-        if (uz * vx - ux * vz > 0) skin.indices.push(...tri); else skin.indices.push(tri[0], tri[2], tri[1]);
-      }
-      prev = row; prevS = rowS.length ? rowS : null;
-    }
-  });
-  tris = indices.length / 3;
 
-  // ---- 形にして描く（両面。内側から見るため） ----
-  const mesh = createMesh(app.graphicsDevice, { positions, normals, uvs, colors, indices });
+  // ---- 岩の質感（殻と、口の岩の面） ----
   const mat = new pc.StandardMaterial();
   mat.diffuse = new pc.Color(0.82, 0.78, 0.72);
   mat.diffuseVertexColor = true;
@@ -167,62 +258,159 @@ export function createCave(app, land, { obstacles, floors, sight = null, rockTex
     if (rockTex.normal) mat.normalMap = rockTex.normal;
   }
   mat.cull = pc.CULLFACE_NONE;
+  mat.useFog = false;   // 中は霧を掛けない（霧の色は明るいので、外から見ると穴の奥が光って見えてしまう。暗さは岩の色で付ける）
   mat.update();
-  const e = new pc.Entity('cave');
-  e.addComponent('render', { meshInstances: [new pc.MeshInstance(mesh, mat)], castShadows: true, receiveShadows: true });
-  app.root.addChild(e);
-  sceneBudget.triangles += tris;
-  // 蓋の上の面（地面と同じ見た目）：描画命令がもう 1 つ（見える時だけ）
-  let skinTris = 0;
-  if (terrain && skin.indices.length) {
-    const skinMesh = createMesh(app.graphicsDevice, skin);
-    const se = new pc.Entity('cave-hill-skin');
-    se.addComponent('render', { meshInstances: [new pc.MeshInstance(skinMesh, terrain.material)], castShadows: false, receiveShadows: true });
-    app.root.addChild(se);
-    skinTris = skin.indices.length / 3;
-    sceneBudget.triangles += skinTris;
-  }
+  const faceMat = mat.clone();   // 口の岩の面は外にあるので、霧を掛ける
+  faceMat.useFog = true;
+  faceMat.update();
+  // 結晶：自分で光る（明かりの計算をしない）
+  const gemMat = new pc.StandardMaterial();
+  gemMat.useLighting = false;
+  gemMat.diffuse = new pc.Color(0, 0, 0);
+  gemMat.emissive = new pc.Color(1, 1, 1);
+  gemMat.emissiveVertexColor = true;
+  gemMat.emissiveIntensity = 1.0;
+  gemMat.useFog = false;
+  gemMat.cull = pc.CULLFACE_NONE;
+  gemMat.update();
 
-  // ---- 歩ける・ぶつかる・見えない ----
+  const chunks = [];
+  let gemTris = 0;
+  for (const t of tiles.values()) {
+    if (!t.indices.length) continue;
+    const mesh = createMesh(device, { positions: t.positions, normals: t.normals, uvs: t.uvs, colors: t.colors, indices: t.indices });
+    const mis = [new pc.MeshInstance(mesh, mat)];
+    if (t.gem.indices.length) { mis.push(new pc.MeshInstance(createMesh(device, t.gem), gemMat)); gemTris += t.gem.indices.length / 3; }
+    const ent = new pc.Entity('cave-shell');
+    ent.addComponent('render', { meshInstances: mis, castShadows: false, receiveShadows: false });
+    ent.enabled = false;
+    app.root.addChild(ent);
+    chunks.push({ ent, x: t.cx / t.n, z: t.cz / t.n });
+    tris += t.indices.length / 3;
+  }
+  tris += gemTris;
+
+  // ---- 口：岩の面と、まわりの細かい地面（口ごとに 1 つずつの形。見えない口は描かれない） ----
+  const groundAt = terrain ? terrain.analyticAt : land.heightAt;
   const footprints = [];
-  // 岩山の上：掘った溝のうち覆われた所（筒の上）では、掘る前の岩山の面を床にする（溝の上を歩いても中へ落ちない。見た目の蓋と同じ高さ）。
-  //   掘る範囲（world/cave-shape.js の carve：壁から 3.9 m）と同じ物差しで決めるので、曲がり角でも隙間ができない。
-  //   覆われていない所（口の外の切り通し）は床にしない。岩山は天井の上に少なくとも 5.6 m あるので、中の人がこの面に上がることはない
-  const hillTop = (x, z) => {
-    const q = C.nearest(x, z);
-    if (!q || q.e > 4.2 || q.cover < 0.5) return null;
-    return land.uncarved(x, z);
-  };
-  {
-    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-    for (const t of C.tunnels) for (const [x, z] of t.P) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
-    floors.addSurface({ cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, yaw: 0, hw: (x1 - x0) / 2 + 8, hd: (z1 - z0) / 2 + 8, at: hillTop });
-  }
-  for (const t of C.tunnels) {
-    const P = t.P;
-    for (let i = 0; i < P.length - 1; i++) {
-      const cov = (t.covered[i] + t.covered[i + 1]) / 2;
-      const [ax, az] = P[i], [bx, bz] = P[i + 1], dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
-      const yaw = (Math.atan2(dx, dz) * 180) / Math.PI, nx = -dz / L, nz = dx / L;
-      const mx = (ax + bx) / 2, mz = (az + bz) / 2, w = (t.width[i] + t.width[i + 1]) / 2, fy = (t.floor[i] + t.floor[i + 1]) / 2;
-      const ceil = (t.ceiling[i] + t.ceiling[i + 1]) / 2;
-      // 中の壁：両側に当たり判定の円（通り道の高さだけ。分かれ道の所は開ける）
-      if (cov > 0.3) for (const s of [-1, 1]) {
-        const ox = mx + nx * s * (w / 2 + 0.35), oz = mz + nz * s * (w / 2 + 0.35);
-        if (insideOther(t, ox, fy + 1, oz)) continue;
-        obstacles.add(ox, oz, 0.4, true, { y0: fy - 0.6, y1: fy + ceil + 0.3 });
+  let patchTris = 0;
+  for (const m of C.mouths) {
+    const face = { positions: [], normals: [], uvs: [], colors: [], indices: [] };
+    const patch = { positions: [], uvs: [], colors: [], indices: [] };
+    const at = (s, l) => [m.x + m.in[0] * s + m.in[1] * l, m.z + m.in[1] * s - m.in[0] * l];
+    // 岩の面：口の面（少し奥）に立てる。横に 0.25 m ごとの柱に分け、穴の所だけ開ける
+    // 柱の間隔：穴のまわり（通り道の幅＋両脇 1 m）は 0.2 m（穴の形を出す）、その外は 0.7 m
+    const W = m.hw + 8, cols = [], ls = [];
+    for (let l = -W; l < -m.hw - 1; l += 0.7) ls.push(l);
+    for (let l = -m.hw - 1; l < m.hw + 1; l += 0.2) ls.push(l);
+    for (let l = m.hw + 1; l <= W + 1e-6; l += 0.7) ls.push(l);
+    for (const l of ls) {
+      const [bx, bz] = at(0.35, l), [fx, fz] = at(-0.35, l), [px, pz] = at(0.12, l);
+      const top = groundAt(bx, bz) + 0.3, bottom = Math.min(groundAt(fx, fz), top) - 0.7;
+      // 穴：口のすぐ奥の洞窟の中。殻の口より少し小さくする（壁から 0.2 m・天井から 0.15 m 内側。殻と岩の面の間にすき間を作らない）
+      let hole = null, okAll = true, ceil = Infinity, floor = Infinity;
+      for (const sd of [0.06, 0.3, 0.6]) {
+        const q = C.at(...at(sd, l));
+        if (!q || q.d > -0.2) { okAll = false; break; }
+        ceil = Math.min(ceil, q.ceil); floor = Math.min(floor, q.floor);
       }
-      if (cov < 0.5) continue;
-      const top = Math.min(land.uncarved(mx, mz), land.uncarved(mx + nx * (w / 2 + 3.6), mz + nz * (w / 2 + 3.6)), land.uncarved(mx - nx * (w / 2 + 3.6), mz - nz * (w / 2 + 3.6)));
-      // bot の目：天井から岩山の上までをさえぎる
-      sight?.addYawBox(mx, fy + ceil, mz, w + 1, L + 0.1, Math.max(0.5, top - fy - ceil), yaw);
+      if (okAll) hole = [floor - 0.4, Math.min(ceil - 0.15, top - 0.2)];
+      cols.push({ l, x: px, z: pz, top, bottom, hole });
     }
-    // 行き止まりの奥の突き当たり
-    if (t.end) {
-      const [ex, ez] = P[P.length - 1];
-      obstacles.add(ex, ez, 0.8, true, { y0: t.floor[P.length - 1] - 0.6, y1: t.floor[P.length - 1] + t.ceiling[P.length - 1] });
+    // 岩の面のでこぼこ：口の面から手前へ最大 0.55 m ふくらませる（まっすぐな板に見えないように）。穴とその両脇 0.5 m、上と下のふちはふくらませない
+    const holeL = cols.filter((c) => c.hole).map((c) => c.l), hl0 = Math.min(...holeL), hl1 = Math.max(...holeL);
+    const ROWS = Math.max(2, Math.ceil(Math.max(...cols.map((c) => c.top - c.bottom)) / 1.3));
+    const fv = (c, y, shade, edge) => {
+      const nearHole = Math.max(hl0 - c.l, c.l - hl1, 0);
+      const k = edge * smooth(0.5, 1.8, nearHole);
+      const out = 0.55 * fbm(c.l * 0.45 + 7, y * 0.5, seed + 131) * k;
+      face.positions.push(c.x - m.in[0] * out, y, c.z - m.in[1] * out); face.normals.push(-m.in[0], 0, -m.in[1]); face.uvs.push(c.l / 3, y / 3);
+      const sh = shade * (0.9 + 0.2 * fbm(c.l * 0.3, y * 0.3, seed + 133));
+      face.colors.push(sh, sh * 0.97, sh * 0.93, 1);
+      return face.positions.length / 3 - 1;
+    };
+    const quad = (a, b, ya0, ya1, yb0, yb1, s0, s1) => {
+      if (ya1 - ya0 < 0.02 && yb1 - yb0 < 0.02) return;
+      // 縦に分ける。分ける数はこの岩の面のどの柱も同じ（隣の面と、柱の上の点の高さがそろい、すき間ができない）
+      const n = ROWS;
+      let pa = fv(a, ya0, s0, 0), pb = fv(b, yb0, s0, 0);
+      for (let r = 1; r <= n; r++) {
+        const t = r / n, edge = r === n ? 0 : 1;
+        const qa = fv(a, ya0 + (ya1 - ya0) * t, s0 + (s1 - s0) * t, edge), qb = fv(b, yb0 + (yb1 - yb0) * t, s0 + (s1 - s0) * t, edge);
+        face.indices.push(pa, pb, qb, pa, qb, qa);
+        pa = qa; pb = qb;
+      }
+    };
+    for (let i = 0; i < cols.length - 1; i++) {
+      const a = cols[i], b = cols[i + 1];
+      if (a.top - a.bottom < 0.75 && b.top - b.bottom < 0.75) continue;   // 段の無い所（岩の面の端）
+      if (a.hole && b.hole) quad(a, b, a.hole[1], a.top, b.hole[1], b.top, 0.5, 0.8);   // 穴の上
+      else quad(a, b, a.bottom, a.top, b.bottom, b.top, 0.62, 0.8);
     }
+    // まわりの細かい地面：口の面をはさんで、前（切り通しと、その両脇）と後ろ（岩山の上）。
+    // 前の最後の列は、口の面の少し奥まで延ばす（高さは口の面の手前のまま。殻の床の下にもぐり、床との間にすき間を作らない）
+    const S0 = -m.len - PATCH.front, S1 = PATCH.back, LW = m.hw + PATCH.side, PS = 0.7;
+    const rowsS = [];   // [置く所の s, 高さを読む所の s]
+    for (let sv = S0; sv < -0.02; sv += PS) rowsS.push([sv, sv]);
+    rowsS.push([-0.02, -0.02], [0.1, -0.02], [0.02, 0.02]);
+    for (let sv = PS; sv <= S1 + 1e-6; sv += PS) rowsS.push([sv, sv]);
+    const nl = Math.round((2 * LW) / PS);
+    for (const [sp, sh] of rowsS) for (let j = 0; j <= nl; j++) {
+      const l = -LW + (2 * LW * j) / nl, [x, z] = at(sp, l), [hx, hz] = at(sh, l);
+      patch.positions.push(x, groundAt(hx, hz) + 0.05, z);
+      patch.uvs.push(x / (terrain?.uvTile || 2), z / (terrain?.uvTile || 2));
+      patch.colors.push(...(terrain ? terrain.colorAt(hx, hz) : [0.6, 0.6, 0.55, 0.5]));
+    }
+    for (let r = 0; r < rowsS.length - 1; r++) {
+      if (rowsS[r][1] < 0 && rowsS[r + 1][1] > 0) continue;   // 口の面をまたぐ所は作らない（そこは岩の面）
+      for (let j = 0; j < nl; j++) {
+        const a = r * (nl + 1) + j, b = a + 1, c = a + nl + 1, d = c + 1;
+        // 上から見て表になる向きにそろえる
+        const q = patch.positions, ux = q[c * 3] - q[a * 3], uz = q[c * 3 + 2] - q[a * 3 + 2], vx = q[b * 3] - q[a * 3], vz = q[b * 3 + 2] - q[a * 3 + 2];
+        if (uz * vx - ux * vz > 0) patch.indices.push(a, c, b, b, c, d); else patch.indices.push(a, b, c, b, d, c);
+      }
+    }
+    if (face.indices.length) {
+      const ent = new pc.Entity('cave-face');
+      ent.addComponent('render', { meshInstances: [new pc.MeshInstance(createMesh(device, face), faceMat)], castShadows: true, receiveShadows: true });
+      app.root.addChild(ent);
+      tris += face.indices.length / 3;
+    }
+    if (terrain && patch.indices.length) {
+      const ent = new pc.Entity('cave-mouth-ground');
+      ent.addComponent('render', { meshInstances: [new pc.MeshInstance(createMesh(device, patch), terrain.material)], castShadows: false, receiveShadows: true });
+      app.root.addChild(ent);
+      patchTris += patch.indices.length / 3;
+    }
+    footprints.push({ type: 'cave', x: m.x, z: m.z, name: m.name, dx: m.in[0], dz: m.in[1] });
   }
-  for (const [x, z] of mouths) footprints.push({ type: 'cave', x, z });
-  return { triangles: tris + skinTris, footprints, mesh: e };
+  sceneBudget.triangles += tris + patchTris;
+
+  // ---- 歩く・ぶつかる ----
+  floors.setUnder((x, z, y) => C.layer(x, z, y));
+  obstacles.addField({ resolve: (p, radius) => C.resolve(p, radius) });
+
+  let shown = -1, timer = 0;
+  return {
+    triangles: tris + patchTris, shellTriangles: tris, patchTriangles: patchTris, footprints, chunks,
+    /**
+     * 毎フレーム：近くの殻だけ描く。地上にいて口から遠いときは、どれも描かない
+     * @param {{x: number, z: number}} cam カメラの位置、inside：洞窟の中にいる度合い（0〜1）
+     */
+    update(dt, cam, inside) {
+      timer -= dt;
+      if (timer > 0) return;
+      timer = 0.25;
+      let near = inside > 0.05;
+      if (!near) for (const m of C.mouths) if (Math.hypot(cam.x - m.x, cam.z - m.z) < MOUTH_NEAR) { near = true; break; }
+      let n = 0;
+      for (const c of chunks) {
+        const on = near && Math.hypot(cam.x - c.x, cam.z - c.z) < SHOW;
+        if (c.ent.enabled !== on) c.ent.enabled = on;
+        if (on) n++;
+      }
+      shown = n;
+    },
+    get shown() { return shown; },
+  };
 }

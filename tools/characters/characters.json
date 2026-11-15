@@ -34,7 +34,6 @@
     "archer": {
       "source": "archer.glb",
       "group": "bw",
-      "melee": "kn",
       "dagger": true
     },
     "cleric": {

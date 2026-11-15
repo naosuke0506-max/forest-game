@@ -89,7 +89,7 @@ export function createTimeOfDay(app, base, config, camera = null) {
   }
 
   let current = 'day', from = null, to = null, k = 1, duration = 1, lastState = null;
-  const local = { fog: 1, light: 1 };   // 場所による補正（深い森：霧が濃く、空からの光が弱い）
+  const local = { fog: 1, light: 1, sun: 1, fx: 1 };   // 場所による補正（深い森：霧が濃く、空からの光が弱い。洞窟の中：太陽の光も飾りも弱い）
   let bgSky = base.daySky;      // 背景（skybox）に出している空
   let lightSky = base.daySky;   // 空から回り込む光（envAtlas）に使っている空
   const glare = { strength: TIMES.day.glare, color: [...TIMES.day.glareColor] };
@@ -158,15 +158,16 @@ export function createTimeOfDay(app, base, config, camera = null) {
       scene.ambientLight = new pc.Color(...base.ambient.map((c) => c * (0.3 + 0.7 * Math.min(1, s.level))));
     }
     base.pointSunFrom(dir.set(s.dir[0], s.dir[1], s.dir[2]).normalize());
-    base.sun.light.intensity = s.sun;
+    base.sun.light.intensity = s.sun * local.sun;
     base.sun.light.color = color.set(s.sunColor[0], s.sunColor[1], s.sunColor[2]);
     scene.fog.color = fog.set(s.fog[0], s.fog[1], s.fog[2]);
     scene.fog.density = s.fogDensity * local.fog;
     scene.exposure = s.exposure;
     lastState = s;
-    glare.strength = s.glare;
+    glare.strength = s.glare * local.fx;
     glare.color = s.glareColor;
     Object.assign(fx, s.fx);
+    if (local.fx < 1) for (const k of Object.keys(fx)) if (typeof fx[k] === 'number') fx[k] *= local.fx;   // 洞窟の中：塵・蛍・落ち葉・光の筋を出さない
     skyDir.set(s.photoDir[0], s.photoDir[1], s.photoDir[2]).normalize();
     base.onFogColor?.(scene.fog.color);
   }
@@ -209,10 +210,13 @@ export function createTimeOfDay(app, base, config, camera = null) {
       if (to.sky && to.sky !== bgSky && to.sky.image && seconds > 0) startDome(to.sky);
       if (seconds <= 0) { k = 1; bgSky = lightSky = to.sky || bgSky; endDome(); apply(to); }
     },
-    /** 場所による補正（毎フレーム呼んでよい）。fog：霧の濃さの倍率、light：空と空から回り込む光の倍率 */
-    setLocal({ fog = 1, light = 1 }) {
-      if (Math.abs(fog - local.fog) < 0.002 && Math.abs(light - local.light) < 0.002) return;
-      local.fog = fog; local.light = light;
+    /**
+     * 場所による補正（毎フレーム呼んでよい）。fog：霧の濃さの倍率、light：空と空から回り込む光の倍率、
+     * sun：太陽（月）の光の倍率、fx：雰囲気の飾り（塵・蛍・落ち葉・光の筋・太陽のまぶしさ）の倍率（洞窟の中で 0 に近づける）
+     */
+    setLocal({ fog = 1, light = 1, sun = 1, fx: fxK = 1 }) {
+      if (Math.abs(fog - local.fog) < 0.002 && Math.abs(light - local.light) < 0.002 && Math.abs(sun - local.sun) < 0.002 && Math.abs(fxK - local.fx) < 0.01) return;
+      local.fog = fog; local.light = light; local.sun = sun; local.fx = fxK;
       if (lastState && (!to || k >= 1)) apply(lastState);
     },
     /** 移り変わりの途中の、ある割合の所へ飛ぶ（確認用） */

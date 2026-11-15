@@ -50,7 +50,7 @@ export function buildHouse(B, h, reg) {
   const bx = (surf, x, y, z, bw, bd, bh, opt = {}, rot = 0) => { const p = F.at(x, 0, z); box(B, surf, p[0], y0 + y, p[2], bw, bd, bh, yaw + rot, opt); };
   // 視線をさえぎる物（bot の目。game/sight.js）：壁・床・屋根・妻壁・階段・大きな家具。家ごとにまとめる（外側の箱で先にふるう）
   const S = reg.sight || null;
-  const blk = (x, y, z, bw, bd, bh, rot = 0) => { if (!S) return; const p = F.at(x, 0, z); S.addYawBox(p[0], y0 + y, p[2], bw, bd, bh, yaw + rot); };
+  const blk = (x, y, z, bw, bd, bh, rot = 0) => { if (!S) return null; const p = F.at(x, 0, z); return S.addYawBox(p[0], y0 + y, p[2], bw, bd, bh, yaw + rot); };
   reg.block = blk;
   if (S) {
     const hTop = top0(stories, w);
@@ -154,11 +154,23 @@ export function buildHouse(B, h, reg) {
   }
   if (twoStory) P.jetty(w, d, J, FOUND + STORY, tone);
 
-  // 開いた扉（扉口の内側で、壁に沿って開いている）と鉄の帯
-  bx('gate', DOOR_W / 2 + 0.05, FOUND + 0.05, d / 2 - T - 0.55, 0.06, 1.1, DOOR_H - 0.05, {}, 0);
-  blk(DOOR_W / 2 + 0.05, FOUND + 0.05, d / 2 - T - 0.55, 0.06, 1.1, DOOR_H - 0.05);
-  P.doorStraps(DOOR_W / 2 + 0.05 - 0.037, FOUND + 0.05, d / 2 - T - 0.55, 1.1, DOOR_H - 0.05);
-  for (const z of [d / 2 - T - 0.3, d / 2 - T - 0.8]) { const [x, zz] = wpos(DOOR_W / 2 + 0.05, z); reg.solid(x, zz, 0.1, range(0)); }
+  // 扉：開け閉めできる（利用者の指示 2026-11-14：村の家すべてに扉。ボタンで開け閉め）。形と動きは world/doors.js。
+  // ここでは蝶番の場所と、閉じているとき・開いているときの当たり判定と視線をさえぎる箱を登録する（doors.js が切り替える）。
+  // 蝶番は扉口の右（家の中から見て左）、開くと扉口の内側で壁に沿う
+  if (reg.doors) {
+    const zw = d / 2 - T / 2, [hx, hz] = wpos(DOOR_W / 2, zw), [dcx, dcz] = wpos(0, zw), fdir = F.dir(0, 0, 1);
+    const closedSolids = [-0.42, 0, 0.42].map((x) => { const [px, pz] = wpos(x, zw); return reg.solid(px, pz, 0.24, range(0)); });
+    const openSolids = [d / 2 - T - 0.3, d / 2 - T - 0.8].map((z) => { const [px, pz] = wpos(DOOR_W / 2 + 0.05, z); return reg.solid(px, pz, 0.1, range(0)); });
+    const closedSight = blk(0, FOUND + 0.05, zw, DOOR_W, 0.08, DOOR_H - 0.05);
+    const openSight = blk(DOOR_W / 2 + 0.05, FOUND + 0.05, d / 2 - T - 0.55, 0.06, 1.1, DOOR_H - 0.05);
+    reg.doors.push({ x: hx, y: y0 + FOUND + 0.05, z: hz, yaw, w: DOOR_W, h: DOOR_H - 0.05, cx: dcx, cz: dcz, nx: fdir[0], nz: fdir[2], closedSolids, openSolids, closedSight, openSight });
+  } else {
+    // （扉の登録先が無いとき：前と同じ、開いたままの扉）
+    bx('gate', DOOR_W / 2 + 0.05, FOUND + 0.05, d / 2 - T - 0.55, 0.06, 1.1, DOOR_H - 0.05, {}, 0);
+    blk(DOOR_W / 2 + 0.05, FOUND + 0.05, d / 2 - T - 0.55, 0.06, 1.1, DOOR_H - 0.05);
+    P.doorStraps(DOOR_W / 2 + 0.05 - 0.037, FOUND + 0.05, d / 2 - T - 0.55, 1.1, DOOR_H - 0.05);
+    for (const z of [d / 2 - T - 0.3, d / 2 - T - 0.8]) { const [x, zz] = wpos(DOOR_W / 2 + 0.05, z); reg.solid(x, zz, 0.1, range(0)); }
+  }
   // 当たり判定：壁に沿って円を並べる（扉口は空ける）。二階建ては、一階の前の壁と、張り出した二階の前の壁を高さで分ける
   const line = (ax, az, bx2, bz2, rg) => {
     const [x0, z0] = wpos(ax, az), [x1, z1] = wpos(bx2, bz2);

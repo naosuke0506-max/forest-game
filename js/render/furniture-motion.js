@@ -50,7 +50,7 @@ function clipOf(a) {
 }
 
 /** 部品を並べて 1 つの描画命令で描く（動いた部品の向きだけ書き換える） */
-function instanced(app, name, mesh, material, parts) {
+export function instanced(app, name, mesh, material, parts) {
   const device = app.graphicsDevice;
   const data = new Float32Array(parts.length * 16);
   const vb = new pc.VertexBuffer(device, pc.VertexFormat.getDefaultInstancingFormat(device), parts.length, { data, usage: pc.BUFFER_DYNAMIC });

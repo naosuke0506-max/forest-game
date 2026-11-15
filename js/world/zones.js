@@ -61,7 +61,7 @@ export function createZones(seed, radius, land = null, plan = null) {
   /** 水辺（0〜1。川の中と岸。world/landform.js）・岩場（0〜1。山の高い所） */
   const wet = (x, z) => (land ? land.wet(x, z) : 0);
   const rocky = (x, z) => (land ? land.rocky(x, z) : 0);
-  /** 洞窟の通り道とその切り通しのまわり（0〜1。木・草・小物を置かない。world/cave-shape.js） */
+  /** 洞窟の口のまわり（切り通しと岩の面。0〜1。木・草・小物を置かない。world/cave-plan.js） */
   const caveArea = (x, z) => (land?.cave ? land.cave.area(x, z) : 0);
   /** 洞窟の中か（0〜1。y があれば岩山の上は外） */
   const caveAt = (x, z, y = null) => (land?.cave ? land.cave.inside(x, z, y) : 0);
@@ -74,5 +74,7 @@ export function createZones(seed, radius, land = null, plan = null) {
   const villageAt = (x, z) => (plan ? plan.villageAt(x, z) : null);
 
   const plazas = plan ? plan.wells.map((w) => w.plaza) : [];   // 村の広場（石畳の足音。audio/sfx.js）
-  return { weights, zoneAt, path, treeDensity, wet, rocky, caveArea, caveAt, castle, villages, villageAt, plazas, paths, centerR, sectors, blobs };
+  /** 洞窟の中の、今いる所の名前（風穴・地底洞・大空洞） */
+  const caveName = (x, z) => (land?.cave ? land.cave.nameAt(x, z) : '風穴');
+  return { weights, zoneAt, path, treeDensity, wet, rocky, caveArea, caveAt, caveName, castle, villages, villageAt, plazas, paths, centerR, sectors, blobs };
 }

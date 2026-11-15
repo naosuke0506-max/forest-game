@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-14.4';</script>
+<script>window.__BUILD = '2026-11-15.1';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -37,9 +37,11 @@
 <link rel="modulepreload" href="./js/world/landform.js">
 <link rel="modulepreload" href="./js/world/villages.js">
 <link rel="modulepreload" href="./js/world/cave.js">
-<link rel="modulepreload" href="./js/world/cave-shape.js">
+<link rel="modulepreload" href="./js/world/doors.js">
+<link rel="modulepreload" href="./js/world/cave-plan.js">
 <link rel="modulepreload" href="./js/world/water.js">
 <link rel="modulepreload" href="./js/game/swim.js">
+<link rel="modulepreload" href="./js/game/slope.js">
 <link rel="modulepreload" href="./js/world/zones.js">
 <link rel="modulepreload" href="./js/world/castle.js">
 <link rel="modulepreload" href="./js/world/house-builder.js">
@@ -213,6 +215,8 @@
   <button id="btn-stance" class="act-btn stance" type="button">屈身</button>
   <!-- 素材の山・箱の近くで出る：拾う・開ける -->
   <button id="btn-use" class="act-btn use" type="button" hidden>拾得</button>
+  <!-- 家の扉の近くで出る：開ける・閉める -->
+  <button id="btn-door" class="act-btn door" type="button" hidden>開扉</button>
   <!-- ベッド・タンスの近くで出る：探す -->
   <button id="btn-search" class="act-btn search" type="button" hidden>搜索</button>
   <!-- 楯攻撃（楯を持つキャラだけ。楯の技の名前が出る：鳶形楯は楯擊） -->

@@ -48,21 +48,6 @@
    "loop": false,
    "speed": 0.0
   },
-  "ma1": {
-   "duration": 0.4667,
-   "loop": false,
-   "speed": 0.0
-  },
-  "ma2": {
-   "duration": 0.4667,
-   "loop": false,
-   "speed": 0.0
-  },
-  "ma3": {
-   "duration": 0.4667,
-   "loop": false,
-   "speed": 0.1686
-  },
   "roll": {
    "duration": 1.4,
    "loop": false,

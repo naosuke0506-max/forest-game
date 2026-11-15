@@ -5,6 +5,7 @@
 import * as pc from 'playcanvas';
 import { BODY_TURN, SWIM } from '../game/data.js';
 import { wadeScale } from '../game/swim.js';
+import { slopeSpeed, slopeAhead } from '../game/slope.js';
 
 const wrapDeg = (a) => ((a + 540) % 360) - 180;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -92,20 +93,29 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     // 三人称：見ている向き（上下）に合わせて、後ろ上・下へ回り込む
     const pr = (pitch * Math.PI) / 180;
     const want = THIRD_DIST;
-    // 地面に当たらない距離まで縮める（体の真後ろの地面の高さで確かめる）
+    // 地面や洞窟の岩に当たらない距離まで縮める（カメラの来る所の地面の高さと、api.cameraClear で確かめる）。
+    // 2026-11-14：洞窟の中でカメラが壁や天井の外へ出て、外の地面が見えていた（利用者の指摘）。横へずらす分も、近いほど小さくする
     let d = want;
-    const yr = (yaw * Math.PI) / 180;
-    for (let k = 0; k < 6; k++) {
-      const lx = THIRD_SIDE, ly = THIRD_PIVOT - Math.sin(pr) * d, lz = Math.cos(pr) * d;
-      const wx = pos.x + Math.cos(yr) * lx + Math.sin(yr) * lz;
-      const wz = pos.z - Math.sin(yr) * lx + Math.cos(yr) * lz;
-      if (groundY + ly > terrain.heightAt(wx, wz) + 0.35) break;
+    const yr = (yaw * Math.PI) / 180, h = (headYaw * Math.PI) / 180;
+    const sideAt = (dist) => THIRD_SIDE * Math.min(1, dist / (THIRD_DIST * 0.6));
+    const localAt = (dist) => {
+      const lx = sideAt(dist), lz = Math.cos(pr) * dist;
+      return [lx * Math.cos(h) + lz * Math.sin(h), THIRD_PIVOT - Math.sin(pr) * dist, -lx * Math.sin(h) + lz * Math.cos(h)];
+    };
+    // 地面の下（洞窟の中）にいるときは、上の地面とは比べない（洞窟の岩は api.cameraClear が確かめる）
+    const under = groundY < terrain.heightAt(pos.x, pos.z) - 1.5;
+    for (let k = 0; k < 9; k++) {
+      const [ex, ey, ez] = localAt(d);
+      const wx = pos.x + Math.cos(yr) * ex + Math.sin(yr) * ez;
+      const wz = pos.z - Math.sin(yr) * ex + Math.cos(yr) * ez;
+      if ((under || groundY + ey > terrain.heightAt(wx, wz) + 0.35) && (!api.cameraClear || api.cameraClear(wx, groundY + ey, wz))) break;
       d *= 0.75;
     }
-    thirdDist += (d - thirdDist) * 0.25;
+    // 近づけるときはすぐに（岩の外が一瞬でも見えないように）、離すときはなめらかに
+    thirdDist = d < thirdDist ? d : thirdDist + (d - thirdDist) * 0.12;
     // 首の向いている方を、後ろから見る（体の座標で首の分だけ回す）
-    const h = (headYaw * Math.PI) / 180, lx = THIRD_SIDE, lz = Math.cos(pr) * thirdDist;
-    eye.setLocalPosition(lx * Math.cos(h) + lz * Math.sin(h), THIRD_PIVOT - Math.sin(pr) * thirdDist, -lx * Math.sin(h) + lz * Math.cos(h));
+    const [ex, ey, ez] = localAt(thirdDist);
+    eye.setLocalPosition(ex, ey, ez);
     eye.setLocalRotation(headRotation());
   }
 
@@ -188,10 +198,15 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       // 前（-Z）と右（+X）を、その向きに合わせて回す
       const fx = -Math.sin(rad), fz = -Math.cos(rad);
       const rx = Math.cos(rad), rz = -Math.sin(rad);
-      const k = (speed * dt) / mag;
-      pos.x += (fx * input.moveY + rx * input.moveX) * k;
-      pos.z += (fz * input.moveY + rz * input.moveX) * k;
-      bob += dt * speed * 2.2;
+      let k = (speed * dt) / mag;
+      const mx = fx * input.moveY + rx * input.moveX, mz = fz * input.moveY + rz * input.moveX;
+      // 坂（game/slope.js）：上りは遅く、急な下りも遅い（bot と同じ式）。泳いでいる間は関係ない
+      // 洞窟の口のまわり（api.noSlope。口の後ろは岩山の崖で、地面の高さで見ると「上れない坂」に見えてしまう）では使わない
+      const sk = swimming || (api.noSlope && api.noSlope(pos.x, pos.z)) ? 1 : slopeSpeed(slopeAhead(terrain.heightAt, pos.x, pos.z, pos.y, mx / mag, mz / mag));
+      k *= sk;
+      pos.x += mx * k;
+      pos.z += mz * k;
+      bob += dt * speed * sk * 2.2;
     }
     lastMag = Math.min(1, mag);
 
@@ -205,6 +220,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     let target = groundAt(pos.x, pos.z, pos.y);
     let w = api.water ? api.water(pos.x, pos.z) : null;
     if (w && !swimming && target > w.surface + 0.05) w = null;   // 橋の上（水の上の床）に立っている
+    if (w && target < w.surface - w.depth - 1.5) w = null;       // 川床より下（川の真下の洞窟の中）にいる
     waterDepth = w ? w.depth : 0;
     swimming = waterDepth > SWIM.depth;
     if (swimming) target = w.surface - SWIM.float;
@@ -218,6 +234,10 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   }
 
   const api = {
+    /** 三人称のカメラを置ける所か（main.js が洞窟の中の岩を確かめる関数を入れる）。(x, y, z) → true / false */
+    cameraClear: null,
+    /** 坂の速さの決まりを使わない所か（main.js が洞窟の口のまわりを入れる）。(x, z) → true / false */
+    noSlope: null,
     body,
     camera: eye,
     update,
@@ -309,10 +329,10 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     },
     /** 向きと上下の角度を直接決める（確認用） */
     setLook(faceYaw, facePitch) { yaw = faceYaw; headYaw = 0; turn.target = null; look = yaw; pitch = Math.max(-p.pitchLimit, Math.min(p.pitchLimit, facePitch)); },
-    /** 出現する場所と向き */
-    spawn(x, z, faceYaw) {
+    /** 出現する場所と向き。y を渡すと、その高さの近くの床に立つ（地面の下の洞窟の中に出るとき） */
+    spawn(x, z, faceYaw, y = null) {
       pos.x = x; pos.z = z; yaw = faceYaw; pitch = -2; headYaw = 0; turn.target = null; look = yaw;
-      pos.y = groundAt(x, z, null);
+      pos.y = groundAt(x, z, y);
       groundY = pos.y;
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
     },

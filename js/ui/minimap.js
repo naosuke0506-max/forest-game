@@ -195,15 +195,17 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       : [{ key: 'castle', x: zones.castle.x, z: zones.castle.z - 40 }]),
   ] : [];
 
-  // 洞窟（風穴）の名前：2 つの口の真ん中の少し東
+  // 洞窟の口の名前：同じ名前の口（風穴は 2 つ）は、その真ん中の少し東に 1 つだけ書く
   {
-    const mouths = buildings.filter((b) => b.type === 'cave');
-    if (mouths.length) labels.push({ key: 'cave', name: '風穴', x: mouths.reduce((s, b) => s + b.x, 0) / mouths.length + 6, z: mouths.reduce((s, b) => s + b.z, 0) / mouths.length });
+    const byName = new Map();
+    for (const b of buildings) if (b.type === 'cave') { const k = b.name || '風穴'; if (!byName.has(k)) byName.set(k, []); byName.get(k).push(b); }
+    for (const [name, list] of byName) labels.push({ key: 'cave', name, x: list.reduce((s, b) => s + b.x, 0) / list.length + 6, z: list.reduce((s, b) => s + b.z, 0) / list.length });
   }
 
   // ===== 小さな地図：今いるエリアの範囲を映す =====
   const ctx = canvas.getContext('2d');
   let size = 0, timer = 0, zoneNow = null, villageNow = null;   // villageNow：村の中なら、その村（名前と映す範囲）
+  let underName = null;   // 洞窟の中にいる間は、その名前（風穴・地底洞・大空洞）
   const cam = { cx: RES / 2, cy: RES / 2, half: RES / 2 };      // 映している範囲（起伏の絵の画素で）
   const target = { cx: RES / 2, cy: RES / 2, half: RES / 2 };
 
@@ -277,9 +279,11 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     ctx.strokeText(L.north, size / 2, size / 10);
     ctx.fillStyle = '#f3dc9a';
     ctx.fillText(L.north, size / 2, size / 10);
+    // 洞窟の中：地上の地図は暗くする（地上のどのあたりの下にいるかは分かる。中の通り道は描かない）
+    if (underName) { ctx.fillStyle = 'rgba(8, 6, 4, .55)'; ctx.fillRect(0, 0, size, size); }
     if (zoneNow) {
       ctx.font = `700 ${Math.round(size / 10)}px "Hiragino Mincho ProN", serif`;
-      const name = villageNow?.name || ZONE_NAMES[zoneNow];
+      const name = underName || villageNow?.name || ZONE_NAMES[zoneNow];
       ctx.strokeText(name, size / 2, size - size / 9);
       ctx.fillStyle = '#fff3cf';
       ctx.fillText(name, size / 2, size - size / 9);
@@ -428,6 +432,8 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
         const z = ZONE_KEYS[zi] || zoneNow || 'mixed';
         if (z !== zoneNow) zoneNow = z;
         villageNow = z === 'castle' && zones.villageAt ? zones.villageAt(me.x, me.z) : null;
+        underName = zones.caveAt && zones.caveAt(me.x, me.z, me.y ?? null) > 0.5 ? (zones.caveName?.(me.x, me.z) || null) : null;
+        if (underName) villageNow = null;
         aim(zoneNow, px, py);
       }
       // 映す範囲はなめらかに動かす

@@ -313,6 +313,13 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
       if (kind === 'wardrobe') { playSample(d, 'wood_creak', { gain: 0.7 }); playSample(d, 'wood_close', { t: 0.35, gain: 0.6 }); }
       else { playSample(d, 'bed_rustle', { gain: 0.8 }); playSample(d, 'roll_cloth', { t: 0.1, rate: 1.2, gain: 0.4 }); }
     },
+    /** 家の扉を開ける・閉める（world/doors.js）：きしむ音。閉めるときは、閉まる音も */
+    door(f, open) {
+      const d = at(f, 0.9, { ref: 2, max: 28 });
+      if (!d) return;
+      playSample(d, 'wood_creak', { rate: (open ? 0.82 : 0.95) * jitter(0.06), gain: 0.85 });
+      if (!open) playSample(d, 'wood_close', { t: 0.3, rate: 0.9, gain: 0.8 });
+    },
     search(f, kind) {
       const d = at(f, 1, { ref: 2, max: 25 });
       if (!d) return;

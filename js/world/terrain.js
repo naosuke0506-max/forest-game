@@ -14,11 +14,28 @@ const smoothstep = (a, b, x) => {
 export function createTerrain(app, config, seed, textures = null, zones = null, land = null, plan = null) {
   const { terrainSize: size, terrainSegments: seg } = config.world;
 
-  /** 地点 (x, z) の地面の高さ（m）。村の家の下と広場だけ平らにする（坂では段々になる。world/villages.js の pads） */
-  const heightAt = (x, z) => {
+  /** 計算で求めた地面の高さ（m）。村の家の下と広場だけ平らにする（坂では段々になる。world/villages.js の pads）。地面の網の頂点に使う */
+  const analyticAt = (x, z) => {
     const h = land.heightAt(x, z);
     return plan ? plan.padHeight(x, z, h) : h;
   };
+  // 格子の頂点の高さ（下で埋める）
+  const half = size / 2, cell = size / seg;
+  const H = new Float32Array((seg + 1) * (seg + 1));
+  /** 描かれる地面の網（三角形）の上の高さ。網の区切り（2.6 m）より細かい起伏は、網と同じくならされる */
+  const meshAt = (x, z) => {
+    const fx = Math.min(seg - 1e-6, Math.max(0, (x + half) / cell)), fz = Math.min(seg - 1e-6, Math.max(0, (z + half) / cell));
+    const ix = Math.floor(fx), iz = Math.floor(fz), u = fx - ix, v = fz - iz, k = iz * (seg + 1) + ix;
+    const a = H[k], b = H[k + 1], c = H[k + seg + 1], d = H[k + seg + 2];
+    // 四角を 2 つの三角形（a・c・b と b・c・d）に分けてあるので、同じ分け方で求める
+    return u + v <= 1 ? a + (b - a) * u + (c - a) * v : d + (c - d) * (1 - u) + (b - d) * (1 - v);
+  };
+  /**
+   * 地点 (x, z) の地面の高さ（m）：**描かれる地面の網の高さ**（2026-11-14。前は計算の高さで、家の土台の土手・川岸・急な坂では、
+   * 足が見えている地面から浮いたり埋まったりしていた。歩ける範囲の 7% で 10 cm より大きく、大きい所では 1 m をこえていた）。
+   * 洞窟の口のまわり（world/cave-plan.js の patchAt）は、地面を細かく作り直すので（world/cave.js）、計算の高さ
+   */
+  const heightAt = (x, z) => (land.cave && land.cave.patchAt(x, z) ? analyticAt(x, z) : meshAt(x, z));
   /** 地点 (x, z) の川の水：{ surface（水面の高さ）, depth（水の深さ）} か、水が無ければ null */
   const waterAt = (x, z) => {
     const w = land.waterLevel(x, z);
@@ -41,7 +58,6 @@ export function createTerrain(app, config, seed, textures = null, zones = null, 
   const positions = new Array(verts * verts * 3);
   const colors = new Array(verts * verts * 4);
   const uvs = new Array(verts * verts * 2);
-  const half = size / 2;
   // 質感画像があるときは、頂点色を「色味の調整（掛け算）」に使う。無いときは今までどおり色そのもの
   const moss = textures ? [0.40, 0.64, 0.26] : [0.20, 0.27, 0.12];   // 草の地面：緑（土の画像に緑を強く掛ける）
   const soil = textures ? [0.62, 0.53, 0.45] : [0.29, 0.23, 0.16];
@@ -56,8 +72,7 @@ export function createTerrain(app, config, seed, textures = null, zones = null, 
   const plowed = textures ? [0.6, 0.46, 0.34] : [0.3, 0.22, 0.15];      // 野邑の畑：耕した土
 
   // 先に高さを全部求める（色を付けるときに、隣の高さから斜面の傾きを求める）
-  const H = new Float32Array(verts * verts);
-  for (let iz = 0; iz < verts; iz++) for (let ix = 0; ix < verts; ix++) H[iz * verts + ix] = heightAt(-half + (ix / seg) * size, -half + (iz / seg) * size);
+  for (let iz = 0; iz < verts; iz++) for (let ix = 0; ix < verts; ix++) H[iz * verts + ix] = analyticAt(-half + (ix / seg) * size, -half + (iz / seg) * size);
   for (let iz = 0; iz < verts; iz++) {
     for (let ix = 0; ix < verts; ix++) {
       const i = iz * verts + ix;
@@ -119,8 +134,11 @@ export function createTerrain(app, config, seed, textures = null, zones = null, 
   }
 
   const indices = [];
+  // 洞窟の口の所は網を抜く（world/cave-plan.js の holeAt。四隅のどれかが入る升は描かない。そこは world/cave.js が細かい地面と岩の面を作る）
+  const hole = (ix, iz) => land.cave && land.cave.holeAt(-half + (ix / seg) * size, -half + (iz / seg) * size);
   for (let iz = 0; iz < seg; iz++) {
     for (let ix = 0; ix < seg; ix++) {
+      if (hole(ix, iz) || hole(ix + 1, iz) || hole(ix, iz + 1) || hole(ix + 1, iz + 1)) continue;
       const a = iz * verts + ix, b = a + 1, c = a + verts, d = c + 1;
       indices.push(a, c, b, b, c, d);
     }
@@ -155,8 +173,8 @@ export function createTerrain(app, config, seed, textures = null, zones = null, 
 
   return {
     entity, heightAt, normalAt, waterAt, land,
-    /** 地面と同じ見た目の物を作るとき用：マテリアル・頂点色・質感画像 1 枚の大きさ（m） */
-    material, colorAt, uvTile: tile,
+    /** 地面と同じ見た目の物を作るとき用：マテリアル・頂点色・質感画像 1 枚の大きさ（m）・計算の高さ */
+    material, colorAt, uvTile: tile, analyticAt,
     /** 草地と落ち葉の画像を貼る（起動の後に裏で読んだ物） */
     setGroundTextures: (grass, litter) => blend?.setTextures(grass, litter),
   };

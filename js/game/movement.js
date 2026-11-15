@@ -3,6 +3,7 @@
 // しゃがむ・伏せると遅くなり、走れない（game/stance.js）。伏せる・起き上がる途中は動けない
 import { stanceSpeed, canRun } from './stance.js';
 import { applyWater, swimSpeed, wadeScale } from './swim.js';
+import { slopeSpeed, slopeAhead } from './slope.js';
 
 export const WALK_SPEED = 3.0; // m/s
 export const RUN_SPEED = 5.2;
@@ -11,7 +12,7 @@ export const BODY_RADIUS = 0.35;
 /**
  * @param {object} f 戦う人（createFighter の記録）
  * @param {{forward: number, strafe: number, run: boolean, yaw: number}} input
- * @param {{obstacles: object, areaRadius: number, groundAt?: Function}} world
+ * @param {{obstacles: object, areaRadius: number, groundAt?: Function, heightAt?: Function}} world  heightAt：地面の高さ（坂の速さに使う）
  */
 export function moveFighter(f, input, dt, world) {
   f.yaw = input.yaw;
@@ -23,9 +24,16 @@ export function moveFighter(f, input, dt, world) {
     const rad = (f.yaw * Math.PI) / 180;
     const fx = -Math.sin(rad), fz = -Math.cos(rad);  // 前（-Z を向きで回したもの）
     const rx = Math.cos(rad), rz = -Math.sin(rad);   // 右
-    const k = (speed * dt) / Math.max(1, Math.hypot(input.forward, input.strafe));
-    f.x += (fx * input.forward + rx * input.strafe) * k;
-    f.z += (fz * input.forward + rz * input.strafe) * k;
+    let k = (speed * dt) / Math.max(1, Math.hypot(input.forward, input.strafe));
+    let mx = fx * input.forward + rx * input.strafe, mz = fz * input.forward + rz * input.strafe;
+    // 坂（game/slope.js）：上りは遅く、急な下りも遅い。泳いでいる間は関係ない
+    // 洞窟の口のまわり（口の後ろは岩山の崖。地面の高さで見ると「上れない坂」に見えてしまう）と洞窟の中では使わない
+    if (world.heightAt && !f.swimming && !(world.cave && world.cave.patchAt(f.x, f.z))) {
+      const ml = Math.hypot(mx, mz) || 1;
+      k *= slopeSpeed(slopeAhead(world.heightAt, f.x, f.z, f.y, mx / ml, mz / ml));
+    }
+    f.x += mx * k;
+    f.z += mz * k;
   }
   world.obstacles.resolve(f, BODY_RADIUS);
   keepInside(f, world.areaRadius);

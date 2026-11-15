@@ -19,7 +19,7 @@ const TRACKS = {
   //   ファイルは「8 小節＋頭の 1 秒」。0.5 秒から 8 小節を繰り返す（MP3 の頭の無音の長さが分からなくても、継ぎ目がそろう）
   hall_medieval: { url: 'assets/music/hall_medieval.mp3', volume: 0.6, loop: [0.5, 0.5 + (32 * 60) / 133.155] },
 };
-/** 大廳の曲：大廳の背景の時代ごとに替える（今は中世の城だけ。前の自作の曲 hall.mp3 は使っていない） */
+/** 大廳の曲：大廳の背景の時代ごとに替える（今は中世の城だけ） */
 const HALL_MUSIC = { medieval: 'hall_medieval' };
 /** 題曲の版（設定の題曲。日本・羅甸・獨逸・伊太利・西班牙・英吉利） */
 export const TITLE_VERSIONS = ['ja', 'la', 'de', 'it', 'es', 'en'];

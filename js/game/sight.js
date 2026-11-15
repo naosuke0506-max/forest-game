@@ -8,9 +8,10 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 /**
  * @param {(x: number, z: number) => number} heightAt 地面の高さ
- * @param {{ grassAt?: (x: number, z: number) => number }} [opt] grassAt：その場所の背の高い草の高さ（m。無ければ 0）
+ * @param {{ grassAt?: (x: number, z: number) => number, openAt?: (x: number, y: number, z: number) => boolean }} [opt]
+ *   grassAt：その場所の背の高い草の高さ（m。無ければ 0）、openAt：地面の下の空いた所（洞窟の中）か
  */
-export function createSight(heightAt, { grassAt = null } = {}) {
+export function createSight(heightAt, { grassAt = null, openAt = null } = {}) {
   const grid = new Map();
   const key = (gx, gz) => gx * 73856093 ^ gz * 19349663;
   let stamp = 0;
@@ -118,11 +119,13 @@ export function createSight(heightAt, { grassAt = null } = {}) {
     const t = (e2[0] * qx + e2[1] * qy + e2[2] * qz) * inv;
     return t > EPS && t < 1 - EPS;
   }
+  let wallsOnly = false;   // blocked の opt.wallsOnly：円柱（木の幹・岩・杭）は数えない
   function hit(o, p, d) {
     if (o.stamp === stamp) return false;
     o.stamp = stamp;
+    if (o.off) return false;   // 無い物として扱う（開いている扉。world/doors.js が切り替える）
     if (o.t === 0) return hitBox(o, p, d);
-    if (o.t === 1) return hitCyl(o, p, d);
+    if (o.t === 1) return wallsOnly ? false : hitCyl(o, p, d);
     if (o.t === 2) return hitTri(o, p, d);
     // 家：外側の箱に当たれば、中の物
     if (!hitBox(o, p, d)) return false;
@@ -139,7 +142,7 @@ export function createSight(heightAt, { grassAt = null } = {}) {
       const t = i / n;
       const x = p[0] + d[0] * t, y = p[1] + d[1] * t, z = p[2] + d[2] * t;
       const g = heightAt(x, z);
-      if (y < g - 0.05) return true;
+      if (y < g - 0.05) { if (openAt && openAt(x, y, z)) continue; return true; }   // 地面の下でも、洞窟の空いた所は見通せる
       if (grassAt && y - g < 1.7) {
         const gh = grassAt(x, z);
         if (gh > 0 && y - g < gh) { grass += gstep; if (grass > 2.0) return true; }
@@ -148,12 +151,17 @@ export function createSight(heightAt, { grassAt = null } = {}) {
     return false;
   }
 
-  /** p から q が見通せないか（何かに当たれば true） */
-  function blocked(p, q) {
+  /**
+   * p から q が見通せないか（何かに当たれば true）
+   * @param {{ wallsOnly?: boolean }} [opt] wallsOnly：箱と三角（家の壁・床・屋根・家具など）だけを見る。木の幹などの円柱・地面・草は見ない
+   *   （三人称のカメラが壁の向こうへ出ないようにするのに使う。細い幹でカメラが寄ったり離れたりしないように）
+   */
+  function blocked(p, q, opt = null) {
     const d = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
     const len = Math.hypot(d[0], d[1], d[2]);
     if (len < 0.05) return false;
     stamp++;
+    wallsOnly = !!opt?.wallsOnly;
     // 升を順にたどる（線分が通る升だけ）
     let gx = Math.floor(p[0] / CELL), gz = Math.floor(p[2] / CELL);
     const ex = Math.floor(q[0] / CELL), ez = Math.floor(q[2] / CELL);
@@ -168,7 +176,7 @@ export function createSight(heightAt, { grassAt = null } = {}) {
       if (tmx < tmz) { if (tmx > 1) break; gx += sx; tmx += tdx; }
       else { if (tmz > 1) break; gz += sz; tmz += tdz; }
     }
-    return groundBlocks(p, d, len);
+    return wallsOnly ? false : groundBlocks(p, d, len);
   }
 
   return { addBox, addYawBox, addCyl, addTri, beginGroup, endGroup, blocked, get count() { return count; } };
