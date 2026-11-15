@@ -14,6 +14,7 @@ import { SURFACES, builder, frame, box, obox, buildHouse } from './house-builder
 import { v3 } from './build-kit.js';
 import { well, barrel, bench, hay, woodpile } from './village-props.js';
 import { createFurnitureMotion } from '../render/furniture-motion.js';
+import { createDoors } from './doors.js';
 
 /**
  * 木の柵（杭と 2 本の横木）を a から b へ。杭の間は約 2.4m
@@ -52,7 +53,8 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
   const houses = [];
   const hides = [];   // 隠れ場所（ベッドの下・タンスの中）
   const covers = [];  // 壁裏隠れの線（家の外の壁と中の壁。game/cover.js）
-  const reg = { floors, solid, hides, sight, covers };
+  const doorList = [];   // 家の扉（開け閉めできる。world/doors.js）
+  const reg = { floors, solid, hides, sight, covers, doors: doorList };
   const walls = [1, [1, 0.94, 0.84], [0.98, 0.9, 0.86], [0.92, 0.92, 0.9], [1, 0.97, 0.88]];   // しっくいの色（白・黄土・薄紅・灰・生成り）
   let i = 0;
   // 家の周りの小物（樽・長椅子・薪の山・干し草）。家の並びを変えないよう、別の乱数で選ぶ
@@ -263,6 +265,8 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
   sceneBudget.triangles += tris;
   // タンスの扉・ベッドの掛け布（隠れる・探す動きに合わせて動く部品。同じ質感を使う）
   const furniture = createFurnitureMotion(app, hides, materials);
+  // 家の扉（開け閉めできる。どの家にも 1 枚）
+  const doors = createDoors(app, doorList, { material: materials.gate });
 
   // 質感の画像は裏で読み込み、届いたら貼る（それまでは色だけ）
   for (const [surf, m] of Object.entries(materials)) {
@@ -276,5 +280,5 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
       m.update();
     });
   }
-  return { houses, triangles: tris, footprints, hides, covers, insideHouse, furniture };
+  return { houses, triangles: tris, footprints, hides, covers, insideHouse, furniture, doors };
 }

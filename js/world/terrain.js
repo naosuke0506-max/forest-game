@@ -33,9 +33,9 @@ export function createTerrain(app, config, seed, textures = null, zones = null, 
   /**
    * 地点 (x, z) の地面の高さ（m）：**描かれる地面の網の高さ**（2026-11-14。前は計算の高さで、家の土台の土手・川岸・急な坂では、
    * 足が見えている地面から浮いたり埋まったりしていた。歩ける範囲の 7% で 10 cm より大きく、大きい所では 1 m をこえていた）。
-   * 洞窟の通り道とそのまわり（world/cave-shape.js の area）は、床を計算の高さで作ってあるので、今までどおり計算の高さ
+   * 洞窟の口のまわり（world/cave-plan.js の patchAt）は、地面を細かく作り直すので（world/cave.js）、計算の高さ
    */
-  const heightAt = (x, z) => (land.cave && land.cave.area(x, z) > 0 ? analyticAt(x, z) : meshAt(x, z));
+  const heightAt = (x, z) => (land.cave && land.cave.patchAt(x, z) ? analyticAt(x, z) : meshAt(x, z));
   /** 地点 (x, z) の川の水：{ surface（水面の高さ）, depth（水の深さ）} か、水が無ければ null */
   const waterAt = (x, z) => {
     const w = land.waterLevel(x, z);
@@ -134,8 +134,11 @@ export function createTerrain(app, config, seed, textures = null, zones = null, 
   }
 
   const indices = [];
+  // 洞窟の口の所は網を抜く（world/cave-plan.js の holeAt。四隅のどれかが入る升は描かない。そこは world/cave.js が細かい地面と岩の面を作る）
+  const hole = (ix, iz) => land.cave && land.cave.holeAt(-half + (ix / seg) * size, -half + (iz / seg) * size);
   for (let iz = 0; iz < seg; iz++) {
     for (let ix = 0; ix < seg; ix++) {
+      if (hole(ix, iz) || hole(ix + 1, iz) || hole(ix, iz + 1) || hole(ix + 1, iz + 1)) continue;
       const a = iz * verts + ix, b = a + 1, c = a + verts, d = c + 1;
       indices.push(a, c, b, b, c, d);
     }
@@ -170,8 +173,8 @@ export function createTerrain(app, config, seed, textures = null, zones = null, 
 
   return {
     entity, heightAt, normalAt, waterAt, land,
-    /** 地面と同じ見た目の物を作るとき用：マテリアル・頂点色・質感画像 1 枚の大きさ（m） */
-    material, colorAt, uvTile: tile,
+    /** 地面と同じ見た目の物を作るとき用：マテリアル・頂点色・質感画像 1 枚の大きさ（m）・計算の高さ */
+    material, colorAt, uvTile: tile, analyticAt,
     /** 草地と落ち葉の画像を貼る（起動の後に裏で読んだ物） */
     setGroundTextures: (grass, litter) => blend?.setTextures(grass, litter),
   };

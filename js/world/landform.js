@@ -5,7 +5,7 @@
 //   谷：川の周りは掘り下げる（真ん中ほど深い谷）。丘：盆地の中はなだらかな起伏
 // 地図の上で北は -Z、東は +X。村の場所を平らにするのは world/terrain.js（エリア分けの world/zones.js を使う）
 import { fbm } from '../core/random.js';
-import { createCaveShape } from './cave-shape.js';
+import { createCavePlan } from './cave-plan.js';
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -162,9 +162,10 @@ export function createLandform(seed, { playRadius, size }) {
     return bd <= REACH ? { d: bd, s: bs } : null;
   }
 
-  // 洞窟（3 回目。world/cave-shape.js）：北西の深い森の岩山と、その中の通り道。岩山は地面に足し、通り道は床の高さまで掘る
-  const cave = createCaveShape(seed, natural);
-  /** 地面の高さ（村を平らにする前）：盆地の丘と山（と洞窟の岩山）に、川の谷と川床を掘り、洞窟の通り道を掘る */
+  // 洞窟（world/cave-plan.js）：北西の岩山（風穴）の口から、マップの地下へ広がる。地面に足すのは岩山（風穴の大きな岩山と、口ごとの小さな岩山）、
+  // 掘るのは口の前の切り通しだけ（中は地面の下にあるので、地面の形は変えない）
+  const cave = createCavePlan(seed);
+  /** 地面の高さ（村を平らにする前）：盆地の丘と山（と洞窟の岩山）に、川の谷と川床を掘り、洞窟の口の前の切り通しを掘る */
   function heightAt(x, z) {
     return cave.carve(x, z, riverHeight(x, z));
   }
@@ -196,6 +197,7 @@ export function createLandform(seed, { playRadius, size }) {
     if (!q) return 0;
     return 1 - smooth(widthAt(q.s) / 2 + 2, widthAt(q.s) / 2 + 10, q.d);
   }
+  cave.settle(riverHeight);   // 洞窟の床の高さを決め、形を升目に焼く（上の地面と川床の高さが要る）
   /** 岩場の度合い（0〜1）：山の高い所（木がまばらで、岩が多い） */
   const rocky = (x, z) => Math.max(smooth(14, 34, mountain(x, z)), smooth(3, 9, cave.hill(x, z)));   // 山の高い所と洞窟の岩山
 
@@ -208,7 +210,7 @@ export function createLandform(seed, { playRadius, size }) {
 
   return {
     heightAt, natural, mountain, nearest, waterLevel, wet, rocky, cave,
-    /** 洞窟の通り道を掘る前の高さ（岩山の上の高さ。world/cave.js が岩山の上の床に使う） */
+    /** 洞窟の口の前の切り通しを掘る前の高さ（岩山の上の高さ） */
     uncarved: (x, z) => riverHeight(x, z),
     river: { points: S, s: sAt, length, sLip, fords: fordS, levelAt, widthAt, depthAt, fall },
   };

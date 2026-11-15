@@ -18,6 +18,7 @@ export const wadeScale = (depth) => 1 - (1 - SWIM.wade) * smooth(0.15, 1.2, dept
 export function applyWater(f, water) {
   let w = water ? water(f.x, f.z) : null;
   if (w && !f.swimming && (f.y ?? -Infinity) > w.surface + 0.05) w = null;   // 橋の上に立っている（水の上）
+  if (w && f.y !== undefined && f.y !== null && f.y < w.surface - w.depth - 1.5) w = null;   // 川床より下（川の真下の洞窟の中）にいる
   f.waterDepth = w ? w.depth : 0;
   f.waterSurface = w ? w.surface : null;
   f.swimming = f.waterDepth > SWIM.depth;

@@ -125,12 +125,14 @@ async function boot() {
   // 視線をさえぎる物（bot の目。game/sight.js）：家・柵・木の幹・岩など。大草原の背の高い草も、低い所の視線をさえぎる
   const sight = createSight(terrain.heightAt, {
     grassAt: zones ? (x, z) => { const p = zones.weights(x, z).prairie; return p > 0.35 ? 1.25 * Math.min(1, p) : 0; } : null,
+    openAt: (x, y, z) => land.cave.voidAt(x, y, z),   // 地面の下でも、洞窟の空いた所は見通せる（洞窟の中どうしは見える。岩はさえぎる）
   });
   for (const t of trees?.trunks || []) sight.addCyl(t.x, t.z, t.r, terrain.heightAt(t.x, t.z) - 0.3, t.top);
   for (const b of props?.blockers || []) sight.addCyl(b.x, b.z, b.r, b.y0, b.y1);
   const village = createVillage(app, CONFIG, terrain, obstacles, zones, floors, sight, plan);
-  // 洞窟（風穴。北西の深い森の岩山。world/cave.js）：壁と天井・床・口の岩の縁。岩山の上の床と、中の壁の当たり判定も登録する
-  const cave = createCave(app, land, { obstacles, floors, sight, rockTex: tex.rock, seed: CONFIG.seed, terrain });
+  // 洞窟（world/cave.js。配置は world/cave-plan.js）：北西の岩山（風穴）の口から、マップの地下へ広がる。
+  // 床・壁・天井の殻と、口の岩の面・口のまわりの細かい地面を作り、中の床と壁の当たり判定を登録する
+  const cave = createCave(app, land, { obstacles, floors, rockTex: tex.rock, seed: CONFIG.seed, terrain });
   // 地面を覆う草（自分の周りだけ。短い草・穂・白い花・大草原の背の高い草）
   const groundCover = grassTex ? createGroundCover(app, CONFIG, CONFIG.seed, terrain, obstacles, grassTex, zones) : null;
 
@@ -139,16 +141,15 @@ async function boot() {
   player.water = terrain.waterAt;   // 川の中を歩く・泳ぐ（game/swim.js）
   // 三人称のカメラは、家の壁・床・屋根の向こうや、洞窟の壁や天井の外へ出ない（出ると、壁の中や岩の裏、外の地面が見えてしまう）。
   //   家：頭からカメラまでの線が、壁・床・屋根（bot の目をさえぎる物と同じ。game/sight.js）に当たらない所まで近づける
-  //   洞窟：中にいる間だけ確かめる。通り道の断面（半分の楕円）の内側で、壁・天井から少し離れた所だけに置ける
+  //   洞窟：中にいる間だけ確かめる。壁・天井から 0.3 m より中の、空いた所だけに置ける
+  player.noSlope = (x, z) => !!land.cave.patchAt(x, z);   // 洞窟の口のまわりでは、坂の速さの決まりを使わない（口の後ろは岩山の崖）
   player.cameraClear = (x, y, z) => {
     const cp = player.position;
     const fy = cp.y ?? terrain.heightAt(cp.x, cp.z);
     if (sight.blocked([cp.x, fy + 1.6, cp.z], [x, y, z], { wallsOnly: true })) return false;
-    if (!land.cave.inside(cp.x, cp.z, cp.y)) return true;
-    const q = land.cave.nearest(x, z);
-    if (!q) return false;
-    const a = Math.max(0.2, q.w / 2 - 0.35), b = Math.max(0.5, q.ceil - 0.35);
-    return y > q.floor + 0.25 && (q.d / a) ** 2 + ((y - q.floor) / b) ** 2 < 1;
+    if (land.cave.inside(cp.x, cp.z, cp.y) < 0.3) return true;
+    const q = land.cave.at(x, z);
+    return !!q && q.d < -0.3 && y > q.floor + 0.25 && y < q.ceil - 0.3;
   };
   // 時間帯（朝・昼・夕暮れ・深夜）。霧の色が変わったら、空の無い所の背景色も合わせる
   env.onFogColor = (c) => { player.camera.camera.clearColor = c; };
@@ -192,11 +193,12 @@ async function boot() {
     const cp = player.camera.getPosition();
     const deep = zones.weights(cp.x, cp.z).deep;
     deepK += (deep - deepK) * Math.min(1, dt * 1.5);
-    // 洞窟の中は暗い（奥ほど暗いのは洞窟の頂点の色。ここは光を弱くする。岩山の上にいるときは外）
+    // 洞窟の中は暗い（奥ほど暗いのは洞窟の頂点の色。ここは空と太陽の光を弱くする。岩山の上にいるときは外）
     const inCave = land.cave.inside(cp.x, cp.z, cp.y);
     caveK += (inCave - caveK) * Math.min(1, dt * 2);
-    // 洞窟の中は霧も薄くする（霧の色は明るいので、奥が明るく光って見えてしまう）
-    timeOfDay.setLocal({ fog: (1 + 1.3 * deepK) * (1 - 0.85 * caveK), light: (1 - 0.35 * deepK) * (1 - 0.5 * caveK) });
+    cave.update(dt, cp, Math.max(inCave, caveK));   // 近くの洞窟の殻だけ描く
+    // 洞窟の中は霧も薄くする（霧の色は明るいので、奥が明るく光って見えてしまう）。塵・落ち葉・光の筋・太陽のまぶしさは出さない
+    timeOfDay.setLocal({ fog: (1 + 1.3 * deepK) * (1 - 0.85 * caveK), light: (1 - 0.35 * deepK) * (1 - 0.5 * caveK), sun: 1 - 0.7 * caveK, fx: 1 - caveK });
     trees?.setDrawDistance?.(CONFIG.world.drawDistance * (1 - 0.45 * deepK));
     timeOfDay.update(dt);
     sunGlare.update(dt);
@@ -250,6 +252,7 @@ async function boot() {
       trees: trees?.canopies || [],
       groundAt: floors.groundAt, insideHouse: village?.insideHouse, hides: village?.hides || [], covers: village?.covers || [], furniture: village?.furniture || null, sight,
       houses: village?.houses || [],   // 家の一覧（鷹目の貫く矢で壁に穴を開ける。world/arrow-holes.js）
+      doors: village?.doors || null,   // 家の扉（開け閉めできる。world/doors.js）
       debug: CONFIG.debug,
       tutorial: loadout?.tutorial || null,   // 教練（大廳の「教練」から。game/tutorial.js）
       // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」。教練では時間で刻が進まない

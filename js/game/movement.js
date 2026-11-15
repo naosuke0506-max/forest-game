@@ -27,7 +27,8 @@ export function moveFighter(f, input, dt, world) {
     let k = (speed * dt) / Math.max(1, Math.hypot(input.forward, input.strafe));
     let mx = fx * input.forward + rx * input.strafe, mz = fz * input.forward + rz * input.strafe;
     // 坂（game/slope.js）：上りは遅く、急な下りも遅い。泳いでいる間は関係ない
-    if (world.heightAt && !f.swimming) {
+    // 洞窟の口のまわり（口の後ろは岩山の崖。地面の高さで見ると「上れない坂」に見えてしまう）と洞窟の中では使わない
+    if (world.heightAt && !f.swimming && !(world.cave && world.cave.patchAt(f.x, f.z))) {
       const ml = Math.hypot(mx, mz) || 1;
       k *= slopeSpeed(slopeAhead(world.heightAt, f.x, f.z, f.y, mx / ml, mz / ml));
     }

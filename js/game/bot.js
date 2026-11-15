@@ -39,7 +39,7 @@ export function createBot(fighter, rng, fighters) {
     strafeTimer: 0,
     drawGoal: 0,         // 弓：どれだけ引いてから放つか（秒）
     dodgeCooldown: 0,
-    route: null,         // 歩いている道順 { pts: [{x, z}], i, why: 'hide' | 'search' | 'leave', spot }
+    route: null,         // 歩いている道順 { pts: [{x, z}], i, why: 'hide' | 'search' | 'leave' | 'cave', spot }
     hideTimer: 0,        // 隠れている残りの時間
     hideCooldown: 0,     // 次に隠れようとするまで
     knownSpot: null,     // 誰かが隠れるのを見た場所
@@ -141,10 +141,30 @@ export function createBot(fighter, rng, fighters) {
     return best;
   }
 
+  /** 洞窟（world/cave-plan.js）の中にいるか */
+  const inCave = (world) => !!world.cave && world.cave.inside(f.x, f.z, f.y ?? null) > 0.5;
+  /** 洞窟の中の道順を決める：広間のどれかへ行くか、どれかの口から外へ出る */
+  function caveRoute(world, leave) {
+    const C = world.cave;
+    const pts = leave ? C.route(f.x, f.z, { mouth: rng.next() < 0.6 ? C.nearestMouth(f.x, f.z) : C.entrances[Math.floor(rng.next() * C.entrances.length)].id })
+      : C.route(f.x, f.z, { room: true, pick: rng.next() });
+    if (pts && pts.length > 1) b.route = { pts, i: 0, why: 'cave' };
+    return !!b.route;
+  }
+
   function wander(world) {
+    // 洞窟の中：壁があるので、まっすぐは歩けない。通り道をたどって、広間へ行くか、口から外へ出る
+    if (inCave(world) && !b.route) { if (caveRoute(world, rng.next() < 0.55)) { b.goal = null; return; } }
     if (!b.goal || Math.hypot(b.goal.x - f.x, b.goal.z - f.z) < 2) {
+      // 洞窟の口に着いた：中へ入っていく
+      if (b.goal?.cave && world.cave && caveRoute(world, false)) { b.goal = null; return; }
       if (b.goal && b.waitTimer <= 0) b.waitTimer = 1 + rng.next() * 3;
       pickGoal(world.areaRadius);
+      // ときどき、近くの洞窟の口へ向かう（中を探しに行く）
+      if (world.cave && rng.next() < 0.14) {
+        const e = world.cave.entrances.filter((q) => Math.hypot(q.x, q.z) < world.areaRadius - 6).sort((p, q) => Math.hypot(p.x - f.x, p.z - f.z) - Math.hypot(q.x - f.x, q.z - f.z))[0];
+        if (e && Math.hypot(e.x - f.x, e.z - f.z) < 110) b.goal = { x: e.x, z: e.z, cave: e.id };
+      }
     }
     if (Math.hypot(f.x - b.lastX, f.z - b.lastZ) < 0.15 && b.input.forward > 0) b.stuckTimer += 0.3;
     else b.stuckTimer = 0;
@@ -335,7 +355,8 @@ export function createBot(fighter, rng, fighters) {
     // 誰かが隠れるのを見た：探しに行く（相手が見えていて、無防備でなければ戦う方が先）
     if (H && !b.route && b.knownSpot && !b.target) b.route = routeTo(b.knownSpot, 'search');
     b.lastX = f.x; b.lastZ = f.z;
-    if (b.route) { followRoute(world); if (b.route?.why !== 'leave' || !b.target) return; b.route = null; }
+    // 道順を歩く。家を出る途中・洞窟の中を歩く途中で相手を見つけたら、道順をやめて戦う
+    if (b.route) { followRoute(world); if ((b.route?.why !== 'leave' && b.route?.why !== 'cave') || !b.target) return; b.route = null; }
     b.ambushCooldown -= 0.25;
     if (!b.target) { b.hold = 0; if (!ambush(world) && !investigate(world)) wander(world); return; }
     b.ambush = null;

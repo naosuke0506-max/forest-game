@@ -102,11 +102,13 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       const lx = sideAt(dist), lz = Math.cos(pr) * dist;
       return [lx * Math.cos(h) + lz * Math.sin(h), THIRD_PIVOT - Math.sin(pr) * dist, -lx * Math.sin(h) + lz * Math.cos(h)];
     };
+    // 地面の下（洞窟の中）にいるときは、上の地面とは比べない（洞窟の岩は api.cameraClear が確かめる）
+    const under = groundY < terrain.heightAt(pos.x, pos.z) - 1.5;
     for (let k = 0; k < 9; k++) {
       const [ex, ey, ez] = localAt(d);
       const wx = pos.x + Math.cos(yr) * ex + Math.sin(yr) * ez;
       const wz = pos.z - Math.sin(yr) * ex + Math.cos(yr) * ez;
-      if (groundY + ey > terrain.heightAt(wx, wz) + 0.35 && (!api.cameraClear || api.cameraClear(wx, groundY + ey, wz))) break;
+      if ((under || groundY + ey > terrain.heightAt(wx, wz) + 0.35) && (!api.cameraClear || api.cameraClear(wx, groundY + ey, wz))) break;
       d *= 0.75;
     }
     // 近づけるときはすぐに（岩の外が一瞬でも見えないように）、離すときはなめらかに
@@ -199,7 +201,8 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       let k = (speed * dt) / mag;
       const mx = fx * input.moveY + rx * input.moveX, mz = fz * input.moveY + rz * input.moveX;
       // 坂（game/slope.js）：上りは遅く、急な下りも遅い（bot と同じ式）。泳いでいる間は関係ない
-      const sk = swimming ? 1 : slopeSpeed(slopeAhead(terrain.heightAt, pos.x, pos.z, pos.y, mx / mag, mz / mag));
+      // 洞窟の口のまわり（api.noSlope。口の後ろは岩山の崖で、地面の高さで見ると「上れない坂」に見えてしまう）では使わない
+      const sk = swimming || (api.noSlope && api.noSlope(pos.x, pos.z)) ? 1 : slopeSpeed(slopeAhead(terrain.heightAt, pos.x, pos.z, pos.y, mx / mag, mz / mag));
       k *= sk;
       pos.x += mx * k;
       pos.z += mz * k;
@@ -217,6 +220,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     let target = groundAt(pos.x, pos.z, pos.y);
     let w = api.water ? api.water(pos.x, pos.z) : null;
     if (w && !swimming && target > w.surface + 0.05) w = null;   // 橋の上（水の上の床）に立っている
+    if (w && target < w.surface - w.depth - 1.5) w = null;       // 川床より下（川の真下の洞窟の中）にいる
     waterDepth = w ? w.depth : 0;
     swimming = waterDepth > SWIM.depth;
     if (swimming) target = w.surface - SWIM.float;
@@ -232,6 +236,8 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   const api = {
     /** 三人称のカメラを置ける所か（main.js が洞窟の中の岩を確かめる関数を入れる）。(x, y, z) → true / false */
     cameraClear: null,
+    /** 坂の速さの決まりを使わない所か（main.js が洞窟の口のまわりを入れる）。(x, z) → true / false */
+    noSlope: null,
     body,
     camera: eye,
     update,
@@ -323,10 +329,10 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     },
     /** 向きと上下の角度を直接決める（確認用） */
     setLook(faceYaw, facePitch) { yaw = faceYaw; headYaw = 0; turn.target = null; look = yaw; pitch = Math.max(-p.pitchLimit, Math.min(p.pitchLimit, facePitch)); },
-    /** 出現する場所と向き */
-    spawn(x, z, faceYaw) {
+    /** 出現する場所と向き。y を渡すと、その高さの近くの床に立つ（地面の下の洞窟の中に出るとき） */
+    spawn(x, z, faceYaw, y = null) {
       pos.x = x; pos.z = z; yaw = faceYaw; pitch = -2; headYaw = 0; turn.target = null; look = yaw;
-      pos.y = groundAt(x, z, null);
+      pos.y = groundAt(x, z, y);
       groundY = pos.y;
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
     },

@@ -37,7 +37,7 @@ const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
  * @param {object} ctx { app, config, terrain, obstacles, player, myChar, loadout, debug, phaseDuration }
  *   loadout：試合の前に選んだ武器 { main, side, shield }（game/data.js の LOADOUTS から。無ければキャラの最初の物）
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null, houses = [], tutorial = null }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null, houses = [], tutorial = null, doors = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる）。bot の武器は、選べる物から乱数で選ぶ
@@ -81,6 +81,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 隠れ場所（村の家のベッドの下・タンスの中）
   const hiding = createHiding(hides);
   furniture?.reset();   // 前の試合で開けたままの扉を閉める
+  // 家の扉（world/doors.js）：試合の始めは全部閉じている。教練では全部開けておく（教練の手順は、扉が開いている前提で作ってある）
   // 戦闘と bot
   // 壁裏隠れ（村の家の外の壁と中の壁に背を付ける）
   const cover = createCover(covers, { isFree: obstacles.isFree, groundAt: groundAt || ((x, z) => terrain.heightAt(x, z)) });
@@ -203,7 +204,16 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 右のボタン（出る・隠れる・壁に背を付ける・壁から離れる）
   const useBtn = document.getElementById('btn-use');
   let nearSpot = null, nearWall = null, useTimer = 0;
-  const held = { use: false, sprint: false };   // 前のフレームにボタンを押していたか
+  const held = { use: false, sprint: false, door: false };   // 前のフレームにボタンを押していたか
+  // 扉のボタン（家の扉の近くにいる間だけ出る。開いていれば「閉」、閉じていれば「開」。PC は T）
+  const doorBtn = document.getElementById('btn-door');
+  let nearDoor = null, botDoorTimer = 0;
+  doors?.setAll(!!lesson);
+  doors?.on(({ door, open, by }) => {
+    const who = by || { x: door.cx, z: door.cz, y: door.y };
+    sfx.door(who, open);
+    if (by) senses.noise(by, 'search');   // 扉の音は、探す音と同じくらい遠くまで聞こえる
+  });
   let coverStick = null;   // 壁際を歩く向きの見方（スティックを倒し始めたときのカメラの右と前）
   const searchBtn = document.getElementById('btn-search');
   const assassinBtn = document.getElementById('btn-assassinate');
@@ -328,6 +338,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         stanceBtn.hidden = true; shieldBtn.hidden = true;
         useBtn.hidden = true;
         searchBtn.hidden = true;
+        if (doorBtn) doorBtn.hidden = true;
         hideView.hidden = true;
         spectateEl.hidden = false;
         nextSpectate();
@@ -339,6 +350,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   match.on('end', () => { spectateEl.hidden = true; });
 
   const world = { obstacles, groundAt, heightAt: terrain.heightAt, hiding, cover, sight, senses, water: terrain.waterAt || null, get areaRadius() { return match.areaRadius; },
+    /** 洞窟（world/cave-plan.js）：bot が中を道なりに歩く・口から出入りするのに使う */
+    cave: terrain.land?.cave || null,
     /** f が今暗殺できる相手 { target, grace } か null（bot が暗殺ボタンを押すか決める） */
     assassinTarget: (f) => combat.assassinTarget(f),
     /** 隠れる・出る（動きをしてから。game/hide-acts.js） */
@@ -422,8 +435,25 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       player.turnScale = !me.alive ? 0 : (me.stun > 0 ? 0.3 : 1) * (me.stance === 'prone' ? 0.35 : me.stance === 'crouch' ? 0.75 : 1);
       player.noRun = !canRun(me);
       // ボタンは押した瞬間だけ働かせる（押している間ずっと働くと、指を離すまでの数フレームで入って出てしまう：壁裏隠れ・疾驅）
-      const usePressed = input.use && !held.use, sprintPressed = input.sprint && !held.sprint;
-      held.use = !!input.use; held.sprint = !!input.sprint;
+      const usePressed = input.use && !held.use, sprintPressed = input.sprint && !held.sprint, doorPressed = input.door && !held.door;
+      held.use = !!input.use; held.sprint = !!input.sprint; held.door = !!input.door;
+      // 家の扉：近くの扉を開ける・閉める（扉口に人がいる間は閉められない）
+      if (doorPressed && nearDoor && running && me.alive && !me.hidden && !(me.helpless > 0)) {
+        if (!doors.toggle(nearDoor, me, fighters)) hud.addFeed('扉口に人がいて閉められない');
+        useTimer = 0;
+      }
+      // bot は、閉じた扉へ向かって歩いているときに、自分で開ける
+      if (doors && (botDoorTimer -= dt) <= 0) {
+        botDoorTimer = 0.25;
+        for (const f of fighters) {
+          if (f.isPlayer || !f.alive || f.hidden || f.helpless > 0) continue;
+          const d = doors.nearest(f.x, f.z, f.y ?? null, 1.35);
+          if (!d || d.open) continue;
+          const a = (f.yaw * Math.PI) / 180, dx = d.cx - f.x, dz = d.cz - f.z, dl = Math.hypot(dx, dz) || 1;
+          if ((-Math.sin(a) * dx - Math.cos(a) * dz) / dl > 0.25) doors.toggle(d, f, fighters);   // 扉の方を向いている
+        }
+      }
+      doors?.update(dt);
       // 全速力：押したら動き出すのを待ち、動き出したら SPRINT.time 秒。しゃがむ・伏せる・隠れる・倒れると終わる
       if (sprintPressed && running && me.alive) {
         if (sprint.state === 'ready' && canRun(me) && !me.hidden && !me.cover) sprint.state = 'armed';
@@ -502,6 +532,13 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
           else if (mode === 'leave') setBtn(useBtn, ICONS.exit, L.leave);
         }
         searchBtn.hidden = !nearSpot;
+        // 扉のボタン
+        nearDoor = doors && free && !me.hidden && !me.cover ? doors.nearest(me.x, me.z, me.y ?? null) : null;
+        if (doorBtn) {
+          doorBtn.hidden = !nearDoor;
+          const dm = nearDoor ? (nearDoor.open ? 'close' : 'open') : '';
+          if (dm && doorBtn.dataset.label !== dm) { doorBtn.dataset.label = dm; setBtn(doorBtn, ICONS.door, dm === 'open' ? L.doorOpen : L.doorClose); }
+        }
         // 攻撃ボタン：無防備な相手が近くにいれば「とどめ」（暗殺は別の暗殺ボタン）
         const helplessNear = fighters.some((f) => f !== me && f.alive && f.helpless > 0 && Math.hypot(f.x - me.x, f.z - me.z) < 2.6);
         const want = helplessNear ? 'finisher' : '';
@@ -580,7 +617,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         zoneTimer = 0.5;
         const z = zones.zoneAt(me.x, me.z);
         // 村は 3 つあるので、村の中なら村の名前（山邑・川邑・野邑）
-        const name = zones.caveAt?.(me.x, me.z, me.y) > 0.5 ? '風穴'   // 洞窟の中
+        const name = zones.caveAt?.(me.x, me.z, me.y) > 0.5 ? (zones.caveName?.(me.x, me.z) || '風穴')   // 洞窟の中（風穴・地底洞・大空洞）
           : z === 'castle' ? (zones.villageAt?.(me.x, me.z)?.name || ZONE_NAMES.castle) : ZONE_NAMES[z];
         if (name !== zoneNow) { zoneNow = name; hud.addFeed(`${name}に入った`); }
       }
