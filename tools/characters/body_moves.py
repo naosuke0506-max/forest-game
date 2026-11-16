@@ -1,6 +1,7 @@
 # 全キャラの体の動きを、Tripo の骨に直接付ける（Blender 4.2。tools/characters/build_character.py から呼ぶ開発用の道具）
 #
 #   turn_r・turn_l  その場で足踏みしながら右回り・左回り（向きを変えるスティック。体の向きはゲームが回す）
+#   strafe_r・strafe_l  横歩き（顔と体は前を向いたまま、右・左へ足を開いては寄せて進む。2026-11-16）
 #   crouch_walk     しゃがみ歩き（深くしゃがんで歩く。顔はまっすぐ前）。前の動き（make_motions.py の中腰の物）と入れ替える
 #   prone_up        伏せから起き上がる（腕で押し上げる → 片膝を引き寄せる → 片膝立ち → 立つ）。前の動きと入れ替える
 #   hit_l_<向き>    被弾（軽い）：攻撃された向き（f 前・b 後ろ・l 左・r 右）と反対へ、体がはじかれる
@@ -337,6 +338,45 @@ def cover_walk_fn(side, shield, step=0.40, dur=0.70):
     return fn, dur, step / dur
 
 
+# ======================= 横歩き（顔と体は前を向いたまま、右か左へ） =======================
+def strafe_fn(side, shield, step=0.72, dur=0.42):
+    """体の右（side='r'）か左（'l'）へ、足を開いては寄せて進む（その場）。顔と胸は前を向いたまま（利用者の指示 2026-11-14：
+    横歩きが、前歩きと同じ歩き方で横に滑って不自然）。先の足（進む側）を踏み出し、あとの足を寄せる。体はずっと同じ速さで進む。
+    歩幅 0.72・0.42 秒で 1 回り（身長 1.8 m で約 1.7 m/秒。ゲームの歩き 3.0・走り 5.2 m/秒には、動きを速めて合わせる）。
+    足は地面に着いている間、まっすぐ進む向きと逆へ送る（滑らない）。腕と武器は構えた立ち姿のまま（ゲームでは、上半身は
+    持っている武器の歩きの動きを重ねるので、ここの腕は「上半身を重ねないとき」の姿）"""
+    s = 1 if side == 'r' else -1
+    base = ready(shield)
+    amp = 0.6 * step        # 足が左右に動く幅（着いている間に、体はこの分だけ進む）
+    swing = 0.4             # 1 回りのうち、足が浮いている割合
+
+    def foot(ph, r0, f0, yaw, lead):
+        q = (ph - (0.0 if lead else 0.5)) % 1.0
+        if q < swing:                                    # 浮かせて、進む向きへ運ぶ
+            u = q / swing
+            e = u * u * (3 - 2 * u)
+            return (r0 + s * amp * (e - 0.5), f0, yaw, 10 * math.sin(math.pi * u), 0.075 * math.sin(math.pi * u), 0.0)
+        u = (q - swing) / (1 - swing)                    # 着いて、進む向きと逆へ送る
+        return (r0 + s * amp * (0.5 - u), f0, yaw, 0, 0.0, 0.0)
+
+    def fn(t):
+        ph = (t / dur) % 1.0
+        bob = -0.022 * abs(math.sin(2 * math.pi * ph))          # 足を開いた時に少し沈む
+        sway = s * 0.02 * math.sin(2 * math.pi * (ph - 0.1))     # 腰が、踏み出す足の方へ少し寄る
+        lean = s * 3.0                                           # 進む向きへ少し傾く
+        p = dict(base)
+        p['hip'] = (sway, -0.095 + bob, 0.0)                     # 歩幅が広いので、腰を落とす
+        p['hip_rot'] = (-s * 4, 6, lean)
+        p['chest'] = (s * 3, 3, -lean * 0.5)
+        p['look'] = (0, 0)
+        p['look_k'] = 1.0
+        # 足幅は広め（寄せた足が、踏み出す足にぶつからない）。進む側の足を少し前、あとの足を少し後ろ
+        p['R_foot'] = foot(ph, 0.25, 0.03 if s > 0 else -0.05, 14, s > 0)
+        p['L_foot'] = foot(ph, -0.25, 0.03 if s < 0 else -0.05, -10, s < 0)
+        return p
+    return fn, dur, step / dur
+
+
 # ======================= その場で回る（向きを変えるスティック） =======================
 TURN_DEG_S = 150.0   # この動きを 1 倍で流したときに体が回る速さ（度/秒）。ゲームは実際に回る速さとの比で流す（情報の turn）
 
@@ -505,6 +545,10 @@ def build(rig, has_shield, made_by_name, group=None):
     for side in ('r', 'l'):
         fn, dur, spd = cover_walk_fn(side, has_shield)
         out.append(make_clip(rig, f'cover_walk_{side}', fn, dur, loop=True, speed=spd * rig.K))
+    # 横歩き（右へ・左へ）
+    for side in ('r', 'l'):
+        fn, dur, spd = strafe_fn(side, has_shield)
+        out.append(make_clip(rig, f'strafe_{side}', fn, dur, loop=True, speed=spd * rig.K))
     # その場で回る（右回り・左回り）
     for side in ('r', 'l'):
         fn, dur = turn_fn(side, has_shield)
