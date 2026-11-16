@@ -1,6 +1,7 @@
 // 戦闘（計算だけ）：攻撃・防御・弓と矢・ダメージ・ひるみ・スタミナ。
 // 人間も bot も、同じ形の入力 { attack: 押している, guard: 押している } で動かす。
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
+import { updateDive } from './swim.js';
 import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SKILL_FX, SWORD_ULT, WRATH, SWIM } from './data.js';
 import { skillOf, skillOn, skillReady, useSkill, updateSkill } from './skills.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
@@ -561,6 +562,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         // スタミナ：走っている間（全速力はもっと）と、防禦を構えている間は減り続け、その間は戻らない（利用者の指示 2026-11-14）。
         // 防禦で受けた分も、今までどおり減る（damage）。走って使い切ると息が切れ、COMBAT.windedRecover まで戻るまで走れない（game/stance.js の canRun）
         const running = f.gait === 'run' && !f.action && !f.guarding;   // 防禦の構えで歩いているのは走りではない
+        // 潜る（game/swim.js）：息と、潜っている深さを進める。息が尽きたら、ひとりでに浮く
+        if (updateDive(f, dt) === 'gasp') emit('gasp', { fighter: f });
         const drain = (running ? (f.sprinting ? COMBAT.sprintStamina : COMBAT.runStamina) : 0) + (f.guarding ? COMBAT.guardHoldStamina : 0)
           + (f.swimming ? SWIM.stamina : 0);   // 泳いでいる間も減る（尽きると泳ぐのが遅くなる。game/swim.js）
         if (drain > 0) {
@@ -648,9 +651,10 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         }
         // 動きの速さ：攻撃・溜め・弓を引く・回避・楯の技・技能の動き・ひるみなど、何かの動きをしている間は、移動スティックを倒していても
         // 止まる（利用者の指示 2026-11-14：動きながら滑って動くのはおかしい。回避はスティックの向きへ、動きそのものが体を運ぶ）。
-        // 防禦の構えの間だけは、ゆっくり歩ける
+        // 防禦の構えの間と、弓を引いている間（利用者の指示 2026-11-16）だけは、ゆっくり歩ける
+        const drawing = f.action?.kind === 'draw' && !f.hidden && !(f.helpless > 0) && !(f.stun > 0);
         const busy = f.hidden || f.helpless > 0 || f.stun > 0 || !!f.action;
-        f.moveScale = busy ? COMBAT.attackMoveScale : f.guarding ? COMBAT.guardMoveScale : 1;
+        f.moveScale = drawing ? COMBAT.drawMoveScale : busy ? COMBAT.attackMoveScale : f.guarding ? COMBAT.guardMoveScale : 1;
       }
       for (let i = projectiles.length - 1; i >= 0; i--) {
         if (!stepProjectile(projectiles[i], dt)) projectiles.splice(i, 1);

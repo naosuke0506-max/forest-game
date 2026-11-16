@@ -45,6 +45,32 @@ svg { display: block; width: 100%; height: 100%; }
 
 /* 時間が止まっている（刻が変わった直後の 5 秒）：色を抜いて、止まった時を見せる */
 body.timestop canvas#app { filter: grayscale(.85) contrast(1.08) brightness(.92); }
+/* 時間が止まっている間（刻が変わった直後）：画面いっぱいの灰色の鉄の壁（利用者の指示 2026-11-16）。真ん中に報酬の一覧が出る。
+   鉄の板（継ぎ目・鋲・こすれた筋）は、CSS の重ねた模様だけで描く（画像なし） */
+.timewall {
+  position: fixed; inset: 0; z-index: 24; pointer-events: none; opacity: 0; visibility: hidden;
+  transition: opacity .35s ease, visibility 0s linear .35s;
+  background:
+    radial-gradient(ellipse at 50% 46%, rgba(255, 255, 255, .10), rgba(0, 0, 0, 0) 55%),
+    radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, .55) 100%),
+    /* 鋲：板の四隅 */
+    radial-gradient(circle at 14px 14px, #9a9fa3 0 2.2px, #3a3d40 2.6px 4.4px, rgba(0, 0, 0, 0) 5px) 0 0 / 240px 160px,
+    radial-gradient(circle at 226px 14px, #9a9fa3 0 2.2px, #3a3d40 2.6px 4.4px, rgba(0, 0, 0, 0) 5px) 0 0 / 240px 160px,
+    radial-gradient(circle at 14px 146px, #9a9fa3 0 2.2px, #3a3d40 2.6px 4.4px, rgba(0, 0, 0, 0) 5px) 0 0 / 240px 160px,
+    radial-gradient(circle at 226px 146px, #9a9fa3 0 2.2px, #3a3d40 2.6px 4.4px, rgba(0, 0, 0, 0) 5px) 0 0 / 240px 160px,
+    /* 板の継ぎ目（暗い溝と、その隣の明るい縁） */
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, .55) 0 2px, rgba(255, 255, 255, .13) 2px 3.5px, rgba(0, 0, 0, 0) 3.5px 240px),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, .55) 0 2px, rgba(255, 255, 255, .13) 2px 3.5px, rgba(0, 0, 0, 0) 3.5px 160px),
+    /* こすれた筋 */
+    repeating-linear-gradient(92deg, rgba(255, 255, 255, .028) 0 1px, rgba(0, 0, 0, 0) 1px 7px, rgba(0, 0, 0, .05) 7px 8px, rgba(0, 0, 0, 0) 8px 19px),
+    linear-gradient(180deg, #5d6165, #474a4e 45%, #34373a);
+}
+body.timestop .timewall { opacity: 1; visibility: visible; transition: opacity .35s ease, visibility 0s; }
+.tw-left { position: absolute; left: 0; right: 0; bottom: calc(26px + var(--safe-b)); margin: 0; text-align: center; font-family: var(--serif); letter-spacing: .3em;
+  font-size: clamp(13px, 2vmin, 17px); color: #d6d9db; text-shadow: 0 1px 0 rgba(0, 0, 0, .8), 0 -1px 0 rgba(255, 255, 255, .12); }
+/* 鉄の壁の上の報酬：板の枠を鉄の打ち出しに（金の角金具はそのまま） */
+body.timestop .panel.reward { box-shadow: 0 0 0 1px #1c1e20, 0 0 0 5px #6b6f73, 0 0 0 6px #1c1e20, 0 18px 40px rgba(0, 0, 0, .6); }
+
 canvas#app {
   position: fixed;
   inset: 0;
@@ -651,6 +677,15 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .bar.hp::after { content: ''; position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0) 0 calc(25% - 1px), rgba(0, 0, 0, .55) calc(25% - 1px) 25%); }
 .bar.st i { background: linear-gradient(180deg, #f3e08e, #c9a03a 55%, #7d6020); }
+/* 息（潜っている間と、戻りきるまで）：水色の細い棒。残りが少ないと脈打つ */
+.bar.br { height: 5px; }
+.bar.br[hidden] { display: none; }
+.bar.br i { background: linear-gradient(180deg, #c6f1ff, #58b6d6 55%, #1f6c8c); }
+.bar.br.low i { animation: hpLow .5s ease-in-out infinite; }
+/* 水の中（目が水面の下）：青緑に染め、端を暗くする */
+.underwater { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 22%, rgba(70, 150, 150, .30), rgba(14, 62, 74, .62) 60%, rgba(4, 26, 36, .86) 100%); }
+.underwater[hidden] { display: none; }
 .vitals.low .bar.hp i:not(.trail) { animation: hpLow .7s ease-in-out infinite; }
 .vitals.low .vt-hp { color: #ff9a84; }
 @keyframes hpLow { 0%, 100% { filter: none; } 50% { filter: brightness(1.7); } }

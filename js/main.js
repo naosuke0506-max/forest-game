@@ -179,6 +179,7 @@ async function boot() {
   const stats = createStats(app, CONFIG.showStats, CONFIG.qualityName);
   // 大廳（試合の前）：松明の灯る石の広間。題の画面の後ろから出し、試合が始まると片付けて森のカメラに戻す
   hall = createHall(app, CONFIG);
+  window.__hall = hall;   // 確認用（自動テストから、大廳の人物に動きを流して姿を撮るため）
   hall.setActive(false);
   player.camera.enabled = false;   // 題の画面・大廳の間は、森のカメラで描かない
 
@@ -227,7 +228,7 @@ async function boot() {
     air.update(dt);
     // 音：聞く人の位置と向き。家の中では外の音がこもる
     const inside = Math.max(village?.insideHouse?.(cp.x, cp.z) && player.position.y > terrain.heightAt(cp.x, cp.z) + 0.25 ? 1 : 0, caveK);   // 家の中・洞窟の中は外の音がこもる
-    indoorK += (inside - indoorK) * Math.min(1, dt * 3);
+    indoorK += (Math.max(inside, session?.underwater ? 1 : 0) - indoorK) * Math.min(1, dt * 3);   // 水の中でも外の音がこもる
     audio.setListener(cp.x, cp.y, cp.z, player.yaw, indoorK);
     ambience.update(dt);
     stats.update(dt);

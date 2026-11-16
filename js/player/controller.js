@@ -4,7 +4,7 @@
 // 体がその場で足踏みしながら、見ている向きへ回る（回る速さは鎧の重さまで。体が向き直ると首は正面に戻る）
 import * as pc from 'playcanvas';
 import { BODY_TURN, SWIM } from '../game/data.js';
-import { wadeScale } from '../game/swim.js';
+import { wadeScale, diveY } from '../game/swim.js';
 import { slopeSpeed, slopeAhead } from '../game/slope.js';
 
 const wrapDeg = (a) => ((a + 540) % 360) - 180;
@@ -223,7 +223,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     if (w && target < w.surface - w.depth - 1.5) w = null;       // 川床より下（川の真下の洞窟の中）にいる
     waterDepth = w ? w.depth : 0;
     swimming = waterDepth > SWIM.depth;
-    if (swimming) target = w.surface - SWIM.float;
+    if (swimming) target = diveY(w, api.diveK || 0);   // 水面に浮く。潜っていれば、その分だけ深く（game/swim.js）
     waterSurface = w ? w.surface : null;
     pos.y = target;
     groundY += (target - groundY) * Math.min(1, dt * 12);
@@ -243,6 +243,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     update,
     position: pos,
     speedScale: 1,
+    diveK: 0,                // 潜っている割合（0〜1。match-session.js が戦う人の記録から写す）
     swimSpeed: SWIM.speed,   // 泳ぐ速さ（match-session.js がキャラの速さとスタミナで決める。game/swim.js の swimSpeed）
     water: null,             // 川の水（world/terrain.js の waterAt）。main.js が付ける
     get waterDepth() { return waterDepth; },

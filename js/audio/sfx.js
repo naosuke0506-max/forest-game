@@ -320,6 +320,8 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
       playSample(d, 'wood_creak', { rate: (open ? 0.82 : 0.95) * jitter(0.06), gain: 0.85 });
       if (!open) playSample(d, 'wood_close', { t: 0.3, rate: 0.9, gain: 0.8 });
     },
+    /** 水の中へ潜る・水面へ浮く：水をかく音（川を泳ぐ音と同じ作り） */
+    splash(f) { splash(f, false); },
     /** 角燈（ランタン）を灯す・外す：金具の小さな音 */
     lantern(f, on) {
       const d = at(f, 0.7, { ref: 1.5, max: 14 });

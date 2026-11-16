@@ -9,6 +9,7 @@ export const L = {
   attack: '攻擊', shoot: '射', thrust: '突', assassinate: '暗殺', finisher: '誅殺',
   dodge: '迴避', search: '搜索', sprint: '疾驅', skill: '技能',
   crouch: '屈身', stand: '起立', getUp: '起身',
+  dive: '潛水', surface: '浮上',   // 泳いでいる間の姿勢ボタン：水の中へ潜る・水面へ浮く（game/swim.js）
   exit: '出', hide: '潛伏', wall: '壁潛', leave: '離壁',
   doorOpen: '開扉', doorClose: '閉扉',   // 家の扉を開ける・閉める
   lanternOn: '點燈', lanternOff: '消燈',   // 角燈（ランタン）を灯す・外す（腰に下げる。render/lantern.js）

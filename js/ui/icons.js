@@ -33,6 +33,9 @@ export const ICONS = {
   eye: svg(`<path fill="currentColor" d="M12 5c5 0 8.6 3.6 10 7-1.4 3.4-5 7-10 7S3.4 15.4 2 12c1.4-3.4 5-7 10-7zm0 2.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zm0 2.2a2.3 2.3 0 1 1 0 4.6 2.3 2.3 0 0 1 0-4.6z"/>`),
   hood: svg(`<path fill="currentColor" d="M12 2c4.4 0 7.5 3.6 7.5 8.4V22h-3.2l-1-4.3a5.8 5.8 0 0 1-6.6 0L7.7 22H4.5V10.4C4.5 5.6 7.6 2 12 2zm0 5.2c-2.3 0-3.9 1.8-3.9 4.1 0 1.6 1.7 3.2 3.9 3.2s3.9-1.6 3.9-3.2c0-2.3-1.6-4.1-3.9-4.1z"/>`),
   // 扉：枠の中の板戸（少し開いている）と引き手
+  // 潛水（水面の波の下へ、下向きの矢印）・浮上（水面の波へ、上向きの矢印）
+  dive: svg(`<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M2.5 6.5c1.6-1.6 3.2-1.6 4.8 0s3.2 1.6 4.8 0 3.2-1.6 4.8 0 3.2 1.6 4.6 0"/><path fill="currentColor" d="M11 10h2v6.2h3.2L12 21.5 7.8 16.2H11z"/>`),
+  surface: svg(`<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M2.5 6.5c1.6-1.6 3.2-1.6 4.8 0s3.2 1.6 4.8 0 3.2-1.6 4.8 0 3.2 1.6 4.6 0"/><path fill="currentColor" d="M11 21.5h2v-6.2h3.2L12 10l-4.2 5.3H11z"/>`),
   // 角燈（ランタン）：吊り輪・蓋・ガラスの中の火・底
   lantern: svg(`<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M9.5 5.2a2.5 2.5 0 0 1 5 0"/><path fill="currentColor" d="M8 5.6h8l1.2 2.4H6.8z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M7.6 8.4h8.8v10H7.6z"/><path fill="currentColor" d="M12 10.4c1.6 1.7 2.2 2.9 2.2 4.1a2.2 2.2 0 0 1-4.4 0c0-.9.4-1.6 1-2.2.2.7.6 1 .9 1 .1-1 .1-1.9.3-2.9z"/><path fill="currentColor" d="M6.6 18.6h10.8v2H6.6z"/>`),
   door: svg(`<path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M5 21V3h14v18"/><path fill="currentColor" d="M8 5.2l8 1.6v14.4l-8-1.6z" opacity=".9"/><circle cx="13.6" cy="13" r="1.1" fill="#1a1208"/>`),

@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-16.3';</script>
+<script>window.__BUILD = '2026-11-16.4';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -180,6 +180,8 @@
 <div id="hud" hidden>
   <!-- 隠れている間：隙間から覗く見た目（ベッドの下・タンスの中）。ほかの表示より下に描く -->
   <div id="hideview" class="hideview" hidden><div class="hv-label">潛伏中</div></div>
+  <!-- 水の中に潜っている間：目が水面の下にあるとき、画面を青緑に染める -->
+  <div id="underwater" class="underwater" hidden></div>
   <!-- 上の真ん中：フェーズ・時間帯と残り時間 -->
   <div class="hud-top">
     <div class="phase-row"><span id="phase-icon" class="phase-icon"></span><span id="phase-name" class="phase-name"></span></div>
@@ -213,6 +215,8 @@
       <div class="vt-head"><span id="vt-name" class="vt-name"></span><span id="hp-text" class="vt-hp"></span></div>
       <div class="bar hp"><i id="hp-trail" class="trail"></i><i id="hp-fill"></i></div>
       <div class="bar st"><i id="st-fill"></i></div>
+      <!-- 息（潜っている間と、戻りきるまで出る） -->
+      <div id="br-bar" class="bar br" hidden><i id="br-fill"></i></div>
     </div>
   </div>
   <!-- 右下：操作ボタン。右手（攻撃）・左手（盾で防御・強攻撃・持ち替え）・回避 -->
@@ -260,6 +264,8 @@
   <div class="mapview-hint">タップで閉じる</div>
 </div>
 
+<!-- 刻が進んで時間が止まっている間：画面いっぱいの灰色の鉄の壁（利用者の指示 2026-11-16）。真ん中に報酬の一覧（下の #reward）が出る -->
+<div id="timewall" class="timewall" aria-hidden="true"><p class="tw-left"></p></div>
 <!-- フェーズ報酬（画面中央） -->
 <section id="reward" class="panel reward" hidden>
   <div class="reward-head"></div>
@@ -367,11 +373,11 @@
   <button id="intro-skip" class="in-skip" type="button">略<small class="sub">飛ばす</small></button>
   <div class="in-fade"></div>
 </section>
-<!-- 棺桶の中（js/render/coffin.js）：暗い中から始まり、蓋を開けて出ると動かせる -->
+<!-- 棺桶の中（js/render/coffin.js）：暗い中から始まり、少しすると蓋がひとりでに開いて、出ると動かせる（「開棺」で待たずに出る） -->
 <section id="coffin" class="coffin" hidden>
   <div class="cf-dark"></div>
   <p class="cf-hint">棺の中にいる</p>
-  <button id="coffin-open" class="cf-open" type="button" data-ruby>開棺<small class="sub">蓋を開けて出る</small></button>
+  <button id="coffin-open" class="cf-open" type="button" data-ruby>開棺<small class="sub">すぐ出る</small></button>
 </section>
 <!-- 試合・教練から大廳へ戻るとき：暗くして読み込み直す（js/core/resume.js） -->
 <div id="returning" class="returning" hidden><p>大廳へ戻る…</p></div>

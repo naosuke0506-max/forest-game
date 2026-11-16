@@ -50,8 +50,8 @@ const NODES = {
   EC: { x: 94, z: 24, r: 12, h: 8, y: -15 },
   E:  { x: 127, z: 56 },                               // 口：東の大草原の岩場
   S1: { x: -30, z: 46, y: -16 },
-  S2: { x: -36, z: 80, y: -15 },
-  SC: { x: -12, z: 110, r: 14, h: 9, y: -16 },
+  S2: { x: -36, z: 80, y: -14 },
+  SC: { x: -12, z: 110, r: 14, h: 9, y: -12 },   // 南の口（床 -3）へ上る道が急にならないよう、広間を浅くした（前は -16。広間のふちに急な坂ができていた）
   S:  { x: -22, z: 149 },                              // 口：南の山のふもと
   C1: { x: -8, z: 22, y: -17 },
   C2: { x: 20, z: 30, y: -17 },
@@ -64,46 +64,50 @@ const NODES = {
   D5: { x: -90, z: 28, r: 7, h: 6, y: -15 },
   D5b: { x: -104, z: 46, r: 4, h: 4, y: -13 },
   D6: { x: 64, z: -8, r: 5, h: 4.6, y: -16 },
-  D7: { x: -58, z: 128, r: 5, h: 4.6, y: -13 },
+  D7: { x: -58, z: 128, r: 5, h: 4.6, y: -11 },
 };
 // 通り道：pts は通る所（広間・口の名前か [x, z]）、w は幅、h は天井の高さ、hill：上に風穴の岩山を盛る
+//   w・h は数（どこも同じ）か、並び（始めから終わりへ、道のりを等分した所の値。間はなめらかにつなぐ）。h を書かなければ幅から決める（widthToH）
+//   利用者の指示（2026-11-16）：同じ大きさの通路のまま繋がっている印象なので、太さをまばらに。特に入り口は大きくして、進めば進むほど細く。
+//   逆に広くなる所もある。→ 口は幅 7.5〜8.5 m・高さ 6〜6.5 m。奥へ行くほど 2 m 前後まで細くなり、広間の手前や途中でまた広がる
 const PASSAGES = [
   // 風穴（上の段）：口 A → 入ってすぐの間 → 口 B。行き止まり 1 つ
-  { id: 'up-a', pts: ['A', 'U1'], w: 3.4, h: 3.6, hill: true },
-  { id: 'up-main', pts: ['U1', [-116, -63], 'U2', [-123, -84], 'U3', [-128, -99], 'B'], w: 3.4, h: 3.6, hill: true },
-  { id: 'up-dead', pts: ['U2', [-131, -68], [-140, -61], 'UD'], w: 2.5, h: 3.0, hill: true },
-  // 地下へ下りる道：入ってすぐの間 → 大空洞
-  { id: 'descent', pts: ['U1', [-98, -66], [-84, -62], [-72, -46], [-66, -26], [-58, -6], 'H'], w: 3.2, h: 3.6, hillTo: 2 },
+  { id: 'up-a', pts: ['A', 'U1'], w: [8.5, 6.4], h: [6.5, 5.2], hill: true },
+  { id: 'up-main', pts: ['U1', [-116, -63], 'U2', [-123, -84], 'U3', [-128, -99], 'B'], w: [5.2, 3.2, 2.4, 3.6, 2.6, 4.4, 7.5], h: [4.6, 3.6, 3.0, 4.0, 3.2, 4.4, 6.0], hill: true },
+  { id: 'up-dead', pts: ['U2', [-131, -68], [-140, -61], 'UD'], w: [2.6, 1.9, 2.8], hill: true },
+  // 地下へ下りる道：入ってすぐの間 → 大空洞（下りるほど細くなり、大空洞の手前で広がる）
+  { id: 'descent', pts: ['U1', [-98, -66], [-84, -62], [-72, -46], [-66, -26], [-58, -6], 'H'], w: [5.0, 3.8, 2.8, 2.1, 2.6, 4.2, 6.5], hillTo: 2 },
   // 北：大空洞 → 川の下 → 北の間 → 滝のそばの口
-  { id: 'north', pts: ['H', 'N1', [-14, -34], 'N2', [14, -62], 'NC'], w: 3.2, h: 3.6 },
-  { id: 'falls', pts: ['NC', [31, -104], [35, -130], [29, -150], [15, -159], 'F'], w: 3.0, h: 3.5 },
+  { id: 'north', pts: ['H', 'N1', [-14, -34], 'N2', [14, -62], 'NC'], w: [5.0, 3.0, 2.2, 3.4, 2.4, 4.0] },
+  { id: 'falls', pts: ['NC', [31, -104], [35, -130], [29, -150], [15, -159], 'F'], w: [3.6, 2.4, 2.0, 3.2, 5.0, 7.5], h: [3.8, 3.0, 2.8, 3.6, 4.8, 6.0] },
   // 東：北の間 → 野邑の下 → 東の間 → 東の口
-  { id: 'east', pts: ['NC', [58, -60], [82, -34], [96, -6], 'EC'], w: 3.2, h: 3.6 },
-  { id: 'east-out', pts: ['EC', [110, 42], 'E'], w: 3.0, h: 3.5 },
+  { id: 'east', pts: ['NC', [58, -60], [82, -34], [96, -6], 'EC'], w: [3.8, 2.3, 3.2, 2.2, 4.2] },
+  { id: 'east-out', pts: ['EC', [110, 42], 'E'], w: [4.2, 3.0, 5.0, 7.8], h: [4.2, 3.4, 4.8, 6.2] },
   // 南：大空洞 → 南の間 → 南の口
-  { id: 'south', pts: ['H', 'S1', 'S2', 'SC'], w: 3.2, h: 3.6 },
-  { id: 'south-out', pts: ['SC', [-17, 132], 'S'], w: 3.0, h: 3.5 },
+  { id: 'south', pts: ['H', 'S1', 'S2', 'SC'], w: [5.0, 2.8, 3.6, 2.4, 4.0] },
+  { id: 'south-out', pts: ['SC', [-17, 132], 'S'], w: [4.4, 3.2, 5.2, 8.0], h: [4.2, 3.6, 5.0, 6.2] },
   // 真ん中：大空洞 → 広い川の下 → 東の間
-  { id: 'mid', pts: ['H', 'C1', 'C2', 'C3', [76, 30], 'EC'], w: 3.0, h: 3.4 },
+  { id: 'mid', pts: ['H', 'C1', 'C2', 'C3', [76, 30], 'EC'], w: [4.4, 2.4, 2.0, 3.4, 2.2, 3.8] },
   // 輪：南の間 → 川の下 → 東の間／北の脇道
-  { id: 'ring', pts: ['SC', [20, 108], [48, 90], [70, 64], 'EC'], w: 2.8, h: 3.3 },
-  { id: 'link', pts: ['N1', [-13, 0], 'C1'], w: 2.6, h: 3.1 },
-  // 行き止まり
-  { id: 'dead1', pts: ['S1', [-50, 56], 'D1'], w: 2.5, h: 3.0 },
-  { id: 'dead2', pts: ['N2', [-4, -72], 'D2'], w: 2.5, h: 3.0 },
-  { id: 'dead3', pts: ['EC', [114, 10], 'D3'], w: 2.5, h: 3.0 },
-  { id: 'dead4', pts: ['C1', [-2, 42], 'D4'], w: 2.5, h: 3.0 },
-  { id: 'dead5', pts: ['H', [-66, 18], 'D5', 'D5b'], w: 2.6, h: 3.1 },
-  { id: 'dead6', pts: ['C3', [60, 12], 'D6'], w: 2.5, h: 3.0 },
-  { id: 'dead7', pts: ['SC', [-38, 120], 'D7'], w: 2.5, h: 3.0 },
+  { id: 'ring', pts: ['SC', [20, 108], [48, 90], [70, 64], 'EC'], w: [3.4, 2.0, 2.8, 1.9, 3.4] },
+  { id: 'link', pts: ['N1', [-13, 0], 'C1'], w: [2.6, 1.9, 2.6] },
+  // 行き止まり（細い。奥の間で少し広がる）
+  { id: 'dead1', pts: ['S1', [-50, 56], 'D1'], w: [2.6, 1.9, 2.8] },
+  { id: 'dead2', pts: ['N2', [-4, -72], 'D2'], w: [2.4, 1.9, 2.6] },
+  { id: 'dead3', pts: ['EC', [114, 10], 'D3'], w: [3.0, 2.0, 2.8] },
+  { id: 'dead4', pts: ['C1', [-2, 42], 'D4'], w: [2.4, 1.9, 2.8] },
+  { id: 'dead5', pts: ['H', [-66, 18], 'D5', 'D5b'], w: [4.2, 2.6, 3.4, 2.0] },
+  { id: 'dead6', pts: ['C3', [60, 12], 'D6'], w: [2.6, 1.9, 2.6] },
+  { id: 'dead7', pts: ['SC', [-38, 120], 'D7'], w: [3.0, 2.0, 2.6] },
 ];
 // 口：from は外から来る所（切り通しの始まり）、drop は切り通しが下る深さ、mound は口の後ろの岩山 { h 高さ, r 半径 }（風穴は大きな岩山があるので無し）
 const MOUTHS = {
   A: { from: [-98, -42], drop: 0, name: '風穴' },
   B: { from: [-134.5, -110.5], drop: 0, name: '風穴' },
-  F: { from: [-4.5, -141.5], drop: 0.7, mound: { h: 5, r: 15 }, name: '瀧穴' },
-  E: { from: [141, 68], drop: CAVE.drop, mound: { h: 4, r: 15 }, name: '野穴' },
-  S: { from: [-27, 163], drop: CAVE.drop, mound: { h: 4, r: 15 }, name: '南穴' },
+  // 口を大きくした（幅 7.5〜8 m・高さ 6 m。2026-11-16）ので、口の後ろの岩山も大きくした（前は高さ 4〜5 m・半径 15 m。天井の上に岩を残すため）
+  F: { from: [-4.5, -141.5], drop: 0.7, mound: { h: 10.5, r: 23 }, name: '瀧穴' },
+  E: { from: [141, 68], drop: CAVE.drop, mound: { h: 7.5, r: 22 }, name: '野穴' },
+  S: { from: [-27, 163], drop: CAVE.drop, mound: { h: 7.5, r: 22 }, name: '南穴' },
 };
 // 大空洞の中に立つ岩の柱（天井まで届く）
 // 通り道の入る所（北西・北東・東・南・西）を避けて置く
@@ -167,13 +171,23 @@ export function createCavePlan(seed) {
     });
     const P = spline(ctrl, CAVE.step);
     const first = p.pts[0], last = p.pts[p.pts.length - 1];
-    const hw = p.w / 2;
+    // 幅と天井：道のりに沿った並び（始め → 終わり）をなめらかにつなぐ。天井を書いていなければ幅から決める
+    const along = (v, t) => {
+      if (!Array.isArray(v)) return v;
+      const f = Math.min(v.length - 1.0001, Math.max(0, t * (v.length - 1))), i = Math.floor(f), u = f - i;
+      return lerp(v[i], v[i + 1], u * u * (3 - 2 * u));
+    };
+    const widthToH = (w) => Math.max(2.7, Math.min(6.4, 2.0 + 0.58 * w));
+    const wAt = (t) => along(p.w, t), hAt = (t) => (p.h !== undefined ? along(p.h, t) : widthToH(wAt(t)));
+    const hw = wAt(0) / 2;   // 途中で通る広間（名前の点）の、入れ替える前の仮の幅
     const list = P.map(([x, z], i) => {
-      if (i === 0 && typeof first === 'string') return getNode(first, hw, p.h);
-      if (i === P.length - 1 && typeof last === 'string') return getNode(last, hw, p.h);
-      // 幅と天井は、場所ごとに少し変える（同じ太さの管にならないように）
-      const k = 0.85 + 0.4 * fbm(x * 0.11, z * 0.11, seed + 771);
-      const s = { x, z, hw: hw * k, h: p.h * (0.9 + 0.25 * fbm(x * 0.09 + 40, z * 0.09, seed + 773)), y: 0, fixed: false, adj: [], node: null, pid: p.id, open: 0 };
+      const t = i / (P.length - 1);
+      if (i === 0 && typeof first === 'string') return getNode(first, wAt(0) / 2, hAt(0));
+      if (i === P.length - 1 && typeof last === 'string') return getNode(last, wAt(1) / 2, hAt(1));
+      // 幅と天井は、場所ごとにも変える（同じ太さの管にならないように）：ゆるい揺れ（0.78〜1.3 倍）と、ところどころのふくらみ（〜1.7 倍）・くびれ
+      const n1 = fbm(x * 0.11, z * 0.11, seed + 771), n2 = fbm(x * 0.045 + 17, z * 0.045, seed + 775);
+      const k = (0.78 + 0.52 * n1) * (1 + 0.7 * smooth(0.62, 0.8, n2)) * (1 - 0.14 * smooth(0.36, 0.22, n2));
+      const s = { x, z, hw: Math.max(0.92, (wAt(t) / 2) * k), h: Math.max(2.6, hAt(t) * (0.88 + 0.3 * fbm(x * 0.09 + 40, z * 0.09, seed + 773)) * (1 + 0.25 * smooth(0.62, 0.8, n2))), y: 0, fixed: false, adj: [], node: null, pid: p.id, open: 0 };
       samples.push(s);
       return s;
     });
@@ -185,7 +199,7 @@ export function createCavePlan(seed) {
       for (let i = 1; i < list.length - 1; i++) { const d = Math.hypot(list[i].x - n.x, list[i].z - n.z); if (d < bd) { bd = d; b = i; } }
       const old = list[b];
       samples.splice(samples.indexOf(old), 1);
-      list[b] = getNode(q, hw, p.h);
+      { const tq = b / (list.length - 1); list[b] = getNode(q, wAt(tq) / 2, hAt(tq)); }
     });
     for (let i = 0; i < list.length - 1; i++) link(list[i], list[i + 1]);
     return { ...p, samples: list };
@@ -342,7 +356,19 @@ export function createCavePlan(seed) {
       seen.add(key);
       segs.push({ ax: s.x, az: s.z, bx: t.x, bz: t.z, ra: s.hw, rb: t.hw, ya: s.y, yb: t.y, ha: s.h, hb: t.h, da: s.dist, db: t.dist, open: 0 });
     }
-    for (const s of samples) if (s.room) segs.push({ ax: s.x, az: s.z, bx: s.x, bz: s.z, ra: s.room.r, rb: s.room.r, ya: s.y, yb: s.y, ha: s.room.h, hb: s.room.h, da: s.dist, db: s.dist, open: 0, room: true });
+    // 広間：床は平らな円にしない。広間の中を通る通り道の区切り（と真ん中）の床の高さを、近い物ほど強く混ぜた高さにする
+    // （利用者の指示 2026-11-16：洞窟内に登れない坂がある。前は、広間の床＝真ん中の高さの平らな円で、通り道が広間に入るふちで
+    //   床が 2〜3 m 一気に変わり、最大 48 度の坂になっていた）
+    for (const s of samples) {
+      if (!s.room) continue;
+      const mem = samples.filter((t) => !t.fixed && Math.hypot(t.x - s.x, t.z - s.z) < s.room.r + 2.5);
+      const floorAt = (x, z) => {
+        let a = 0, w = 0;
+        for (const t of mem) { const q = 1 / ((t.x - x) ** 2 + (t.z - z) ** 2 + 6); a += t.y * q; w += q; }
+        return w > 0 ? a / w : s.y;
+      };
+      segs.push({ ax: s.x, az: s.z, bx: s.x, bz: s.z, ra: s.room.r, rb: s.room.r, ya: s.y, yb: s.y, ha: s.room.h, hb: s.room.h, da: s.dist, db: s.dist, open: 0, room: true, floorAt });
+    }
     for (const m of mouths) segs.push({ ax: m.from[0], az: m.from[1], bx: m.x, bz: m.z, ra: m.hw + 0.4, rb: m.hw, ya: m.yFrom, yb: m.y, ha: 30, hb: 30, da: 0, db: 0, open: 1 });
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     for (const g of segs) { const r = Math.max(g.ra, g.rb) + 4; x0 = Math.min(x0, g.ax - r, g.bx - r); x1 = Math.max(x1, g.ax + r, g.bx + r); z0 = Math.min(z0, g.az - r, g.bz - r); z1 = Math.max(z1, g.az + r, g.bz + r); }
@@ -376,7 +402,7 @@ export function createCavePlan(seed) {
         // 床・天井は、近い部品ほど強く混ぜる（中は 1、壁の外 2.5 m で 0）
         if (g.open) continue;   // 切り通しは、壁からの距離だけに使う
         const w = smooth(2.5, -0.6, e) ** 2 * (g.room ? 3 : 1) + 1e-6;
-        wSum += w; f += lerp(g.ya, g.yb, t) * w; sd += lerp(g.da, g.db, t) * w; rr += r * w;
+        wSum += w; f += (g.floorAt ? g.floorAt(x, z) : lerp(g.ya, g.yb, t)) * w; sd += lerp(g.da, g.db, t) * w; rr += r * w;
         hd += lerp(g.ha, g.hb, t) * w; hw += w;
       }
       if (d > 2.9) continue;

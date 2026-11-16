@@ -75,6 +75,7 @@ export function createDoors(app, list, { material }) {
         }
       }
       d.open = !d.open;
+      d.wait = by ? 0.16 : 0;   // 人が開け閉めしたときは、手が届くまで（扉を押す動きの 0.16 秒）待ってから動き出す（通れる・見通せるのはすぐ切り替わる）
       apply(d);
       for (const fn of listeners) fn({ door: d, open: d.open, by });
       return true;
@@ -92,6 +93,7 @@ export function createDoors(app, list, { material }) {
       for (let k = 0; k < doors.length; k++) {
         const d = doors[k], goal = d.open ? OPEN_ANGLE : 0;
         if (d.angle === goal) continue;
+        if (d.wait > 0) { d.wait -= dt; continue; }
         d.angle += Math.max(-SPEED * dt, Math.min(SPEED * dt, goal - d.angle));
         write(k); dirty = true;
       }
