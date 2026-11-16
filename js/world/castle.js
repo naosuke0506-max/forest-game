@@ -280,5 +280,5 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
       m.update();
     });
   }
-  return { houses, triangles: tris, footprints, hides, covers, insideHouse, furniture, doors };
+  return { houses, triangles: tris, footprints, hides, covers, insideHouse, furniture, doors, materials };   // materials：村の質感（棺桶 render/coffin.js が木の質感を使う）
 }

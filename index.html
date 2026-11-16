@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-15.1';</script>
+<script>window.__BUILD = '2026-11-16.1';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -38,6 +38,11 @@
 <link rel="modulepreload" href="./js/world/villages.js">
 <link rel="modulepreload" href="./js/world/cave.js">
 <link rel="modulepreload" href="./js/world/doors.js">
+<link rel="modulepreload" href="./js/render/lantern.js">
+<link rel="modulepreload" href="./js/render/intro.js">
+<link rel="modulepreload" href="./js/render/coffin.js">
+<link rel="modulepreload" href="./js/ui/matching.js">
+<link rel="modulepreload" href="./js/core/resume.js">
 <link rel="modulepreload" href="./js/world/cave-plan.js">
 <link rel="modulepreload" href="./js/world/water.js">
 <link rel="modulepreload" href="./js/game/swim.js">
@@ -217,6 +222,8 @@
   <button id="btn-use" class="act-btn use" type="button" hidden>拾得</button>
   <!-- 家の扉の近くで出る：開ける・閉める -->
   <button id="btn-door" class="act-btn door" type="button" hidden>開扉</button>
+  <!-- 角燈（ランタン）：腰に下げて灯す・外す（いつでも。PC は N） -->
+  <button id="btn-lantern" class="act-btn lantern" type="button">點燈</button>
   <!-- ベッド・タンスの近くで出る：探す -->
   <button id="btn-search" class="act-btn search" type="button" hidden>搜索</button>
   <!-- 楯攻撃（楯を持つキャラだけ。楯の技の名前が出る：鳶形楯は楯擊） -->
@@ -258,12 +265,14 @@
 <section id="result" class="panel result" hidden>
   <h2 class="result-head"></h2>
   <ol class="result-list"></ol>
-  <button id="again" class="start" type="button">再戰</button>
+  <button id="again" class="start" type="button">再戰<small class="sub">大廳へ戻る</small></button>
 </section>
 
 <!-- 設定 -->
 <section id="settings" class="panel settings" hidden>
   <h2>設定</h2>
+  <!-- 試合・教練の間だけ出る：大廳へ戻る（見つけやすいよう、設定のいちばん上に置く） -->
+  <button id="settings-leave" class="leave-btn" type="button" data-ruby hidden>退出<small class="sub">試合・教練をやめて、大廳へ戻る</small></button>
   <div class="set-row">
     <span data-ruby>性能表示<small class="set-note">左上に動きの速さ（fps）などの数字を出す</small></span>
     <div class="seg" data-key="stats">
@@ -334,6 +343,31 @@
 </section>
 <!-- 「入」を押したとき：一瞬暗くして大廳へ -->
 <div id="fade" class="fade"></div>
+<!-- 開戰の前：相手を探す画面（js/ui/matching.js）。相手が揃うと、マップの紹介 → 棺桶から出る、と進む -->
+<section id="matching" class="matching" hidden>
+  <div class="mt-box">
+    <h2 class="mt-title" data-ruby>索敵<small class="sub">相手を探す</small></h2>
+    <p class="mt-where"></p>
+    <ol class="mt-slots"></ol>
+    <p class="mt-state"></p>
+    <button id="matching-back" class="mt-back" type="button" data-ruby>歸<small class="sub">やめて戻る</small></button>
+  </div>
+</section>
+<!-- マップの紹介（js/render/intro.js）：戦場の特徴のある所を順に映す。名前と短い説明、飛ばすボタン -->
+<section id="intro" class="intro" hidden>
+  <div class="in-bars"></div>
+  <div class="in-cap"><h2 class="in-name"></h2><p class="in-note"></p></div>
+  <button id="intro-skip" class="in-skip" type="button">略<small class="sub">飛ばす</small></button>
+  <div class="in-fade"></div>
+</section>
+<!-- 棺桶の中（js/render/coffin.js）：暗い中から始まり、蓋を開けて出ると動かせる -->
+<section id="coffin" class="coffin" hidden>
+  <div class="cf-dark"></div>
+  <p class="cf-hint">棺の中にいる</p>
+  <button id="coffin-open" class="cf-open" type="button" data-ruby>開棺<small class="sub">蓋を開けて出る</small></button>
+</section>
+<!-- 試合・教練から大廳へ戻るとき：暗くして読み込み直す（js/core/resume.js） -->
+<div id="returning" class="returning" hidden><p>大廳へ戻る…</p></div>
 
 <!-- 大廳（後ろに 3D の広間と、選んだ人物が立つ）と、試合の前に選ぶ画面：戰鬥 → 戰場 → 人物・武器 → 兵器・變異 → 開戰 -->
 <section id="lobby" class="lobby" hidden>

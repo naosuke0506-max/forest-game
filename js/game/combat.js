@@ -231,6 +231,13 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   /** 致命の一撃・暗殺：一撃で倒す */
   function lethal(target, attacker, how) {
     if (!target.alive || match.state !== 'running') return;
+    // 教練の自分（deathless）：倒れない。体力を戻し、「やられた」ことだけ知らせる（暗殺避けの教練でやり直せるように）
+    if (target.deathless) {
+      target.stats.hp = target.stats.maxHp;
+      target.hitFlash = 0.25;
+      emit('spared', { attacker, target, how });
+      return;
+    }
     const amount = target.stats.hp;
     target.stats.hp = 0;
     target.hitFlash = 0.25;

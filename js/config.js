@@ -41,6 +41,8 @@ export const CONFIG = {
   debug: params.get('debug') === '1',                          // 確認用のボタンを出す
   view: params.get('view') === 'third' ? 'third' : 'first',      // 視点（遊ぶときは一人称だけ。三人称は確認用）
   phaseDuration: Number(params.get('phase')) || null,           // フェーズの長さ（秒）を短くして確かめる
+  // 開戰の後の流れ（相手を探す画面 → マップの紹介 → 棺桶から出る）。?intro=0 で全部飛ばしてすぐ始める、?intro=quick で相手を探す待ち時間だけ短く（確かめ用）
+  intro: params.get('intro') === '0' ? 'off' : params.get('intro') === 'quick' ? 'quick' : 'on',
 
   // 同じ種からは必ず同じ森ができる（将来のマルチプレイで全員が同じ地形を共有するため）
   seed: Number(params.get('seed')) || 20261031,

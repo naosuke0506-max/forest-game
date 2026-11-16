@@ -15,6 +15,9 @@ function formatTime(sec) {
 }
 
 /** label：決まった見出し（教練の間。時間は進まないので、残り時間の代わりに出す） */
+// bot の名前の横に付ける札（利用者の指示 2026-11-14：bot だったら bot と書く。相手を探す画面・順位・結果に出す）
+const BOT_TAG = '<small class="bot-tag">bot</small>';
+
 export function createHud(match, me, { label = null } = {}) {
   const phaseName = $('#phase-name'), phaseTime = $('#phase-time'), phaseIcon = $('#phase-icon');
   let shownTime = null;
@@ -50,7 +53,7 @@ export function createHud(match, me, { label = null } = {}) {
     ranking.innerHTML = list.map((f, i) => `
       <li class="${f === me ? 'me' : ''} ${f.alive ? '' : 'out'}">
         <span>${i + 1}</span>
-        <span><i class="dot" style="background:${f.color}"></i>${esc(f.name)}</span>
+        <span><i class="dot" style="background:${f.color}"></i>${esc(f.name)}${f.bot ? BOT_TAG : ''}</span>
         <span class="pts">${f.points}</span>
       </li>`).join('');
   }
@@ -183,7 +186,7 @@ export function createHud(match, me, { label = null } = {}) {
       res.querySelector('.result-head').textContent = winner === me ? L.victory : `${winner.name} ${L.victory}`;
       res.querySelector('.result-list').innerHTML = list.map((f, i) => {
         const tags = [CHARACTERS[f.char]?.name, f === survivor ? L.survivor : (f.alive ? '' : L.out)].filter(Boolean).join('・');
-        return `<li class="${f === me ? 'me' : ''}"><span>${i + 1}</span><span>${esc(f.name)}</span><span>${f.points} ${L.points}</span><span class="why">${esc(tags)}　${L.kills} ${f.kills}</span></li>`;
+        return `<li class="${f === me ? 'me' : ''}"><span>${i + 1}</span><span>${esc(f.name)}${f.bot ? BOT_TAG : ''}</span><span>${f.points} ${L.points}</span><span class="why">${esc(tags)}　${L.kills} ${f.kills}</span></li>`;
       }).join('');
       res.hidden = false;
     },

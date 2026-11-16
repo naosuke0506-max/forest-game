@@ -8,6 +8,7 @@ import { resolveLoadout } from '../game/match.js';
 import { createCodex } from './codex.js';
 import { LESSONS, LESSON_ORDER } from '../game/tutorial.js';
 import { ICONS } from './icons.js';
+import { takeResume } from '../core/resume.js';
 
 // 武器を選ぶ枠：右手（主の武器）・左手（楯）・持替（弓兵の近接武器）
 const SLOTS = [['main', L.main], ['shield', L.shield], ['side', L.side]];
@@ -28,7 +29,7 @@ const BACK = { codex: 'hall', tutorial: 'hall', mode: 'hall', map: 'mode', char:
  * @param {() => void} o.onSettings 大廳の「設定」
  * @param {() => object} o.hall 大廳の 3D（圖鑑で人物の動きを流し、武器を見せる）
  */
-export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = () => {}, onShow = () => {}, onSettings = () => {}, hall = () => null } = {}) {
+export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = () => {}, onShow = () => {}, onSettings = () => {}, onResume = null, hall = () => null } = {}) {
   const title = document.getElementById('title');
   const gate = document.getElementById('gate'), fade = document.getElementById('fade');
   // 題の画面の設定ボタン（題曲の版・音の大きさ）
@@ -48,6 +49,14 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
     setTimeout(() => { gate.hidden = true; }, 900);
   };
   gate.addEventListener('click', openGate);
+  // 試合・教練から戻ってきたとき（core/resume.js）：最初の画面と題の画面を飛ばして、読み込みが済んだら大廳から始める
+  const resume = takeResume();
+  if (resume) {
+    gate.removeEventListener('click', openGate);
+    gate.hidden = true;
+    title.hidden = false;
+    title.classList.add('resuming');   // 題の文字は出さず、「讀込中」だけを出す
+  }
   const enterBtn = document.getElementById('start');
   const lobby = document.getElementById('lobby');
   const head = document.getElementById('lobby-title'), stepEl = document.getElementById('lobby-step');
@@ -199,6 +208,17 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
       startFn = onStart;   // 教練の札からも始める
       enterBtn.disabled = false;
       enterBtn.textContent = L.enter;
+      if (resume) {
+        // 大廳へ戻ってきた：すぐ大廳を出す（曲は、次に画面に触れたときから流れる。iPad は触れるまで音を出せない）
+        onResume?.();
+        onHall();
+        show();
+        title.hidden = true;
+        title.classList.remove('resuming');
+        lobby.hidden = false;
+        go('hall');
+        document.getElementById('returning')?.setAttribute('hidden', '');
+      }
       enterBtn.addEventListener('click', () => {
         if (!gate.hidden) openGate();
         // 「時が動き出す音」を鳴らし、題の文字が大きくなりながら消え、画面が暗くなったところで大廳に切り替えて明ける
@@ -215,14 +235,19 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
           setTimeout(() => fade.classList.remove('on'), 120);
         }, 750);
       }, { once: true });
+      const fightLabel = fightBtn.innerHTML;
       fightBtn.addEventListener('click', async () => {
-        // キャラの模型を読み込む間は、画面を出したまま待つ
+        // 相手を探す画面（ui/matching.js）を経て、試合が始まる。そこで「歸」を押すと、この画面に戻る（onStart が false を返す）
+        if (fightBtn.disabled) return;
         fightBtn.disabled = true;
-        fightBtn.textContent = `${L.loading}…`;
+        let started = false;
         try {
-          await onStart(pick.char, { ...loadouts[pick.char], arms: pick.arms, mutation: pick.mutation, mode: pick.mode, map: pick.map });
-        } finally { lobby.hidden = true; }
-      }, { once: true });
+          started = (await onStart(pick.char, { ...loadouts[pick.char], arms: pick.arms, mutation: pick.mutation, mode: pick.mode, map: pick.map })) !== false;
+        } finally {
+          if (started) lobby.hidden = true;
+          else { fightBtn.disabled = false; fightBtn.innerHTML = fightLabel; }
+        }
+      });
     },
     fail(message) {
       enterBtn.textContent = L.startFail;
