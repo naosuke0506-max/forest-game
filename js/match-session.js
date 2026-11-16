@@ -157,7 +157,10 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 別のエリアに入ったら、左の知らせに出す
   let zoneNow = zones ? zones.zoneAt(me.x, me.z) : null, zoneTimer = 0;
   // ボタン：絵と文字。右手・左手の文字をキャラに合わせる（左手：盾持ちは防御、ほかは強攻撃・持ち替え など）
-  const setBtn = (el, icon, label) => { el.innerHTML = `<span class="ab-icon">${icon}</span><span class="ab-label">${label}</span>`; };
+  // ボタンの中身：絵・名前の札・（あれば）真ん中の秒。見た目は css/style.css の .act-btn（金の輪・色の面・札）
+  const setBtn = (el, icon, label, num = '') => { el.innerHTML = `<span class="ab-icon">${icon}</span><span class="ab-label">${label}</span>${num !== '' ? `<span class="ab-num">${num}</span>` : ''}`; };
+  // 待ち時間の影（時計回りに減る。--cd：残りの割合 0〜1）。1/50 刻みで、変わったときだけ書く
+  const setCd = (el, k) => { const v = Math.round(Math.max(0, Math.min(1, k)) * 50) / 50; if (el._cd !== v) { el._cd = v; el.style.setProperty('--cd', v); } };
   const leftBtn = document.getElementById('btn-left');
   // 左手ボタンの無いキャラ（劍騎士）は、ボタンを出さない
   leftBtn.hidden = !me.left;
@@ -171,10 +174,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   let sprintShown = '';
   const showSprint = () => {
     const sec = sprint.state === 'on' || sprint.state === 'cool' ? Math.ceil(sprint.left) : 0;
+    setCd(sprintBtn, sprint.state === 'cool' ? sprint.left / SPRINT.cooldown : 0);
     const key = `${sprint.state}${sec}`;
     if (key === sprintShown) return;
     sprintShown = key;
-    setBtn(sprintBtn, ICONS.sprint, sec ? `${L.sprint}<small>${sec}</small>` : L.sprint);
+    setBtn(sprintBtn, ICONS.sprint, L.sprint, sec || '');
     for (const c of ['armed', 'on', 'cool']) sprintBtn.classList.toggle(c, sprint.state === c);
   };
   const endSprint = () => { if (sprint.state === 'on' || sprint.state === 'armed') { sprint.state = 'cool'; sprint.left = SPRINT.cooldown; } };
@@ -189,10 +193,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (!mySkill) return;
     const on = me.skillLeft > 0, cool = me.skillCool > 0;
     const sec = on ? Math.ceil(me.skillLeft) : cool ? Math.ceil(me.skillCool) : 0;
+    setCd(skillBtn, cool && !on && mySkill.cd ? me.skillCool / mySkill.cd : 0);
     const key = `${on}${cool}${sec}`;
     if (key === skillShown) return;
     skillShown = key;
-    setBtn(skillBtn, ICONS.skill, sec ? `${mySkill.name}<small>${sec}</small>` : mySkill.name);
+    setBtn(skillBtn, ICONS.skill, mySkill.name, sec || '');
     skillBtn.classList.toggle('on', on);
     skillBtn.classList.toggle('cool', cool);
   };

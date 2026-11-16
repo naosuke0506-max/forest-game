@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-16.1';</script>
+<script>window.__BUILD = '2026-11-16.2';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -184,6 +184,9 @@
   <div class="hud-top">
     <div class="phase-row"><span id="phase-icon" class="phase-icon"></span><span id="phase-name" class="phase-name"></span></div>
     <div id="phase-time" class="phase-time"></div>
+    <!-- 刻の残りの線と、生き残りの人数（教練では出さない） -->
+    <div class="phase-bar"><i id="phase-fill"></i></div>
+    <div class="alive"><small>殘</small><b id="alive-count"></b></div>
   </div>
   <!-- 左上：ミニマップと設定 -->
   <canvas id="minimap" class="minimap"></canvas>
@@ -205,8 +208,12 @@
   <div id="stats" class="stats"></div>
   <!-- 下：自分の体力とスタミナ -->
   <div class="vitals">
-    <div class="bar hp"><i id="hp-fill"></i><span id="hp-text"></span></div>
-    <div class="bar st"><i id="st-fill"></i></div>
+    <div id="vt-crest" class="vt-crest"></div>
+    <div class="vt-body">
+      <div class="vt-head"><span id="vt-name" class="vt-name"></span><span id="hp-text" class="vt-hp"></span></div>
+      <div class="bar hp"><i id="hp-trail" class="trail"></i><i id="hp-fill"></i></div>
+      <div class="bar st"><i id="st-fill"></i></div>
+    </div>
   </div>
   <!-- 右下：操作ボタン。右手（攻撃）・左手（盾で防御・強攻撃・持ち替え）・回避 -->
   <button id="btn-left" class="act-btn left" type="button">左手</button>

@@ -4,7 +4,7 @@ import { L } from './labels.js';
 import * as pc from 'playcanvas';
 import { CHARACTERS, PHASES } from '../game/data.js';
 import { TIMES } from '../world/time-of-day.js';
-import { timeIcon } from './icons.js';
+import { timeIcon, weaponIconOf } from './icons.js';
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -94,6 +94,13 @@ export function createHud(match, me, { label = null } = {}) {
 
   // ===== 戦闘の表示 =====
   const hpFill = $('#hp-fill'), hpText = $('#hp-text'), stFill = $('#st-fill');
+  // 体力の板：紋章（持っている武器の絵）・人物の名前・受けた分が遅れて減る棒（見た目は css の .vitals）
+  const hpTrail = $('#hp-trail'), vitalsEl = $('.vitals'), crest = $('#vt-crest'), nameEl = $('#vt-name');
+  if (nameEl) nameEl.textContent = CHARACTERS[me.char]?.name || '';
+  let crestOf = null, hpShown = -1, stShown = -1, lowShown = null;
+  // 上の飾り板：刻の残りの線と、生き残りの人数
+  const phaseFill = $('#phase-fill'), aliveEl = $('#alive-count');
+  let phaseOf = -1, phaseMax = 1, fillShown = -1, aliveShown = -1;
   const tagsLayer = $('#tags'), hurtEl = $('#hurt');
   const tagEls = new Map();
   const screenPos = new pc.Vec3(), worldPos = new pc.Vec3();
@@ -111,9 +118,18 @@ export function createHud(match, me, { label = null } = {}) {
     addFeed,
     /** 自分の体力とスタミナ */
     updateVitals(f) {
-      hpFill.style.width = `${(100 * f.stats.hp) / f.stats.maxHp}%`;
-      hpText.textContent = `${Math.ceil(f.stats.hp)} / ${f.stats.maxHp}`;
-      stFill.style.width = `${(100 * f.stamina) / f.stats.maxStamina}%`;
+      // 変わったときだけ書き換える（毎フレーム同じ値を書かない）
+      const hp = Math.max(0, Math.round((1000 * f.stats.hp) / f.stats.maxHp) / 10), st = Math.max(0, Math.round((200 * f.stamina) / f.stats.maxStamina) / 2);
+      if (hp !== hpShown) {
+        hpShown = hp;
+        hpFill.style.width = `${hp}%`;
+        if (hpTrail) hpTrail.style.width = `${hp}%`;   // 淡い金の棒：css で遅れて減る
+        hpText.textContent = `${Math.ceil(f.stats.hp)} / ${f.stats.maxHp}`;
+      }
+      if (st !== stShown) { stShown = st; stFill.style.width = `${st}%`; }
+      const low = f.alive && f.stats.hp < f.stats.maxHp * 0.3;
+      if (low !== lowShown) { lowShown = low; vitalsEl?.classList.toggle('low', low); }
+      if (crest && crestOf !== f.weapon) { crestOf = f.weapon; crest.innerHTML = weaponIconOf(f.weapon); }
       if (hurtTimer > 0) { hurtTimer -= 1 / 60; if (hurtTimer <= 0) hurtEl.style.opacity = 0; }
     },
     /** ほかの人の頭上に、名前と体力（近くて画面に入っている人だけ） */
@@ -168,6 +184,14 @@ export function createHud(match, me, { label = null } = {}) {
       } else {
         phaseTime.textContent = formatTime(match.timeLeft);
         phaseTime.classList.remove('overtime');
+      }
+      // 刻の残りの線（その刻で初めに見た残り時間を満タンとする）と、生き残りの人数
+      if (!label) {
+        if (match.phase !== phaseOf) { phaseOf = match.phase; phaseMax = Math.max(1, match.timeLeft); }
+        const fill = match.overtime ? 100 : Math.max(0, Math.min(100, Math.round((100 * match.timeLeft) / phaseMax)));
+        if (fill !== fillShown && phaseFill) { fillShown = fill; phaseFill.style.width = `${fill}%`; }
+        const alive = match.fighters.reduce((n, f) => n + (f.alive ? 1 : 0), 0);
+        if (alive !== aliveShown && aliveEl) { aliveShown = alive; aliveEl.textContent = alive; }
       }
       renderRanking();
       // 中央の知らせ

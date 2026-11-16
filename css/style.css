@@ -16,6 +16,8 @@
   --sans: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif;
   --mono: ui-monospace, Menlo, monospace;
   --mm: clamp(120px, 20vmin, 180px);    /* ミニマップの大きさ */
+  /* 金の輪（試合の画面のボタン・紋章）：ぐるりと明るい所と暗い所がある、磨いた金属の見え方 */
+  --gold-ring: conic-gradient(from 215deg, #6d5524, #f6e6ad 12%, #c9a24c 24%, #7a5f28 38%, #e9cf85 52%, #fff3c4 60%, #b8923f 72%, #5d481d 86%, #6d5524);
   --safe-l: env(safe-area-inset-left, 0px);
   --safe-r: env(safe-area-inset-right, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
@@ -66,11 +68,11 @@ canvas#app {
   height: var(--stick-size, 140px);
   margin: calc(var(--stick-size, 140px) / -2) 0 0 calc(var(--stick-size, 140px) / -2);
   border-radius: 50%;
-  border: 2px solid rgba(217, 180, 95, .4);
-  background: radial-gradient(circle, rgba(0, 0, 0, .05) 40%, rgba(0, 0, 0, .3));
-  box-shadow: inset 0 0 0 6px rgba(0, 0, 0, .15);
+  /* 金の細い輪を二重に（試合の画面のボタンと同じ作り。2026-11-16） */
+  background: radial-gradient(circle, rgba(0, 0, 0, .04) 40%, rgba(0, 0, 0, .34));
+  box-shadow: inset 0 0 0 2px rgba(217, 180, 95, .6), inset 0 0 0 5px rgba(0, 0, 0, .32), inset 0 0 0 6px rgba(217, 180, 95, .22), 0 0 0 1px rgba(0, 0, 0, .5);
   pointer-events: none;
-  opacity: .6;
+  opacity: .62;
   transition: opacity .15s;
 }
 .stick.active { opacity: 1; }
@@ -82,11 +84,13 @@ canvas#app {
   height: 42%;
   margin: -21% 0 0 -21%;
   border-radius: 50%;
-  background: radial-gradient(circle at 38% 32%, rgba(255, 244, 214, .7), rgba(150, 130, 90, .5));
-  border: 1px solid rgba(255, 240, 200, .5);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, .4);
+  background:
+    radial-gradient(ellipse 80% 48% at 50% 14%, rgba(255, 255, 255, .5), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(circle at 50% 40%, #cdbb90, #7c6c4a 70%, #3a3020);
+  box-shadow: 0 0 0 1.5px rgba(10, 8, 5, .8), 0 0 0 3.5px rgba(217, 180, 95, .8), 0 0 0 5px rgba(10, 8, 5, .7), 0 5px 10px rgba(0, 0, 0, .45);
   will-change: transform;
 }
+
 
 /* 表示 */
 #hud { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
@@ -396,26 +400,35 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 }
 
 /* ===== 試合の画面表示 ===== */
-/* 上の真ん中：時間帯の絵・フェーズの名前・残り時間（暗い帯に金の線） */
+/* 上の真ん中：刻の飾り板（時間帯の絵・刻の名前・残り時間・刻の残りの線）と、生き残りの人数（2026-11-16 に作り直した） */
 .hud-top {
   position: absolute;
   left: 50%; transform: translateX(-50%);
-  top: calc(6px + var(--safe-t));
-  min-width: 220px;
-  padding: 4px 34px 6px;
+  top: var(--safe-t);
+  min-width: 250px;
+  padding: 6px 56px 12px;
   text-align: center;
-  background: linear-gradient(90deg, transparent, rgba(10, 8, 6, .62) 22%, rgba(10, 8, 6, .62) 78%, transparent);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 60' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%231f1a12' stop-opacity='.95'/%3E%3Cstop offset='1' stop-color='%230a0806' stop-opacity='.9'/%3E%3C/linearGradient%3E%3ClinearGradient id='e' x1='0' y1='0' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%237a5f28'/%3E%3Cstop offset='.5' stop-color='%23f3dc9a'/%3E%3Cstop offset='1' stop-color='%237a5f28'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 0H200L187 60H13Z' fill='url(%23g)'/%3E%3Cpath d='M0 .6 13 59.4H187L200 .6' fill='none' stroke='url(%23e)' stroke-width='1.5' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M7 4 17 54H183L193 4' fill='none' stroke='%23d9b45f' stroke-opacity='.22' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .45));
   text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
-}
-.hud-top::after {
-  content: ''; position: absolute; left: 18%; right: 18%; bottom: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--gold), transparent);
 }
 .phase-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
 .phase-icon { width: 18px; height: 18px; color: var(--gold-hi); filter: drop-shadow(0 0 4px rgba(255, 210, 120, .5)); }
-.phase-name { font-family: var(--serif); font-size: clamp(15px, 2.1vmin, 21px); font-weight: 600; letter-spacing: .14em; }
-.phase-time { font: 600 clamp(22px, 3.2vmin, 32px)/1.15 var(--serif); letter-spacing: .08em; font-variant-numeric: tabular-nums; color: #fff4d6; }
+.phase-name { font-family: var(--serif); font-size: clamp(14px, 2vmin, 19px); font-weight: 600; letter-spacing: .16em; color: var(--gold-hi); white-space: nowrap; }
+.phase-time { font: 600 clamp(24px, 3.5vmin, 34px)/1.1 var(--serif); letter-spacing: .08em; font-variant-numeric: tabular-nums; color: #fff4d6; white-space: nowrap; }
 .phase-time.overtime { color: #ff9a7a; }
+/* 刻の残りの線（右から減る） */
+.phase-bar { position: relative; width: min(170px, 80%); height: 3px; margin: 4px auto 0; background: rgba(0, 0, 0, .65); box-shadow: 0 0 0 1px rgba(217, 180, 95, .3); overflow: hidden; }
+.phase-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: linear-gradient(90deg, #8c7034, #f3dc9a); transition: width .5s linear; }
+.overtime ~ .phase-bar i { background: #ff9a7a; }
+/* 生き残りの人数：飾り板の右の菱形 */
+.alive { position: absolute; left: calc(100% + 2px); top: 6px; width: 46px; height: 46px; display: grid; place-items: center; }
+.alive::before { content: ''; position: absolute; inset: 5px; transform: rotate(45deg);
+  background: linear-gradient(135deg, #2a2219, #0d0b08); box-shadow: 0 0 0 1px #0b0906, 0 0 0 2.5px #b8923f, 0 0 0 3.5px #0b0906, 0 4px 8px rgba(0, 0, 0, .5); }
+.alive small, .alive b { position: relative; grid-area: 1 / 1; font-family: var(--serif); line-height: 1; }
+.alive small { transform: translateY(-11px); font-size: 10px; color: var(--gold); letter-spacing: 0; }
+.alive b { transform: translateY(5px); font-size: 19px; color: #fff4d6; font-variant-numeric: tabular-nums; }
+#hud.tutoring .alive, #hud.tutoring .phase-bar { display: none; }
 
 /* 左上のミニマップ（丸い地図）。青銅の縁 */
 .minimap {
@@ -429,48 +442,57 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
   pointer-events: auto;     /* タップで大きな地図を開く */
   cursor: pointer;
 }
-.icon-btn.view-btn { left: calc(28px + var(--mm) + var(--safe-l)); top: calc(62px + var(--safe-t)); padding: 9px; }   /* 設定のすぐ下 */
+.icon-btn.view-btn { left: calc(30px + var(--mm) + var(--safe-l)); top: calc(70px + var(--safe-t)); padding: 9px; }   /* 設定のすぐ下 */
 .icon-btn.view-btn svg { width: 100%; height: 100%; }
 .icon-btn {
   position: absolute;
-  left: calc(28px + var(--mm) + var(--safe-l));
-  top: calc(12px + var(--safe-t));
+  left: calc(30px + var(--mm) + var(--safe-l));
+  top: calc(14px + var(--safe-t));
   width: 44px; height: 44px;           /* 指で押しやすい大きさ */
   padding: 10px;
   font-size: 22px; line-height: 1;
   color: var(--gold-hi);
-  background: radial-gradient(circle at 40% 30%, rgba(60, 50, 34, .9), rgba(16, 13, 10, .9));
-  border: 1px solid var(--edge);
+  /* 黒鉄の丸い札に、金の輪（試合の画面のボタンと同じ作り） */
+  background:
+    radial-gradient(ellipse 80% 48% at 50% 14%, rgba(255, 255, 255, .22), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(circle at 50% 40%, #4c402c, #1e1810 70%, #0c0a07);
+  border: 0;
   border-radius: 50%;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, .45);
+  box-shadow: 0 0 0 1.5px #0b0906, 0 0 0 3.5px #b8923f, 0 0 0 5px #0b0906, 0 5px 10px rgba(0, 0, 0, .5), inset 0 0 8px rgba(0, 0, 0, .5);
   pointer-events: auto;
   cursor: pointer;
   box-sizing: border-box;
 }
-/* 右上：ポイントのランキング */
+.icon-btn:active { filter: brightness(1.35); transform: scale(.94); }
+/* 右上：得点の順位（黒鉄の板。上に金の線。自分の段は金の帯。2026-11-16 に作り直した） */
 .ranking {
   position: absolute;
-  right: calc(10px + var(--safe-r));
-  top: calc(10px + var(--safe-t));
-  margin: 0; padding: 6px 8px;
-  min-width: min(240px, 46vw);
+  right: calc(12px + var(--safe-r));
+  top: calc(12px + var(--safe-t));
+  margin: 0; padding: 6px 6px 5px;
+  min-width: min(236px, 44vw);
   list-style: none;
-  background: var(--panel-bg);
+  background: linear-gradient(180deg, rgba(30, 25, 18, .92), rgba(10, 8, 6, .88));
   border: 1px solid var(--edge);
-  border-radius: 6px;
-  box-shadow: var(--panel-shadow);
+  border-radius: 3px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(0, 0, 0, .6), inset 0 0 0 3px rgba(217, 180, 95, .07);
   font-size: clamp(13px, 1.7vmin, 16px);
 }
-.ranking li { display: grid; grid-template-columns: 1.7em 1fr auto; gap: 6px; padding: 3px 2px; align-items: center; }
+.ranking::before { content: ''; position: absolute; left: 12%; right: 12%; top: -2px; height: 3px; background: linear-gradient(90deg, rgba(243, 220, 154, 0), var(--gold-hi), rgba(243, 220, 154, 0)); }
+.ranking li { display: grid; grid-template-columns: 1.9em 1fr auto; gap: 6px; padding: 4px 8px 4px 3px; align-items: center; border-radius: 2px; }
 .ranking li + li { border-top: 1px solid rgba(217, 180, 95, .12); }
+/* 順位の数字：菱形の札 */
 .ranking li > span:first-child {
-  display: inline-grid; place-items: center; width: 1.45em; height: 1.45em; border-radius: 50%;
-  font: 700 .8em var(--serif); color: var(--gold-hi); border: 1px solid var(--edge); background: rgba(0, 0, 0, .35);
+  display: inline-grid; place-items: center; width: 1.7em; height: 1.7em;
+  font: 700 .78em var(--serif); color: #1a140a;
+  background: linear-gradient(135deg, #f3dc9a, #a8853a);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 .ranking li .dot { display: inline-block; width: .65em; height: .65em; border-radius: 50%; margin-right: .45em; box-shadow: 0 0 0 1px rgba(0, 0, 0, .6); }
-.ranking li .pts { font-family: var(--mono); font-weight: 700; }
-.ranking li.me { color: var(--gold-hi); }
+.ranking li .pts { font: 700 1.05em var(--serif); font-variant-numeric: tabular-nums; color: #fff4d6; }
+.ranking li.me { color: var(--gold-hi); background: linear-gradient(90deg, rgba(217, 180, 95, .24), rgba(217, 180, 95, 0)); box-shadow: inset 2px 0 0 var(--gold-hi); }
 .ranking li.out { opacity: .45; text-decoration: line-through; }
+.ranking li.out > span:first-child { background: #6c6456; }
 
 /* 左：知らせ（移動スティックの上） */
 /* 教練の間（ui/hud.js）：順位と左下の知らせは隠す */
@@ -491,23 +513,28 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 }
 @keyframes feedOut { 0% { opacity: 0; transform: translateX(-8px); } 6% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }
 
-/* 画面中央の大きな知らせ */
+/* 画面中央の大きな知らせ（題の文字の左右に、金の細い線が伸びる） */
 .center-msg {
   position: absolute; left: 0; right: 0; top: 27%;
   text-align: center;
   text-shadow: 0 2px 14px rgba(0, 0, 0, .85);
   animation: cmIn .5s ease-out;
 }
-.cm-title { font-family: var(--serif); font-size: clamp(32px, 6.4vmin, 68px); font-weight: 600; letter-spacing: .2em; text-indent: .2em; color: #fff3d2; }
-.cm-sub { display: inline-block; margin-top: 10px; padding: 4px 24px; font-family: var(--serif); font-size: clamp(14px, 2.2vmin, 20px); color: #e9dfc4; letter-spacing: .1em;
-  border-top: 1px solid rgba(217, 180, 95, .5); }
+.cm-title { position: relative; display: table; margin: 0 auto; font-family: var(--serif); font-size: clamp(32px, 6.4vmin, 68px); font-weight: 600; letter-spacing: .2em; text-indent: .2em; color: #fff3d2; white-space: nowrap; }
+.cm-title::before, .cm-title::after { content: ''; position: absolute; top: 54%; width: min(15vw, 150px); height: 2px; box-shadow: 0 1px 4px rgba(0, 0, 0, .6); }
+.cm-title::before { right: 100%; margin-right: 14px; background: linear-gradient(90deg, rgba(243, 220, 154, 0), var(--gold-hi)); }
+.cm-title::after { left: 100%; margin-left: 14px; background: linear-gradient(270deg, rgba(243, 220, 154, 0), var(--gold-hi)); }
+.cm-sub { display: inline-block; margin-top: 10px; padding: 5px 26px 6px; font-family: var(--serif); font-size: clamp(14px, 2.2vmin, 20px); color: #f1e7cc; letter-spacing: .1em;
+  background: linear-gradient(90deg, rgba(10, 8, 6, 0), rgba(10, 8, 6, .62) 18%, rgba(10, 8, 6, .62) 82%, rgba(10, 8, 6, 0)); }
+.cm-sub:empty { display: none; }
 @keyframes cmIn { from { opacity: 0; transform: scale(1.06); letter-spacing: .35em; } to { opacity: 1; transform: none; } }
+
 
 /* 性能表示（地図の右） */
 .stats {
   position: absolute;
-  left: calc(28px + var(--mm) + var(--safe-l));
-  top: calc(114px + var(--safe-t));   /* 設定と視點のボタン（上から 12〜106px）の下 */
+  left: calc(26px + var(--mm) + var(--safe-l));
+  top: calc(126px + var(--safe-t));   /* 設定と視點のボタン（上から 14〜114px）の下 */
   font: 12px/1.4 var(--mono);
   color: rgba(255, 255, 255, .7);
   text-shadow: 0 1px 2px rgba(0, 0, 0, .8);
@@ -532,9 +559,15 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
   overflow: auto;
   padding: 18px 20px 20px;
   text-align: center;
-  background: var(--panel-bg);
+  /* 四隅に金の角金具（試合の画面の部品と同じ作り。2026-11-16） */
+  background:
+    linear-gradient(var(--gold), var(--gold)) left 7px top 7px / 22px 2px no-repeat, linear-gradient(var(--gold), var(--gold)) left 7px top 7px / 2px 22px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) right 7px top 7px / 22px 2px no-repeat, linear-gradient(var(--gold), var(--gold)) right 7px top 7px / 2px 22px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) left 7px bottom 7px / 22px 2px no-repeat, linear-gradient(var(--gold), var(--gold)) left 7px bottom 7px / 2px 22px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) right 7px bottom 7px / 22px 2px no-repeat, linear-gradient(var(--gold), var(--gold)) right 7px bottom 7px / 2px 22px no-repeat,
+    var(--panel-bg);
   border: 1px solid var(--edge);
-  border-radius: 8px;
+  border-radius: 4px;
   box-shadow: var(--panel-shadow);
   box-sizing: border-box;
   pointer-events: auto;
@@ -544,13 +577,16 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .reward-sub { margin: 4px 0 14px; color: var(--dim); font-family: var(--serif); letter-spacing: .1em; }
 .reward-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .reward-card {
-  min-height: 116px; padding: 14px 10px;
+  position: relative; min-height: 124px; padding: 18px 10px 14px;
   font: inherit; color: var(--ink);
-  background: linear-gradient(180deg, rgba(56, 46, 30, .85), rgba(24, 20, 14, .85));
-  border: 1px solid var(--edge); border-radius: 6px;
-  box-shadow: inset 0 0 0 3px rgba(0, 0, 0, .35);
+  background:
+    radial-gradient(ellipse 90% 60% at 50% 0, rgba(243, 220, 154, .16), rgba(243, 220, 154, 0) 70%),
+    linear-gradient(180deg, rgba(58, 48, 32, .92), rgba(22, 18, 12, .92));
+  border: 1px solid var(--edge); border-radius: 3px;
+  box-shadow: inset 0 0 0 3px rgba(0, 0, 0, .4), inset 0 0 0 4px rgba(217, 180, 95, .18), 0 6px 14px rgba(0, 0, 0, .4);
   cursor: pointer;
 }
+.reward-card::before { content: ''; position: absolute; left: 50%; top: -6px; width: 10px; height: 10px; transform: translateX(-50%) rotate(45deg); background: linear-gradient(135deg, #f3dc9a, #a8853a); box-shadow: 0 0 0 1.5px #0b0906; }
 .reward-card:active { filter: brightness(1.3); }
 .reward-card .rc-name { font-family: var(--serif); font-size: clamp(16px, 2.4vmin, 21px); font-weight: 600; letter-spacing: .08em; }
 .reward-card .rc-val { margin-top: 10px; font: 700 clamp(22px, 3.6vmin, 32px) var(--mono); color: var(--gold-hi); }
@@ -558,8 +594,9 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .result-head { font-size: clamp(28px, 5vmin, 50px); }
 .result-list { list-style: none; margin: 0 0 16px; padding: 0; text-align: left; }
 .result-list li { display: grid; grid-template-columns: 2em 1fr auto; gap: 8px; padding: 8px 6px; border-bottom: 1px solid rgba(217, 180, 95, .15); font-size: clamp(14px, 2.2vmin, 18px); }
-.result-list li > span:first-child { font-family: var(--serif); color: var(--gold); font-weight: 700; }
-.result-list li.me { color: var(--gold-hi); }
+.result-list li > span:first-child { display: inline-grid; place-items: center; width: 1.7em; height: 1.7em; font: 700 .8em var(--serif); color: #1a140a;
+  background: linear-gradient(135deg, #f3dc9a, #a8853a); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.result-list li.me { color: var(--gold-hi); background: linear-gradient(90deg, rgba(217, 180, 95, .2), rgba(217, 180, 95, 0)); box-shadow: inset 2px 0 0 var(--gold-hi); }
 .result-list li .why { grid-column: 2 / 4; font-size: 12px; color: var(--dim); }
 .settings { width: min(440px, calc(100vw - 32px)); }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; }
@@ -580,89 +617,166 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .settings .test-btns button:disabled { opacity: .35; }
 
 /* ===== 戦闘の表示 ===== */
-/* 下の真ん中：体力とスタミナ（金の縁の帯） */
+/* 下の真ん中：体力の板（人物の紋章・名前・体力・スタミナ。2026-11-16 に作り直した）
+   体力の棒：受けた分は淡い金の棒（.trail）が遅れて減る。25% ごとに刻み。3 割を切ると脈打つ（.low） */
 .vitals {
   position: absolute; left: 50%; transform: translateX(-50%);
-  bottom: calc(14px + var(--safe-b));
-  width: min(380px, 52vw);
-  padding: 5px 8px 6px;
-  background: linear-gradient(180deg, rgba(20, 17, 12, .7), rgba(8, 7, 5, .7));
-  border: 1px solid var(--edge-soft);
-  border-radius: 6px;
+  bottom: calc(12px + var(--safe-b));
+  width: min(400px, 40vw);
+  display: flex; align-items: center; gap: 12px;
+  padding: 6px 14px 7px 7px;
+  background: linear-gradient(180deg, rgba(30, 25, 18, .92), rgba(10, 8, 6, .9));
+  border: 1px solid var(--edge);
+  border-radius: 30px 4px 4px 30px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(0, 0, 0, .6), inset 0 0 0 3px rgba(217, 180, 95, .07);
+  box-sizing: border-box;
 }
-.bar { position: relative; height: 10px; margin-top: 4px; background: rgba(0, 0, 0, .65); border: 1px solid rgba(217, 180, 95, .35); border-radius: 2px; overflow: hidden; }
-.bar:first-child { margin-top: 0; }
-.bar.hp { height: 16px; }
+.vitals[hidden] { display: none; }
+/* 紋章：持っている武器の絵 */
+.vt-crest { flex: 0 0 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: #fff3d2;
+  background:
+    radial-gradient(ellipse 80% 48% at 50% 14%, rgba(255, 255, 255, .26), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(circle at 50% 40%, #7a3a2c, #3a1410 70%, #160705);
+  box-shadow: 0 0 0 1.5px #0b0906, 0 0 0 3.5px #b8923f, 0 0 0 5px #0b0906, inset 0 0 8px rgba(0, 0, 0, .5); }
+.vt-crest svg { width: 58%; height: 58%; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .7)); }
+.vt-body { flex: 1 1 auto; min-width: 0; }
+.vt-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
+.vt-name { font-family: var(--serif); font-size: 13px; letter-spacing: .2em; color: var(--gold-hi); white-space: nowrap; text-shadow: 0 1px 2px #000; }
+.vt-hp { font: 700 13px var(--serif); font-variant-numeric: tabular-nums; color: #fff4d6; letter-spacing: .04em; text-shadow: 0 1px 2px #000; white-space: nowrap; }
+.bar { position: relative; height: 7px; margin-top: 4px; background: rgba(0, 0, 0, .7); box-shadow: 0 0 0 1px rgba(217, 180, 95, .38); border-radius: 1px; overflow: hidden; }
+.bar.hp { height: 14px; margin-top: 0; }
 .bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; transition: width .12s; }
-.bar.hp i { background: linear-gradient(180deg, #e8735e, #b2291c 55%, #7a170e); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25); }
-.bar.st i { background: linear-gradient(180deg, #f0d982, #c49b36 55%, #7d6020); }
-.bar span { position: absolute; inset: 0; font: 600 11px/16px var(--mono); text-align: center; text-shadow: 0 1px 2px #000; }
+.bar.hp i { background: linear-gradient(180deg, #f08a72, #c0301f 45%, #7a170e); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3); }
+.bar.hp i.trail { background: #f3dc9a; box-shadow: none; opacity: .85; transition: width .7s ease-out .35s; }
+.bar.hp::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0) 0 calc(25% - 1px), rgba(0, 0, 0, .55) calc(25% - 1px) 25%); }
+.bar.st i { background: linear-gradient(180deg, #f3e08e, #c9a03a 55%, #7d6020); }
+.vitals.low .bar.hp i:not(.trail) { animation: hpLow .7s ease-in-out infinite; }
+.vitals.low .vt-hp { color: #ff9a84; }
+@keyframes hpLow { 0%, 100% { filter: none; } 50% { filter: brightness(1.7); } }
 
-/* 右下：操作ボタン（丸い金属の盾のような見た目。絵と文字） */
+
+/* 右下：操作ボタン（2026-11-16 に作り直した。利用者の指示：攻撃ボタンや UI を本格的に作り上げる）
+   作り：金の輪（刻み目つき。::before）＋色ガラスの面（背景）＋大きな絵（.ab-icon）＋下に名前の札（.ab-label）。
+   色は役目で決める：攻め＝紅、守り＝青、動き＝翠、技能＝紫、道具＝銅・鉄、暗殺＝深紅。
+   状態：.cool と --cd（0〜1）＝待ち時間（時計回りに暗い影が減る。::after）、.on＝効き目の間（金に脈打つ）、
+         .charging と --charge（0〜1）＝溜め（内側の輪が満ちる）、.down＝押している、.ab-num＝真ん中の秒
+   並び：攻擊ボタンの真ん中（右から 92・下から 124）から、親指の届く弧の上に置く。輪と札の分（半径 + 9〜11 px）を空けて、重ならないように決めた
+     内の弧（約 127 px）：左手（-14 度）・技能（42 度）・迴避（97 度）
+     外の弧（約 235 px）：屈身（-2 度）・楯擊（20 度）・潛伏（46 度）・暗殺（72 度）・疾驅（98 度）
+     その外：角燈（屈身の左）・搜索（潛伏の左上）・扉（潛伏の上）
+     下の段（屈身・角燈）は、体力の板（下から 72 px まで）に掛からない高さに置く */
 .act-btn {
-  position: absolute; border-radius: 50%;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-  padding: 0;
-  font-family: var(--serif); font-weight: 600; letter-spacing: .08em; color: #fff7e2;
-  border: 2px solid rgba(217, 180, 95, .6);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .18), inset 0 -6px 12px rgba(0, 0, 0, .45), 0 0 0 2px rgba(0, 0, 0, .45), 0 5px 14px rgba(0, 0, 0, .45);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .8);
+  --c1: #b9a27a; --c2: #5a4a30; --c3: #1d170d;   /* 面の色（明・中・暗） */
+  --ring: 5px;                                    /* 金の輪の太さ */
+  --lb: 13px;                                     /* 名前の札の字の大きさ */
+  --cd: 0; --charge: 0;
+  position: absolute; border-radius: 50%; box-sizing: border-box;
+  display: grid; place-items: center;
+  padding: 0; border: 0; margin: 0;
+  font-family: var(--serif); font-weight: 600; color: #fff7e2;
+  background:
+    radial-gradient(ellipse 80% 48% at 50% 13%, rgba(255, 255, 255, .36), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(circle at 50% 118%, rgba(0, 0, 0, .6), rgba(0, 0, 0, 0) 64%),
+    radial-gradient(circle at 50% 40%, var(--c1), var(--c2) 66%, var(--c3));
+  /* 影の重ね方：光（--sh-glow。状態で変わる）→ 輪の外の黒い縁と面の内の影（--sh-base）→ 外のもう 1 本の輪（--halo。攻擊だけ）→ 落ちる影 */
+  --sh-base: 0 0 0 calc(var(--ring) + 3.5px) rgba(9, 7, 5, .84), inset 0 0 0 1.5px rgba(0, 0, 0, .6), inset 0 0 14px rgba(0, 0, 0, .4);
+  --sh-glow: 0 0 0 0 rgba(0, 0, 0, 0);
+  --halo: 0 0 0 0 rgba(0, 0, 0, 0);
+  box-shadow: var(--sh-glow), var(--sh-base), var(--halo), 0 8px 16px 3px rgba(0, 0, 0, .5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .85);
   pointer-events: auto; touch-action: none;
-  -webkit-user-select: none; user-select: none;
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+  transition: transform .06s ease-out, filter .12s;
+  isolation: isolate;
 }
-.act-btn .ab-icon { width: 42%; height: 42%; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .7)); }
-.act-btn .ab-label { font-size: .78em; line-height: 1.1; }
-.act-btn .ab-label small { margin-left: 2px; font: 700 .9em var(--mono); }
-.act-btn.attack { right: calc(26px + var(--safe-r)); bottom: calc(60px + var(--safe-b)); width: 104px; height: 104px; font-size: 19px;
-  background: radial-gradient(circle at 38% 30%, rgba(196, 82, 62, .9), rgba(110, 30, 22, .88) 70%); }
-.act-btn.left { right: calc(140px + var(--safe-r)); bottom: calc(34px + var(--safe-b)); width: 82px; height: 82px; font-size: 15px;
-  background: radial-gradient(circle at 38% 30%, rgba(176, 128, 58, .9), rgba(96, 62, 22, .88) 70%); }
-.act-btn.left.guard { background: radial-gradient(circle at 38% 30%, rgba(82, 112, 168, .9), rgba(32, 50, 92, .88) 70%); }
-.act-btn.dodge { right: calc(40px + var(--safe-r)); bottom: calc(180px + var(--safe-b)); width: 76px; height: 76px; font-size: 14px;
-  background: radial-gradient(circle at 38% 30%, rgba(86, 140, 96, .9), rgba(32, 70, 42, .88) 70%); }
-/* 全速力（疾驅）：回避ボタンの上。押すと縁が光り（動き出すのを待つ）、走っている間は金に光って残りの秒を出す。終わった後の待ち時間は暗い */
-.act-btn.sprint { right: calc(46px + var(--safe-r)); bottom: calc(268px + var(--safe-b)); width: 66px; height: 66px; font-size: 12px;
-  background: radial-gradient(circle at 38% 30%, rgba(150, 120, 60, .9), rgba(66, 48, 18, .88) 70%); }
-.act-btn.sprint.armed { border-color: var(--gold-hi); }
-.act-btn.sprint.on { border-color: var(--gold-hi); animation: usePulse 0.8s ease-in-out infinite;
-  background: radial-gradient(circle at 38% 30%, rgba(214, 170, 72, .95), rgba(120, 82, 22, .92) 70%); }
-.act-btn.sprint.cool { opacity: .45; }
-/* 技能（專用技能）：疾驅ボタンの上。効き目の間は紅く光って残りの秒、使った後の待ち時間は暗く残りの秒を出す */
-.act-btn.skill { right: calc(42px + var(--safe-r)); bottom: calc(346px + var(--safe-b)); width: 74px; height: 74px; font-size: 13px;
-  background: radial-gradient(circle at 38% 30%, rgba(150, 62, 92, .92), rgba(70, 20, 40, .9) 70%); }
-.act-btn.skill.on { border-color: var(--gold-hi); animation: usePulse 0.8s ease-in-out infinite;
-  background: radial-gradient(circle at 38% 30%, rgba(214, 84, 108, .95), rgba(120, 26, 48, .92) 70%); }
-.act-btn.skill.cool { opacity: .45; }
+.act-btn[hidden] { display: none; }
+/* 金の輪：面の外側。12 個の刻み目 */
+.act-btn::before {
+  content: ''; position: absolute; inset: calc(-1 * var(--ring) - 2px); border-radius: 50%; z-index: -1;
+  background:
+    repeating-conic-gradient(from -1.5deg, rgba(20, 14, 6, .72) 0 3deg, rgba(0, 0, 0, 0) 3deg 30deg),
+    var(--gold-ring);
+  -webkit-mask: radial-gradient(farthest-side, rgba(0, 0, 0, 0) calc(100% - var(--ring) - 1.6px), #000 calc(100% - var(--ring) - .8px), #000 calc(100% - .9px), rgba(0, 0, 0, 0) 100%);
+  mask: radial-gradient(farthest-side, rgba(0, 0, 0, 0) calc(100% - var(--ring) - 1.6px), #000 calc(100% - var(--ring) - .8px), #000 calc(100% - .9px), rgba(0, 0, 0, 0) 100%);
+}
+/* 待ち時間の影（時計回りに減る）・溜めの輪 */
+.act-btn::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none; opacity: 0;
+  background: conic-gradient(rgba(6, 5, 4, .8) calc(var(--cd) * 360deg), rgba(0, 0, 0, 0) 0);
+}
+.act-btn.cool::after { opacity: 1; }
+.act-btn.cool { filter: saturate(.6) brightness(.86); }
+.act-btn.cool .ab-icon, .act-btn:has(.ab-num) .ab-icon { opacity: .38; }
+.act-btn.charging::after {
+  opacity: 1; inset: 3px;
+  background: conic-gradient(#fff0b8 calc(var(--charge) * 360deg), rgba(255, 255, 255, .14) 0);
+  -webkit-mask: radial-gradient(farthest-side, rgba(0, 0, 0, 0) calc(100% - 7px), #000 calc(100% - 6px));
+  mask: radial-gradient(farthest-side, rgba(0, 0, 0, 0) calc(100% - 7px), #000 calc(100% - 6px));
+}
+.act-btn.charging { --sh-glow: 0 0 calc(10px + 26px * var(--charge)) calc(var(--ring) + 2px + 4px * var(--charge)) rgba(255, 220, 140, calc(.2 + .55 * var(--charge))); }
+.act-btn .ab-icon { grid-area: 1 / 1; width: 54%; height: 54%; transform: translateY(-5%); filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .75)); }
+.act-btn .ab-icon svg { display: block; width: 100%; height: 100%; }
+/* 名前の札：面の下の縁に掛かる */
+.act-btn .ab-label {
+  position: absolute; left: 50%; bottom: -10px; transform: translateX(-50%); z-index: 2;
+  padding: 1px 8px 2px; white-space: nowrap;
+  font-size: var(--lb); line-height: 1.25; letter-spacing: .16em; text-indent: .16em;
+  color: #f6e9c6;
+  background: linear-gradient(180deg, #2e261b, #100d09);
+  border: 1px solid var(--gold-dim); border-radius: 3px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .09);
+  text-shadow: 0 1px 1px #000;
+}
+/* 真ん中の秒（待ち時間・効き目の残り） */
+.act-btn .ab-num { grid-area: 1 / 1; z-index: 2; font: 700 calc(var(--lb) * 1.9) var(--mono); color: #fff3cf; text-shadow: 0 0 6px #000, 0 2px 2px #000; transform: translateY(-4%); }
+.act-btn.on { animation: btnPulse .9s ease-in-out infinite; }
+@keyframes btnPulse {
+  0%, 100% { box-shadow: 0 0 8px calc(var(--ring) + 2px) rgba(255, 214, 130, .12), var(--sh-base), var(--halo), 0 8px 16px 3px rgba(0, 0, 0, .5); }
+  50% { box-shadow: 0 0 24px calc(var(--ring) + 5px) rgba(255, 214, 130, .62), var(--sh-base), var(--halo), 0 8px 16px 3px rgba(0, 0, 0, .5); }
+}
+/* 攻擊：一番大きい。輪が太く、外にもう 1 本 */
+.act-btn.attack { right: calc(34px + var(--safe-r)); bottom: calc(66px + var(--safe-b)); width: 116px; height: 116px; --ring: 7px; --lb: 17px;
+  --c1: #e56a52; --c2: #9c2a1e; --c3: #3a0c08;
+  --halo: 0 0 0 16.5px rgba(9, 7, 5, .4), 0 0 0 18px rgba(217, 180, 95, .62), 0 0 0 19px rgba(9, 7, 5, .5); }   /* 外にもう 1 本の細い金の輪（影で描く。outline は古い iPadOS で丸くならない） */
+.act-btn.attack .ab-icon { width: 56%; height: 56%; }
+/* 左手（強攻撃・持替＝銅。楯の防禦＝青） */
+.act-btn.left { right: calc(171px + var(--safe-r)); bottom: calc(49px + var(--safe-b)); width: 88px; height: 88px; --ring: 6px; --lb: 15px;
+  --c1: #d2a45c; --c2: #80541e; --c3: #2c1a08; }
+.act-btn.left.guard { --c1: #7ba2e0; --c2: #2f5098; --c3: #101c3c; }
+.act-btn.dodge { right: calc(37px + var(--safe-r)); bottom: calc(205px + var(--safe-b)); width: 80px; height: 80px; --lb: 14px;
+  --c1: #74c48c; --c2: #2c7646; --c3: #0d2c18; }
+/* 技能（專用技能）：攻擊の左上（内の弧）。効き目の間は金に脈打って残りの秒、使った後の待ち時間は暗い影と残りの秒 */
+.act-btn.skill { right: calc(151px + var(--safe-r)); bottom: calc(172px + var(--safe-b)); width: 76px; height: 76px;
+  --c1: #cf6fa2; --c2: #7c2452; --c3: #2c0b1c; }
+/* 全速力（疾驅）：迴避の上（外の弧）。押すと輪が明るくなり（動き出すのを待つ）、走っている間は金に脈打って残りの秒。終わった後の待ち時間は暗い影 */
+.act-btn.sprint { right: calc(25px + var(--safe-r)); bottom: calc(323px + var(--safe-b)); width: 68px; height: 68px;
+  --c1: #dcba60; --c2: #8a661f; --c3: #2e2008; }
+.act-btn.sprint.armed { filter: brightness(1.25); }
+/* 姿勢（しゃがむ・伏せる）：外の弧のいちばん下（左手の左）。しゃがむ・伏せている間は明るい */
+.act-btn.stance { right: calc(293px + var(--safe-r)); bottom: calc(83px + var(--safe-b)); width: 66px; height: 66px; --lb: 12px;
+  --c1: #9aa290; --c2: #485040; --c3: #171b14; }
+.act-btn.stance.low { --c1: #c8d2b4; --c2: #6c7a58; --c3: #252c1c; --sh-glow: 0 0 16px calc(var(--ring) + 3px) rgba(243, 220, 154, .5); }
+/* 潛伏・壁潛・出る・離壁：隠れ場所・壁の近くで出る。目に留まるよう、ゆっくり脈打つ */
+.act-btn.use { right: calc(217px + var(--safe-r)); bottom: calc(255px + var(--safe-b)); width: 76px; height: 76px;
+  --c1: #b49c66; --c2: #524224; --c3: #1a140a; animation: btnPulse 1.6s ease-in-out infinite; }
+/* 暗殺：暗殺できる相手が近くにいるときだけ出る（攻擊ボタンの左上）。深紅で、脈打って目立つ */
+.act-btn.assassinate { right: calc(121px + var(--safe-r)); bottom: calc(303px + var(--safe-b)); width: 88px; height: 88px; --ring: 6px; --lb: 14px;
+  --c1: #c2323c; --c2: #600c16; --c3: #1e0406; animation: btnPulse 1.1s ease-in-out infinite; }
+.act-btn.shield { right: calc(279px + var(--safe-r)); bottom: calc(170px + var(--safe-b)); width: 68px; height: 68px; --lb: 12px;
+  --c1: #7ba2e0; --c2: #2f5098; --c3: #101c3c; }
+.act-btn.search { right: calc(310px + var(--safe-r)); bottom: calc(301px + var(--safe-b)); width: 70px; height: 70px; --lb: 12px;
+  --c1: #968cc0; --c2: #403666; --c3: #151126; }
+/* 扉：家の扉の近くにいる間だけ出る（開ける・閉める）。木の色 */
+.act-btn.door { right: calc(213px + var(--safe-r)); bottom: calc(381px + var(--safe-b)); width: 68px; height: 68px; --lb: 12px;
+  --c1: #c08e58; --c2: #66421f; --c3: #231507; }
+/* 角燈（ランタン）：いつでも出ている（屈身の左）。灯している間は橙に光る */
+.act-btn.lantern { right: calc(382px + var(--safe-r)); bottom: calc(86px + var(--safe-b)); width: 60px; height: 60px; --ring: 4px; --lb: 12px;
+  --c1: #8e8474; --c2: #443b2e; --c3: #17130d; }
+.act-btn.lantern.on { --c1: #ffc266; --c2: #b3661a; --c3: #3c1f06; color: #fff1d0; animation: none; --sh-glow: 0 0 20px calc(var(--ring) + 4px) rgba(255, 176, 84, .55); }
 /* 鷹目（弓兵の技能）：目に映る物を白黒に。敵の体温は、上の重ねた絵（render/heat-vision.js）に色で描く */
 body.hawk canvas#app { filter: grayscale(1) contrast(1.12) brightness(.85); }
 canvas.heat { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 12; pointer-events: none; }
-/* 姿勢（しゃがむ・伏せる）：左手ボタンの左。しゃがむ・伏せている間は縁が光る */
-.act-btn.stance { right: calc(236px + var(--safe-r)); bottom: calc(28px + var(--safe-b)); width: 68px; height: 68px; font-size: 12px;
-  background: radial-gradient(circle at 38% 30%, rgba(92, 100, 88, .9), rgba(34, 40, 32, .88) 70%); }
-.act-btn.stance.low { border-color: var(--gold-hi); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .18), inset 0 -6px 12px rgba(0, 0, 0, .45), 0 0 0 2px rgba(0, 0, 0, .45), 0 0 14px rgba(243, 220, 154, .6); }
-/* 拾う・開ける：素材の近くで出る。目に留まるよう、ゆっくり光る */
-.act-btn.use { right: calc(132px + var(--safe-r)); bottom: calc(140px + var(--safe-b)); width: 80px; height: 80px; font-size: 13px;
-  background: radial-gradient(circle at 38% 30%, rgba(120, 100, 60, .92), rgba(40, 32, 18, .9) 70%);
-  border-color: var(--gold-hi); animation: usePulse 1.6s ease-in-out infinite; }
-.act-btn.use .ab-icon { width: 46%; height: 46%; }
-/* 扉：家の扉の近くにいる間だけ出る（開ける・閉める）。木の色 */
-.act-btn.door { right: calc(316px + var(--safe-r)); bottom: calc(96px + var(--safe-b)); width: 72px; height: 72px; font-size: 13px;
-  background: radial-gradient(circle at 38% 30%, rgba(150, 106, 62, .92), rgba(58, 36, 18, .9) 70%);
-  border-color: var(--gold-hi); }
-/* 角燈（ランタン）：いつでも出ている。灯している間は橙に光る。扉のボタンの上（下の段に置くと、幅の狭い画面で体力の棒に重なる） */
-.act-btn.lantern { right: calc(320px + var(--safe-r)); bottom: calc(178px + var(--safe-b)); width: 64px; height: 64px; font-size: 12px;
-  background: radial-gradient(circle at 38% 30%, rgba(92, 82, 66, .9), rgba(34, 28, 20, .9) 70%); }
-.act-btn.lantern.on { border-color: #ffd28a; color: #ffe9bf;
-  background: radial-gradient(circle at 42% 34%, rgba(214, 140, 52, .95), rgba(96, 52, 14, .92) 72%);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .2), inset 0 -6px 12px rgba(0, 0, 0, .4), 0 0 0 2px rgba(0, 0, 0, .45), 0 0 18px rgba(255, 176, 84, .55); }
-/* 暗殺：暗殺できる相手が近くにいるときだけ出る（攻撃ボタンの左上）。暗い紅で、脈打って目立つ */
-.act-btn.assassinate { right: calc(132px + var(--safe-r)); bottom: calc(236px + var(--safe-b)); width: 86px; height: 86px; font-size: 14px;
-  background: radial-gradient(circle at 38% 30%, rgba(150, 30, 34, .95), rgba(52, 8, 12, .92) 70%);
-  border-color: var(--gold-hi); animation: usePulse 1.2s ease-in-out infinite; }
-.act-btn.shield { right: calc(236px + var(--safe-r)); bottom: calc(104px + var(--safe-b)); width: 68px; height: 68px; font-size: 12px;
-  background: radial-gradient(circle at 38% 30%, rgba(82, 112, 168, .9), rgba(32, 50, 92, .88) 70%); }
-.act-btn.search { right: calc(222px + var(--safe-r)); bottom: calc(180px + var(--safe-b)); width: 72px; height: 72px; font-size: 13px;
-  background: radial-gradient(circle at 38% 30%, rgba(96, 86, 120, .92), rgba(36, 30, 52, .9) 70%); }
 /* 隠れている間の見た目：タンスは扉の隙間（縦の細い光）、ベッドの下は上が板で塞がれ、床すれすれから外を見る */
 .hideview { position: absolute; inset: 0; pointer-events: none; }
 .hideview.wardrobe { background:
@@ -675,12 +789,7 @@ canvas.heat { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 12;
 .hv-label { position: absolute; left: 50%; top: calc(80px + var(--safe-t)); transform: translateX(-50%);
   padding: 3px 14px; font-family: var(--serif); font-size: 14px; letter-spacing: .25em; color: var(--gold-hi);
   background: rgba(0, 0, 0, .45); border: 1px solid var(--edge-soft); border-radius: 4px; }
-@keyframes usePulse { 0%, 100% { box-shadow: inset 0 2px 0 rgba(255, 255, 255, .18), inset 0 -6px 12px rgba(0, 0, 0, .45), 0 0 0 2px rgba(0, 0, 0, .45), 0 0 6px rgba(243, 220, 154, .3); }
-  50% { box-shadow: inset 0 2px 0 rgba(255, 255, 255, .18), inset 0 -6px 12px rgba(0, 0, 0, .45), 0 0 0 2px rgba(0, 0, 0, .45), 0 0 20px rgba(243, 220, 154, .75); } }
 .act-btn.down { transform: scale(.93); filter: brightness(1.35); }
-/* 溜めている間の攻撃ボタン：金の光が溜めるほど強く広がる（--charge は 0〜1） */
-.act-btn.charging { box-shadow: inset 0 2px 0 rgba(255, 255, 255, .18), inset 0 -6px 12px rgba(0, 0, 0, .45), 0 0 0 calc(2px + 2px * var(--charge, 0)) rgba(243, 220, 154, calc(.35 + .6 * var(--charge, 0))),
-  0 0 calc(8px + 22px * var(--charge, 0)) rgba(243, 220, 154, calc(.25 + .6 * var(--charge, 0))); }
 
 /* 敵の頭上：名前と体力・与えたダメージの数字 */
 .tags { position: absolute; inset: 0; pointer-events: none; }
