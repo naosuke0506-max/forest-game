@@ -1,8 +1,9 @@
 // 川の中を歩く・泳ぐ（計算だけ。PlayCanvas に依存しない）。利用者の指示（2026-11-14）：川は泳げる（深い所は泳ぐ）
 //   水の深さ（足もとから水面まで）が SWIM.depth より深いと泳ぐ：体は水面に浮き（頭と肩が水の上）、ゆっくり進み、スタミナが減る。
 //   泳いでいる間は攻撃・防禦・回避・技能・隠れることはできない（game/combat.js）。浅い所は歩けるが遅く、深めの所では走れない（game/stance.js の canRun）
+//   潜る（利用者の指示 2026-11-16）：泳いでいる間に姿勢ボタンで水の中へ潜る。息（DIVE.breath 秒）が続く間だけ。潜っていると遠くの bot から見えない
 //   水の中を歩く・泳ぐと水音が立つ（bot に聞こえる。game/senses.js）。数は game/data.js の SWIM。水の形は world/landform.js
-import { SWIM } from './data.js';
+import { SWIM, DIVE } from './data.js';
 import { resetStance } from './stance.js';
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -23,9 +24,39 @@ export function applyWater(f, water) {
   f.waterSurface = w ? w.surface : null;
   f.swimming = f.waterDepth > SWIM.depth;
   if (f.waterDepth > 0.35 && f.stance && f.stance !== 'stand') resetStance(f);   // 水の中ではしゃがめない・伏せられない
-  if (f.swimming) f.y = w.surface - SWIM.float;
+  // 泳いでいる：水面に浮く。潜っていれば、その分だけ深く（川床より下へは行かない）
+  if (f.swimming) f.y = diveY(w, f.diveK || 0);
+  else { f.diving = false; f.diveK = 0; }
   return f.swimming;
 }
 
+/** 泳いでいる人の足の高さ：水面に浮く高さから、潜っている割合 k（0〜1）の分だけ深く。川床の少し上まで */
+export const diveY = (w, k) => Math.max(w.surface - w.depth + 0.1, w.surface - SWIM.float - DIVE.depth * k);
+
+/** 潜る・浮く（姿勢ボタン）。返り値：'dive'・'surface'・'nobreath'（息が足りなくて潜れない）・null（泳いでいない） */
+export function toggleDive(f) {
+  if (!f.swimming || !f.alive) return null;
+  if (f.diving) { f.diving = false; return 'surface'; }
+  if ((f.breath ?? DIVE.breath) < DIVE.min) return 'nobreath';
+  f.diving = true;
+  return 'dive';
+}
+
+/**
+ * 毎フレーム：息と、潜っている深さ（f.diveK 0〜1）を進める。息が尽きたら、ひとりでに浮く（返り値 'gasp'）
+ */
+export function updateDive(f, dt) {
+  if (f.breath === undefined) f.breath = DIVE.breath;
+  if (!f.swimming || !f.alive) f.diving = false;
+  let out = null;
+  if (f.diving) {
+    f.breath -= dt;
+    if (f.breath <= 0) { f.breath = 0; f.diving = false; out = 'gasp'; }
+  } else if (f.breath < DIVE.breath && !((f.diveK || 0) > 0.5)) f.breath = Math.min(DIVE.breath, f.breath + DIVE.recover * dt);   // 水面に上がってから戻る
+  const k = f.diveK || 0, step = (DIVE.rate / DIVE.depth) * dt;
+  f.diveK = f.swimming ? k + Math.max(-step, Math.min(step, (f.diving ? 1 : 0) - k)) : 0;
+  return out;
+}
+
 /** 泳ぐ速さ（m/s）：キャラの速さを掛け、スタミナが尽きたら遅い */
-export const swimSpeed = (f) => SWIM.speed * (f.stats?.speed ?? 1) * (f.stamina > 0 ? 1 : SWIM.tired);
+export const swimSpeed = (f) => SWIM.speed * (f.stats?.speed ?? 1) * (f.stamina > 0 ? 1 : SWIM.tired) * (f.diving ? DIVE.speed : 1);

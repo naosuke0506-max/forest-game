@@ -88,7 +88,7 @@ export const CONFIG = {
     eyeHeight: 1.65,
     radius: 0.35,
     walkSpeed: 3.0,         // m/s（スティックを半分ほど倒したとき）
-    runSpeed: 5.2,          // m/s（スティックを端まで倒したとき）
+    runSpeed: 4.5,          // m/s（スティックを端まで倒したとき）。歩きの 1.5 倍（利用者の指示 2026-11-16：走る速度が速い。前は 5.2）
     fov: 70,
     pitchLimit: 85,
   },

@@ -4,7 +4,7 @@
 //       （家の壁・家具・木の幹・岩・柵・丘・大草原の背の高い草など、間に物があればその点は見えない。game/sight.js）
 //   耳：音が届く距離の中にいれば聞こえる。足音（走る＞歩く。しゃがむ・伏せると小さい。鎧が重いほど大きい）と、
 //       振る・当たる・回避・弓・探す・隠れる の音
-import { CHARACTERS, SENSES, STANCES } from './data.js';
+import { CHARACTERS, SENSES, STANCES, DIVE } from './data.js';
 import { stanceShape } from './stance.js';
 
 const DEG = Math.PI / 180;
@@ -53,6 +53,7 @@ export function createSenses({ sight = null, heightAt }) {
     const dx = target.x - viewer.x, dz = target.z - viewer.z, d = Math.hypot(dx, dz);
     const reach = CHARACTERS[viewer.char]?.sight ?? 40;
     if (d > reach) return false;
+    if (target.diving && (target.diveK || 0) > 0.6 && d > DIVE.seen) return false;   // 水の中に潜っている人は、近くでないと見えない
     if (d > 0.3) {
       const a = (viewer.yaw + (viewer.headYaw || 0)) * DEG;   // 見ている向き（体の向き＋首の向き）
       const cos = (-Math.sin(a) * dx - Math.cos(a) * dz) / d;   // 前（-Z を向きで回したもの）との角度

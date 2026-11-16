@@ -2,6 +2,8 @@
 #
 #   turn_r・turn_l  その場で足踏みしながら右回り・左回り（向きを変えるスティック。体の向きはゲームが回す）
 #   strafe_r・strafe_l  横歩き（顔と体は前を向いたまま、右・左へ足を開いては寄せて進む。2026-11-16）
+#   jog・sprint     普通の走り（ゆっくり大きく足と腕を振る）・全速力（前傾姿勢で全力で走る）。2026-11-16
+#   door            扉を開ける・閉める（左手を伸ばして押す・引く。ゲームでは上半身だけに重ねる）。2026-11-16
 #   crouch_walk     しゃがみ歩き（深くしゃがんで歩く。顔はまっすぐ前）。前の動き（make_motions.py の中腰の物）と入れ替える
 #   prone_up        伏せから起き上がる（腕で押し上げる → 片膝を引き寄せる → 片膝立ち → 立つ）。前の動きと入れ替える
 #   hit_l_<向き>    被弾（軽い）：攻撃された向き（f 前・b 後ろ・l 左・r 右）と反対へ、体がはじかれる
@@ -377,6 +379,90 @@ def strafe_fn(side, shield, step=0.72, dur=0.42):
     return fn, dur, step / dur
 
 
+# ======================= 走り（ゆっくり大きく）・全速力（前傾で全力） =======================
+def run_fn(shield, speed, dur, duty, f_td, lean, knee, arm, hip_u, bob):
+    """走る動き（その場）。利用者の指示（2026-11-16。全キャラ共通）：
+      普通の走り＝ゆっくり足と腕を振って走る（jog）／全速力＝前傾姿勢になって全力で走る（sprint）
+    speed：この動きを 1 倍で流したときに進む速さ（m/秒。身長 1.8 m）、dur：2 歩で 1 回りの秒、duty：1 回りのうち足が着いている割合
+    （0.5 より小さい＝両足とも浮く間がある）、f_td：着く所（体の真下から前へ m）、lean：前傾（腰・胸の度）、knee：浮いた足を上げる高さ（m）、
+    arm：腕の振り（前の手首・後ろの手首。肩から、腕の長さを 1 として 右・上・前）、hip_u：腰の高さ（立ち姿から m）、bob：上下の揺れ（m）
+    足は地面に着いている間、まっすぐ後ろへ同じ速さで送る（滑らない）。離れる前にかかとを上げて蹴り、浮いたら後ろで畳んでから膝を前へ出す"""
+    base = ready(shield)
+    dist = speed * duty * dur          # 着いている間に、足が体の下を後ろへ動く長さ
+    f_to = f_td - dist                 # 離れる所
+
+    def foot(q, r, yaw):
+        if q < duty:
+            u = q / duty
+            heel = 55 * max(0.0, (u - 0.55) / 0.45) ** 1.5      # 終わりにかかとを上げて蹴る
+            return (r, f_td - dist * u, yaw, heel, 0.0, 0.0)
+        v = (q - duty) / (1 - duty)
+        e = v * v * (3 - 2 * v)
+        # 前へ運ぶ：始めは後ろに残って高く畳み、あとから膝といっしょに前へ出る
+        f = f_to + (f_td - f_to) * (e ** 1.25) + 0.05 * math.sin(math.pi * v)
+        lift = knee * math.sin(math.pi * min(1.0, v ** 0.8)) + 0.10 * knee * math.sin(2 * math.pi * v)
+        heel = 55 * (1 - v) ** 2 * (1 if v < 0.6 else 0) + 8 * math.sin(math.pi * v)
+        return (r, f, yaw, heel, max(0.0, lift), -12 * math.sin(math.pi * v))
+
+    (afr, afu, aff), (abr, abu, abf) = arm
+
+    def fn(t):
+        ph = (t / dur) % 1.0                         # 0：右足が着く
+        qR, qL = ph, (ph + 0.5) % 1.0
+        # 腰：着いた足の上で沈み、浮いている間に上がる。腰は出す足の側へ少し回り、胸は逆へ回る
+        up = hip_u + bob * math.cos(4 * math.pi * (ph - duty * 0.5 - 0.25))
+        tw = 7 * math.sin(2 * math.pi * (ph + 0.12))
+        p = dict(base)
+        p['hip'] = (0.012 * math.sin(2 * math.pi * ph), up, 0.02)
+        p['hip_rot'] = (tw, lean[0], 0)
+        p['chest'] = (-tw * 1.5, lean[1], 0)
+        p['look'] = (0, -lean[0] * 0.2)
+        p['look_k'] = 1.0
+        p['R_foot'] = foot(qR, 0.10, 4)
+        p['L_foot'] = foot(qL, -0.10, -4)
+        # 腕：脚と逆（右足が前のとき、右腕は後ろ）。肘を曲げたまま前後に振る
+        k = 0.5 - 0.5 * math.cos(2 * math.pi * (ph - 0.5 * duty))   # 0：右足が体の下、1：左足が体の下
+        sR = k * k * (3 - 2 * k)                   # 右腕：左足が出るとき前
+        sL = 1 - sR
+        p['R'] = carry({'wrist': (abr + (afr - abr) * sR, abu + (afu - abu) * sR, abf + (aff - abf) * sR), 'pole': (0.7, -0.5, -1)})
+        if shield:
+            # 楯の腕は大きく振らない（楯を体の横に引き付けて、小さく前後に揺らす）
+            p['L'] = {'wrist': (-0.16, -0.46, 0.16 + 0.10 * (sL - 0.5)), 'normal': (-0.9, 0.05, 0.45), 'up': (0, 1, 0), 'pole': (-1, -0.6, -0.3)}
+        else:
+            p['L'] = {'wrist': (-(abr + (afr - abr) * sL), abu + (afu - abu) * sL, abf + (aff - abf) * sL), 'pole': (-0.7, -0.5, -1)}
+        return p
+    return fn, dur, speed
+
+
+def jog_fn(shield):
+    """普通の走り：ゆっくり、大きく足と腕を振る（2 歩で 0.72 秒・4.2 m/秒。ゲームの走り 4.5 m/秒では 1.07 倍の速さで流す）"""
+    return run_fn(shield, speed=4.2, dur=0.72, duty=0.33, f_td=0.37, lean=(7, 5), knee=0.30,
+                  arm=((0.11, -0.36, 0.42), (0.21, -0.62, -0.06)), hip_u=-0.085, bob=0.028)
+
+
+def sprint_fn(shield):
+    """全速力：前傾姿勢で、腕を大きく振り、膝を高く上げて全力で走る（2 歩で 0.44 秒・8.0 m/秒）"""
+    return run_fn(shield, speed=8.0, dur=0.44, duty=0.27, f_td=0.30, lean=(19, 11), knee=0.46,
+                  arm=((0.06, -0.12, 0.58), (0.25, -0.60, -0.30)), hip_u=-0.075, bob=0.034)
+
+
+# ======================= 扉を開ける・閉める（左手を伸ばして押す・引く） =======================
+def door_keys(shield):
+    """扉に左手（楯を持つ人は楯の腕）を伸ばして、押し開ける・引いて閉める（利用者の指示 2026-11-16：扉を開けるモーション）。
+    ゲームでは上半身だけに重ねる（歩きながらでも出せる）ので、脚は構えた立ち姿のまま"""
+    base = ready(shield)
+    L0 = base['L']
+    reach = P(base, hip=(0.0, -0.05, 0.03), hip_rot=(-6, 7, 0), chest=(-10, 5, 0), look=(-4, -4))
+    push = P(base, hip=(0.0, -0.06, 0.08), hip_rot=(-10, 10, 0), chest=(-16, 8, 0), look=(-4, -6))
+    if shield:
+        reach['L'] = dict(L0, wrist=(-0.04, -0.34, 0.66))
+        push['L'] = dict(L0, wrist=(0.02, -0.30, 0.88))
+    else:
+        reach['L'] = {'wrist': (-0.04, -0.26, 0.70), 'pole': (-1, -0.5, -0.3)}
+        push['L'] = {'wrist': (0.02, -0.22, 0.93), 'pole': (-1, -0.4, -0.2)}
+    return [(0.0, base, None), (0.16, reach, 'io'), (0.32, push, 'io'), (0.42, push, 'io'), (0.62, base, 'io')]
+
+
 # ======================= その場で回る（向きを変えるスティック） =======================
 TURN_DEG_S = 150.0   # この動きを 1 倍で流したときに体が回る速さ（度/秒）。ゲームは実際に回る速さとの比で流す（情報の turn）
 
@@ -549,6 +635,13 @@ def build(rig, has_shield, made_by_name, group=None):
     for side in ('r', 'l'):
         fn, dur, spd = strafe_fn(side, has_shield)
         out.append(make_clip(rig, f'strafe_{side}', fn, dur, loop=True, speed=spd * rig.K))
+    # 普通の走り（ゆっくり大きく）と、全速力（前傾で全力）
+    for name, mk in (('jog', jog_fn), ('sprint', sprint_fn)):
+        fn, dur, spd = mk(has_shield)
+        out.append(make_clip(rig, name, fn, dur, loop=True, speed=spd * rig.K))
+    # 扉を開ける・閉める
+    kd = door_keys(has_shield)
+    out.append(make_clip(rig, 'door', lambda t: sample(kd, t), kd[-1][0]))
     # その場で回る（右回り・左回り）
     for side in ('r', 'l'):
         fn, dur = turn_fn(side, has_shield)

@@ -130,12 +130,14 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     if (spinePath && body.anim.addLayer) {
       upper = body.anim.addLayer('upper', 0, { [spinePath]: { children: true } }, pc.ANIM_LAYER_OVERWRITE);
       for (const [name, c] of Object.entries(meta.clips)) {
-        if (!(name === 'guard' || name === 'draw' || /(^|_)(idle|walk)$/.test(name))) continue;
+        if (!(name === 'guard' || name === 'draw' || name === 'door' || /(^|_)(idle|walk|run)$/.test(name))) continue;
         const track = tracks.get(name);
         if (track) body.anim.assignAnimation(name, track, 'upper', 1, c.loop);
       }
     }
   }
+  // 上半身に 1 回だけ重ねる動き（扉を開ける・閉める。歩きながらでも出せる）：{ name, t, dur }
+  let upperOnce = null;
   /** 上半身に重ねる動きを決める（null で重ねない）。毎フレーム呼ぶ（呼ばないフレームは、重ねるのをやめていく） */
   const setUpper = (name, blend = 0.15) => {
     if (!upper || !name || !has(name)) return false;
@@ -198,6 +200,11 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   //   横が主なら横歩き（strafe_r・strafe_l）、後ろなら後ろ歩き、ほかは歩き・走り。足の運びが地面と合うように、進む速さで動きの速さを変える。
   //   斜めの分は、腰から下を進む向きへひねって合わせる（legTwist。上半身は前を向いたまま）
   const hasStrafe = has('strafe_l') && has('strafe_r');
+  // 走りの動き（利用者の指示 2026-11-16。全キャラ共通）：
+  //   速さ 1.6〜3.7 m/秒（歩きの速さ 3.0）＝前からの小走り（run）、それより速い（走りの速さ 4.5）＝ゆっくり大きく足と腕を振る走り（jog）、
+  //   全速力（疾驅。8 m/秒）＝前傾姿勢で全力で走る（sprint）。境目でばたばた入れ替わらないよう、入る速さと出る速さに幅を持たせる
+  const hasJog = has('jog'), hasSprint = has('sprint');
+  let gait = 'walk';
   let legTwist = 0, legTwistWant = 0, legsNow = '';
   const pelvisBone = body.findByName('Pelvis');
   const qTw = new pc.Quat(), qTwB = new pc.Quat();
@@ -210,7 +217,16 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     let name, twist, max = 2.5;
     if (strafing) { name = ang > 0 ? 'strafe_r' : 'strafe_l'; twist = ang > 0 ? ang - 90 : ang + 90; legsNow = 'strafe'; max = 3; }
     else if (a > 90) { name = loco('back'); twist = ang > 0 ? ang - 180 : ang + 180; legsNow = 'back'; }
-    else { name = canRun && vel > RUN_FROM ? loco('run') : loco('walk'); twist = ang; legsNow = 'walk'; }
+    else {
+      let upperOf = null;
+      if (canRun && hasSprint && (fighter.sprinting || vel > (gait === 'sprint' ? 5.6 : 6.3))) { name = 'sprint'; gait = 'sprint'; upperOf = 'run'; }
+      else if (canRun && hasJog && vel > (gait === 'jog' || gait === 'sprint' ? 3.4 : 3.8)) { name = 'jog'; gait = 'jog'; upperOf = 'run'; }
+      else if (canRun && vel > RUN_FROM) { name = loco('run'); gait = 'run'; }
+      else { name = loco('walk'); gait = 'walk'; }
+      twist = ang; legsNow = 'walk';
+      // 両手で持つ武器（戰鎚・長柄鎚）：走り・全速力の脚に、その武器の走りの上半身（両手で持つ腕）を重ねる
+      if (upperOf && loco(upperOf) !== upperOf) setUpper(loco(upperOf));
+    }
     legTwistWant = Math.max(-48, Math.min(48, twist));
     const base = clip(name.replace(/^.*_(?=(walk|run|back)$)/, '')) || clip(name);
     const spd = (clip(name)?.speed || base?.speed || 0.5) * sc;
@@ -311,6 +327,8 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   };
   return {
     root,
+    /** 扉を開ける・閉める：左手を伸ばして押す動きを 1 回（利用者の指示 2026-11-16）。動きの無い模型では何もしない */
+    doorPush() { if (upper && has('door')) upperOnce = { name: 'door', t: 0, dur: clip('door').duration }; },
     /** 確認用（自動テストから、今の動き・上半身に重ねている動き・腰のひねり・速さを読む） */
     get moveState() { return { clip: current, upper: upperName, upperW, legTwist, vel, fwd, side }; },
     update(dt) {
@@ -318,6 +336,13 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       if (directed) return;  // 圖鑑：選んだ動きをそのまま流す（時刻は圖鑑が動かす）
       upperWant = 0;
       updateAnim(dt);
+      // 扉を開ける・閉める：左手を伸ばして押す動きを、上半身だけに重ねる（動きの時刻は、押してからの時間に合わせる）
+      if (upperOnce) {
+        upperOnce.t += dt;
+        const busy = fighter.action && fighter.action.kind !== 'draw';
+        if (upperOnce.t < upperOnce.dur && fighter.alive && !fighter.hidden && !busy && setUpper(upperOnce.name, 0.08)) upper.activeStateCurrentTime = upperOnce.t;
+        else upperOnce = null;
+      }
       // 上半身の層の重み：0.12 秒で入れ替える。使わなくなったら名前を忘れる（次に使うとき、混ぜずにその動きから始める）
       if (upper) {
         upperW += Math.max(-dt / 0.12, Math.min(dt / 0.12, upperWant - upperW));

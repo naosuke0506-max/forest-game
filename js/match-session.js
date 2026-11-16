@@ -20,7 +20,7 @@ import { createSfx, wireSounds } from './audio/sfx.js';
 import { ICONS, weaponIconOf } from './ui/icons.js';
 import { createSenses } from './game/senses.js';
 import { stanceButton, stanceSpeed, canRun, stanceShape, resetStance } from './game/stance.js';
-import { swimSpeed } from './game/swim.js';
+import { swimSpeed, toggleDive } from './game/swim.js';
 import { STANCES, BODY_TURN } from './game/data.js';
 import { skillOf, skillOn } from './game/skills.js';
 import { createHeatVision } from './render/heat-vision.js';
@@ -250,6 +250,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     const who = by || { x: door.cx, z: door.cz, y: door.y };
     sfx.door(who, open);
     if (by) senses.noise(by, 'search');   // 扉の音は、探す音と同じくらい遠くまで聞こえる
+    if (by) views.get(by)?.doorPush?.();  // 左手を伸ばして扉を押す・引く動き（上半身だけ。render/character-view.js）
   });
   let coverStick = null;   // 壁際を歩く向きの見方（スティックを倒し始めたときのカメラの右と前）
   const searchBtn = document.getElementById('btn-search');
@@ -263,13 +264,20 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const stanceBtn = document.getElementById('btn-stance');
   let stanceShown = '';
   const refreshStance = () => {
-    const now = me.stanceTo || me.stance;
+    // 泳いでいる間は、姿勢ボタンが「潛水」（潜る）・「浮上」（浮く）になる（利用者の指示 2026-11-16。game/swim.js）
+    const now = me.swimming ? (me.diving ? 'surface' : 'dive') : (me.stanceTo || me.stance);
     if (now === stanceShown) return;
     stanceShown = now;
-    if (now === 'stand') setBtn(stanceBtn, ICONS.crouch, L.crouch);
+    if (now === 'dive') setBtn(stanceBtn, ICONS.dive, L.dive);
+    else if (now === 'surface') setBtn(stanceBtn, ICONS.surface, L.surface);
+    else if (now === 'stand') setBtn(stanceBtn, ICONS.crouch, L.crouch);
     else setBtn(stanceBtn, ICONS.stand, now === 'prone' ? L.getUp : L.stand);
-    stanceBtn.classList.toggle('low', now !== 'stand');
+    stanceBtn.classList.toggle('low', now !== 'stand' && now !== 'dive');
   };
+  // 水の中の見え方（目が水面の下にあるとき、画面を青緑に染める）
+  const underEl = document.getElementById('underwater');
+  let underShown = false;
+  combat.on('gasp', ({ fighter }) => { if (fighter === me) { hud.addFeed('息が続かない。水面へ浮いた'); sfx.splash?.(me); } });
   refreshStance();
   const hideView = document.getElementById('hideview');
 
@@ -490,7 +498,16 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       for (const v of views.values()) v.setPaused?.(frozenTime);
       player.setAreaRadius(match.areaRadius);
       // 姿勢：ボタン（押す＝しゃがむ／立つ、長押し＝伏せる）。しゃがむ・伏せると遅く、走れず、目が低い
-      if (input.stance && running && me.alive && !me.hidden && !me.cover) stanceButton(me, input.stance);
+      if (input.stance && running && me.alive && !me.hidden && !me.cover) {
+        if (me.swimming) {
+          // 泳いでいる間：潜る・浮く
+          const r = toggleDive(me);
+          if (r === 'dive') { hud.addFeed('水の中へ潜った（息が続く間だけ）'); sfx.splash?.(me); }
+          else if (r === 'surface') sfx.splash?.(me);
+          else if (r === 'nobreath') hud.addFeed('息が整うまで潜れない');
+        } else stanceButton(me, input.stance);
+      }
+      player.diveK = me.diveK || 0;
       player.speedScale = me.stats.speed * (me.moveScale ?? 1) * stanceSpeed(me);
       // その場で回る速さ：鎧の重さで決まる（data.js の BODY_TURN）。ひるんでいる間は遅く、伏せていればとても遅い
       player.turnSpeed = BODY_TURN.turn[me.weight] || BODY_TURN.turn.medium;
@@ -700,6 +717,12 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         if (twistBase !== null) { player.setTwist(0); if (!me.hidden) player.keepView(viewBefore); }
         twistBase = null; player.setTwist(0);
       }
+      // 水の中：目（カメラ）が水面の下にあるとき、画面を青緑に染める
+      {
+        const cp = player.camera.getPosition(), wq = terrain.waterAt?.(cp.x, cp.z);
+        const under = !!wq && cp.y < wq.surface - 0.03 && cp.y > wq.surface - wq.depth - 0.8;
+        if (under !== underShown) { underShown = under; if (underEl) underEl.hidden = !under; }
+      }
       hud.update(dt);
       hud.updateVitals(me);
       minimap.update(dt, spectating || me);
@@ -714,6 +737,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // 敵の頭上の名前と体力は出さない（見つけるのも、相手の残りを見極めるのも自分の目で）
     },
     get spectating() { return spectating; },
+    /** 目が水面の下にあるか（水の中では外の音がこもる。main.js） */
+    get underwater() { return underShown; },
     debugAction,
     views,   // 確認用（自動テストから見た目の状態を読むため）
     combat,  // 確認用（自動テストから戦闘の出来事を数えるため）

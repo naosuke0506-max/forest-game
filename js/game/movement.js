@@ -6,7 +6,7 @@ import { applyWater, swimSpeed, wadeScale } from './swim.js';
 import { slopeSpeed, slopeAhead } from './slope.js';
 
 export const WALK_SPEED = 3.0; // m/s
-export const RUN_SPEED = 5.2;
+export const RUN_SPEED = 4.5;   // 歩きの 1.5 倍（利用者の指示 2026-11-16：走る速度が速い。前は 5.2）
 export const BODY_RADIUS = 0.35;
 
 /**

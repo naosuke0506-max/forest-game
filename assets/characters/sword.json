@@ -341,6 +341,21 @@
    "loop": true,
    "speed": 0.9519
   },
+  "jog": {
+   "duration": 0.7333,
+   "loop": true,
+   "speed": 2.3322
+  },
+  "sprint": {
+   "duration": 0.4333,
+   "loop": true,
+   "speed": 4.4423
+  },
+  "door": {
+   "duration": 0.6333,
+   "loop": false,
+   "speed": 0.0
+  },
   "turn_r": {
    "duration": 0.8,
    "loop": true,

@@ -2,7 +2,7 @@
 // 画面中央の大きな知らせ、フェーズ報酬の選択、試合の結果
 import { L } from './labels.js';
 import * as pc from 'playcanvas';
-import { CHARACTERS, PHASES } from '../game/data.js';
+import { CHARACTERS, PHASES, DIVE } from '../game/data.js';
 import { TIMES } from '../world/time-of-day.js';
 import { timeIcon, weaponIconOf } from './icons.js';
 
@@ -27,6 +27,8 @@ export function createHud(match, me, { label = null } = {}) {
   $('#hud').classList.toggle('tutoring', !!label);
   const reward = $('#reward');
   let centerTimer = 0, lastRankKey = '', shownReward = null;
+  const wallLeft = $('#timewall .tw-left');
+  let wallShown = -1;
 
   function centerMsg(title, sub = '', seconds = 3.5) {
     center.querySelector('.cm-title').textContent = title;
@@ -98,6 +100,8 @@ export function createHud(match, me, { label = null } = {}) {
   const hpTrail = $('#hp-trail'), vitalsEl = $('.vitals'), crest = $('#vt-crest'), nameEl = $('#vt-name');
   if (nameEl) nameEl.textContent = CHARACTERS[me.char]?.name || '';
   let crestOf = null, hpShown = -1, stShown = -1, lowShown = null;
+  const brBar = $('#br-bar'), brFill = $('#br-fill');
+  let brShown = false, brW = -1;
   // 上の飾り板：刻の残りの線と、生き残りの人数
   const phaseFill = $('#phase-fill'), aliveEl = $('#alive-count');
   let phaseOf = -1, phaseMax = 1, fillShown = -1, aliveShown = -1;
@@ -127,6 +131,13 @@ export function createHud(match, me, { label = null } = {}) {
         hpText.textContent = `${Math.ceil(f.stats.hp)} / ${f.stats.maxHp}`;
       }
       if (st !== stShown) { stShown = st; stFill.style.width = `${st}%`; }
+      // 息（潜っている間と、戻りきるまで出す。残り 5 秒を切ると脈打つ）
+      if (brBar) {
+        const full = DIVE.breath, b = f.breath ?? full, show = f.alive && (f.diving || b < full - 0.05);
+        const bw = Math.max(0, Math.round((200 * b) / full) / 2);
+        if (show !== brShown) { brShown = show; brBar.hidden = !show; }
+        if (show && bw !== brW) { brW = bw; brFill.style.width = `${bw}%`; brBar.classList.toggle('low', b < 5); }
+      }
       const low = f.alive && f.stats.hp < f.stats.maxHp * 0.3;
       if (low !== lowShown) { lowShown = low; vitalsEl?.classList.toggle('low', low); }
       if (crest && crestOf !== f.weapon) { crestOf = f.weapon; crest.innerHTML = weaponIconOf(f.weapon); }
@@ -196,6 +207,9 @@ export function createHud(match, me, { label = null } = {}) {
       renderRanking();
       // 中央の知らせ
       if (centerTimer > 0) { centerTimer -= dt; if (centerTimer <= 0) center.hidden = true; }
+      // 時間が止まっている間の鉄の壁（css の .timewall）：下に、時が動き出すまでの秒
+      if (match.freeze > 0) { const left = Math.ceil(match.freeze); if (left !== wallShown) { wallShown = left; if (wallLeft) wallLeft.textContent = `時が動き出すまで ${left}`; } }
+      else wallShown = -1;
       // フェーズ報酬（自分の分）
       if (me.pendingReward && me.pendingReward !== shownReward) showReward();
       if (!me.pendingReward && !reward.hidden) reward.hidden = true;

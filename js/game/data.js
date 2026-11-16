@@ -324,6 +324,13 @@ export const HIDE_ACTS = {
  *   泳いでいる間は、攻撃・防禦・回避・技能・隠れることはできない
  */
 export const SWIM = { depth: 1.25, float: 1.28, speed: 1.7, tired: 0.55, stamina: 4, wade: 0.5, noRun: 0.7 };
+/**
+ * 潜る（利用者の指示 2026-11-16：水中に潜れるように。息を止められる時間も）。泳いでいる間に、姿勢ボタン（潛水・浮上。PC は X）で潜る・浮く。
+ *   depth：浮いている所から潜る深さ（m。川床より下へは行かない）、rate：潜る・浮く速さ（m/秒）、speed：潜っている間の泳ぐ速さの割合
+ *   breath：息を止められる時間（秒）。尽きると、ひとりでに浮く。recover：水面で 1 秒に戻る息（秒）、min：潜り直せる息の量（秒）
+ *   seen：潜っている人が bot に見える距離（m。それより遠いと見えない。水面の下は見えづらい）
+ */
+export const DIVE = { depth: 1.5, rate: 1.6, speed: 0.85, breath: 20, recover: 2.5, min: 5, seen: 5 };
 
 /** 戦闘の決まりごと */
 export const COMBAT = {
@@ -342,6 +349,7 @@ export const COMBAT = {
   guardStaminaPerDamage: 1.0, // 防御で受けたダメージ 1 ごとに使うスタミナ
   guardMoveScale: 0.5,     // 防御中の移動の速さ
   attackMoveScale: 0,      // 攻撃・回避などの動きの間の移動の速さ（止まる。利用者の指示 2026-11-14。前は 0.55）
+  drawMoveScale: 0.5,      // 弓を引いている間の移動の速さ（ゆっくり歩ける。利用者の指示 2026-11-16。脚は歩き・上半身は引く動き：render/character-view.js）
   bodyRadius: 0.4,         // 当たり判定の体の太さ（m）
   bodyHeight: 1.8,
   gravity: 9.8,
