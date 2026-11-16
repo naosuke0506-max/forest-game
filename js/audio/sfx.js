@@ -320,6 +320,19 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
       playSample(d, 'wood_creak', { rate: (open ? 0.82 : 0.95) * jitter(0.06), gain: 0.85 });
       if (!open) playSample(d, 'wood_close', { t: 0.3, rate: 0.9, gain: 0.8 });
     },
+    /** 角燈（ランタン）を灯す・外す：金具の小さな音 */
+    lantern(f, on) {
+      const d = at(f, 0.7, { ref: 1.5, max: 14 });
+      if (d) playSample(d, 'pick_metal', { rate: (on ? 1.5 : 1.2) * jitter(0.05), gain: 0.4 });
+    },
+    /** 棺桶の蓋を押し開ける（render/coffin.js）：木のきしみ → 蓋が地面に落ちる音 */
+    coffin(f) {
+      const d = at(f, 1, { ref: 2, max: 30 });
+      if (!d) return;
+      playSample(d, 'wood_creak', { rate: 0.62, gain: 1 });
+      playSample(d, 'wood_close', { t: 0.95, rate: 0.6, gain: 0.9 });
+      playSample(d, 'body_fall', { t: 1.0, rate: 0.8, gain: 0.35 });
+    },
     search(f, kind) {
       const d = at(f, 1, { ref: 2, max: 25 });
       if (!d) return;

@@ -1,4 +1,6 @@
 // 設定：性能表示、テスト用（フェーズの長さ・フェーズを飛ばす など）。設定はこの端末に保存する（保存できない環境でも動く）
+import { returnToHall } from '../core/resume.js';
+
 const KEY = 'forest-game.settings';
 const DEFAULTS = { stats: 'on', phaseLen: 'normal', sound: 'mid', titleBgm: 'ja', view: 'first' };   // view：視點（一人稱・三人稱）   // titleBgm：題曲の版（日本・羅甸・獨逸・伊太利・西班牙・英吉利）
 
@@ -42,6 +44,10 @@ export function createSettings(onChange, onTest = () => {}) {
   // 設定の画面の外（試合中の視點のボタン）で変えたときに保存する
   Object.defineProperty(settings, 'save', { value: () => { save(settings); render(); }, enumerable: false });
   document.getElementById('settings-close').addEventListener('click', () => { panel.hidden = true; });
+  // 退出：試合・教練の間だけ出る（main.js が setInMatch(true) で出す）。押すと大廳へ戻る（core/resume.js）
+  const leave = document.getElementById('settings-leave');
+  leave?.addEventListener('click', () => { panel.hidden = true; returnToHall(); });
+  Object.defineProperty(settings, 'setInMatch', { value: (v) => { if (leave) leave.hidden = !v; }, enumerable: false });
 
   render();
   onChange(settings);

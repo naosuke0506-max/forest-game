@@ -2,7 +2,7 @@
 // 手順を 1 つずつこなす。手順は画面の左に出て、できた物に印が付く（ui/tutor-panel.js）。全部できたら達成。
 //   共通：基本（動く・見回す・疾驅・攻擊・迴避）、暗殺・簞笥（タンスに隠れた敵を見つけて倒す）、暗殺・寢臺（ベッドの下に隠れた敵を見つけて倒す）、
 //         暗殺・潛伏（タンスかベッドに隠れて待ち、部屋に入ってきた敵を暗殺）、暗殺・壁潛（壁に背を付けて待ち、通りかかった敵を暗殺）。
-//         寢臺・潛伏は利用者の指示（2026-11-14）
+//         寢臺・潛伏は利用者の指示（2026-11-14）。暗殺・迴避（タンスから飛び出してくる敵の暗殺を、回避でかわす）も利用者の指示（2026-11-14「暗殺避け」）
 //   人物ごと：楯劍騎士（防禦と反擊）・劍騎士（奧義）・長柄騎士（強靱）・打擊騎士（剛力）・弓兵（鷹目）・祓魔僧（神怒）
 // 教練では時間で刻が進まず、自分は倒れない（体力が 3 割を切ると戻る）。計算だけ（PlayCanvas に依存しない）
 import { moveFighter } from './movement.js';
@@ -18,7 +18,9 @@ const fwd = (yaw) => [-Math.sin(yaw * DEG), -Math.cos(yaw * DEG)];
  * setup(ctx)：自分と相手を置く、steps：手順（text：画面に出す文、done(S)：できたか。S は試合の出来事から数えた記録）
  *   role：dummy（立っているだけ。倒れない）・guard（楯を構えて立つ。倒れない）・attacker（近づいて攻撃してくる。弱い）・
  *         patrol（f.patrol の点を順に行き来する。こちらに気づかない。f.patrolGate があれば、それが true になるまで待つ。
- *         f.patrolWait 秒、端で立ち止まる）・hidden（タンス・ベッドに隠れている）
+ *         f.patrolWait 秒、端で立ち止まる）・hidden（タンス・ベッドに隠れている）・
+ *         ambusher（タンスに隠れて待ち、こちらが近づくと飛び出して暗殺してくる。かわされた後は attacker と同じ）
+ *   retry(ctx)：自分が「やられた」とき（教練では倒れない）に、置き直してやり直す（無ければ、やり直さずそのまま続く）
  */
 /** 一階建ての家の、一階のタンスとベッドの隠れ場所（家ごと）。道順（外 → 扉の内 → 部屋の奥）が 3 点ある家 */
 function groundRooms(hides) {
@@ -101,6 +103,17 @@ export const LESSONS = {
       { text: 'タンスかベッドの前で潛伏ボタン（PC は E）を押して隠れる。隠れると、外の敵が家に入ってくる', done: (S) => S.hid },
       { text: '敵が近くに来たら、暗殺ボタン（PC は R）で飛び出す', done: (S) => S.assassinTries >= 1 },
       { text: '暗殺で倒す', done: (S) => S.assassinKills >= 1 },
+    ],
+  },
+  evade: {
+    name: '暗殺・迴避', char: null, desc: 'タンスから飛び出してくる敵の暗殺を、迴避でかわす',
+    bots: [{ char: 'shield', role: 'ambusher', loadout: { main: 'armingsword' } }],
+    setup: setupSearch('wardrobe'),
+    retry: setupSearch('wardrobe'),   // かわせなかったら、敵はタンスに戻り、自分は扉の外からやり直す
+    steps: [
+      { text: '目の前の家に入る。タンスに敵が隠れていて、近づくと飛び出してくる', done: (S) => S.inside },
+      { text: '「暗殺！」と出たら、すぐ迴避ボタン（PC はスペース）で避ける。遅れても、やり直せる（猶予は本番 0.45 秒、教練は 0.7 秒）', done: (S) => S.evaded >= 1 },
+      { text: '暗殺をしくじった敵は、少しの間ひるむ。その間に倒す', done: (S) => S.kills >= 1 },
     ],
   },
   cover: {
@@ -205,7 +218,7 @@ export const LESSONS = {
   },
 };
 /** 大廳に並べる順 */
-export const LESSON_ORDER = ['basic', 'search', 'searchBed', 'ambush', 'cover', 'shield', 'sword', 'polearm', 'blunt', 'archer', 'cleric'];
+export const LESSON_ORDER = ['basic', 'search', 'searchBed', 'ambush', 'cover', 'evade', 'shield', 'sword', 'polearm', 'blunt', 'archer', 'cleric'];
 
 /** 相手を、自分の向きから右へ ang 度の向きに d m、さらに右へ side m ずらして置き、こちらを向かせる */
 function place(f, me, d, ang = 0, side = 0) {
@@ -224,6 +237,9 @@ function place(f, me, d, ang = 0, side = 0) {
 export function createTutorBot(f, role, me) {
   const input = { forward: 0, strafe: 0, run: false, yaw: f.yaw, pitch: 0 };
   let tap = false, cd = 1.2, leg = 1, dir = 1, wait = 0, stuck = 0, started = false;
+  // 待ち伏せ（ambusher）：こちらが暗殺できる近さに来てから少し待って、飛び出す。避ける猶予は本番より少し長い
+  let leap = false, lurk = 0, sprung = false;
+  if (role === 'ambusher') { f.graceTime = 0.7; f.stats.attack *= 0.35; }
   // 倒れない案山子（dummy・guard）。攻めてくる相手は弱くする（教練で自分が倒れないように）
   if (role === 'dummy' || role === 'guard') { f.stats.maxHp = f.stats.hp = 5000; }
   if (role === 'attacker') f.stats.attack *= 0.35;
@@ -231,7 +247,15 @@ export function createTutorBot(f, role, me) {
     fighter: f,
     alert() {}, knowSpot() {}, forget() {},
     update(dt, world) {
-      if (!f.alive || f.hidden || f.helpless > 0 || (f.action && ['assassinated', 'dragged', 'hideIn', 'hideOut'].includes(f.action.kind))) return 0;
+      if (role === 'ambusher' && f.alive && f.hidden) {
+        // タンスの中で待つ：こちらが近くに来たら、0.6 秒待って飛び出す（やり直しで戻ってきたときも同じ）
+        sprung = false;
+        lurk = world.assassinTarget?.(f)?.target === me ? lurk + dt : 0;
+        if (lurk > 0.6) { leap = true; lurk = 0; }
+        return 0;
+      }
+      if (!f.alive || f.hidden || f.helpless > 0 || (f.action && ['assassinate', 'assassinated', 'dragged', 'hideIn', 'hideOut'].includes(f.action.kind))) { if (f.action?.kind === 'assassinate') sprung = true; return 0; }
+      if (role === 'ambusher' && (!sprung || f.stun > 0)) return 0;   // 飛び出す前・しくじってひるんでいる間は動かない
       cd -= dt;
       input.forward = 0; input.strafe = 0; input.run = false;
       let want = f.yaw;
@@ -249,7 +273,7 @@ export function createTutorBot(f, role, me) {
         }
       } else if (me.alive) {
         want = yawTo(f, me.x, me.z);
-        if (role === 'attacker') {
+        if (role === 'attacker' || role === 'ambusher') {
           const d = Math.hypot(me.x - f.x, me.z - f.z);
           if (d > 1.9) input.forward = 0.8;
           else if (cd <= 0 && !f.action) { tap = true; cd = 1.3 + Math.random() * 0.6; }
@@ -269,9 +293,9 @@ export function createTutorBot(f, role, me) {
       return mag;
     },
     get combatInput() {
-      const attack = tap;
-      tap = false;
-      return { attack, left: role === 'guard', dodge: false, moveX: 0, moveY: 0 };
+      const attack = tap, assassinate = leap;
+      tap = false; leap = false;
+      return { attack, assassinate, left: role === 'guard', dodge: false, moveX: 0, moveY: 0 };
     },
   };
 }
@@ -284,7 +308,7 @@ export function createTutorBot(f, role, me) {
 export function createTutorState(lesson, { me, combat, cover, match }) {
   const S = { moved: 0, turned: 0, sprinted: false, hits: 0, dodges: 0, inside: false, searched: 0, kills: 0, covered: false, hid: false,
     assassinTries: 0, assassinKills: 0, guarded: 0, skill: false, counters: 0, ultTargets: 0, skillHits: 0, blocked: 0, pierced: 0,
-    pierceHits: 0, wrathHits: 0 };
+    pierceHits: 0, wrathHits: 0, evaded: 0 };
   const ultHit = new Set();
   let lastX = me.x, lastZ = me.z, lastYaw = me.yaw;
   combat.on('hit', ({ attacker, target, amount, guarded, kind }) => {
@@ -303,6 +327,7 @@ export function createTutorState(lesson, { me, combat, cover, match }) {
   combat.on('dodge', ({ fighter }) => { if (fighter === me) S.dodges++; });
   combat.on('searchStart', ({ fighter }) => { if (fighter === me) S.searched++; });
   combat.on('assassinate', ({ attacker }) => { if (attacker === me) S.assassinTries++; });
+  combat.on('assassinFail', ({ target }) => { if (target === me) S.evaded++; });   // 自分への暗殺を、回避でかわした
   combat.on('projectileHit', ({ projectile, through }) => { if (through && projectile.owner === me) S.pierceHits++; });
   cover.on('enter', ({ fighter }) => { if (fighter === me) S.covered = true; });
   match.on('eliminated', ({ victim, killer }) => { if (killer === me && victim !== me) S.kills++; });

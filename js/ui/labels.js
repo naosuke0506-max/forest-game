@@ -11,6 +11,7 @@ export const L = {
   crouch: '屈身', stand: '起立', getUp: '起身',
   exit: '出', hide: '潛伏', wall: '壁潛', leave: '離壁',
   doorOpen: '開扉', doorClose: '閉扉',   // 家の扉を開ける・閉める
+  lanternOn: '點燈', lanternOff: '消燈',   // 角燈（ランタン）を灯す・外す（腰に下げる。render/lantern.js）
   // 題の画面
   loading: '讀込中', start: '出陣', startFail: '起動失敗', practice: '修練之陣　對傀儡 3 騎', enter: '入',
   // 大廳と、試合の前に選ぶ画面（戰鬥 → 戰場 → 人物・武器 → 兵器・變異 → 開戰）

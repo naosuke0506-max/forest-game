@@ -306,6 +306,16 @@
    "loop": true,
    "speed": 0.3173
   },
+  "strafe_r": {
+   "duration": 0.4333,
+   "loop": true,
+   "speed": 0.9519
+  },
+  "strafe_l": {
+   "duration": 0.4333,
+   "loop": true,
+   "speed": 0.9519
+  },
   "turn_r": {
    "duration": 0.8,
    "loop": true,

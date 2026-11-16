@@ -20,11 +20,11 @@ export function createInput(layer, stickEl, config) {
 
   // 右手（攻撃）・左手（防御・強攻撃・持ち替え）・回避・拾う：画面右側のボタン（押している間 true）と、
   // PC の J（右手）・K（左手）・L かスペース（回避）・E（拾う・開ける）
-  const held = { attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false };
-  const keys = { attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false };
+  const held = { attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false, lantern: false };
+  const keys = { attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false, lantern: false };
   // 押した瞬間を覚えておく：フレームの間隔より短い押下（素早いタップ）でも、必ず 1 回は攻撃として伝える
-  const latched = { attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false };
-  for (const [id, key] of [['btn-attack', 'attack'], ['btn-left', 'left'], ['btn-dodge', 'dodge'], ['btn-use', 'use'], ['btn-search', 'search'], ['btn-assassinate', 'assassinate'], ['btn-shield', 'shield'], ['btn-sprint', 'sprint'], ['btn-skill', 'skill'], ['btn-door', 'door']]) {
+  const latched = { attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false, lantern: false };
+  for (const [id, key] of [['btn-attack', 'attack'], ['btn-left', 'left'], ['btn-dodge', 'dodge'], ['btn-use', 'use'], ['btn-search', 'search'], ['btn-assassinate', 'assassinate'], ['btn-shield', 'shield'], ['btn-sprint', 'sprint'], ['btn-skill', 'skill'], ['btn-door', 'door'], ['btn-lantern', 'lantern']]) {
     const el = document.getElementById(id);
     if (!el) continue;
     const down = (e) => { e.preventDefault(); held[key] = true; latched[key] = true; el.classList.add('down'); try { el.setPointerCapture?.(e.pointerId); } catch { /* 指がもう離れていたら何もしない */ } };
@@ -63,13 +63,13 @@ export function createInput(layer, stickEl, config) {
     window.addEventListener('keydown', (e) => { if (e.code === 'KeyX' && !e.repeat) stanceDown(); });
     window.addEventListener('keyup', (e) => { if (e.code === 'KeyX') stanceUp(); });
   }
-  const keyOf = { KeyJ: 'attack', KeyK: 'left', KeyL: 'dodge', Space: 'dodge', KeyE: 'use', KeyF: 'search', KeyR: 'assassinate', KeyU: 'shield', KeyQ: 'sprint', KeyG: 'skill', KeyT: 'door' };
+  const keyOf = { KeyJ: 'attack', KeyK: 'left', KeyL: 'dodge', Space: 'dodge', KeyE: 'use', KeyF: 'search', KeyR: 'assassinate', KeyU: 'shield', KeyQ: 'sprint', KeyG: 'skill', KeyT: 'door', KeyN: 'lantern' };
   window.addEventListener('keydown', (e) => { if (keyOf[e.code] && !e.repeat) { keys[keyOf[e.code]] = true; latched[keyOf[e.code]] = true; } });
   window.addEventListener('keyup', (e) => { if (keyOf[e.code]) keys[keyOf[e.code]] = false; });
-  const resetButtons = () => { for (const o of [held, keys]) o.attack = o.left = o.dodge = o.use = o.search = o.assassinate = o.shield = o.sprint = o.skill = o.door = false; stance.held = false; stance.tap = stance.hold = false; };
+  const resetButtons = () => { for (const o of [held, keys]) o.attack = o.left = o.dodge = o.use = o.search = o.assassinate = o.shield = o.sprint = o.skill = o.door = o.lantern = false; stance.held = false; stance.tap = stance.hold = false; };
   document.addEventListener('visibilitychange', resetButtons);
 
-  const frame = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, turnX: 0, turnY: 0, attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false, stance: null };
+  const frame = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, turnX: 0, turnY: 0, attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false, lantern: false, stance: null };
 
   /** 1 フレーム分の入力を取り出す（向きの変化量はここで 0 に戻す） */
   function read() {
@@ -97,7 +97,8 @@ export function createInput(layer, stickEl, config) {
     frame.sprint = held.sprint || keys.sprint || latched.sprint;   // 全速力ボタン（疾驅。PC は Q。Shift は今までどおり走る）
     frame.skill = held.skill || keys.skill || latched.skill;       // 技能ボタン（專用技能。PC は G）
     frame.door = held.door || keys.door || latched.door;           // 扉のボタン（家の扉を開ける・閉める。PC は T）
-    latched.attack = latched.left = latched.dodge = latched.use = latched.search = latched.assassinate = latched.shield = latched.sprint = latched.skill = latched.door = false;
+    frame.lantern = held.lantern || keys.lantern || latched.lantern;   // 角燈のボタン（腰の角燈を灯す・外す。PC は N）
+    latched.attack = latched.left = latched.dodge = latched.use = latched.search = latched.assassinate = latched.shield = latched.sprint = latched.skill = latched.door = latched.lantern = false;
     // しゃがむボタン：'tap'（押して離した）・'hold'（長押しになった）・null
     if (stance.held && !stance.fired && performance.now() - stance.downAt >= HOLD * 1000) { stance.fired = true; stance.hold = true; }
     frame.stance = stance.hold ? 'hold' : stance.tap ? 'tap' : null;

@@ -37,7 +37,11 @@ import { createMusic } from './audio/music.js';
 import { playTimeStart, TIME_START_PEAK } from './audio/ui-sounds.js';
 import { createSettings, loadSettings } from './ui/settings.js';
 import { ICONS } from './ui/icons.js';
-import { startPracticeMatch } from './match-session.js';
+import { startPracticeMatch, planRoster } from './match-session.js';
+import { createMatching } from './ui/matching.js';
+import { L } from './ui/labels.js';
+import { createIntro } from './render/intro.js';
+import { createCoffins } from './render/coffin.js';
 import { BUILD } from './version.js';
 import { refreshIfStale } from './core/freshness.js';
 
@@ -71,6 +75,8 @@ const titleScreen = createLobby({
   },
   onShow: (char, loadout) => { hall?.show(char, loadout).catch((err) => console.warn('大廳の人物:', err)); },
   onSettings: () => settings.open(),
+  // 試合・教練から大廳へ戻ってきた（core/resume.js）：大廳の曲を流す（iPad は触れるまで音を出せないので、次に画面に触れたときから鳴る）
+  onResume: () => { music.play('hall', { fade: 2 }); },
   hall: () => hall,
 });
 
@@ -176,15 +182,28 @@ async function boot() {
   hall.setActive(false);
   player.camera.enabled = false;   // 題の画面・大廳の間は、森のカメラで描かない
 
-  let playing = false, session = null, deepK = 0, caveK = 0;
+  // 開戰の前後の流れ（利用者の指示 2026-11-14）：相手を探す画面（ui/matching.js）→ マップの紹介（render/intro.js）→
+  // 棺桶の中から始まり、蓋を開けて出ると操作できる（render/coffin.js）
+  const matching = createMatching();
+  const intro = createIntro({ camera: player.camera, land, plan, terrain, zones });
+  const coffins = createCoffins(app, { material: village?.materials?.wood || null, groundAt: (x, z) => floors.groundAt(x, z), camera: player.camera });
+  const IDLE = { attack: false, left: false, dodge: false, use: false, moveX: 0, moveY: 0 };
+
+  // 今どこか：lobby（題の画面・大廳）→ intro（マップの紹介）→ coffin（棺桶の中）→ play（試合）。教練と ?intro=0 は lobby から play へ
+  let stage = 'lobby', session = null, deepK = 0, caveK = 0;
   app.on('update', (dt) => {
     // 題の画面・大廳にいる間は、その 3D だけを動かす（森は描かず、動かさない。森の音も止める）
-    const lobbyOn = hall.active || titleScene.active || !playing;
+    const lobbyOn = hall.active || titleScene.active || stage === 'lobby';
     ambience.setMuted?.(lobbyOn);
     if (lobbyOn) { hall.update(dt); stats.update(dt); return; }
-    const frame = playing ? input.read() : null;
-    if (playing) player.update(dt, frame);
-    session?.update(dt, frame || { attack: false, left: false, dodge: false, use: false, moveX: 0, moveY: 0 });
+    // マップの紹介・棺桶の中：カメラだけを動かす（プレイヤーの操作と試合の計算は、棺桶から出るまで止めておく）
+    if (stage === 'intro') intro.update(dt);
+    else if (stage === 'coffin') coffins.update(dt);
+    else {
+      const frame = input.read();
+      player.update(dt, frame);
+      session?.update(dt, frame || IDLE);
+    }
     trees?.update(dt, player.camera.getPosition(), player.camera.forward);
     groundCover?.update(dt, player.camera.getPosition(), player.camera.forward);
     props?.update(dt, player.camera.getPosition(), player.camera.forward);
@@ -198,7 +217,8 @@ async function boot() {
     caveK += (inCave - caveK) * Math.min(1, dt * 2);
     cave.update(dt, cp, Math.max(inCave, caveK));   // 近くの洞窟の殻だけ描く
     // 洞窟の中は霧も薄くする（霧の色は明るいので、奥が明るく光って見えてしまう）。塵・落ち葉・光の筋・太陽のまぶしさは出さない
-    timeOfDay.setLocal({ fog: (1 + 1.3 * deepK) * (1 - 0.85 * caveK), light: (1 - 0.35 * deepK) * (1 - 0.5 * caveK), sun: 1 - 0.7 * caveK, fx: 1 - caveK });
+    // マップの紹介の間は、遠くまで見えるように霧を薄くする（render/intro.js の fog）
+    timeOfDay.setLocal({ fog: (1 + 1.3 * deepK) * (1 - 0.85 * caveK) * (stage === 'intro' ? intro.fog : 1), light: (1 - 0.35 * deepK) * (1 - 0.5 * caveK), sun: 1 - 0.7 * caveK, fx: 1 - caveK });
     trees?.setDrawDistance?.(CONFIG.world.drawDistance * (1 - 0.45 * deepK));
     timeOfDay.update(dt);
     sunGlare.update(dt);
@@ -222,7 +242,8 @@ async function boot() {
     .then(([grass, litter]) => terrain.setGroundTextures(grass, litter));
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air, floors, sight, land, water, plan, cave };
+  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air, floors, sight, land, water, plan, cave, intro, coffins,
+    get stage() { return stage; } };
 
   // 設定のうち森に関わる分（視点）。変わるたびに反映する
   applyWorld = (st = settings) => {
@@ -247,7 +268,17 @@ async function boot() {
   titleScreen.ready(async (myChar, loadout) => {
     audio.unlock();
     input.reset();
+    // 相手を探す画面：相手の顔ぶれを先に決めて、枠が埋まっていくのを見せる（「歸」で、開戰の前の画面へ戻る）。教練には無い
+    const lesson = loadout?.tutorial || null;
+    const staged = !lesson && CONFIG.intro !== 'off';
+    const roster = lesson ? null : planRoster(myChar);
+    if (staged) {
+      const ok = await matching.run([{ me: true, name: L.you, char: myChar }, ...roster], { mode: loadout?.mode, map: loadout?.map, quick: CONFIG.intro === 'quick' });
+      if (!ok) return false;
+      matching.moving();   // ここからは戻れない（人物の模型を読み込んで、戦場へ移る）
+    }
     session = await startPracticeMatch({
+      roster, staged,
       app, config: CONFIG, terrain, obstacles, player, myChar, loadout, timeOfDay, zones, buildings: [...(village?.footprints || []), ...(cave?.footprints || [])],
       trees: trees?.canopies || [],
       groundAt: floors.groundAt, insideHouse: village?.insideHouse, hides: village?.hides || [], covers: village?.covers || [], furniture: village?.furniture || null, sight,
@@ -263,11 +294,36 @@ async function boot() {
     hall.clear();
     music.stopAll({ fade: 2.5 });
     document.body.classList.remove('in-hall');
-    touchLayer.hidden = false;
-    document.getElementById('hud').hidden = false;
     window.__forest.session = session;
     applyWorld(settings);
-    playing = true;
+    settings.setInMatch?.(true);   // 設定に「退出」（大廳へ戻る）を出す。教練の間も出る
+    const enter = () => {
+      touchLayer.hidden = false;
+      document.getElementById('hud').hidden = false;
+      input.reset();
+      stage = 'play';
+    };
+    if (!staged) { enter(); return true; }
+    // マップの紹介 → 棺桶の中 → 蓋を開けて出る → 操作できる（この間、試合の時間は進まない。相手も棺桶の中で待つ）
+    coffins.place(session.fighters.map((f) => ({ x: f.x, z: f.z, yaw: f.yaw, isPlayer: f.isPlayer })));
+    groundCover?.setClear(session.fighters.map((f) => ({ x: f.x, z: f.z, r: 1.5 })));   // 棺桶の中と、開いた蓋の下には草を生やさない
+    document.getElementById('lobby').hidden = true;
+    stage = 'intro';
+    const introShow = intro.play();
+    matching.close();
+    (async () => {
+      await introShow;
+      stage = 'coffin';
+      const cam = player.camera;
+      await coffins.play({
+        // 立ち上がった後の目の位置と向き：プレイヤーのカメラを 1 回動かして読む（一人称・三人称のどちらでも、そこへつながる）
+        endPose: () => { input.reset(); player.update(1 / 60, input.read()); return { pos: cam.getPosition().clone(), rot: cam.getRotation().clone() }; },
+        onOpen: () => session.sfx.coffin?.(session.me),
+      });
+      session.begin();
+      enter();
+    })().catch((err) => { console.error(err); session.begin(); enter(); });   // 途中で何か起きても、試合は始められるように
+    return true;
   });
 }
 

@@ -62,7 +62,8 @@ export function createAssassin({ fighters, senses, yOf, move, lethal, emit }) {
     const mv = key ? ASSASSIN.moves[key] : null;
     // 前・横から bot を暗殺するときも、避ける猶予がある（bot が 40%、見つけている相手なら必ず避ける。game/bot.js。利用者の指示 2026-11-10）
     const dodgeable = !!grace || (!behind && !t.isPlayer);
-    f.action = { kind: 'assassinate', t: 0, target: t, phase: 'approach', move: mv, back: behind, grace: dodgeable, dodged: false, hit: false };
+    // 避ける猶予の長さ：ふつうは ASSASSIN.grace 秒。教練の相手は少し長い（f.graceTime。game/tutorial.js の暗殺・迴避）
+    f.action = { kind: 'assassinate', t: 0, target: t, phase: 'approach', move: mv, back: behind, grace: dodgeable, graceTime: f.graceTime ?? ASSASSIN.grace, dodged: false, hit: false };
     f.guarding = false;
     emit('assassinate', { attacker: f, target: t });
   }
@@ -95,7 +96,7 @@ export function createAssassin({ fighters, senses, yOf, move, lethal, emit }) {
       if (d > 1e-3) move(f, (dx / d) * step, (dz / d) * step);
       f.yaw = g.yaw;
       const arrived = d - step < 0.06 || a.t > 0.9;
-      if (a.t < (a.grace ? ASSASSIN.grace : 0) || !arrived) return;
+      if (a.t < (a.grace ? a.graceTime : 0) || !arrived) return;
       if (a.dodged || t.hidden) {   // 猶予の間に避けられた
         f.stun = 0.8;
         f.action = null;

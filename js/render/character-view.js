@@ -117,6 +117,32 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   }
   const clip = (name) => meta.clips[name];
   const has = (name) => tracks.has(name);
+  // 上半身の層（利用者の指示 2026-11-14：楯を構えた歩き・弓を構えた歩きで、足が止まったまま浮いて動くのを直す）。
+  //   背骨（Spine01）から上の骨だけを別の動きで上書きする。下半身（腰・脚）は、下の層の歩き・後ろ歩き・横歩きのまま。
+  //   使う所：楯を構えて歩く（上＝防禦の構え）・弓を引いて歩く（上＝引く動き）・横歩き（上＝持っている武器の歩きの腕）
+  let upper = null, upperName = '', upperW = 0, upperWant = 0;
+  {
+    let spinePath = null;
+    for (const t of tracks.values()) {
+      for (const c of t.curves || []) for (const pt of c.paths || []) { const ep = pt.entityPath; if (ep && ep[ep.length - 1] === 'Spine01') { spinePath = ep.join('/'); break; } }
+      if (spinePath) break;
+    }
+    if (spinePath && body.anim.addLayer) {
+      upper = body.anim.addLayer('upper', 0, { [spinePath]: { children: true } }, pc.ANIM_LAYER_OVERWRITE);
+      for (const [name, c] of Object.entries(meta.clips)) {
+        if (!(name === 'guard' || name === 'draw' || /(^|_)(idle|walk)$/.test(name))) continue;
+        const track = tracks.get(name);
+        if (track) body.anim.assignAnimation(name, track, 'upper', 1, c.loop);
+      }
+    }
+  }
+  /** 上半身に重ねる動きを決める（null で重ねない）。毎フレーム呼ぶ（呼ばないフレームは、重ねるのをやめていく） */
+  const setUpper = (name, blend = 0.15) => {
+    if (!upper || !name || !has(name)) return false;
+    upperWant = 1;
+    if (name !== upperName) { upper.transition(name, upperW > 0.01 ? blend : 0); upperName = name; }
+    return true;
+  };
   // 両手で持つ武器（戰鎚・長柄鎚。data.js の stance）は、待機・歩き・後ろ歩き・走りも両手で持つ動き（wh_idle など）にする
   const loco = (name) => { const st = WEAPONS[fighter.weapon]?.stance; return st && has(`${st}_${name}`) ? `${st}_${name}` : name; };
   // 姿勢の動き（tools/characters/make_motions.py）：しゃがみ（その場）・しゃがみ歩き・伏せる・伏せ・這う・起き上がる
@@ -168,6 +194,38 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
 
   let groundY = (fighter.y ?? terrain.heightAt(fighter.x, fighter.z)), flashOn = false;
   let px = fighter.x, pz = fighter.z, vel = 0, fwd = 0;
+  // 脚の動きを、進む向き（体の向きから見た前後・左右の速さ）で選ぶ（利用者の指示 2026-11-14：横歩きが前歩きのまま横へ滑る）。
+  //   横が主なら横歩き（strafe_r・strafe_l）、後ろなら後ろ歩き、ほかは歩き・走り。足の運びが地面と合うように、進む速さで動きの速さを変える。
+  //   斜めの分は、腰から下を進む向きへひねって合わせる（legTwist。上半身は前を向いたまま）
+  const hasStrafe = has('strafe_l') && has('strafe_r');
+  let legTwist = 0, legTwistWant = 0, legsNow = '';
+  const pelvisBone = body.findByName('Pelvis');
+  const qTw = new pc.Quat(), qTwB = new pc.Quat();
+  const DEG = 180 / Math.PI;
+  const legs = (sc, canRun = true) => {
+    const ang = Math.atan2(side, fwd) * DEG;                    // 進む向き（前から右へ 度）
+    const a = Math.abs(ang);
+    // 横歩きに入る・出る角度に幅を持たせる（境目で動きがばたばた入れ替わらないように）
+    const strafing = hasStrafe && (legsNow === 'strafe' ? a > 42 && a < 138 : a > 52 && a < 128);
+    let name, twist, max = 2.5;
+    if (strafing) { name = ang > 0 ? 'strafe_r' : 'strafe_l'; twist = ang > 0 ? ang - 90 : ang + 90; legsNow = 'strafe'; max = 3; }
+    else if (a > 90) { name = loco('back'); twist = ang > 0 ? ang - 180 : ang + 180; legsNow = 'back'; }
+    else { name = canRun && vel > RUN_FROM ? loco('run') : loco('walk'); twist = ang; legsNow = 'walk'; }
+    legTwistWant = Math.max(-48, Math.min(48, twist));
+    const base = clip(name.replace(/^.*_(?=(walk|run|back)$)/, '')) || clip(name);
+    const spd = (clip(name)?.speed || base?.speed || 0.5) * sc;
+    return { name, rate: Math.min(max, Math.max(0.5, vel / spd)), strafing };
+  };
+  /** 腰から下を進む向きへひねる（骨を動きの後で回す。背骨は逆へ回して、上半身は前を向いたままにする） */
+  function twistLegs(dt) {
+    legTwist += (legTwistWant - legTwist) * Math.min(1, dt * 9);
+    legTwistWant = 0;   // 次のフレームに脚の動きを選ばなければ、ひねりを戻していく
+    if (Math.abs(legTwist) < 0.5 || !pelvisBone || !spine.length) return;
+    qTw.setFromAxisAngle(pc.Vec3.UP, -legTwist);                // 右へ進むなら、腰を右へ（上から見て時計回り）
+    pelvisBone.setRotation(qTwB.mul2(qTw, pelvisBone.getRotation()));
+    qTw.setFromAxisAngle(pc.Vec3.UP, legTwist);
+    spine[0].setRotation(qTwB.mul2(qTw, spine[0].getRotation()));
+  }
   // 坂での体の傾き（見た目だけ）：上るときは進む向きへ少し前のめり、下るときは少し後ろへ（利用者の指示 2026-11-14：坂の上り下りが不自然）。
   // 傾きは、進む向きの勾配（高さの変わる速さ ÷ 進む速さ）から決める。止まっているとき・泳ぐ・伏せる・倒れた後は傾けない
   let pTarget = groundY, climb = 0, side = 0, leanF = 0, leanS = 0;
@@ -253,10 +311,21 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   };
   return {
     root,
+    /** 確認用（自動テストから、今の動き・上半身に重ねている動き・腰のひねり・速さを読む） */
+    get moveState() { return { clip: current, upper: upperName, upperW, legTwist, vel, fwd, side }; },
     update(dt) {
       if (paused) return;   // 時間が止まっている（刻が変わった直後）：姿もそのまま
       if (directed) return;  // 圖鑑：選んだ動きをそのまま流す（時刻は圖鑑が動かす）
+      upperWant = 0;
       updateAnim(dt);
+      // 上半身の層の重み：0.12 秒で入れ替える。使わなくなったら名前を忘れる（次に使うとき、混ぜずにその動きから始める）
+      if (upper) {
+        upperW += Math.max(-dt / 0.12, Math.min(dt / 0.12, upperWant - upperW));
+        // 使い終わったら、動きの無い始めの状態へ戻す（重みが 0 の間も動きを計算し続けないように）
+        if (upperW <= 0) { upperW = 0; if (upperName) { upperName = ''; upper.transition('START', 0); } }
+        if (upper.weight !== upperW) upper.weight = upperW;
+      }
+      if (fighter.alive) twistLegs(dt);
       if (fighter.alive) turnHead();
       if (firstPerson && fighter.alive) applyFirstPerson(dt);
       if (nocked) placeArrow();
@@ -530,12 +599,35 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
           }
         }
       }
+      const sc = meta.scale;
+      // 弓を引いている間に歩く：脚は歩き・後ろ歩き・横歩き、上半身は引く動き（引いた時間に合わせた所。満ちたら引ききった姿のまま）。
+      // 止まれば、全身の引く動きへ戻る
+      if (a?.kind === 'draw' && upper && has('draw') && fighter.stance !== 'prone') {
+        const dur = clip('draw').duration, at = Math.min(dur - 0.02, (a.t * dur) / WEAPONS[fighter.weapon].drawTime);
+        if (vel > 0.25) {
+          const L = legs(sc, false);
+          play(L.name, L.rate, 0.15);
+          if (setUpper('draw', 0.1)) upper.activeStateCurrentTime = at;
+        } else if (current !== 'draw') {
+          body.anim.speed = dur / WEAPONS[fighter.weapon].drawTime;
+          body.anim.baseLayer.transition('draw', 0.15, at);
+          current = 'draw';
+        }
+        return;
+      }
       if (a) return;
       lastAction = null;
 
-      if (fighter.guarding && has('guard')) { play('guard', 1); return; }
+      // 防禦：止まっていれば全身の構え。歩いている間は、脚は歩き・後ろ歩き・横歩き、上半身は構え（足が止まったまま滑らない）
+      if (fighter.guarding && has('guard')) {
+        if (vel > 0.25 && upper && fighter.stance === 'stand') {
+          const L = legs(sc, false);
+          play(L.name, L.rate, 0.15);
+          setUpper('guard');
+        } else play('guard', 1);
+        return;
+      }
 
-      const sc = meta.scale;
       // 壁裏隠れ：壁に背を付けて、覗く向き（左・右）の動き。壁際を歩いている間は、その向きへ歩く動き（足の運びを進む速さに合わせる）
       if (fighter.cover && has('cover_l')) {
         const side = fighter.cover.side === 'r' ? 'r' : 'l', mv = fighter.cover.moving || 0, walk = `cover_walk_${side}`;
@@ -558,7 +650,12 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         }
         if (fighter.stance === 'crouch') {
           if (vel < 0.15) play('crouch', 1, 0.25);
-          else play('crouch_walk', Math.min(2.5, Math.max(0.5, vel / (clip('crouch_walk').speed * sc))), 0.2);
+          else {
+            play('crouch_walk', Math.min(2.5, Math.max(0.5, vel / (clip('crouch_walk').speed * sc))), 0.2);
+            // しゃがみ歩きは前へ歩く動きだけなので、斜め・横・後ろへは、腰から下をその向きへひねる（後ろは前歩きを逆向きに見せられないので、ひねりだけ）
+            const ang = Math.atan2(side, fwd) * DEG;
+            legTwistWant = Math.max(-60, Math.min(60, Math.abs(ang) > 120 ? 0 : ang));
+          }
           return;
         }
       }
@@ -570,8 +667,11 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         if (Math.abs(yawRate) > 25 && has(tn)) play(tn, Math.min(2, Math.max(0.5, Math.abs(yawRate) / (clip(tn).turn || 150))), 0.15);
         else play(loco('idle'), 1);
       }
-      else if (fwd < -0.3 * vel) play(loco('back'), Math.min(2.5, Math.max(0.5, vel / (clip('back').speed * sc))));
-      else if (vel > RUN_FROM) play(loco('run'), Math.min(2.5, Math.max(0.6, vel / (clip('run').speed * sc))));
-      else play(loco('walk'), Math.min(2.5, Math.max(0.5, vel / (clip('walk').speed * sc))));
+      else {
+        // 進む向きで脚の動きを選ぶ。横歩きの間は、上半身に「持っている武器の歩きの腕」を重ねる（両手で持つ武器・弓・楯の持ち方が変わらない）
+        const L = legs(sc);
+        play(L.name, L.rate);
+        if (L.strafing) setUpper(loco('walk'));
+      }
   }
 }

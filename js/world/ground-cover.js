@@ -151,6 +151,9 @@ export function createGroundCover(app, config, seed, terrain, obstacles, texture
   const q0 = new pc.Quat(), p0 = new pc.Vec3(), s0 = new pc.Vec3(), m0 = new pc.Mat4();
   let lastX = Infinity, lastZ = Infinity, lastYaw = Infinity, timer = 0, counted = 0;
   const cosView = Math.cos((80 * Math.PI) / 180);
+  // 草を生やさない円（試合ごとに置く物の下。棺桶 render/coffin.js）：{ x, z, r }
+  let clear = [];
+  const cleared = (x, z) => { for (const c of clear) if ((x - c.x) * (x - c.x) + (z - c.z) * (z - c.z) < c.r * c.r) return true; return false; };
   function update(cx, cz, fx, fz) {
     // 区画を足す・捨てる
     const R = reachTall + CELL;
@@ -170,6 +173,7 @@ export function createGroundCover(app, config, seed, terrain, obstacles, texture
         const dx = it.x - cx, dz = it.z - cz, d = Math.hypot(dx, dz);
         if (d > L.reach || counts[it.kind] >= L.cap) continue;
         if (d > 6 && (dx * fx + dz * fz) / d < cosView) continue;
+        if (clear.length && cleared(it.x, it.z)) continue;
         const shrink = Math.min(1, (L.reach - d) / (L.reach * 0.3));   // 遠さの端の 3 割で小さくしていく
         p0.set(it.x, it.y, it.z);
         q0.setFromEulerAngles(0, it.yaw, 0);
@@ -189,6 +193,8 @@ export function createGroundCover(app, config, seed, terrain, obstacles, texture
   }
 
   return {
+    /** 草を生やさない円を決める（試合ごとに置く棺桶の下。前の物は捨てる）：[{ x, z, r }] */
+    setClear(list) { clear = list || []; lastX = Infinity; },
     /** 確認用：種類ごとの今描いている株の数 */
     get counts() { return Object.fromEntries(Object.entries(layers).map(([k, L]) => [k, L.mi.instancingCount])); },
     update(dt, camPos, camFwd) {
