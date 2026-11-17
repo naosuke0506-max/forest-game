@@ -149,10 +149,15 @@ async function boot() {
   //   家：頭からカメラまでの線が、壁・床・屋根（bot の目をさえぎる物と同じ。game/sight.js）に当たらない所まで近づける
   //   洞窟：中にいる間だけ確かめる。壁・天井から 0.3 m より中の、空いた所だけに置ける
   player.noSlope = (x, z) => !!land.cave.patchAt(x, z);   // 洞窟の口のまわりでは、坂の速さの決まりを使わない（口の後ろは岩山の崖）
-  player.cameraClear = (x, y, z) => {
+  player.cameraClear = (x, y, z, from = null) => {
     const cp = player.position;
     const fy = cp.y ?? terrain.heightAt(cp.x, cp.z);
-    if (sight.blocked([cp.x, fy + 1.6, cp.z], [x, y, z], { wallsOnly: true })) return false;
+    const p0 = from || [cp.x, fy + 1.6, cp.z];
+    // 頭（from）からカメラまでの線と、カメラのまわりの余白（後ろへ 0.3 m・左右へ 0.22 m・上へ 0.2 m）まで、何にも当たらないか
+    // （壁・床・屋根・家具・木の幹・岩・杭。地面と草は見ない：地面は player/controller.js が別に確かめる）
+    const dx = x - p0[0], dz = z - p0[2], dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl;
+    const pts = [[x, y, z], [x + ux * 0.3, y, z + uz * 0.3], [x - uz * 0.22, y, z + ux * 0.22], [x + uz * 0.22, y, z - ux * 0.22], [x, y + 0.2, z]];
+    for (const q of pts) if (sight.blocked(p0, q, { solidsOnly: true })) return false;
     if (land.cave.inside(cp.x, cp.z, cp.y) < 0.3) return true;
     const q = land.cave.at(x, z);
     return !!q && q.d < -0.3 && y > q.floor + 0.25 && y < q.ceil - 0.3;

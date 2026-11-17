@@ -2,7 +2,7 @@
 // 画面中央の大きな知らせ、フェーズ報酬の選択、試合の結果
 import { L } from './labels.js';
 import * as pc from 'playcanvas';
-import { CHARACTERS, PHASES, DIVE } from '../game/data.js';
+import { CHARACTERS, phaseAt, DIVE } from '../game/data.js';
 import { TIMES } from '../world/time-of-day.js';
 import { timeIcon, weaponIconOf } from './icons.js';
 
@@ -27,8 +27,7 @@ export function createHud(match, me, { label = null } = {}) {
   $('#hud').classList.toggle('tutoring', !!label);
   const reward = $('#reward');
   let centerTimer = 0, lastRankKey = '', shownReward = null;
-  const wallLeft = $('#timewall .tw-left');
-  let wallShown = -1;
+
 
   function centerMsg(title, sub = '', seconds = 3.5) {
     center.querySelector('.cm-title').textContent = title;
@@ -63,7 +62,7 @@ export function createHud(match, me, { label = null } = {}) {
   function showReward() {
     const r = me.pendingReward;
     shownReward = r;
-    reward.querySelector('.reward-head').textContent = `${PHASES[r.phase].name} ${L.cleared}`;
+    reward.querySelector('.reward-head').textContent = `${phaseAt(r.phase).name} ${L.cleared}`;
     const cards = reward.querySelector('.reward-cards');
     cards.innerHTML = '';
     r.options.forEach((o, i) => {
@@ -86,7 +85,6 @@ export function createHud(match, me, { label = null } = {}) {
     if (victim === me) centerMsg(L.out, '残りの戦いを見届ける', 4);
   });
   match.on('phaseStart', ({ info }) => centerMsg(`${info.name}・${TIMES[info.time]?.name ?? ''}`, info.note));
-  match.on('overtime', () => centerMsg(L.overtime, '最後の一人になるまで終わらない'));
   match.on('rewardChosen', ({ fighter, option }) => {
     if (fighter !== me) return;
     reward.hidden = true;
@@ -207,9 +205,6 @@ export function createHud(match, me, { label = null } = {}) {
       renderRanking();
       // 中央の知らせ
       if (centerTimer > 0) { centerTimer -= dt; if (centerTimer <= 0) center.hidden = true; }
-      // 時間が止まっている間の鉄の壁（css の .timewall）：下に、時が動き出すまでの秒
-      if (match.freeze > 0) { const left = Math.ceil(match.freeze); if (left !== wallShown) { wallShown = left; if (wallLeft) wallLeft.textContent = `時が動き出すまで ${left}`; } }
-      else wallShown = -1;
       // フェーズ報酬（自分の分）
       if (me.pendingReward && me.pendingReward !== shownReward) showReward();
       if (!me.pendingReward && !reward.hidden) reward.hidden = true;

@@ -63,8 +63,19 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
 
   const camV = new pc.Vec3(), lookV = new pc.Vec3();
   function placeCamera(mag) {
-    if (hide) {   // 隠れている：家具の上の少し後ろから、外の向きを見る（三人称）
-      eye.setLocalPosition(0, hide.camH, 0);
+    if (hide) {
+      // 隠れている（利用者の指示 2026-11-17：一人称はちゃんと一人称、三人称はちゃんと三人称）。
+      //   一人称：家具の中の目の位置（タンスは扉の隙間の高さ、ベッドの下は床すれすれ）から外を覗く
+      //   三人称：家具の上の少し前から、外の向きを見る。部屋の壁・天井の外へ出ないよう、目の位置からまっすぐ確かめて下げる
+      if (viewMode === 'first') {
+        eye.setLocalPosition(0, hide.eyeH, 0);
+      } else {
+        // 家具の前に立った所（出る所の頭の高さ）から、家具の上のカメラまでを確かめる。当たれば、立った所の方へ寄せる
+        const fx = hide.outX, fy = hide.y + 1.6, fz = hide.outZ;
+        let k = 1;
+        for (let i = 0; i < 6 && api.cameraClear && !api.cameraClear(fx + (hide.camX - fx) * k, fy + (hide.y + hide.camH - fy) * k, fz + (hide.camZ - fz) * k, [fx, fy, fz]); i++) k *= 0.65;
+        eye.setPosition(fx + (hide.camX - fx) * k, fy + (hide.y + hide.camH - fy) * k, fz + (hide.camZ - fz) * k);
+      }
       eye.setLocalEulerAngles(pitch, 0, 0);
       return;
     }
@@ -103,25 +114,32 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       return [lx * Math.cos(h) + lz * Math.sin(h), THIRD_PIVOT - Math.sin(pr) * dist, -lx * Math.sin(h) + lz * Math.cos(h)];
     };
     // 地面の下（洞窟の中）にいるときは、上の地面とは比べない（洞窟の岩は api.cameraClear が確かめる）
+    // 利用者の指示（2026-11-17）：三人称のカメラは、建物や障害物を貫通せず、その中に留まる。
+    //   api.cameraClear は、頭からカメラまでの線と、カメラのまわり（後ろ・左右・上へ少し出た所）まで、壁・床・屋根・家具・木の幹・岩に
+    //   当たらないかを確かめる（カメラが壁にぴったり付くと、画面の端から壁の向こうが見えるため）。当たれば近づける
     const under = groundY < terrain.heightAt(pos.x, pos.z) - 1.5;
-    for (let k = 0; k < 9; k++) {
+    const pivot = [pos.x, groundY + THIRD_PIVOT, pos.z];
+    for (let k = 0; k < 12; k++) {
       const [ex, ey, ez] = localAt(d);
       const wx = pos.x + Math.cos(yr) * ex + Math.sin(yr) * ez;
       const wz = pos.z - Math.sin(yr) * ex + Math.cos(yr) * ez;
-      if ((under || groundY + ey > terrain.heightAt(wx, wz) + 0.35) && (!api.cameraClear || api.cameraClear(wx, groundY + ey, wz))) break;
-      d *= 0.75;
+      if ((under || groundY + ey > terrain.heightAt(wx, wz) + 0.35) && (!api.cameraClear || api.cameraClear(wx, groundY + ey, wz, pivot))) break;
+      d = k < 8 ? d * 0.78 : d * 0.6;
+      if (d < 0.25) { d = 0.25; break; }
     }
     // 近づけるときはすぐに（岩の外が一瞬でも見えないように）、離すときはなめらかに
     thirdDist = d < thirdDist ? d : thirdDist + (d - thirdDist) * 0.12;
-    // 首の向いている方を、後ろから見る（体の座標で首の分だけ回す）
+    // 首の向いている方を、後ろから見る（体の座標で首の分だけ回す）。
+    // 暗殺などの動きで体（肩の線）が回った分（twist）は足さない：三人称は体を後ろから見るので、カメラまで横や後ろを向くと壁ばかり映る
+    // （2026-11-17。利用者の指摘：タンスやベッドから暗殺する時の視点がおかしい。三人称はちゃんと三人称に）
     const [ex, ey, ez] = localAt(thirdDist);
     eye.setLocalPosition(ex, ey, ez);
-    eye.setLocalRotation(headRotation());
+    eye.setLocalRotation(headRotation(false));
   }
 
-  /** 目の向き：体の向きから、首の左右（headYaw）と上下（pitch） */
-  function headRotation() {
-    qHead.setFromAxisAngle(pc.Vec3.UP, headYaw + twist);
+  /** 目の向き：体の向きから、首の左右（headYaw）と上下（pitch）。withTwist：動きで体が回った分も足す（一人称） */
+  function headRotation(withTwist = true) {
+    qHead.setFromAxisAngle(pc.Vec3.UP, headYaw + (withTwist ? twist : 0));
     qPitch.setFromAxisAngle(pc.Vec3.RIGHT, pitch);
     return qEye.mul2(qHead, qPitch);
   }
@@ -159,8 +177,10 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       const c = hide.yaw + 180;   // 外を見る向き（プレイヤーの向きの約束は -Z が前）
       const dy = ((yaw - c + 540) % 360) - 180;
       yaw = c + Math.max(-50, Math.min(50, dy));
-      pitch = Math.max(hide.pitchMin, Math.min(hide.pitchMax, pitch));
-      body.setPosition(hide.camX, hide.y, hide.camZ);
+      const first = viewMode === 'first';
+      pitch = Math.max(first ? hide.fpMin : hide.pitchMin, Math.min(first ? hide.fpMax : hide.pitchMax, pitch));
+      if (first) body.setPosition(hide.eyeX, hide.y, hide.eyeZ);   // 一人称：家具の中の目の真下
+      else body.setPosition(hide.camX, hide.y, hide.camZ);
       body.setEulerAngles(0, yaw, 0);
       placeCamera(0);
       return;
@@ -258,7 +278,13 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     get pitch() { return pitch; },
     get moving() { return lastMag; },
     get viewMode() { return viewMode; },
-    setViewMode(mode) { viewMode = mode === 'third' ? 'third' : 'first'; thirdDist = THIRD_DIST; placeCamera(0); },
+    /** 三人称のカメラの、今の頭からの距離（m。壁などに押されると縮む） */
+    get thirdDistance() { return thirdDist; },
+    setViewMode(mode) {
+      viewMode = mode === 'third' ? 'third' : 'first'; thirdDist = THIRD_DIST;
+      if (hide) update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });   // 隠れている間に切り替えた：目の位置を置き直す
+      else placeCamera(0);
+    },
     /** 首の向き（体の向きからの左右。度。左が正） */
     get headYaw() { return headYaw; },
     /** その場で回る速さ（度/秒。鎧の重さ）と、その倍率（ひるんでいる間は遅い） */
@@ -267,14 +293,21 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     sprintSpeed: 8,
     turnScale: 1,
     setAreaRadius(r) { areaRadius = r; },
-    /** 隠れる（ベッドの下・タンスの中）：三人称。家具の上の少し後ろから、外を見る向きを見る。null で解除 */
+    /**
+     * 隠れる（ベッドの下・タンスの中）。null で解除。
+     *   一人称：家具の中の目の位置（spot.eyeX・eyeZ・eyeH）から外を覗く。三人称：家具の上の少し前から、外を見る向きを見る
+     */
     setHide(spot) {
       if (!spot) { hide = null; return; }
       const a = (spot.yaw * Math.PI) / 180;   // 外を見る向き（0 で +Z）
-      hide = { ...spot, camX: spot.x - Math.sin(a) * 0.15, camZ: spot.z - Math.cos(a) * 0.15, camH: spot.kind === 'bed' ? 1.35 : 2.35,
-        pitchMin: -55, pitchMax: 8 };
+      const bed = spot.kind === 'bed';
+      // 三人称のカメラ：家具の前の縁の少し上（タンスの上の後ろだと、壁際の低い天井や屋根の外へ出ることがあった）
+      const fwd = bed ? 0.1 : 0.35;
+      hide = { ...spot, camX: spot.x + Math.sin(a) * fwd, camZ: spot.z + Math.cos(a) * fwd, camH: bed ? 1.35 : 2.2,
+        pitchMin: -55, pitchMax: 8,
+        fpMin: bed ? -10 : -40, fpMax: bed ? 14 : 25 };   // 一人称：ベッドの下は床すれすれなので、上下はほとんど見られない
       pos.x = spot.x; pos.z = spot.z; pos.y = spot.y; groundY = spot.y;
-      yaw = spot.yaw + 180; pitch = -20; headYaw = 0; twist = 0; look = yaw;   // 首と体のねじれは使わない（外を見る向きだけ）
+      yaw = spot.yaw + 180; pitch = viewMode === 'first' ? (bed ? 2 : -6) : -20; headYaw = 0; twist = 0; look = yaw;   // 首と体のねじれは使わない（外を見る向きだけ）
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
     },
     /** 隠れ場所から出た：x, z, y に立ち、yaw を向く */

@@ -263,7 +263,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
 
   // 一人称（自分の体を目から見る）：頭（兜）を隠し、上下の向きに合わせて上体を傾け（腕と武器が視線に付いてくる）、
   // 目の位置をカメラへ渡す。脚や胴は動きのまま（下を向けば見える）
-  let firstPerson = false, eyeReady = false, eyeHold = false;
+  let firstPerson = false, eyeReady = false, eyeHold = false, headHidden = false, fpLeftHidden = false;
   let paused = false, pausedSpeed = 1;   // 時間が止まっている（刻が変わった直後）
   const headBone = body.findByName('Head');
   // 鷹目の体温の形に使う骨（render/heat-vision.js）
@@ -288,7 +288,9 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       qAim.setFromAxisAngle(root.right, aim / spine.length);
       for (const b of spine) { qBone.mul2(qAim, b.getRotation()); b.setRotation(qBone); }
     }
-    if (fighter.shield && lArm) {
+    // 暗殺などの決まった動きの間は、左腕（と楯）を隠す：動きの途中や終わりの姿で、楯と左腕が目の前に来て前が見えなくなるため（2026-11-17）
+    if (fpLeftHidden && lArm) lArm.setLocalScale(0.001, 0.001, 0.001);
+    else if (fighter.shield && lArm) {
       qArm.setFromAxisAngle(root.right, -SHIELD_FP.down);
       qBone.mul2(qArm, lArm.getRotation());
       qArm.setFromAxisAngle(pc.Vec3.UP, SHIELD_FP.out);
@@ -309,6 +311,28 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     // 攻撃を受けた直後は頭が急に動く（重い被弾・よろめきで 0.1 秒に 40 cm 沈む）ので、目はゆっくり追う（画面の揺れで酔わないように）
     const rate = fighter.react && fighter.react.t < 0.6 ? 9 : 25;
     if (!eyeReady) { eyeLocal.copy(eyeTmp); eyeReady = true; } else eyeLocal.lerp(eyeLocal, eyeTmp, Math.min(1, dt * rate));
+  }
+
+  // 頭の向き（headYaw）の測り方：{ axis：前に使う軸（forward・right・up）, sign：向き, off：体の向きとのずれ（度） }
+  let headCal = null;
+  function calibrateHead() {
+    const body = (fighter.yaw * Math.PI) / 180, bx = -Math.sin(body), bz = -Math.cos(body);
+    let best = null;
+    for (const axis of ['forward', 'up', 'right']) {
+      const v = headBone[axis];
+      const h = Math.hypot(v.x, v.z);
+      if (h < 0.5) continue;
+      for (const sign of [1, -1]) {
+        const dot = (v.x * sign * bx + v.z * sign * bz) / h;
+        if (!best || dot > best.dot) best = { axis, sign, dot };
+      }
+    }
+    if (!best || best.dot < 0.6) return;
+    const v = headBone[best.axis];
+    const raw = (Math.atan2(-v.x * best.sign, -v.z * best.sign) * 180) / Math.PI;
+    const off = ((fighter.yaw - raw + 540) % 360) - 180;
+    if (!headCal || headCal.axis !== best.axis || headCal.sign !== best.sign) headCal = { axis: best.axis, sign: best.sign, off };
+    else headCal.off += (((off - headCal.off + 540) % 360) - 180) * 0.1;
   }
 
   // 圖鑑で動きを流すとき（direct）：戦闘の状態を見ずに、選んだ動きだけを流す
@@ -352,7 +376,10 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       }
       if (fighter.alive) twistLegs(dt);
       if (fighter.alive) turnHead();
+      // 頭の向きの測り直し：何もしていない（立つ・歩く）間に、頭の骨の軸のうち、体の前と一番よく合う軸とずれを覚える
+      if (headBone && fighter.alive && !fighter.action && !fighter.hidden && vel < 2 && Math.abs(fighter.headYaw || 0) < 3) calibrateHead();
       if (firstPerson && fighter.alive) applyFirstPerson(dt);
+      else if (headHidden && headBone) headBone.setLocalScale(0.001, 0.001, 0.001);   // 三人称のカメラが頭のすぐ後ろまで寄った
       if (nocked) placeArrow();
     },
     /** 一人称で自分の体を映すか（頭を隠し、上体を視線に合わせる）。外すと頭を戻す */
@@ -360,7 +387,30 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       if (v === firstPerson) return;
       firstPerson = v;
       eyeReady = false;
-      if (!v) headBone?.setLocalScale(1, 1, 1);
+      if (!v && !headHidden) headBone?.setLocalScale(1, 1, 1);
+    },
+    /** 一人称で、左腕（と楯）を隠す（暗殺などの決まった動きの間）。外すと戻す */
+    setFpLeftHidden(v) {
+      if (v === fpLeftHidden) return;
+      fpLeftHidden = v;
+      if (!v) lArm?.setLocalScale(1, 1, 1);
+    },
+    /** 頭（兜）だけを隠す（三人称のカメラが壁に押されて頭のすぐ後ろまで寄ったとき。兜の内側で前が見えなくならないように） */
+    setHeadHidden(v) {
+      if (v === headHidden) return;
+      headHidden = v;
+      if (!v && !firstPerson) headBone?.setLocalScale(1, 1, 1);
+    },
+    /**
+     * 頭の向いている向き（度。戦う人の向きの約束）。暗殺などの動きで頭が向いた先を、一人称の目に使う（2026-11-17）。
+     * 頭の骨のどの軸が前かは模型によって違うので、何もしていない間に、体の向きと一番よく合う軸と、そのずれを測っておく（headCal）
+     * 測れていなければ null
+     */
+    get headYaw() {
+      if (!headBone || !headCal) return null;
+      const v = headBone[headCal.axis];
+      const raw = (Math.atan2(-v.x * headCal.sign, -v.z * headCal.sign) * 180) / Math.PI;
+      return raw + headCal.off;
     },
     /** 肩の線から見た体の向き（度。戦う人の向きの約束）。暗殺などの動きで体が回った分を、一人称の目に足すのに使う */
     get shoulderYaw() {

@@ -387,18 +387,34 @@ export const BOT_RIVALRY = { fight: 0.25, fightFor: 20 };
 export const BOT_NAMES = ['玄馬', '志乃', '伊吹', '颯', '朱音', '鐵心'];
 
 /**
- * フェーズ。duration：長さ（秒）、radius：歩ける範囲の半径（m）、time：時間帯（world/time-of-day.js の TIMES）
- * 歩ける範囲はフェーズで広げない（最初から森全体）。フェーズが進むと時間帯が変わり、夜に向かう
- * 最後のフェーズの時間が切れたら、生き残りが 1 人になるまで延長する
+ * フェーズ（刻）。duration：長さ（秒）、radius：歩ける範囲の半径（m）、time：時間帯（world/time-of-day.js の TIMES）
+ * 歩ける範囲はフェーズで広げない（最初から森全体）。
+ * 利用者の指示（2026-11-17）：第 1 刻 朝 3 分・第 2 刻 昼 5 分・第 3 刻 昼 5 分・第 4 刻 夕日 5 分・第 5 刻 夜 10 分。
+ *   それ以降は、朝・昼・夕日・夜の順に繰り返す（PHASE_LOOP。長さは最初のめぐりと同じ：朝 3 分・昼 5 分・夕日 5 分・夜 10 分）。
+ *   最後の 1 人になるまで刻はめぐり続ける（前の「終刻」と延長戰は無くした）。何番目の刻かは phaseAt(番号) で引く
  */
 export const AREA_RADIUS = 175;   // js/config.js の world.playRadius と同じ値（端から端まで 350m）
 export const PHASES = [
   { name: '第1刻', duration: 180, radius: AREA_RADIUS, time: 'morning', note: '朝の森。息を潜め、敵を探せ' },
-  { name: '第2刻', duration: 180, radius: AREA_RADIUS, time: 'day',     note: '日が高くなった' },
-  { name: '第3刻', duration: 180, radius: AREA_RADIUS, time: 'dusk',    note: '日が傾き、森が赤く染まる' },
-  { name: '第4刻', duration: 180, radius: AREA_RADIUS, time: 'night',   note: '夜が来た。暗い森に気をつけよ' },
-  { name: '終刻', duration: 240, radius: AREA_RADIUS, time: 'night',   note: '最後の一人になるまで終わらない' },
+  { name: '第2刻', duration: 300, radius: AREA_RADIUS, time: 'day',     note: '日が高くなった' },
+  { name: '第3刻', duration: 300, radius: AREA_RADIUS, time: 'day',     note: '日はまだ高い' },
+  { name: '第4刻', duration: 300, radius: AREA_RADIUS, time: 'dusk',    note: '日が傾き、森が赤く染まる' },
+  { name: '第5刻', duration: 600, radius: AREA_RADIUS, time: 'night',   note: '長い夜が来た。暗い森に気をつけよ' },
 ];
+/** 第 6 刻からは、朝・昼・夕日・夜を繰り返す（最後の 1 人になるまで） */
+export const PHASE_LOOP = [
+  { duration: 180, time: 'morning', note: '夜が明けた。刻はまためぐる' },
+  { duration: 300, time: 'day',     note: '日が高くなった' },
+  { duration: 300, time: 'dusk',    note: '日が傾き、森が赤く染まる' },
+  { duration: 600, time: 'night',   note: 'また夜が来た' },
+];
+const phaseCache = [];
+/** i 番目（0 から）の刻。第 6 刻からは PHASE_LOOP を繰り返す（名前は 第 N 刻） */
+export function phaseAt(i) {
+  if (i < PHASES.length) return PHASES[i];
+  if (!phaseCache[i]) phaseCache[i] = { ...PHASE_LOOP[(i - PHASES.length) % PHASE_LOOP.length], name: `第${i + 1}刻`, radius: AREA_RADIUS };
+  return phaseCache[i];
+}
 
 /**
  * 技能（スキル。docs/DESIGN.md「技能」）：技能ボタンを押して使う。使うと効き目が time 秒続き、使った後は cd 秒待つとまた使える
@@ -471,7 +487,7 @@ export const SHARED_SKILLS = {
  * 戰鬥（試合の形）と戰場（マップ）。大廳の「戰鬥」から選ぶ。今は蠱毒と森だけ
  */
 export const MODES = {
-  kodoku: { name: '蠱毒', desc: '4 人で、最後の 1 人になるまで生き残りを争う。試合は刻（こく）という区切りで進み、時間が来るたびに次の刻へ移って、越えると褒美を選べる。今は練習（あなた＋コンピューターが動かす相手 3 人）' },
+  kodoku: { name: '蠱毒', desc: '4 人で、最後の 1 人になるまで生き残りを争う。試合は刻（こく）という区切りで進み、時間が来るたびに次の刻へ移って、越えると褒美を選べる。刻は朝 3 分・昼 5 分・昼 5 分・夕日 5 分・夜 10 分と進み、その後は朝・昼・夕日・夜を繰り返す。今は練習（あなた＋コンピューターが動かす相手 3 人）' },
 };
 export const MAPS = {
   forest: { name: '森', desc: '混淆林・深林・大草原・村。端から端まで 350m。刻が進むと、朝から昼・夕暮れ・夜へ移る' },
@@ -500,7 +516,7 @@ export const MUTATIONS = {
 
 /** ポイント */
 export const POINTS = {
-  phaseSurvive: [50, 75, 100, 150, 200], // フェーズを生き残るたび（フェーズの番号ごと）
+  phaseSurvive: [50, 75, 100, 150, 200], // フェーズを生き残るたび（フェーズの番号ごと。第 6 刻からは最後の値）
   killCreature: 30,
   killPlayer: 150,
   killMutatedPlayer: 250,   // クリーチャー状態（変異薬）のプレイヤーを倒す
@@ -515,7 +531,8 @@ export const POINTS = {
 export const PHASE_FREEZE = 5;
 /** 刻の終わりの、この秒数から 1 秒ごとに時計台の秒針の音（カチッ）を鳴らす。0 秒で鐘（カーンカーン） */
 export const PHASE_TICKS = 10;
-export const REWARD_PICK_TIME = PHASE_FREEZE;
+/** 報酬を選べる時間（秒）：刻の門（js/ui/time-gate.js）が一気に開き始めるまで。過ぎたら最初の候補を自動で選ぶ */
+export const REWARD_PICK_TIME = PHASE_FREEZE - 0.45;
 
 /**
  * フェーズ報酬（ステータス向上）。values はフェーズの番号ごとの強さ。
