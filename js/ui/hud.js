@@ -18,8 +18,11 @@ function formatTime(sec) {
 // bot の名前の横に付ける札（利用者の指示 2026-11-14：bot だったら bot と書く。相手を探す画面・順位・結果に出す）
 const BOT_TAG = '<small class="bot-tag">bot</small>';
 
-export function createHud(match, me, { label = null } = {}) {
+export function createHud(match, me, { label = null, trial = null } = {}) {
   const phaseName = $('#phase-name'), phaseTime = $('#phase-time'), phaseIcon = $('#phase-icon');
+  // 試驗用の刻之長（設定の 60 秒・30 秒、URL の ?phase=）で試合をしているときは、残り時間の下に小さく書く（通常の長さと見分ける）
+  if (trial && !label) phaseTime.dataset.trial = `試驗用 ${trial} 秒`;
+  else delete phaseTime.dataset.trial;
   let shownTime = null;
   const ranking = $('#ranking'), feed = $('#feed');
   const center = $('#center-msg');

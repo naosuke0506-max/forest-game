@@ -6,11 +6,26 @@ const DEFAULTS = { stats: 'on', phaseLen: 'normal', sound: 'mid', titleBgm: 'ja'
 
 /** この端末に保存した設定（無ければ初めの値）。設定の画面を作る前に読むとき用 */
 export function loadSettings() { return load(); }
+// 試驗用の「刻之長」は端末に残さない（2026-11-17：前に試した 60 秒が残ったままで、刻が 1 分になっていた）。
+//   今のタブの間だけ覚える（sessionStorage。大廳へ戻る読み込み直しでは残り、アプリを開き直すと通常に戻る）
+const SESSION_KEYS = ['phaseLen'];
 function load() {
-  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return { ...DEFAULTS }; }
+  let s;
+  try { s = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { s = { ...DEFAULTS }; }
+  for (const k of SESSION_KEYS) {
+    let v = null;
+    try { v = sessionStorage.getItem(`${KEY}.${k}`); } catch { /* 読めなければ初めの値 */ }
+    s[k] = v ?? DEFAULTS[k];   // 端末に残っていた前の値は使わない
+  }
+  return s;
 }
 function save(s) {
-  try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* 保存できなくても続ける */ }
+  const kept = { ...s };
+  for (const k of SESSION_KEYS) {
+    delete kept[k];
+    try { sessionStorage.setItem(`${KEY}.${k}`, s[k]); } catch { /* 保存できなくても続ける */ }
+  }
+  try { localStorage.setItem(KEY, JSON.stringify(kept)); } catch { /* 保存できなくても続ける */ }
 }
 
 /**

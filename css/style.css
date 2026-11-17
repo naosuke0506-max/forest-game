@@ -446,6 +446,8 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .phase-name { font-family: var(--serif); font-size: clamp(14px, 2vmin, 19px); font-weight: 600; letter-spacing: .16em; color: var(--gold-hi); white-space: nowrap; }
 .phase-time { font: 600 clamp(24px, 3.5vmin, 34px)/1.1 var(--serif); letter-spacing: .08em; font-variant-numeric: tabular-nums; color: #fff4d6; white-space: nowrap; }
 .phase-time.overtime { color: #ff9a7a; }
+/* 試驗用の刻之長で遊んでいるときの目印（hud.js。通常の長さでは出ない） */
+.phase-time[data-trial]::after { content: attr(data-trial); display: block; margin-top: 1px; font: 600 11px/1.2 var(--serif); letter-spacing: .1em; color: #ff9a7a; }
 /* 刻の残りの線（右から減る） */
 .phase-bar { position: relative; width: min(170px, 80%); height: 3px; margin: 4px auto 0; background: rgba(0, 0, 0, .65); box-shadow: 0 0 0 1px rgba(217, 180, 95, .3); overflow: hidden; }
 .phase-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: linear-gradient(90deg, #8c7034, #f3dc9a); transition: width .5s linear; }
