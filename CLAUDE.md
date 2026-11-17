@@ -100,6 +100,10 @@
     天井の上に岩が残る大きさにする。直した後は、作業用の場所の `cavesteep.mjs`（床の急な升を数える）と `cavewalk.mjs`・`routetest.mjs` を回す
   - 潜る数は `data.js` の `DIVE`、走りの動きの選び方は `character-view.js` の `legs`（run＝小走り・jog＝走り・sprint＝全速力）
   - 動きの姿を確かめるには、大廳の人物に動きを流して撮る（作業用の場所の `posetest.js`。`window.__hall.direct(名前)` → 少し流してから `seek(時刻)`）
+- **2026-11-17 の依頼**：刻の並び（朝 3 分・昼 5 分・昼 5 分・夕日 5 分・夜 10 分、その後は朝・昼・夕日・夜を繰り返す。`data.js` の `PHASES`・`PHASE_LOOP`・
+  `phaseAt`。終刻と延長戰は無くした。刻の情報は必ず `phaseAt(番号)` で引く）・刻の門（`js/ui/time-gate.js`。絵は `tools/make_gate.py` で Blender が描く。
+  `assets/ui/gate/`）・隠れている間の視点（一人称は家具の中の目の位置 `spot.eyeX/eyeZ/eyeH`、三人称は家具の上の前）・
+  三人称のカメラは壁・家具・木の幹・岩を貫通しない（`main.js` の `player.cameraClear`。頭からの線と、カメラのまわりの余白まで確かめる）
 - **歩きの動き**（2026-11-16。`js/render/character-view.js`）：脚の動きは進む向きで選ぶ（`legs`：歩き・走り・後ろ歩き・横歩き strafe_r/l）。
   斜めは腰から下をひねる（`twistLegs`）。楯を構える・弓を引く・横歩きの間は、上半身の層（背骨から上だけを上書き。`setUpper`）で、
   上半身と脚を別々に動かす。全身の動きを足すときは、歩きながらする物かどうかを考えて、上半身の層に入れるかを決める。

@@ -31,6 +31,7 @@ import { LESSONS, createTutorBot, createTutorState } from './game/tutorial.js';
 import { createTutorPanel } from './ui/tutor-panel.js';
 import { returnToHall } from './core/resume.js';
 import { createLanterns } from './render/lantern.js';
+import { createTimeGate } from './ui/time-gate.js';
 
 const PLAYER_COLOR = '#ffd75e';
 const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
@@ -284,6 +285,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 効果音（足音・戦闘・隠れる・鐘など）
   const sfx = createSfx({ terrain, zones, insideHouse, plazas: zones?.plazas || [] });
   wireSounds(sfx, { combat, match, hiding, me });
+  // 刻の門（時間が止まっている間に画面をふさぐ鉄の門。ガシャンと閉まり、ガシャン、ガシャンと開く。js/ui/time-gate.js）
+  const timeGate = createTimeGate({ sfx });
 
   // 隠れる・探す：自分が隠れたら隙間から覗く見た目に。近くの bot に見られていたら、その bot は場所を覚えて探しに来る
   // 隠れるところを見たか：隠れる直前に立っていた所が、bot の目（前の 120 度・見える距離・体の半分以上が見える）に入っていたか
@@ -292,7 +295,10 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     for (const b of bots) if (b.fighter !== fighter && b.fighter.alive && sees(b.fighter, fighter, from)) b.knowSpot(spot);
     if (fighter !== me) return;
     player.setHide(spot);
-    viewModel.setVisible(false);   // 隠れている間は三人称（家具の上の少し後ろから見る）。手元の武器は出さない
+    viewModel.setVisible(false);   // 隠れている間は、手元の武器は出さない
+    // 一人称：家具の中から隙間を覗く見た目（タンスは扉の縦の隙間、ベッドの下は上が板でふさがる）を重ねる。三人称は「潛伏中」の札だけ
+    hideView.className = `hideview ${thirdPerson ? 'third' : spot.kind}`;
+    hideView.hidden = false;
     hud.addFeed(spot.kind === 'bed' ? 'ベッドの下に隠れた' : 'タンスの中に隠れた');
   });
   const leaveHideView = () => {
@@ -354,6 +360,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     const body = !gone && (third || (fpBody && me.alive));   // 倒れた後は（観戦に移るまで）一人称で自分の体を出さない
     v.setVisible(body);
     v.setFirstPerson?.(body && !third);
+    v.setHeadHidden?.(body && third && player.thirdDistance < 0.7);   // 三人称のカメラが壁に押されて頭のすぐ後ろまで寄った：兜を隠す
+    v.setFpLeftHidden?.(body && !third && SCRIPTED.has(me.action?.kind));   // 一人称の暗殺などの間：左腕と楯で前が見えなくならないように
     viewModel.setVisible(!gone && !third && !fpBody && me.alive);
     player.setEyeOffset(body && !third ? v.eyeOffset : null);
   }
@@ -484,7 +492,12 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     },
     get begun() { return begun; },
     /** 三人称のときは自分の体を見せ、手元の武器を隠す */
-    showMyBody(v) { thirdPerson = v; if (!begun) return; views.get(me).setVisible(v); viewModel.setVisible(!v); },   // 棺桶から出るまでは、体も手元の武器も出さない
+    showMyBody(v) {
+      thirdPerson = v;
+      if (me.hidden) hideView.className = `hideview ${v ? 'third' : me.hidden.kind}`;   // 隠れている間に視點を替えた：覗く見た目も替える
+      if (!begun) return;
+      views.get(me).setVisible(v); viewModel.setVisible(!v);
+    },   // 棺桶から出るまでは、体も手元の武器も出さない
     /** @param {{attack: boolean, left: boolean, dodge: boolean, moveX: number, moveY: number}} input プレイヤーの右手・左手・回避と移動スティック */
     update(dt, input) {
       // 1 回の計算で進める時間は最大 0.1 秒（裏から戻った直後などに、一気に動いたり判定を飛ばしたりしないように）
@@ -495,6 +508,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       const running = match.state === 'running' && !frozenTime;
       player.setFrozen(frozenTime || !me.alive);
       document.body.classList.toggle('timestop', frozenTime);
+      timeGate.update(dt, frozenTime ? match.freeze : 0, me.alive && !spectating);   // 倒れて観戦している間は、門を出さない
       for (const v of views.values()) v.setPaused?.(frozenTime);
       player.setAreaRadius(match.areaRadius);
       // 姿勢：ボタン（押す＝しゃがむ／立つ、長押し＝伏せる）。しゃがむ・伏せると遅く、走れず、目が低い
@@ -661,7 +675,10 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         views.get(b.fighter).update(dt, moving);
         // 隠れている人も、タンスの中・ベッドの下にいる（render/character-view.js。扉や掛け布の隙間から見えることがある）
       }
-      if (running) combat.update(dt);
+      // 試合が終わった後も（最後の 1 人を暗殺で倒した時など）、していた動きは最後まで進める。
+      // 前は、試合が終わった瞬間に暗殺の動きが途中で止まり、体の回りに付いて回る目（一人称）が横や後ろを向いたまま動けなくなっていた
+      // （2026-11-17。利用者の指摘：タンスやベッドから暗殺すると視点がおかしくなる。教練は 1 人倒すと試合が終わるので、必ず起きていた）
+      if (!frozenTime) combat.update(dt);
       if (!frozenTime) { senses.update(dt); sfx.update(dt, fighters); }   // 時間が止まっている間は、見聞きも息遣いも止まる
       viewModel.paused = frozenTime;
       furniture?.update(dt, fighters, frozenTime);   // タンスの扉・ベッドの掛け布（隠れる・探す動きに合わせて）
@@ -706,7 +723,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // 暗殺の動きの間は、一人称の目が体（肩の線）の回った分に付いて回る（動きの始めの肩の向きから。動きの終わりに体の向きが移ると 0 に戻る）
       const ma = me.action, twisting = (ma?.kind === 'assassinate' && ma.phase === 'strike') || (SCRIPTED.has(ma?.kind) && ma?.kind !== 'assassinate');
       if (twisting) {
-        const sy = views.get(me).shoulderYaw;
+        // 一人称の目は、頭の向いている向きに合わせる（肩の線に合わせると、前かがみや振り向きの途中で、目が自分の体の方を向くことがあった。
+        // 2026-11-17）。頭の向きを測れていない模型（仮の人形）は、今までどおり肩の線
+        const vw = views.get(me), sy = vw.headYaw ?? vw.shoulderYaw;
         // 始めの肩の向きの分は引く（構えの姿の少しのねじれ）。ただし、動きの始めから体が大きく回っている
         // （タンスの中で外を向いている・出る動き）ときは引かない（目は体の向く外を見る）
         if (twistBase === null) { const d0 = (((sy - me.yaw) + 540) % 360) - 180; twistBase = Math.abs(d0) < 30 ? d0 : 0; }

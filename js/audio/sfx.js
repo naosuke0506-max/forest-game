@@ -395,6 +395,45 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
       ironStrike(d, at + 0.8, 293.7, 0.23);    // カーン！
     },
     /**
+     * 刻の門（js/ui/time-gate.js）の音。利用者の指示（2026-11-17）：ゲートのようにガシャンガシャンと言いながら開く。
+     *   slam：重い鉄の扉がぶつかって閉まる（ガシャーン）／bolt：かんぬきが差さる・抜ける（ガシャン）／
+     *   clank：扉が引っかかりながら少し開く（ガシャン）／grind：擦れながら一気に開く（ゴゴゴ）
+     * 録音の金属の音（低く落とす）と、その場で作る鉄の響き・低い衝撃・鎖の鳴りを重ねる
+     */
+    gate(kind) {
+      if (!audio.ready) return;
+      const d = outlet({ gain: 0.95, cutoff: 12000 });
+      if (audio.reverb) { const send = audio.ctx.createGain(); send.gain.value = 0.55; d.connect(send); send.connect(audio.reverb); }
+      if (kind === 'slam') {
+        toneHit(d, { f0: 74, f1: 34, dur: 0.85, gain: 0.6, attack: 0.002 });                                  // 床まで響く低い衝撃
+        noiseHit(d, { dur: 0.42, type: 'lowpass', freq: 1400, freqEnd: 180, gain: 0.75, attack: 0.001 });       // ぶつかる音の塊
+        noiseHit(d, { dur: 0.06, type: 'highpass', freq: 3000, gain: 0.35, attack: 0.001 });                    // 硬い当たり
+        ironStrike(d, 0.0, 92, 0.085);                                                                         // 鉄の扉の大きな響き
+        ironStrike(d, 0.012, 139, 0.05);
+        playSample(d, 'hit_metal', { rate: 0.48 * jitter(0.04), gain: 0.95 });
+        playSample(d, 'armor_fall', { t: 0.02, rate: 0.55, gain: 0.7 });
+        playSample(d, 'armor_chain', { t: 0.07, rate: 0.75, gain: 0.45 });                                      // 鎖・金具の鳴り
+        playSample(d, 'hammer', { t: 0.11, rate: 0.6, gain: 0.35 });                                            // 跳ね返り
+      } else if (kind === 'bolt') {
+        noiseHit(d, { dur: 0.16, type: 'bandpass', freq: 1700, freqEnd: 600, q: 1.4, gain: 0.45, attack: 0.002 });   // 棒が擦れる
+        playSample(d, 'hit_metal', { t: 0.1, rate: 0.82 * jitter(0.05), gain: 0.85 });                          // 止めに当たる
+        ironStrike(d, 0.1, 240, 0.04);
+        toneHit(d, { t: 0.1, f0: 120, f1: 70, dur: 0.25, gain: 0.25, attack: 0.002 });
+      } else if (kind === 'clank') {
+        toneHit(d, { f0: 88, f1: 46, dur: 0.5, gain: 0.45, attack: 0.002 });
+        noiseHit(d, { dur: 0.22, type: 'lowpass', freq: 1100, freqEnd: 250, gain: 0.5, attack: 0.001 });
+        ironStrike(d, 0.0, 118 * jitter(0.04), 0.05);
+        playSample(d, 'hit_metal', { rate: 0.6 * jitter(0.06), gain: 0.8 });
+        playSample(d, 'armor_chain', { t: 0.03, rate: 0.85 * jitter(0.05), gain: 0.35 });
+      } else if (kind === 'grind') {
+        noiseHit(d, { dur: 0.55, type: 'bandpass', freq: 520, freqEnd: 260, q: 2.2, gain: 0.5, attack: 0.04 });   // 擦れながら滑る
+        noiseHit(d, { dur: 0.5, type: 'bandpass', freq: 2100, freqEnd: 1300, q: 5, gain: 0.12, attack: 0.05 }); // きしみ
+        toneHit(d, { f0: 58, f1: 44, dur: 0.6, gain: 0.3, attack: 0.05 });
+        playSample(d, 'armor_chain', { t: 0.05, rate: 0.6, gain: 0.4 });
+        playSample(d, 'hit_metal', { t: 0.42, rate: 0.5, gain: 0.55 });                                         // 開ききって当たる
+      }
+    },
+    /**
      * 祓魔僧の神怒（利用者の指示 2026-11-13：大きめの音）。溜め：宙に浮く間、低いうなりが上がっていき、聖歌のような和音と風が膨らむ。
      * 遠くまで聞こえる（ほかの人の神怒も 150 m ほど先まで）
      */
@@ -458,7 +497,6 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   match.on('eliminated', ({ victim }) => sfx.death(victim));
   match.on('tick', ({ left }) => sfx.clockTick(left));   // 刻の終わりの 10 秒：秒針の「カチッ」
   match.on('phaseStart', () => sfx.bell());              // 0 秒（刻が変わった瞬間）：鐘の「カーン、カーン！」
-  match.on('overtime', () => sfx.bell());                // 最後の刻の時間切れ（延長に入る）も同じ
   hiding.on('hide', ({ fighter, spot }) => sfx.hide(fighter, spot.kind));
   hiding.on('exit', ({ fighter, spot }) => sfx.hide(fighter, spot.kind));
   hiding.on('found', ({ searcher, victim }) => { if (searcher === me || victim === me) sfx.found(); });

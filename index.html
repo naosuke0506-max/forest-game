@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-16.4';</script>
+<script>window.__BUILD = '2026-11-17.1';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -39,6 +39,7 @@
 <link rel="modulepreload" href="./js/world/cave.js">
 <link rel="modulepreload" href="./js/world/doors.js">
 <link rel="modulepreload" href="./js/render/lantern.js">
+<link rel="modulepreload" href="./js/ui/time-gate.js">
 <link rel="modulepreload" href="./js/render/intro.js">
 <link rel="modulepreload" href="./js/render/coffin.js">
 <link rel="modulepreload" href="./js/ui/matching.js">
@@ -264,8 +265,16 @@
   <div class="mapview-hint">タップで閉じる</div>
 </div>
 
-<!-- 刻が進んで時間が止まっている間：画面いっぱいの灰色の鉄の壁（利用者の指示 2026-11-16）。真ん中に報酬の一覧（下の #reward）が出る -->
-<div id="timewall" class="timewall" aria-hidden="true"><p class="tw-left"></p></div>
+<!-- 刻の門：刻が進んで時間が止まっている間、画面をふさぐ鉄の両開きの門（js/ui/time-gate.js。利用者の指示 2026-11-16・17）。
+     真ん中に報酬の一覧（下の #reward）が出る。ガシャンと閉まり、ガシャン、ガシャンと開く -->
+<div id="timegate" class="timegate" aria-hidden="true" hidden>
+  <div class="tg-shake">
+    <div class="tg-door tg-l"></div>
+    <div class="tg-door tg-r"><div class="tg-bolt"></div><div class="tg-bolt"></div></div>
+    <div class="tg-dust"></div>
+  </div>
+  <p class="tg-left"></p>
+</div>
 <!-- フェーズ報酬（画面中央） -->
 <section id="reward" class="panel reward" hidden>
   <div class="reward-head"></div>

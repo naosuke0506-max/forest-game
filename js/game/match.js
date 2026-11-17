@@ -1,6 +1,6 @@
 // 試合の流れ：フェーズ・残り時間・延長・歩ける範囲・ポイント・脱落・終了。
 // PlayCanvas に依存しない「計算だけ」の部分（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { PHASES, POINTS, REWARDS, REWARD_PICK_TIME, PHASE_FREEZE, PHASE_TICKS, CHARACTERS, COMBAT, LOADOUTS, WEAPONS, SHIELDS } from './data.js';
+import { phaseAt, POINTS, REWARDS, REWARD_PICK_TIME, PHASE_FREEZE, PHASE_TICKS, CHARACTERS, COMBAT, LOADOUTS, WEAPONS, SHIELDS } from './data.js';
 import { initStance, resetStance } from './stance.js';
 
 /** 選べる物か（武器・楯の模型と動きがある） */
@@ -77,22 +77,22 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
   const listeners = {};
   const emit = (type, data) => (listeners[type] || []).forEach((fn) => fn(data));
 
-  const durationOf = (i) => phaseDuration ?? PHASES[i].duration;
+  const durationOf = (i) => phaseDuration ?? phaseAt(i).duration;
   const m = {
     fighters,
     state: 'running',          // running / over
     phase: 0,
     timeLeft: durationOf(0),
-    overtime: false,           // 最終フェーズの延長中
-    areaRadius: PHASES[0].radius,
-    targetRadius: PHASES[0].radius,
+    overtime: false,           // 延長（前の「終刻」の時間切れ）。2026-11-17 から刻はめぐり続けるので、使わない（いつも false）
+    areaRadius: phaseAt(0).radius,
+    targetRadius: phaseAt(0).radius,
     winner: null,
     elapsed: 0,
     freeze: 0,                 // 刻が変わった直後の、時間が止まっている残り（秒）。この間は誰も動けず、攻撃も当たらない
 
     on(type, fn) { (listeners[type] ||= []).push(fn); return m; },
 
-    get phaseInfo() { return PHASES[m.phase]; },
+    get phaseInfo() { return phaseAt(m.phase); },
     get alive() { return fighters.filter((f) => f.alive); },
 
     /** 点数順（高い順）。同点なら生き残っている方を上に */
@@ -163,7 +163,6 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
         if (f.pendingReward.timeLeft <= 0) m.chooseReward(f, 0);
       }
 
-      if (m.overtime) return;
       const before = Math.ceil(m.timeLeft);
       m.timeLeft -= dt;
       // 刻の終わりの PHASE_TICKS 秒：残りの秒が 1 つ減るたびに合図（時計台の秒針の音。0 秒は刻が変わる＝鐘）
@@ -172,17 +171,11 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
       if (m.timeLeft > 0) return;
 
       endPhase();
-      if (m.phase < PHASES.length - 1) {
-        m.phase++;
-        m.timeLeft = durationOf(m.phase);
-        m.targetRadius = PHASES[m.phase].radius;
-        emit('phaseStart', { phase: m.phase, info: PHASES[m.phase] });
-      } else {
-        // 最終フェーズの時間切れ：生き残りが 1 人になるまで延長
-        m.overtime = true;
-        m.timeLeft = 0;
-        emit('overtime', {});
-      }
+      // 次の刻へ（第 5 刻の後は、朝・昼・夕日・夜を繰り返す。最後の 1 人になるまで続く）
+      m.phase++;
+      m.timeLeft = durationOf(m.phase);
+      m.targetRadius = phaseAt(m.phase).radius;
+      emit('phaseStart', { phase: m.phase, info: phaseAt(m.phase) });
       // 刻を越えたら、時間が止まる（その間に報酬を選ぶ）
       m.freeze = PHASE_FREEZE;
       emit('freeze', { time: PHASE_FREEZE });
@@ -193,11 +186,11 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
   function endPhase() {
     const pts = POINTS.phaseSurvive[m.phase] ?? POINTS.phaseSurvive.at(-1);
     for (const f of m.alive) {
-      m.addPoints(f, pts, `${PHASES[m.phase].name}を生き残った`);
+      m.addPoints(f, pts, `${phaseAt(m.phase).name}を生き残った`);
       if (f.pendingReward) m.chooseReward(f, 0); // 前の報酬を選び終えていなければ自動で
       f.pendingReward = { phase: m.phase, options: pickRewards(m.phase), timeLeft: REWARD_PICK_TIME };
     }
-    emit('phaseEnd', { phase: m.phase, info: PHASES[m.phase] });
+    emit('phaseEnd', { phase: m.phase, info: phaseAt(m.phase) });
   }
 
   /** 報酬の候補を 3 つ（重ならないように） */
