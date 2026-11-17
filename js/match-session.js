@@ -145,7 +145,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     const m = models.get(CHARACTERS[f.char].model);
     return [f, m ? createCharacterView(app, f, terrain, m) : createFighterView(app, f, terrain)];
   }));
-  const hud = createHud(match, me, { label: lesson ? ['教練', lesson.name] : null });   // 教練では残り時間の代わりに教練の名前
+  const hud = createHud(match, me, { label: lesson ? ['教練', lesson.name] : null, trial: !lesson && phaseDuration && phaseDuration < 1e5 ? phaseDuration : null });   // 教練では残り時間の代わりに教練の名前
   // 試合の前に選んだ兵器・變異：その刻を越えたときに届く（中身はまだ無いので、今は知らせだけ）
   const arms = ARMS[loadout?.arms], mutation = MUTATIONS[loadout?.mutation];
   me.arms = null; me.potion = null;

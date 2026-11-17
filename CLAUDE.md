@@ -104,6 +104,7 @@
   `phaseAt`。終刻と延長戰は無くした。刻の情報は必ず `phaseAt(番号)` で引く）・刻の門（`js/ui/time-gate.js`。絵は `tools/make_gate.py` で Blender が描く。
   `assets/ui/gate/`）・隠れている間の視点（一人称は家具の中の目の位置 `spot.eyeX/eyeZ/eyeH`、三人称は家具の上の前）・
   三人称のカメラは壁・家具・木の幹・岩を貫通しない（`main.js` の `player.cameraClear`。頭からの線と、カメラのまわりの余白まで確かめる）
+  設定の試驗用の刻之長（60 秒・30 秒）は端末に残さない（sessionStorage。`settings.js` の `SESSION_KEYS`）。前に試した値が残って「刻が 1 分になっている」と言われたため
 - **歩きの動き**（2026-11-16。`js/render/character-view.js`）：脚の動きは進む向きで選ぶ（`legs`：歩き・走り・後ろ歩き・横歩き strafe_r/l）。
   斜めは腰から下をひねる（`twistLegs`）。楯を構える・弓を引く・横歩きの間は、上半身の層（背骨から上だけを上書き。`setUpper`）で、
   上半身と脚を別々に動かす。全身の動きを足すときは、歩きながらする物かどうかを考えて、上半身の層に入れるかを決める。
