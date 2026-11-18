@@ -287,6 +287,7 @@ async function boot() {
       roster, staged,
       app, config: CONFIG, terrain, obstacles, player, myChar, loadout, timeOfDay, zones, buildings: [...(village?.footprints || []), ...(cave?.footprints || [])],
       trees: trees?.canopies || [],
+      trunks: trees?.trunks || [],   // 木の幹（火炎の人が触れると火が移る。game/combat.js）
       groundAt: floors.groundAt, insideHouse: village?.insideHouse, hides: village?.hides || [], covers: village?.covers || [], furniture: village?.furniture || null, sight,
       houses: village?.houses || [],   // 家の一覧（鷹目の貫く矢で壁に穴を開ける。world/arrow-holes.js）
       doors: village?.doors || null,   // 家の扉（開け閉めできる。world/doors.js）

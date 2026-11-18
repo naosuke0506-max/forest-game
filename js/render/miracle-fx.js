@@ -7,7 +7,8 @@
 //   （2 回目）天光柱：降る所の地面に金の光の輪が縮んでいき、空から細い光の柱が落ちる（光・輪・光の粒）
 //   聖火彈：金と橙の火の玉（光の玉・炎・火の粉の尾）。爆発すると大きな光・広がる輪・火の粉・一瞬の炎
 //   神罰雷：青白い雷の槍（まっすぐな芯と、まわりでぱちぱちする細い稲妻）。当たると空から稲妻が落ち、しびれている人の体に小さな稲妻が走る
-// 描画命令：光の粒 1・光の玉 1・稲妻 1（どれも出ている間だけ）、光の柱・輪は 1 本 1 つ、光壁は 1 枚 1 つ、炎は舌 1 枚 1 つ
+//   （2026-11-18）地面の火・火炎の人の大きな炎（まとめて 1 つの形）・焦げて倒れた人は黒くなる
+// 描画命令：光の粒 1・光の玉 1・稲妻 1・地面の火と火炎 1（どれも出ている間だけ）、光の柱・輪は 1 本 1 つ、光壁は 1 枚 1 つ、炎は舌 1 枚 1 つ
 // 炎の形・光の玉・板をまとめる道具は render/hall-fire.js（大廳の火）と同じ
 import * as pc from 'playcanvas';
 import { FLAME_VS, FLAME_FS, flameQuad, canvasTexture, glowTex, addMat, quads, billboard } from './hall-fire.js';
@@ -62,6 +63,29 @@ void main() {
   vec3 c = uColor * uIntensity * (0.75 + 0.6 * a);
   gl_FragColor = vec4(gammaCorrectOutput(toneMap(c)), clamp(a, 0.0, 0.9));
 }`;
+
+// 地面の火・火炎の炎（利用者の指示 2026-11-18）：たくさんの炎の舌を 1 つの形にまとめて描く（描画命令 1）。
+//   舌ごとの根もとの位置・幅・高さ・明るさ・種は頂点に持たせ、頂点の計算でカメラの方へ向ける。模様は大廳の炎と同じ
+const FIRE_VS = /* glsl */ `
+attribute vec3 aPosition;
+attribute vec4 aCenter;
+attribute vec4 aParam;
+uniform mat4 matrix_viewProjection;
+uniform mat4 matrix_view;
+varying vec2 vUv;
+varying float vSeed;
+varying float vIntensity;
+void main() {
+  vec3 right = normalize(vec3(matrix_view[0][0], matrix_view[1][0], matrix_view[2][0]) * vec3(1.0, 0.0, 1.0) + vec3(0.0001));
+  vec3 p = aCenter.xyz + right * aPosition.x * aParam.x + vec3(0.0, 1.0, 0.0) * aPosition.y * aParam.y;
+  vUv = vec2(aPosition.x + 0.5, aPosition.y);
+  vSeed = aCenter.w;
+  vIntensity = aParam.z;
+  gl_Position = matrix_viewProjection * vec4(p, 1.0);
+}`;
+const FIRE_FS = FLAME_FS.replace('uniform float uSeed;', 'varying float vSeed;').replace('uniform float uIntensity;', 'varying float vIntensity;')
+  .replace(/uSeed/g, 'vSeed').replace(/uIntensity/g, 'vIntensity');
+const FIRE_TONGUES = 200;
 
 const SPARKS = 260, GLOWS = 32, FLAMES = 22, LINES = 120;
 const rnd = Math.random;
@@ -381,6 +405,56 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
     }
   });
 
+  // ---- 地面の火と火炎の炎（1 つの形） ----
+  const fireMesh = new pc.Mesh(device);
+  const fPos = new Float32Array(FIRE_TONGUES * 12), fCen = new Float32Array(FIRE_TONGUES * 16), fPar = new Float32Array(FIRE_TONGUES * 16), fIdx = [];
+  for (let i = 0; i < FIRE_TONGUES; i++) {
+    fPos.set([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], i * 12);
+    fIdx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
+  }
+  fireMesh.setPositions(fPos); fireMesh.setVertexStream(pc.SEMANTIC_ATTR10, fCen, 4); fireMesh.setVertexStream(pc.SEMANTIC_ATTR11, fPar, 4);
+  fireMesh.setIndices(fIdx); fireMesh.update(pc.PRIMITIVE_TRIANGLES);
+  const fireMat = new pc.ShaderMaterial({ uniqueName: 'miracle-fire-batch', vertexGLSL: FIRE_VS, fragmentGLSL: FIRE_FS,
+    attributes: { aPosition: pc.SEMANTIC_POSITION, aCenter: pc.SEMANTIC_ATTR10, aParam: pc.SEMANTIC_ATTR11 } });
+  fireMat.blendType = pc.BLEND_ADDITIVE; fireMat.depthWrite = false; fireMat.cull = pc.CULLFACE_NONE;
+  fireMat.setParameter('uTime', 0); fireMat.update();
+  const fireMi = new pc.MeshInstance(fireMesh, fireMat);
+  fireMi.cull = false;
+  const fireE = new pc.Entity('fire-batch');
+  fireE.addComponent('render', { meshInstances: [fireMi], castShadows: false, receiveShadows: false });
+  fireE.enabled = false;
+  app.root.addChild(fireE);
+  let tongues = 0;
+  /** 炎の舌を 1 枚（根もと x, y, z・幅 w・高さ h・明るさ k・種 seed） */
+  function tongue(x, y, z, w, h, k, seed) {
+    if (tongues >= FIRE_TONGUES || k <= 0.01) return;
+    const i = tongues++;
+    for (let v = 0; v < 4; v++) {
+      fCen.set([x, y, z, seed], (i * 4 + v) * 4);
+      fPar.set([w, h, k, 0], (i * 4 + v) * 4);
+    }
+  }
+  const fireSeed = new Map();   // 地面の火ごとの種（同じ火は同じ揺らぎ）
+  combat.on('fireSpread', ({ fire: fi }) => {
+    fireSeed.set(fi, rnd() * 100);
+    for (let i = 0; i < 14; i++) spark(fi.x + (rnd() - 0.5) * 0.8, fi.y + 0.2, fi.z + (rnd() - 0.5) * 0.8, (rnd() - 0.5) * 1.2, 1 + rnd() * 2, (rnd() - 0.5) * 1.2, 0.5 + rnd() * 0.5, 0.03, [1, 0.55, 0.18], { drag: 0.8 });
+  });
+  combat.on('fireOut', ({ fire: fi }) => fireSeed.delete(fi));
+  combat.on('blaze', ({ fighter: f }) => {
+    flashes.push({ x: f.x, y: yOf(f) + 1, z: f.z, size: 2.6, life: 0.35, max: 0.35, color: [1, 0.55, 0.2] });
+    for (let i = 0; i < 30; i++) spark(f.x + (rnd() - 0.5) * 0.6, yOf(f) + 0.3 + rnd() * 1.4, f.z + (rnd() - 0.5) * 0.6, (rnd() - 0.5) * 2.5, 1.5 + rnd() * 3, (rnd() - 0.5) * 2.5, 0.5 + rnd() * 0.6, 0.035 + rnd() * 0.03, [1, 0.55, 0.15], { grav: 1, drag: 0.6 });
+  });
+  combat.on('blazeEnd', ({ fighter: f, how }) => {
+    if (how === 'burnt' || how === 'gone') return;
+    // 消えた：白い湯気と、散る火の粉
+    for (let i = 0; i < 18; i++) spark(f.x + (rnd() - 0.5) * 0.6, yOf(f) + 0.4 + rnd() * 1.2, f.z + (rnd() - 0.5) * 0.6, (rnd() - 0.5) * 0.8, 0.6 + rnd(), (rnd() - 0.5) * 0.8, 0.8 + rnd() * 0.6, 0.06 + rnd() * 0.05, how === 'water' ? [0.75, 0.78, 0.8] : [1, 0.6, 0.25], { drag: 0.7 });
+  });
+  combat.on('lethal', ({ target, how }) => {
+    if (how !== 'charred') return;
+    views.get(target)?.setCharred?.();   // 焦げて倒れた：体が黒くなる
+    for (let i = 0; i < 40; i++) spark(target.x + (rnd() - 0.5) * 0.7, yOf(target) + rnd() * 1.6, target.z + (rnd() - 0.5) * 0.7, (rnd() - 0.5) * 1.5, 0.5 + rnd() * 2.5, (rnd() - 0.5) * 1.5, 0.8 + rnd() * 1.2, 0.03 + rnd() * 0.04, rnd() < 0.5 ? [1, 0.45, 0.1] : [0.35, 0.33, 0.3], { drag: 0.7 });
+  });
+
   // ---- 奇跡の知らせ ----
   const GOLD = [1, 0.84, 0.48], GREEN = [0.72, 1, 0.55], WHITE = [1, 0.97, 0.86];
   combat.on('miracle', ({ fighter: f, id }) => {
@@ -581,7 +655,7 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
             if (dt > 0 && rnd() < dt * 18) spark(p.x, p.y + 0.05, p.z, (rnd() - 0.5) * 0.6, 0.6 + rnd() * 1.2, (rnd() - 0.5) * 0.6, 0.5 + rnd() * 0.4, 0.02 + rnd() * 0.02, [1, 0.8, 0.4], { drag: 0.9 });
           }
         }
-        if (f.burn && !(f === me && fp)) {
+        if (f.burn && !f.blaze && !(f === me && fp)) {
           const y = yOf(f), k = Math.min(1, f.burn.left / 0.6);
           flame(f.x, y + 0.6, f.z, 1.0, 0.6, 0, k);
           flame(f.x + right.x * 0.18, y + 0.9, f.z + right.z * 0.18, 0.7, 0.4, 0, k * 0.8);
@@ -590,6 +664,39 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
         }
       }
       for (let i = flameUsed; i < FLAMES; i++) if (flames[i].e.enabled) flames[i].e.enabled = false;
+
+      // 地面の火（草・木）と、火炎で燃え上がっている人：まとめた炎の舌
+      tongues = 0;
+      fireMat.setParameter('uTime', time);
+      for (const fi of combat.fires || []) {
+        const seed = fireSeed.get(fi) ?? 0, age = fi.life - fi.left;
+        const k = Math.min(1, age / 0.5) * Math.min(1, fi.left / 1.5);
+        if (fi.kind === 'tree') {
+          // 木：根もとと、幹を上へ（燃え上がる）
+          const top = Math.min(4.5, 1.2 + age * 1.2);
+          for (let j = 0; j < 3; j++) { const a = seed + j * 2.1; tongue(fi.x + Math.cos(a) * 0.35, fi.y, fi.z + Math.sin(a) * 0.35, 0.9, 1.5, k, seed + j); }
+          for (let hy = 1.2; hy < top; hy += 1.1) tongue(fi.x + Math.cos(seed + hy) * 0.2, fi.y + hy, fi.z + Math.sin(seed + hy) * 0.2, 0.8, 1.5, k * 0.9, seed + hy * 3);
+        } else {
+          // 草：大草原の草（高さ 1.2 m ほど）より上へ炎が出るように、高い舌を 4 枚
+          for (let j = 0; j < 4; j++) { const a = seed + j * 1.7, rr = fi.r * 0.55 * ((j * 0.37 + seed) % 1); tongue(fi.x + Math.cos(a) * rr, fi.y - 0.05, fi.z + Math.sin(a) * rr, 1.0, 1.45 + ((seed + j) % 0.5), k, seed + j * 5); }
+        }
+        if (dt > 0 && rnd() < dt * (fi.kind === 'tree' ? 10 : 5)) spark(fi.x + (rnd() - 0.5) * fi.r, fi.y + 0.4 + rnd() * (fi.kind === 'tree' ? 3 : 0.6), fi.z + (rnd() - 0.5) * fi.r, (rnd() - 0.5) * 0.5, 1 + rnd() * 1.5, (rnd() - 0.5) * 0.5, 0.8 + rnd() * 0.8, 0.025, [1, 0.55, 0.18], { drag: 0.9 });
+      }
+      for (const f of fighters) {
+        if (!f.alive || !f.blaze || f.hidden || (f === me && fp)) continue;
+        const y = yOf(f), k = Math.min(1, f.blaze.left / 0.8), sd = f.id * 7.3;
+        tongue(f.x, y + 0.1, f.z, 1.0, 1.9, k, sd);
+        tongue(f.x + right.x * 0.25, y + 0.5, f.z + right.z * 0.25, 0.7, 1.4, k, sd + 1);
+        tongue(f.x - right.x * 0.25, y + 0.6, f.z - right.z * 0.25, 0.7, 1.4, k, sd + 2);
+        tongue(f.x, y + 1.1, f.z, 0.6, 1.1, k * 0.9, sd + 3);
+        if (dt > 0 && rnd() < dt * 25) spark(f.x + (rnd() - 0.5) * 0.5, y + 1.2 + rnd() * 0.8, f.z + (rnd() - 0.5) * 0.5, (rnd() - 0.5) * 0.6, 1.5 + rnd() * 2, (rnd() - 0.5) * 0.6, 0.6 + rnd() * 0.6, 0.03, [1, 0.55, 0.18], { drag: 0.9 });
+      }
+      fireE.enabled = tongues > 0;
+      if (tongues) {
+        for (let i = tongues; i < FIRE_TONGUES; i++) { const o = i * 16; for (let v = 0; v < 4; v++) fPar[o + v * 4 + 2] = 0; }   // 使わない舌は暗く
+        fireMesh.setVertexStream(pc.SEMANTIC_ATTR10, fCen, 4); fireMesh.setVertexStream(pc.SEMANTIC_ATTR11, fPar, 4);
+        fireMesh.update(pc.PRIMITIVE_TRIANGLES);
+      }
 
       // 光の粒を進めて、板に書き込む
       let alive = 0;
@@ -631,7 +738,7 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
     },
     /** 確認用：今出ている物の数 */
     get stats() {
-      return { sparks: sparks.filter((s) => s.life > 0).length, flames: flameUsed, walls: wallViews.size, bursts: bursts.length, halos: halos.size, lines: lineUsed, spells: (combat.spells || []).length };
+      return { sparks: sparks.filter((s) => s.life > 0).length, flames: flameUsed, walls: wallViews.size, bursts: bursts.length, halos: halos.size, lines: lineUsed, spells: (combat.spells || []).length, tongues, fires: (combat.fires || []).length };
     },
   };
 }

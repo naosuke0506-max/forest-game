@@ -103,7 +103,7 @@ export const LESSONS = {
       { text: '目の前の家に入る', done: (S) => S.inside },
       { text: 'タンスかベッドの前で潛伏ボタン（PC は E）を押して隠れる。隠れると、外の敵が家に入ってくる', done: (S) => S.hid },
       { text: '敵が近くに来たら、暗殺ボタン（PC は R）で飛び出す', done: (S) => S.assassinTries >= 1 },
-      { text: '暗殺で倒す', done: (S) => S.assassinKills >= 1 },
+      { text: '暗殺を決める（後ろからは体力の 6 割、前・横からは 2 割 5 分を削る）', done: (S) => S.assassinKills >= 1 },
     ],
   },
   evade: {
@@ -142,7 +142,7 @@ export const LESSONS = {
     steps: [
       { text: '壁の近くで壁潛ボタン（PC は E）を押して、壁に背を付ける', done: (S) => S.covered },
       { text: '敵が近くを通ったら、暗殺ボタン（PC は R）で飛び出す', done: (S) => S.assassinTries >= 1 },
-      { text: '暗殺で倒す', done: (S) => S.assassinKills >= 1 },
+      { text: '暗殺を決める（後ろからは体力の 6 割、前・横からは 2 割 5 分を削る）', done: (S) => S.assassinKills >= 1 },
     ],
   },
   shield: {
@@ -380,7 +380,7 @@ export function createTutorState(lesson, { me, combat, cover, match }) {
   combat.on('projectileHit', ({ projectile, through }) => { if (through && projectile.owner === me) S.pierceHits++; });
   cover.on('enter', ({ fighter }) => { if (fighter === me) S.covered = true; });
   match.on('eliminated', ({ victim, killer }) => { if (killer === me && victim !== me) S.kills++; });
-  combat.on('hit', ({ attacker, kind }) => { if (attacker === me && kind === 'assassinate') S.assassinKills++; });   // 暗殺で倒した（一撃で倒すときの知らせ）
+  combat.on('hit', ({ attacker, kind }) => { if (attacker === me && kind === 'assassinate') S.assassinKills++; });   // 暗殺を決めた（2026-11-18 から、暗殺は体力の一部を削る。倒しきったときも同じ知らせ）
   let step = 0;
   return {
     S,

@@ -112,6 +112,11 @@
   見た目を素早く確かめるには、作業用の場所の `lab/fx.html`（奇跡の見た目だけを空と地面の前に出す）を `fxlab.js`・`fxlab2.js` で撮る（昼と夜）
   奇跡を足すときは、`MIRACLES` に clip・time・at・cd を書き、`castMiracle`（combat.js）・見た目・音（sfx.js の `miracle`）・bot（bot.js）・圖鑑・教練を足す。
   音の注意：`sfx.js` の noiseHit・toneHit・metal の `t` は「今からの秒」（`audio.ctx.currentTime` を渡すと鳴らない。2026-11-17 に神怒の音で見つけた）
+- **属性と状態異常・暗殺の傷**（2026-11-18。利用者の指示）：物理でない攻撃（炎・雷・聖）は楯で受けても半分通る。炎・雷は当たるたびに少し燃える／しびれ、
+  状態異常が溜まって 100% で火炎（草・木に燃え移る・回避 3 回／水／治癒で消す・消せないと焦げて倒れる）・雷痺（無防備＝致命の一撃）。
+  数は `data.js` の `ELEMENTS`、仕組みは `combat.js` の `elementHit`・`afflict`・`updateAilments`・`updateFires`、燃える物は `match-session.js` の `flammable`、
+  地面の火と火炎の炎は `miracle-fx.js` の 1 つの形（`FIRE_VS`）。暗殺は後ろから体力の 6 割・前と横から 2 割 5 分（`ASSASSIN.cut`。生き残ると起き上がる getup）。
+  タンス・ベッドからの「引きずり出して止め」と致命の一撃は、今も一撃で倒す
 - **歩きの動き**（2026-11-16。`js/render/character-view.js`）：脚の動きは進む向きで選ぶ（`legs`：歩き・走り・後ろ歩き・横歩き strafe_r/l）。
   斜めは腰から下をひねる（`twistLegs`）。楯を構える・弓を引く・横歩きの間は、上半身の層（背骨から上だけを上書き。`setUpper`）で、
   上半身と脚を別々に動かす。全身の動きを足すときは、歩きながらする物かどうかを考えて、上半身の層に入れるかを決める。
