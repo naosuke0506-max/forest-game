@@ -12,6 +12,14 @@ export const ICONS = {
   shield: svg(`<path fill="currentColor" d="M12 2 20 5v6.5c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5V5zm0 2.2L6 6.4v5.1c0 3.8 2.4 6.7 6 8.3z"/>`),
   heavy: svg(`<path fill="currentColor" d="M14.5 2.5h3v3l-8.9 8.9-3-3zM5 12.1l2.1 2.1L5.4 16l2.6 2.6 1.8-1.7 2.1 2.1-1.4 1.4-1.4-1.4-2.8 2.8-3.6-3.6 2.8-2.8-1.4-1.4z"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M20.5 9.5c.6 3.8-1.4 7.6-5 9.3"/>`),
   switch: svg(`<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 9h12l-3-3M19 15H7l3 3"/>`),
+  // 祓魔僧の奇跡（2026-11-17）：治癒（光の輪の中の十字）・蘇生（光輪の下から昇る矢）・光壁（菱の目の光の壁）・淨炎（炎）
+  m_heal: svg(`<circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path fill="currentColor" d="M10.4 5.5h3.2v4.9h4.9v3.2h-4.9v4.9h-3.2v-4.9H5.5v-3.2h4.9z"/>`),
+  m_revive: svg(`<ellipse cx="12" cy="4" rx="5.2" ry="1.9" fill="none" stroke="currentColor" stroke-width="1.7"/><path fill="currentColor" d="M12 7.6l5.6 5.6h-3.4V22h-4.4v-8.8H6.4z"/>`),
+  m_wall: svg(`<rect x="4" y="2.5" width="16" height="19" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="1.3" d="M4 9.5l8-5.5 8 5.5M4 15.5l8-5.5 8 5.5M4 21.5l8-5.5 8 5.5"/>`),
+  m_pillar: svg(`<path fill="currentColor" d="M9.6 1.5h4.8l-.9 15.5h-3z"/><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M4 20.5c2.4-2.2 13.6-2.2 16 0M7.5 14.5l-2-1.6M16.5 14.5l2-1.6M6 9.5l-2.2-.6M18 9.5l2.2-.6"/>`),
+  m_fireball: svg(`<circle cx="15" cy="9" r="5.2" fill="currentColor"/><path fill="currentColor" opacity=".75" d="M11 11.6 3 20.8l1.2-4.4L2 17l5.8-6.6zM13.4 13.6l-5 8 .6-3.2-2.2.8 3.7-6.4z"/>`),
+  m_thunder: svg(`<path fill="currentColor" d="M13.8 1.5 5.5 13.4h5.2l-2 9.1 9.8-13.6h-5.4l2.3-7.4z"/>`),
+  m_flame: svg(`<path fill="currentColor" d="M12 1.8c1.2 4.2 6.6 6.4 6.6 12.4a6.6 6.6 0 0 1-13.2 0c0-3.4 1.7-5.6 3.4-6.8 0 2.3 1 3.9 2.6 4.6-.6-3.6-.4-6.6.6-10.2z"/><path fill="#000" opacity=".35" d="M12 13c.8 1.6 2.6 2.4 2.6 4.4a2.6 2.6 0 0 1-5.2 0c0-1.6.9-2.6 1.8-3.2-.1 1 .3 1.6.8 1.8z"/>`),
   // 視點の切り替え：目
   eye: svg(`<path fill="none" stroke="currentColor" stroke-width="2" d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/>`),
   // 技能（專用技能）：八方へ光を放つ星

@@ -1,7 +1,8 @@
 // 試合の流れ：フェーズ・残り時間・延長・歩ける範囲・ポイント・脱落・終了。
 // PlayCanvas に依存しない「計算だけ」の部分（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { phaseAt, POINTS, REWARDS, REWARD_PICK_TIME, PHASE_FREEZE, PHASE_TICKS, CHARACTERS, COMBAT, LOADOUTS, WEAPONS, SHIELDS } from './data.js';
+import { phaseAt, POINTS, REWARDS, REWARD_PICK_TIME, PHASE_FREEZE, PHASE_TICKS, CHARACTERS, COMBAT, LOADOUTS, WEAPONS, SHIELDS, MIRACLES } from './data.js';
 import { initStance, resetStance } from './stance.js';
+import { miracleOffers, learnMiracle } from './miracles.js';
 
 /** 選べる物か（武器・楯の模型と動きがある） */
 const usable = (slot, id) => (slot === 'shield' ? !!SHIELDS[id] && !SHIELDS[id].planned : !!WEAPONS[id]);
@@ -188,15 +189,21 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
     for (const f of m.alive) {
       m.addPoints(f, pts, `${phaseAt(m.phase).name}を生き残った`);
       if (f.pendingReward) m.chooseReward(f, 0); // 前の報酬を選び終えていなければ自動で
-      f.pendingReward = { phase: m.phase, options: pickRewards(m.phase), timeLeft: REWARD_PICK_TIME };
+      f.pendingReward = { phase: m.phase, options: pickRewards(m.phase, f), timeLeft: REWARD_PICK_TIME };
     }
     emit('phaseEnd', { phase: m.phase, info: phaseAt(m.phase) });
   }
 
-  /** 報酬の候補を 3 つ（重ならないように） */
-  function pickRewards(phase) {
+  /**
+   * 報酬の候補を 3 つ（重ならないように）。
+   * 祓魔僧は、まだ覚えていない奇跡が先に出る（利用者の指示 2026-11-17。最大 4 つ。game/miracles.js）。足りない分は能力値
+   */
+  function pickRewards(phase, f = null) {
+    const out = miracleOffers(f, () => rng.next()).map((id) => ({
+      reward: { id: `miracle:${id}`, kind: 'miracle', miracle: id, name: MIRACLES[id].name, unit: '', apply: (who) => learnMiracle(who, id) },
+      value: '',
+    }));
     const pool = [...REWARDS];
-    const out = [];
     while (out.length < 3 && pool.length) {
       const r = pool.splice(Math.floor(rng.next() * pool.length), 1)[0];
       out.push({ reward: r, value: r.values[Math.min(phase, r.values.length - 1)] });

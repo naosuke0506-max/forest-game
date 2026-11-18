@@ -8,6 +8,7 @@ export const L = {
   // 右下のボタン
   attack: '攻擊', shoot: '射', thrust: '突', assassinate: '暗殺', finisher: '誅殺',
   dodge: '迴避', search: '搜索', sprint: '疾驅', skill: '技能',
+  miracle: '奇跡', swap: '替',   // 祓魔僧：左手の奇跡ボタン（選んでいる奇跡の名前が出る）・唱える奇跡を替えるボタン（2026-11-17）
   crouch: '屈身', stand: '起立', getUp: '起身',
   dive: '潛水', surface: '浮上',   // 泳いでいる間の姿勢ボタン：水の中へ潜る・水面へ浮く（game/swim.js）
   exit: '出', hide: '潛伏', wall: '壁潛', leave: '離壁',

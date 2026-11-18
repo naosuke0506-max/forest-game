@@ -1,5 +1,6 @@
 // 練習モードの試合：あなた＋bot 3 体。試合の計算（game/）と、見た目・画面（render/・ui/）をつなぐ
-import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS, SHIELD_SKILLS, SHIELD_MOVES, SPRINT, DASH } from './game/data.js';
+import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS, SHIELD_SKILLS, SHIELD_MOVES, SPRINT, DASH, MIRACLES } from './game/data.js';
+import { selectedMiracle, miraclesOf, miracleCool } from './game/miracles.js';
 import { createMinimap } from './ui/minimap.js';
 import { ZONE_NAMES } from './world/zones.js';
 import { TIMES } from './world/time-of-day.js';
@@ -26,6 +27,7 @@ import { skillOf, skillOn } from './game/skills.js';
 import { createHeatVision } from './render/heat-vision.js';
 import { createUltDust } from './render/ult-dust.js';
 import { createWrathWave } from './render/wrath-wave.js';
+import { createMiracleFx } from './render/miracle-fx.js';
 import { createArrowHoles } from './world/arrow-holes.js';
 import { LESSONS, createTutorBot, createTutorState } from './game/tutorial.js';
 import { createTutorPanel } from './ui/tutor-panel.js';
@@ -110,6 +112,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 教練では、決まった所に置き（自分の近く・家の中・壁の前など）、動きの決まった相手にする（game/tutorial.js）
   const lessonCtx = () => ({
     me, bots: fighters.filter((f) => !f.isPlayer), hides, hiding, coverSegs: covers, houses, isFree: (x, z, r) => obstacles.isFree(x, z, r, true),
+    insideHouse: insideHouse || null, heightAt: (x, z) => terrain.heightAt(x, z),   // 家の中か・地面の高さ（教練「奇跡・攻」が開けた所を探す）
     spawn: (x, z, yaw) => { player.spawn(x, z, yaw); me.x = x; me.z = z; me.yaw = yaw; me.y = player.position.y; },
   });
   if (lesson) {
@@ -134,7 +137,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // キャラの模型を読み込む。読み込めなかったキャラは、仮の人形で続ける（画面下に知らせを出す）
   const models = new Map();
   // 武器の模型：みんなの武器（持替の武器も）と楯
-  const weaponsLoaded = loadWeaponModels(app, fighters.flatMap((f) => [f.primary, ...(f.sidearm ? [f.sidearm] : []), ...(f.shield ? ['shield'] : [])]));
+  const weaponsLoaded = loadWeaponModels(app, fighters.flatMap((f) => [f.primary, ...(f.sidearm ? [f.sidearm] : []), ...(f.shield ? ['shield'] : []), ...(f.left === 'miracle' ? ['talisman'] : [])]));
   const charIds = [...new Set(fighters.map((f) => CHARACTERS[f.char].model))];
   await Promise.all([weaponsLoaded, ...charIds.map((id) =>
     loadCharacterModel(app, id).then((m) => models.set(id, m)).catch((err) => {
@@ -204,6 +207,90 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   };
   showSkill();
   combat.on('skill', ({ fighter, skill }) => { if (fighter === me) hud.addFeed(skill.time ? `${skill.name}を使った（${skill.time} 秒）` : `${skill.name}を放った`); });
+  // 奇跡（祓魔僧。game/miracles.js）：左手の奇跡ボタンで、選んでいる奇跡を唱える。替ボタン（楯擊の所。PC は H）で次の奇跡へ。
+  // 1 つも覚えていない間は出さない。待ち時間の間は暗い影と残りの秒、唱えている間と蘇生の加護の間は金に脈打つ。替ボタンの上に次の奇跡の名前
+  const isCleric = me.left === 'miracle';
+  const swapBtn = document.getElementById('btn-swap') || document.createElement('button');
+  leftBtn.classList.toggle('miracle', isCleric);
+  let miracleShown = '';
+  const showMiracle = (canShow) => {
+    if (!isCleric) return;
+    const id = selectedMiracle(me), owned = miraclesOf(me);
+    leftBtn.hidden = !canShow || !id;
+    swapBtn.hidden = !canShow || owned.length < 2;
+    if (!id) return;
+    const M = MIRACLES[id], cool = miracleCool(me, id), blessed = id === 'revive' && me.blessing > 0;
+    const casting = me.action?.kind === 'miracle' && me.action.id === id;
+    const sec = blessed ? Math.ceil(me.blessing) : cool > 0 ? Math.ceil(cool) : 0;
+    setCd(leftBtn, cool > 0 ? cool / M.cd : 0);
+    const next = owned.length > 1 ? owned[(owned.indexOf(id) + 1) % owned.length] : null;
+    const key = `${id}|${sec}|${casting}|${blessed}|${next}`;
+    if (key === miracleShown) return;
+    miracleShown = key;
+    setBtn(leftBtn, ICONS[`m_${id}`] || ICONS.skill, M.name, sec || '');
+    leftBtn.classList.toggle('cool', cool > 0);
+    leftBtn.classList.toggle('on', casting || blessed);
+    setBtn(swapBtn, ICONS.switch, L.swap);
+    if (next) swapBtn.insertAdjacentHTML('beforeend', `<span class="ab-next">${MIRACLES[next].name}</span>`);
+  };
+  // 効き目の残り（体力の板の上）：加護・淨炎・光壁・燃えている
+  const buffsEl = document.getElementById('buffs');
+  let buffsShown = '';
+  const showBuffs = () => {
+    if (!buffsEl) return;
+    const list = [];
+    if (me.alive) {
+      if (me.blessing > 0) list.push(['', ICONS.m_revive, '加護', me.blessing]);
+      if (me.flame > 0) list.push(['', ICONS.m_flame, '淨炎', me.flame]);
+      const w = combat.walls.find((x) => x.owner === me);
+      if (w) list.push(['', ICONS.m_wall, '光壁', w.left]);
+      if (me.burn) list.push(['burn', ICONS.m_flame, '燃', me.burn.left]);
+      if (me.shock > 0) list.push(['shock', ICONS.m_thunder, '痺', me.shock]);
+      if (me.blind > 0) list.push(['', ICONS.m_pillar, '眩', me.blind]);
+    }
+    const key = list.map((b) => `${b[2]}${Math.ceil(b[3])}`).join('|');
+    if (key === buffsShown) return;
+    buffsShown = key;
+    buffsEl.hidden = !list.length;
+    buffsEl.innerHTML = list.map(([c, icon, name, sec]) => `<span class="bf ${c}">${icon}${name}<b>${Math.ceil(sec)}</b></span>`).join('');
+  };
+  combat.on('miracle', ({ fighter, id, amount }) => {
+    if (fighter !== me) return;
+    const M = MIRACLES[id];
+    hud.addFeed(id === 'heal' ? `治癒を唱えた（体力 +${Math.round(amount)}）` : id === 'revive' ? `蘇生の加護を受けた（${M.life} 秒）`
+      : id === 'wall' ? `光壁を張った（${M.life} 秒）` : id === 'flame' ? `淨炎をまとった（${M.life} 秒）`
+      : id === 'pillar' ? '天光柱を唱えた' : id === 'fireball' ? '聖火彈を放った' : '神罰雷を投げた');
+  });
+  combat.on('miracleBroken', ({ fighter, id }) => { if (fighter === me) hud.addFeed(`${MIRACLES[id].name}が途切れた`); });
+  combat.on('revived', ({ fighter }) => {
+    if (fighter === me) hud.centerMsg(MIRACLES.revive.name, '光の中から蘇った', 2.6);
+    else hud.addFeed(`${fighter.name}が光の中から蘇った`);
+  });
+  combat.on('wallEnd', ({ wall, broke }) => { if (wall.owner === me && broke) hud.addFeed('光壁が砕けた'); });
+  combat.on('blinded', ({ fighter, by }) => {
+    if (fighter === me) hud.addFeed('光で目がくらんだ');
+    else if (by === me) hud.addFeed(`${fighter.name}の目がくらんだ`);
+  });
+  combat.on('shocked', ({ fighter, by }) => {
+    if (fighter === me) hud.addFeed('雷でしびれて動けない');
+    else if (by === me) hud.addFeed(`${fighter.name}がしびれた`);
+  });
+  // 目くらまし（天光柱）：白い光が画面を覆い、最後の 1 秒で薄れていく
+  const blindEl = document.getElementById('blind');
+  let blindShown = -1;
+  const showBlind = () => {
+    if (!blindEl) return;
+    const k = me.alive && !spectating ? Math.min(1, (me.blind || 0) / 1.0) * 0.94 : 0;
+    const v = Math.round(k * 50) / 50;
+    if (v === blindShown) return;
+    blindShown = v;
+    blindEl.hidden = v <= 0;
+    blindEl.style.opacity = String(v);
+  };
+  combat.on('ignite', ({ fighter, by }) => {
+    if (fighter === me) hud.addFeed('燃えている！（水に入ると消える）');
+    else if (by === me) hud.addFeed(`${fighter.name}が燃えた`);
+  });
   combat.on('counter', ({ fighter, target }) => {
     if (fighter === me) hud.addFeed(`${target.name}に反擊した`);
     else if (target === me) hud.addFeed(`${fighter.name}の反擊を受けた`);
@@ -348,6 +435,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   combat.on('wrath', (e) => wave.burst(e));
   const arrows = createProjectileViews(app, combat);
   let thirdPerson = false;
+  // 祓魔僧の奇跡の見た目（護符に集まる光・光の柱・加護の輪・光壁・清めの炎・燃える人。render/miracle-fx.js）
+  const miracleFx = createMiracleFx(app, { combat, fighters, views, camera: player.camera, firstPerson: () => !thirdPerson && !spectating, me });
   // 一人称でも自分の体（模型）を映す：手・腕・盾・脚が見える（頭は隠す。render/character-view.js）。
   // 模型が読めなかったとき（仮の人形）だけ、画面の手前に武器だけを出す（render/viewmodel.js）
   const fpBody = !!views.get(me).setFirstPerson;
@@ -396,7 +485,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         document.getElementById('btn-attack').hidden = true;
         document.getElementById('btn-left').hidden = true;
         document.getElementById('btn-dodge').hidden = true;
-        stanceBtn.hidden = true; shieldBtn.hidden = true;
+        stanceBtn.hidden = true; shieldBtn.hidden = true; swapBtn.hidden = true;
         useBtn.hidden = true;
         searchBtn.hidden = true;
         if (doorBtn) doorBtn.hidden = true;
@@ -581,6 +670,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       showSprint();
       skillBtn.hidden = !mySkill || !running || !me.alive || !!me.hidden;
       showSkill();
+      showMiracle(running && me.alive && !me.hidden && !spectating);
+      showBuffs();
+      showBlind();
       player.setEyeHeight((config.player.eyeHeight * stanceShape(me).eye) / STANCES.stand.eye);
       me.gait = (player.moving > 0.75 || me.sprinting) && canRun(me) ? 'run' : player.moving > 0.05 ? 'walk' : 'still';   // 足音の大きさ（bot の耳）
       refreshStance();
@@ -704,6 +796,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       lanterns.update(dt, player.camera.getPosition());   // 角燈を腰に付け、光を置く（体の姿が決まった後）
       heat.update(dt, skillOn(me, 'hawk') && me.alive && !spectating, fighters, me, views);   // 鷹目：白黒にして、敵の体温を壁越しに描く
       if (!frozenTime) { dust.update(dt); wave.update(dt); holes.update(combat.projectiles); }
+      miracleFx.update(frozenTime ? 0 : dt);   // 時間が止まっている間は、光も炎も止まる
       if (tutor && tutor.update(dt, { insideHouse })) {
         tutorPanel.show(tutor.step);
         // 全部できた：少し見せてから、自動で大廳へ戻る（利用者の指示 2026-11-14）
@@ -761,6 +854,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     debugAction,
     views,   // 確認用（自動テストから見た目の状態を読むため）
     combat,  // 確認用（自動テストから戦闘の出来事を数えるため）
+    miracleFx,  // 確認用（奇跡の見た目の数）
     hiding,
     sfx,
     senses,

@@ -16,6 +16,7 @@ import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
 import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY, SKILL_FX, SWORD_ULT, WRATH } from './data.js';
 import { skillOf, skillOn, skillReady } from './skills.js';
+import { canMiracle, miracleReady } from './miracles.js';
 import { techSetOf } from './techniques.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
 
@@ -57,6 +58,7 @@ export function createBot(fighter, rng, fighters) {
     tap: false, hold: 0, wantC2: false, chained: false,
     assassin: false,     // 次のフレームに 1 回だけ暗殺ボタンを押す
     skillTap: false,     // 次のフレームに 1 回だけ技能ボタンを押す
+    miracleTap: null,    // 次のフレームに唱える奇跡の名前（祓魔僧）
     input: { forward: 0, strafe: 0, run: false, yaw: fighter.yaw, pitch: 0, attack: false, guard: false, left: false, dodge: false, dodgeX: 0, dodgeY: 0, search: false },
   };
   const f = fighter;
@@ -78,8 +80,11 @@ export function createBot(fighter, rng, fighters) {
     const hawk = skillOn(f, 'hawk');   // 鷹目（弓兵の技能）：80 m 以内の敵が壁越しに分かる。隠れ場所の中の人は、その隠れ場所を探しに行く
     for (const t of fighters) {
       if (t === f || !t.alive) continue;
-      const see = S ? S.canSee(f, t) : !t.hidden && Math.hypot(t.x - f.x, t.z - f.z) <= 40;
+      // 天光柱で目がくらんでいる間は、何も見えず、見失った相手を追うこともできない（耳は聞こえる）
+      const blind = f.blind > 0;
+      const see = !blind && (S ? S.canSee(f, t) : !t.hidden && Math.hypot(t.x - f.x, t.z - f.z) <= 40);
       const k = b.known.get(t);
+      if (blind && k) k.track = 0;
       if (hawk && !see && Math.hypot(t.x - f.x, t.z - f.z) <= SKILL_FX.hawk.range) {
         if (t.hidden) { if (!f.hidden) b.knownSpot = t.hidden; }
         else { b.known.set(t, { x: t.x, y: t.y, z: t.z, age: 0, seen: false, track: Math.max(k?.track ?? 0, 0.5), tracked: true }); continue; }
@@ -334,6 +339,32 @@ export function createBot(fighter, rng, fighters) {
         : false;
       if (use) b.skillTap = true;
     }
+    // 奇跡（祓魔僧。game/miracles.js）：使いどころで唱える（唱える奇跡の名前を 1 フレームだけ渡す）
+    //   治癒：体力が半分を切り、近くに敵がいないとき／蘇生：敵が近くにいるとき（先に加護を受けておく）／
+    //   光壁：弓の相手が見えているとき・体力が少なくて離れた相手がいるとき（相手の方を向いて張る）／淨炎：相手に近づいたとき／
+    //   神罰雷・聖火彈・天光柱：見えている相手が、それぞれ届く間合いにいるとき（相手の方を向き、神罰雷は胸の高さを狙う。どれにするかは乱数）
+    if (canMiracle(f) && !f.action && !f.hidden && !f.swimming && rng.next() < 0.3) {
+      const t = b.target, d = t ? Math.hypot(t.x - f.x, t.z - f.z) : Infinity;
+      const seen = !!t && !!b.known.get(t)?.seen, hpK = f.stats.hp / f.stats.maxHp;
+      const ranged = !!t && WEAPONS[t.weapon]?.kind === 'bow';
+      const strike = [];
+      if (seen && !t.hidden) {
+        if (miracleReady(f, 'thunder') && d > 6 && d < 35) strike.push('thunder');
+        if (miracleReady(f, 'fireball') && d > 5 && d < 22) strike.push('fireball');
+        if (miracleReady(f, 'pillar') && d > 5 && d < 17) strike.push('pillar');
+      }
+      let pick = null;
+      if (miracleReady(f, 'heal') && hpK < 0.5 && d > 3.5) pick = 'heal';
+      else if (miracleReady(f, 'revive') && t && d < 25) pick = 'revive';
+      else if (miracleReady(f, 'wall') && seen && d > 5 && d < 30 && (ranged || hpK < 0.4)) { pick = 'wall'; f.yaw = yawTo(f, t.x, t.z); }
+      else if (strike.length) {
+        pick = strike[Math.floor(rng.next() * strike.length)];
+        f.yaw = yawTo(f, t.x, t.z);
+        f.pitch = (Math.atan2(((t.y ?? 0) + 1.1) - ((f.y ?? 0) + 1.45), Math.max(0.5, d)) * 180) / Math.PI;
+      }
+      else if (miracleReady(f, 'flame') && t && d < 12) pick = 'flame';
+      if (pick) b.miracleTap = pick;
+    }
     if (!b.look) setStance(f, 'stand');   // 探しに行っていなければ立つ（相手が見えたら立って戦う）
     // 近くに隠れている人の息遣いが聞こえたら、その場所を覚えて探す（息が荒いほど気づきやすい）
     if (!b.knownSpot) {
@@ -535,7 +566,9 @@ export function createBot(fighter, rng, fighters) {
       b.leftTap = false;
       const skill = b.skillTap;
       b.skillTap = false;
-      return { attack, assassinate, skill, left: f.left === 'guard' ? i.guard || leftTap : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
+      const miracle = b.miracleTap;
+      b.miracleTap = null;
+      return { attack, assassinate, skill, miracle, left: f.left === 'guard' ? i.guard || leftTap : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
     },
   };
 }

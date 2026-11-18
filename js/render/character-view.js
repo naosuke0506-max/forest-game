@@ -3,7 +3,7 @@
 // 模型は tools/characters/build_character.py で作る（assets/characters/<名前>.glb と、動きの長さ・速さの .json）。
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
-import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT, WRATH, HIDE_ACTS, SLOPE } from '../game/data.js';
+import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT, WRATH, HIDE_ACTS, SLOPE, MIRACLES, REVIVE_TIME } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { techSetOf } from '../game/techniques.js';
 import { stanceShape } from '../game/stance.js';
@@ -91,6 +91,68 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   }
   showWeapon(fighter.weapon);
   if (fighter.shield) attach('socket_L', createShieldModel(), [0, 0, 0]);
+  // 祓魔僧の護符（奇跡。2026-11-17）：左の拳（socket_L2）から鎖で下がる。毎フレーム、拳の所から垂らして揺らし（振り子）、
+  // 表を体の前へ向ける。真ん中の琥珀の玉は、奇跡を唱える間に明るく光る（render/miracle-fx.js が talismanGlow を決める）
+  const sockL2 = body.findByName('socket_L2');
+  const talisman = fighter.left === 'miracle' && sockL2 ? createWeaponModel('talisman', { shadows: false }) : null;   // 小さいので影は落とさない（胸に大きな黒い影が映った）
+  const gemMats = [];
+  if (talisman) {
+    // 人物の入れ物の子にする（位置と向きは毎フレーム世界の座標で決める）。大廳は人物を大廳の層と光へ移すので、護符も一緒に移る
+    root.addChild(talisman);
+    for (const r of talisman.findComponents('render')) {
+      for (const mi of r.meshInstances) {
+        if (!/gem/i.test(mi.material.name)) continue;
+        const m = mi.material.clone();
+        m.emissive = new pc.Color(1, 0.48, 0.12);
+        m.update();
+        mi.material = m;
+        gemMats.push(m);
+      }
+    }
+  }
+  const TAL_LEN = 0.15;   // 拳から護符の真ん中まで（m。tools/make_talisman.py の C）
+  const hand = new pc.Vec3(), bob = new pc.Vec3(), bobPrev = new pc.Vec3(), tv = new pc.Vec3(), tAxX = new pc.Vec3(), tAxY = new pc.Vec3(), tAxZ = new pc.Vec3();
+  const tMat = new pc.Mat4(), tQuat = new pc.Quat();
+  let bobReady = false, glowShown = -1;
+  function placeTalisman(dt) {
+    if (!talisman) return;
+    const show = root.enabled && body.enabled;
+    talisman.enabled = show;
+    if (!show) { bobReady = false; return; }
+    hand.copy(sockL2.getPosition());
+    if (!bobReady) { bob.set(hand.x, hand.y - TAL_LEN, hand.z); bobPrev.copy(bob); bobReady = true; }
+    if (dt > 0) {
+      // 振り子：前の動きを少し弱めて続け、重さで下へ。拳からの長さを保つ
+      const k = Math.min(dt, 1 / 30);
+      tv.sub2(bob, bobPrev).mulScalar(0.9);
+      bobPrev.copy(bob);
+      bob.add(tv);
+      bob.y -= 9.8 * k * k;
+    }
+    tv.sub2(bob, hand);
+    if (tv.lengthSq() < 1e-8) tv.set(0, -1, 0);
+    tv.normalize();
+    bob.copy(hand).add(tAxY.copy(tv).mulScalar(TAL_LEN));
+    // 向き：-Y を拳から護符へ、表（+Z）を体の前へ
+    tAxY.copy(tv).mulScalar(-1);
+    const yaw = (fighter.yaw * Math.PI) / 180;
+    tAxZ.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+    tAxZ.sub(tv.copy(tAxY).mulScalar(tAxZ.dot(tAxY)));
+    if (tAxZ.lengthSq() < 1e-6) tAxZ.set(0, 0, 1);
+    tAxZ.normalize();
+    tAxX.cross(tAxY, tAxZ);
+    const d = tMat.data;
+    d[0] = tAxX.x; d[1] = tAxX.y; d[2] = tAxX.z; d[3] = 0;
+    d[4] = tAxY.x; d[5] = tAxY.y; d[6] = tAxY.z; d[7] = 0;
+    d[8] = tAxZ.x; d[9] = tAxZ.y; d[10] = tAxZ.z; d[11] = 0;
+    d[12] = 0; d[13] = 0; d[14] = 0; d[15] = 1;
+    tQuat.setFromMat4(tMat);
+    talisman.setPosition(hand);
+    talisman.setRotation(tQuat);
+    // 琥珀の玉の光
+    const g = Math.round((0.6 + (fighter.talismanGlow || 0) * 7) * 20) / 20;
+    if (g !== glowShown) { glowShown = g; for (const m of gemMats) { m.emissiveIntensity = g; m.update(); } }
+  }
   // 弓を引いている間の矢：右手（弦を引く手）から弓の握りへ向けて番える（矢の模型は -Z が鏃）
   const sockR = body.findByName('socket_R'), sockBow = body.findByName('socket_bow');
   const nocked = WEAPONS[fighter.primary]?.kind === 'bow' && sockR && sockBow ? createArrowModel() : null;
@@ -356,6 +418,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     /** 確認用（自動テストから、今の動き・上半身に重ねている動き・腰のひねり・速さを読む） */
     get moveState() { return { clip: current, upper: upperName, upperW, legTwist, vel, fwd, side }; },
     update(dt) {
+      placeTalisman(paused || directed ? 0 : dt);   // 祓魔僧の護符（時間が止まっている間・圖鑑では揺らさない）
       if (paused) return;   // 時間が止まっている（刻が変わった直後）：姿もそのまま
       if (directed) return;  // 圖鑑：選んだ動きをそのまま流す（時刻は圖鑑が動かす）
       upperWant = 0;
@@ -431,7 +494,16 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       return heatOut;
     },
     /** 片付ける（大廳の人物を替えるとき） */
-    destroy() { root.destroy(); },
+    destroy() { talisman?.destroy(); root.destroy(); },
+    /**
+     * 祓魔僧の奇跡の見た目（render/miracle-fx.js）に使う世界の位置。模型が映っていないときは null
+     *   talismanPos：護符の真ん中、weaponHead：右手の武器の頭（持ち手から reach m 先。鎚矛の頭は 0.5 m）
+     */
+    talismanPos(out) { return talisman && talisman.enabled ? out.copy(bob) : null; },
+    weaponHead(out, reach = 0.5) {
+      if (!root.enabled || !sockR) return null;
+      return out.copy(sockR.up).mulScalar(reach).add(sockR.getPosition());
+    },
     /** 動きの情報（長さ・繰り返すか）。この模型が持つ動きの名前の一覧は clipNames */
     clipInfo: (name) => (has(name) ? clip(name) : null),
     get clipNames() { return Object.keys(meta.clips).filter(has); },
@@ -664,6 +736,13 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         } else if (a.kind === 'wrath') {
           // 祓魔僧の神怒：宙に浮いて衝撃波を放つ動き（data.js の WRATH.time に合わせる）
           if (has(WRATH.clip)) restart(WRATH.clip, clip(WRATH.clip).duration / WRATH.time);
+        } else if (a.kind === 'miracle') {
+          // 祓魔僧の奇跡を唱える：奇跡ごとの動き（data.js の MIRACLES の clip・time。tools/characters/cleric_moves.py）
+          const M = MIRACLES[a.id];
+          if (M && has(M.clip)) restart(M.clip, clip(M.clip).duration / M.time);
+        } else if (a.kind === 'revive') {
+          // 蘇生の加護で蘇る：崩れて膝をついた姿から、光を受けて立ち上がる
+          if (has('cl_rise')) restart('cl_rise', clip('cl_rise').duration / REVIVE_TIME);
         } else if (a.kind === 'dodge') {
           const d = DODGE[fighter.weight] || DODGE.medium;
           restart(d.anim, clip(d.anim) ? clip(d.anim).duration / d.duration : 1);

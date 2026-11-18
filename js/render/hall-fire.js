@@ -1,9 +1,10 @@
 // 大廳の火と空気：動く炎（その場の計算で揺らめく模様を上へ流す）・熾火・火の粉・揺らぐ光、窓からの月の光の筋と漂う塵
 //   炎は、カメラの方を向く縦長の板に、雲のような模様（fbm）を上へ流して描く。芯は白く、外へ黄・橙・赤へ。光を足す（加算）
 //   火の粉・塵は、それぞれ全部を 1 つの形にまとめ、毎フレーム位置と色を入れ直す（描画命令は 1 つずつ）
+//   炎の形・光の玉・光の筋・板をまとめる道具は、祓魔僧の奇跡の見た目（render/miracle-fx.js）でも使う
 import * as pc from 'playcanvas';
 
-const FLAME_VS = /* glsl */ `
+export const FLAME_VS = /* glsl */ `
 attribute vec3 aPosition;
 attribute vec2 aUv0;
 uniform mat4 matrix_model;
@@ -19,7 +20,7 @@ void main() {
   vUv = aUv0;
   gl_Position = matrix_viewProjection * vec4(p, 1.0);
 }`;
-const FLAME_FS = /* glsl */ `
+export const FLAME_FS = /* glsl */ `
 #include "gammaPS"
 #include "tonemappingPS"
 uniform float uTime;
@@ -54,7 +55,7 @@ void main() {
 }`;
 
 /** 板（横 -0.5〜0.5、縦 0〜1） */
-function flameQuad(device) {
+export function flameQuad(device) {
   const m = new pc.Mesh(device);
   m.setPositions([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0]);
   m.setUvs(0, [0, 0, 1, 0, 1, 1, 0, 1]);
@@ -62,7 +63,7 @@ function flameQuad(device) {
   m.update(pc.PRIMITIVE_TRIANGLES);
   return m;
 }
-function canvasTexture(device, S, draw) {
+export function canvasTexture(device, S, draw) {
   const c = document.createElement('canvas');
   c.width = c.height = S;
   draw(c.getContext('2d'), S);
@@ -71,7 +72,7 @@ function canvasTexture(device, S, draw) {
   return t;
 }
 /** 黒地の柔らかい光の玉（加算） */
-const glowTex = (device) => canvasTexture(device, 128, (g, S) => {
+export const glowTex = (device) => canvasTexture(device, 128, (g, S) => {
   g.fillStyle = '#000'; g.fillRect(0, 0, S, S);
   const r = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
   r.addColorStop(0, 'rgba(255,255,255,0.9)'); r.addColorStop(0.15, 'rgba(255,255,255,0.45)'); r.addColorStop(0.45, 'rgba(255,255,255,0.1)'); r.addColorStop(1, 'rgba(0,0,0,0)');
@@ -91,7 +92,7 @@ const coalTex = (device) => canvasTexture(device, 256, (g, S) => {
   }
 });
 /** 光の筋（横に柔らかく、縦は上が強く下へ消える） */
-const shaftTex = (device) => canvasTexture(device, 128, (g, S) => {
+export const shaftTex = (device) => canvasTexture(device, 128, (g, S) => {
   g.fillStyle = '#000'; g.fillRect(0, 0, S, S);
   const img = g.getImageData(0, 0, S, S), d = img.data;
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
@@ -102,7 +103,7 @@ const shaftTex = (device) => canvasTexture(device, 128, (g, S) => {
   g.putImageData(img, 0, 0);
 });
 
-function addMat(tex, color, intensity, vertexColor = false) {
+export function addMat(tex, color, intensity, vertexColor = false) {
   const m = new pc.StandardMaterial();
   m.useLighting = false; m.useSkybox = false; m.useFog = false;
   m.diffuse = new pc.Color(0, 0, 0);
@@ -114,7 +115,7 @@ function addMat(tex, color, intensity, vertexColor = false) {
 }
 
 /** n 枚の板を 1 つにまとめた形（位置と色を毎回入れ直す） */
-function quads(device, n) {
+export function quads(device, n) {
   const uvs = [], idx = [], nor = new Float32Array(n * 12);
   for (let i = 0; i < n; i++) {
     uvs.push(0, 1, 1, 1, 1, 0, 0, 0);
@@ -128,7 +129,7 @@ function quads(device, n) {
   return { mesh, pos, col, n };
 }
 /** 板 i をカメラに向けて置く（right・up：カメラの右と上） */
-function billboard(q, i, x, y, z, sx, sy, right, up, r, g, b, a = 1) {
+export function billboard(q, i, x, y, z, sx, sy, right, up, r, g, b, a = 1) {
   const o = i * 12, p = q.pos;
   const rx = right.x * sx, ry = right.y * sx, rz = right.z * sx, ux = up.x * sy, uy = up.y * sy, uz = up.z * sy;
   p[o] = x - rx - ux; p[o + 1] = y - ry - uy; p[o + 2] = z - rz - uz;
