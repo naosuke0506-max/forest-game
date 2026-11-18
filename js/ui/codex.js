@@ -3,7 +3,7 @@
 //   動きの再生は、動作監督の画面と同じ作り：動きの一覧（見出しごと）・流す／止める・繰り返す・速さ・時刻のつまみ
 import { L } from './labels.js';
 import { ruby, rubyIn } from './ruby.js';
-import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, EXCLUSIVE_SKILLS, SHARED_SKILLS, TECHNIQUES, SHIELD_SKILLS } from '../game/data.js';
+import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, EXCLUSIVE_SKILLS, SHARED_SKILLS, TECHNIQUES, SHIELD_SKILLS, MIRACLES, MIRACLE_SLOTS } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { resolveLoadout } from '../game/match.js';
 import { CLIP_NAMES, CLIP_DESC, CLIP_GROUPS, WEAPON_KIND, WEAPON_ARTS, COMMON_ARTS, CREATURE_KINDS, CHAR_GUIDE } from '../game/codex.js';
@@ -82,6 +82,15 @@ function skillCard(s, main = false) {
     <p class="sk-desc">${esc(s.desc)}</p></div>`;
 }
 
+/** 奇跡の札（祓魔僧。名前・種類・唱える秒・効き目の長さ・待ち時間・説明。2 回目に作る物は「未完」） */
+function miracleCard(m) {
+  const meta = m.planned ? [SKILL_TYPES[m.type], `待ち時間 ${m.cd} 秒`]
+    : [SKILL_TYPES[m.type], `唱える ${m.at} 秒`, m.life ? `効き目 ${m.life} 秒` : '', `待ち時間 ${m.cd} 秒`].filter(Boolean);
+  return `<div class="skill-card"><div class="sk-head"><b>${ruby(m.name)}</b>${m.planned ? `<small>${L.planned}</small>` : ''}<span class="sk-meta">${meta.map(esc).join('・')}</span></div>
+    <p class="sk-desc">${esc(m.desc)}</p></div>`;
+}
+const MIRACLE_NOTE = `刻を越えるたびの褒美で、奇跡が 3 つ出て 1 つ覚える（最大 ${MIRACLE_SLOTS} つ。そろった後の褒美は能力値）。左手の奇跡ボタン（PC は K）で唱え、替ボタン（PC は H）で唱える奇跡を替える。唱える途中で攻撃を受けてひるむと途切れる`;
+
 /**
  * 性能（殺傷力・生命力・敏捷・防禦力）：全キャラの中での強さを 10 の目盛りで表す（一番弱い人で 3、一番強い人で 10）
  *   殺傷力：選べる武器の威力の平均、生命力：體力、敏捷：速さ、防禦力：鎧の硬さ（受ける傷が少ないほど硬い）
@@ -149,6 +158,7 @@ export function createCodex({ hall }) {
       <h4 class="codex-head">專用技能</h4>
       ${ex ? skillCard(ex, true) : ''}
       <p class="codex-note">技能ボタンで使う（PC は G）。専用技能はキャラ 1 人に 1 つで、最初から使える。共通技能は刻を越えるたびの報酬で 3 つから 1 つ選ぶ（まだ使えない。技能の札）</p>
+      ${c.left === 'miracle' ? `<h4 class="codex-head">奇跡</h4><p class="codex-note">${esc(MIRACLE_NOTE)}</p>${Object.values(MIRACLES).map(miracleCard).join('')}` : ''}
       <h4 class="codex-head">性能</h4>
       ${gauges(char)}
       ${g ? `<h4 class="codex-head">推奨</h4>
@@ -238,7 +248,10 @@ export function createCodex({ hall }) {
       ${Object.values(SHARED_SKILLS).map((s) => skillCard(s)).join('')}
       <h4 class="codex-head">專用技能</h4>
       <p class="codex-note">キャラ 1 人に 1 つ。最初から使える</p>
-      ${Object.entries(EXCLUSIVE_SKILLS).map(([id, s]) => `<p class="skill-of">${esc(CHARACTERS[id].name)}</p>${skillCard(s)}`).join('')}`;
+      ${Object.entries(EXCLUSIVE_SKILLS).map(([id, s]) => `<p class="skill-of">${esc(CHARACTERS[id].name)}</p>${skillCard(s)}`).join('')}
+      <h4 class="codex-head">奇跡</h4>
+      <p class="codex-note">祓魔僧だけ。${esc(MIRACLE_NOTE)}</p>
+      ${Object.values(MIRACLES).map(miracleCard).join('')}`;
   }
   function renderBeast() {
     return `<p class="codex-note">魔物（クリーチャー）はこれから作る（${L.planned}）。森に出てくる魔物・ボスと、變異の藥で変わる姿をここに載せる</p>

@@ -2,7 +2,8 @@
 // 人間も bot も、同じ形の入力 { attack: 押している, guard: 押している } で動かす。
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
 import { updateDive } from './swim.js';
-import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SKILL_FX, SWORD_ULT, WRATH, SWIM } from './data.js';
+import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SKILL_FX, SWORD_ULT, WRATH, SWIM, MIRACLES, REVIVE_TIME } from './data.js';
+import { selectedMiracle, selectMiracle, cycleMiracle, miracleReady, startCool, updateMiracles } from './miracles.js';
 import { skillOf, skillOn, skillReady, useSkill, updateSkill } from './skills.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 import { setStance, updateStance, stanceShape, resetStance } from './stance.js';
@@ -57,6 +58,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   const floorAt = groundAt || ((x, z) => heightAt(x, z));
   const yOf = (f) => f.y ?? heightAt(f.x, f.z);   // 足の高さ（家の二階にいれば高い）
   const projectiles = [];
+  // 光壁（祓魔僧の奇跡。game/miracles.js）：{ owner, x, y, z, yaw, half, height, left（残り秒）, guard（受け止められる残りの傷）}
+  const walls = [];
   const listeners = {};
   const emit = (type, data) => (listeners[type] || []).forEach((fn) => fn(data));
   const fighters = match.fighters;
@@ -76,7 +79,16 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       const d = DODGE[target.weight];
       if (a.t >= d.invuln[0] && a.t <= d.invuln[1]) { emit('dodged', { attacker, target }); return; }
     }
+    if (target.invuln > 0) return;   // 蘇ったばかり（蘇生の奇跡）：傷を受けない
     let amount = (raw * (attacker ? attacker.stats.attack : 1) * target.armor) / target.stats.defense;
+    // 淨炎（奇跡）：鎚矛が炎をまとっている間の近接の当たりは、傷が増え、相手が燃える
+    const flaming = physical && kind === 'melee' && attacker?.flame > 0;
+    if (flaming) amount *= MIRACLES.flame.damage;
+    // 光壁（奇跡）：攻めた所と受ける人の間に光の壁があれば、壁が受け止める（壁を張った人の攻撃は通る。神怒の衝撃波は通る）
+    if (kind !== 'wrath' && attacker && attacker !== target) {
+      const w = wallBetween(fromX, fromZ, target.x, target.z, yOf(target) + 1.1, attacker);
+      if (w) { hitWall(w, amount, attacker, fromX, fromZ, target); return; }
+    }
     let guarded = false, broke = false;
     // 技能（game/skills.js）：剛力（攻めた人）は傷 1.5 倍・楯の上から半分通る・当たりが重い。強靱（受けた人）は受ける傷が減る
     const might = physical && skillOn(attacker, 'might'), crush = might && power === 'h';
@@ -123,10 +135,19 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (ta?.kind === 'drag' && !ta.hit) { if (ta.victim.action?.kind === 'dragged') ta.victim.action = null; target.action = null; }
       if (ta && ['hideIn', 'hideOut', 'search'].includes(ta.kind)) target.action = null;   // 隠れる・出る・探すのを取りやめる
       if (ta && ((ta.kind === 'attack' && !ta.hit) || (ta.kind === 'shield' && !ta.hit) || ta.kind === 'charge' || ta.kind === 'charge2')) target.action = null;
+      // 奇跡を唱えている途中（効き目が出る前）：途切れる（待ち時間は始まらない）
+      if (ta?.kind === 'miracle' && !ta.done) { target.action = null; emit('miracleBroken', { fighter: target, id: ta.id }); }
       interruptTech(target);
     }
     emit('hit', { attacker, target, amount, guarded, kind, power });
+    // 淨炎で燃える（まともに当たったときだけ。燃えている間にまた当たると、燃える時間が戻る）
+    if (flaming && !guarded && target.stats.hp > 0) {
+      const lit = !target.burn;
+      target.burn = { left: MIRACLES.flame.burn, dps: MIRACLES.flame.burnDps, by: attacker };
+      if (lit) emit('ignite', { fighter: target, by: attacker });
+    }
     if (target.stats.hp <= 0) {
+      if (revive(target, attacker)) return;
       target.stats.hp = 0;
       target.action = null;
       target.guarding = false;
@@ -239,7 +260,9 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       emit('spared', { attacker, target, how });
       return;
     }
+    if (target.invuln > 0) return;
     const amount = target.stats.hp;
+    if (revive(target, attacker, how)) return;   // 蘇生の加護があれば、一度だけ蘇る
     target.stats.hp = 0;
     target.hitFlash = 0.25;
     target.action = null; target.helpless = 0;
@@ -247,6 +270,104 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     emit('lethal', { attacker, target, how });
     match.eliminate(target, attacker);
   }
+  /**
+   * 蘇生の加護（奇跡）があれば、倒れずに光の中から蘇る（体力 MIRACLES.revive.hp の割合。蘇る動きの間とその後しばらく、傷を受けない）。
+   * 蘇ったら true。教練の自分（deathless）は使わない（教練では倒れない）
+   */
+  function revive(t, by, how = 'hit') {
+    if (!(t.blessing > 0) || t.deathless) return false;
+    const R = MIRACLES.revive;
+    t.blessing = 0;
+    if (t.miracle) t.miracle.cool.revive = R.cd;
+    t.stats.hp = Math.max(1, Math.round(t.stats.maxHp * R.hp));
+    t.burn = null;
+    t.invuln = REVIVE_TIME + R.invuln;
+    t.helpless = 0; t.stun = 0; t.guarding = false;
+    if (t.react) t.react.time = 0;
+    if (t.hidden) hiding?.exit(t);
+    if (t.cover) cover?.exit(t);
+    resetStance(t);
+    t.action = { kind: 'revive', t: 0 };
+    interruptTech(t);
+    emit('revived', { fighter: t, by, how });
+    return true;
+  }
+
+  /** 燃えている傷（淨炎）。体力が尽きれば倒れる（蘇生の加護があれば蘇る） */
+  function burnHurt(t, n) {
+    if (!t.alive || t.invuln > 0 || match.state !== 'running') return;
+    t.stats.hp -= n;
+    if (t.stats.hp > 0) return;
+    const by = t.burn?.by || null;
+    if (revive(t, by, 'burn')) return;
+    t.stats.hp = 0;
+    t.action = null; t.guarding = false;
+    emit('hit', { attacker: by, target: t, amount: n, guarded: false, kind: 'burn' });
+    match.eliminate(t, by && by !== t ? by : null);
+  }
+
+  // ---- 光壁（奇跡）----
+  /** (ax, az) → (bx, bz) の線が、光壁を横切るか（高さ y で）。横切る壁を返す（owner の壁は通す） */
+  function wallBetween(ax, az, bx, bz, y, owner) {
+    for (const w of walls) {
+      if (w.owner === owner || w.left <= 0) continue;
+      if (y < w.y - 0.3 || y > w.y + w.height) continue;
+      // 壁の線：真ん中 (w.x, w.z) から、壁の向き（右へ）に ±half
+      const rx = Math.cos(w.yaw * DEG), rz = -Math.sin(w.yaw * DEG);
+      const sx = bx - ax, sz = bz - az;
+      const den = sx * rz - sz * rx;
+      if (Math.abs(den) < 1e-6) continue;
+      const qx = w.x - ax, qz = w.z - az;
+      const u = (qx * rz - qz * rx) / den;            // 攻めの線の上の割合（0〜1）
+      const v = (qx * sz - qz * sx) / den;            // 壁の上の位置（真ん中から m。右が正）
+      if (u > 0 && u < 1 && Math.abs(v) <= w.half) return w;
+    }
+    return null;
+  }
+  /** 光壁が受け止める。受け止められる傷を超えたら砕ける */
+  function hitWall(w, amount, attacker, fromX, fromZ, target = null) {
+    w.guard -= amount;
+    // 当たった所（壁の線の上で、攻めた所にいちばん近い点）
+    const rx = Math.cos(w.yaw * DEG), rz = -Math.sin(w.yaw * DEG);
+    const v = Math.max(-w.half, Math.min(w.half, (fromX - w.x) * rx + (fromZ - w.z) * rz));
+    emit('wallHit', { wall: w, attacker, target, amount, x: w.x + rx * v, z: w.z + rz * v, y: w.y + 1.2 });
+    if (w.guard <= 0) breakWall(w, true);
+  }
+  function breakWall(w, broke) {
+    const i = walls.indexOf(w);
+    if (i < 0) return;
+    walls.splice(i, 1);
+    w.left = 0;
+    emit('wallEnd', { wall: w, broke });
+  }
+
+  /** 奇跡の効き目（唱える動きの at 秒に出る） */
+  function castMiracle(f, id) {
+    const M = MIRACLES[id];
+    startCool(f, id);
+    if (id === 'heal') {
+      const before = f.stats.hp;
+      f.stats.hp = Math.min(f.stats.maxHp, f.stats.hp + f.stats.maxHp * M.amount);
+      f.burn = null;
+      emit('miracle', { fighter: f, id, amount: f.stats.hp - before });
+    } else if (id === 'revive') {
+      f.blessing = M.life;
+      emit('miracle', { fighter: f, id });
+    } else if (id === 'flame') {
+      f.flame = M.life;
+      emit('miracle', { fighter: f, id });
+    } else if (id === 'wall') {
+      // 前の壁は消える（1 人 1 枚）
+      for (const w of [...walls]) if (w.owner === f) breakWall(w, false);
+      const rad = f.yaw * DEG, x = f.x - Math.sin(rad) * M.ahead, z = f.z - Math.cos(rad) * M.ahead;
+      const w = { owner: f, x, z, y: floorAt(x, z, yOf(f)), yaw: f.yaw, half: M.width / 2, height: M.height, left: M.life, life: M.life,
+        guard: M.guard, id: Math.random() };
+      walls.push(w);
+      emit('miracle', { fighter: f, id, wall: w });
+      emit('wallUp', { wall: w });
+    }
+  }
+
   /** f の近く（reach 以内・同じ高さ）にいる相手のうち、条件に合う一番近い人 */
   function nearestFoe(f, reach, test = () => true) {
     let best = null, bd = reach;
@@ -263,7 +384,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   const assassin = createAssassin({ fighters, senses, yOf, move: (f, dx, dz) => shove(f, dx, dz), lethal, emit });
   // タンス・ベッドに隠れる・出る・探す動きと、見つけたら引きずり出して止め（game/hide-acts.js）
   const acts = hiding ? createHideActs({ hiding, move: (f, dx, dz) => shove(f, dx, dz), lethal, emit }) : null;
-  const LOCKED = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged', 'wrath']);   // している間はほかのことができない（神怒の間も）
+  const LOCKED = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged', 'wrath', 'revive']);   // している間はほかのことができない（神怒の間も）
   /** 押されて動く（木や岩・壁を避け、歩ける範囲の中・床の高さへ）。実際に動いた分を返す */
   const shove = (f, dx, dz) => {
     const ox = f.x, oz = f.z;
@@ -332,6 +453,15 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     const ox = p.x, oz = p.z;
     p.vy -= COMBAT.gravity * dt;
     p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+    // 光壁（奇跡）に当たると、壁が受け止める（貫く矢は通り抜ける）
+    if (!p.pierce && walls.length) {
+      const w = wallBetween(ox, oz, p.x, p.z, p.y, p.owner);
+      if (w) {
+        hitWall(w, p.damage * (p.owner ? p.owner.stats.attack : 1), p.owner, ox, oz);
+        emit('projectileBlocked', { projectile: p, wall: w });
+        return false;
+      }
+    }
     // 人に当たる：線分（前の位置 → 今の位置）と、体の円柱
     for (const t of fighters) {
       if (t === p.owner || !t.alive || (t.hidden && !p.pierce)) continue;   // 隠れている人には当たらない（貫く矢は、隠れ場所ごと貫く）
@@ -369,6 +499,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
 
   return {
     projectiles,
+    walls,
     on(type, fn) { (listeners[type] ||= []).push(fn); },
 
     /**
@@ -398,6 +529,11 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       f._shieldHeld = !!input.shield;
       const skillPressed = input.skill && !f._skillHeld;      // 技能ボタン（專用技能。game/skills.js）
       f._skillHeld = !!input.skill;
+      // 奇跡（祓魔僧。左手ボタンで唱える）：替ボタンで次の奇跡へ（いつでも替えられる）。bot は唱える奇跡の名前（input.miracle）を渡す
+      const swapPressed = input.swap && !f._swapHeld;
+      f._swapHeld = !!input.swap;
+      if (f.left === 'miracle' && swapPressed && cycleMiracle(f)) emit('miracleSelect', { fighter: f, id: selectedMiracle(f) });
+      const castWant = f.left === 'miracle' && (leftPressed || !!input.miracle);
       // 暗殺している・されている・隠れる・出る・探す・引きずり出す間は、ほかのことはできない
       if (LOCKED.has(f.action?.kind)) { f.guarding = false; return; }
       // 泳いでいる間は、攻撃・防禦・回避・技能はできない（利用者の指示 2026-11-14：川は泳げる。game/swim.js）。していたことも止まる
@@ -463,6 +599,20 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (pressed && !f.action) {
         const t = nearestFoe(f, FINISH_REACH, (o) => o.helpless > 0);
         if (t) { faceTo(f, t); f.action = { kind: 'finisher', t: 0, target: t }; f.guarding = false; emit('finisherStart', { attacker: f, target: t }); return; }
+      }
+
+      // 奇跡を唱える（祓魔僧）：何もしていないときだけ。唱える動きの間は動けず、効き目が出る前に攻撃を受けてひるむと途切れる
+      if (castWant) {
+        if (input.miracle) selectMiracle(f, input.miracle);
+        const id = selectedMiracle(f);
+        if (id && !f.action && miracleReady(f, id)) {
+          f.action = { kind: 'miracle', t: 0, id, done: false };
+          f.guarding = false;
+          f.sprinting = false;
+          emit('miracleCast', { fighter: f, id });
+          return;
+        }
+        if (id && leftPressed && !f.action && !miracleReady(f, id)) emit('miracleNotReady', { fighter: f, id });   // 待ち時間の間に押した（音で知らせる）
       }
 
       // 回避：移動スティックの向きへ（倒していなければ後ろへ）。行動中（弓を引いている途中は除く）はできない
@@ -559,6 +709,17 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         f.hitFlash = Math.max(0, f.hitFlash - dt);
         if (f.helpless > 0) f.helpless = Math.max(0, f.helpless - dt);
         updateSkill(f, dt);   // 技能の効き目と待ち時間
+        updateMiracles(f, dt);   // 奇跡の待ち時間と、加護・炎の残り（game/miracles.js）
+        // 燃えている（淨炎）：少しずつ傷が増える。水に入ると消える
+        if (f.burn) {
+          if (f.swimming) { f.burn = null; emit('extinguish', { fighter: f }); }
+          else {
+            f.burn.left -= dt;
+            burnHurt(f, f.burn.dps * dt);
+            if (f.burn && f.burn.left <= 0) { f.burn = null; emit('extinguish', { fighter: f }); }
+            if (!f.alive) continue;
+          }
+        }
         // スタミナ：走っている間（全速力はもっと）と、防禦を構えている間は減り続け、その間は戻らない（利用者の指示 2026-11-14）。
         // 防禦で受けた分も、今までどおり減る（damage）。走って使い切ると息が切れ、COMBAT.windedRecover まで戻るまで走れない（game/stance.js の canRun）
         const running = f.gait === 'run' && !f.action && !f.guarding;   // 防禦の構えで歩いているのは走りではない
@@ -614,6 +775,13 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
           } else if (a.kind === 'wrath') {
             if (!a.fired && a.t >= WRATH.at) { a.fired = true; wrathBlast(f); }
             if (a.t >= WRATH.time) f.action = null;
+          } else if (a.kind === 'miracle') {
+            // 奇跡を唱える：動きの at 秒に効き目が出る（data.js の MIRACLES）
+            const M = MIRACLES[a.id];
+            if (!a.done && a.t >= M.at) { a.done = true; castMiracle(f, a.id); }
+            if (a.t >= M.time) f.action = null;
+          } else if (a.kind === 'revive') {
+            if (a.t >= REVIVE_TIME) f.action = null;   // 蘇る動き（cl_rise）の間は何もできない
           } else if (a.kind === 'recover') {
             if (a.t >= a.time) f.action = null;   // 疾驅攻撃の後の隙：動けない・何もできない
           } else if (a.kind === 'shield') {
@@ -658,6 +826,11 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       }
       for (let i = projectiles.length - 1; i >= 0; i--) {
         if (!stepProjectile(projectiles[i], dt)) projectiles.splice(i, 1);
+      }
+      // 光壁：時間が来たら消える（張った人が倒れても消える）
+      for (const w of [...walls]) {
+        w.left -= dt;
+        if (w.left <= 0 || !w.owner.alive) breakWall(w, false);
       }
     },
 

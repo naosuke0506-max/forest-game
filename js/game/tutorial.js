@@ -3,10 +3,11 @@
 //   共通：基本（動く・見回す・疾驅・攻擊・迴避）、暗殺・簞笥（タンスに隠れた敵を見つけて倒す）、暗殺・寢臺（ベッドの下に隠れた敵を見つけて倒す）、
 //         暗殺・潛伏（タンスかベッドに隠れて待ち、部屋に入ってきた敵を暗殺）、暗殺・壁潛（壁に背を付けて待ち、通りかかった敵を暗殺）。
 //         寢臺・潛伏は利用者の指示（2026-11-14）。暗殺・迴避（タンスから飛び出してくる敵の暗殺を、回避でかわす）も利用者の指示（2026-11-14「暗殺避け」）
-//   人物ごと：楯劍騎士（防禦と反擊）・劍騎士（奧義）・長柄騎士（強靱）・打擊騎士（剛力）・弓兵（鷹目）・祓魔僧（神怒）
+//   人物ごと：楯劍騎士（防禦と反擊）・劍騎士（奧義）・長柄騎士（強靱）・打擊騎士（剛力）・弓兵（鷹目）・祓魔僧（神怒・奇跡）
 // 教練では時間で刻が進まず、自分は倒れない（体力が 3 割を切ると戻る）。計算だけ（PlayCanvas に依存しない）
 import { moveFighter } from './movement.js';
 import { BODY_TURN } from './data.js';
+import { learnMiracle, selectMiracle } from './miracles.js';
 
 const DEG = Math.PI / 180;
 const wrap = (a) => ((a + 540) % 360) - 180;
@@ -216,9 +217,25 @@ export const LESSONS = {
       { text: '衝撃波で 2 人以上を吹き飛ばす', done: (S) => S.wrathHits >= 2 },
     ],
   },
+  // 奇跡（2026-11-17。利用者の指示：祓魔僧の奇跡）：試合では刻の褒美で覚えるが、教練では初めから 4 つ覚えている
+  miracle: {
+    name: '奇跡', char: 'cleric', desc: '左手の護符で奇跡を唱える。替ボタンで唱える奇跡を替える（祓魔僧）',
+    bots: [{ char: 'polearm', role: 'dummy' }],
+    setup({ me, bots }) {
+      for (const id of ['flame', 'heal', 'wall', 'revive']) learnMiracle(me, id);
+      selectMiracle(me, 'flame');
+      place(bots[0], me, 3, 0);
+    },
+    steps: [
+      { text: '奇跡ボタン（PC は K）で「淨炎」を唱え、鎚矛に清めの炎をまとわせる', done: (S) => S.miracles.flame },
+      { text: '炎をまとった鎚矛で案山子を打ち、燃やす', done: (S) => S.ignited >= 1 },
+      { text: '替ボタン（PC は H）で「治癒」に替えて唱える', done: (S) => S.miracles.heal },
+      { text: '「光壁」に替えて唱え、前に光の壁を張る', done: (S) => S.miracles.wall },
+    ],
+  },
 };
 /** 大廳に並べる順 */
-export const LESSON_ORDER = ['basic', 'search', 'searchBed', 'ambush', 'cover', 'evade', 'shield', 'sword', 'polearm', 'blunt', 'archer', 'cleric'];
+export const LESSON_ORDER = ['basic', 'search', 'searchBed', 'ambush', 'cover', 'evade', 'shield', 'sword', 'polearm', 'blunt', 'archer', 'cleric', 'miracle'];
 
 /** 相手を、自分の向きから右へ ang 度の向きに d m、さらに右へ side m ずらして置き、こちらを向かせる */
 function place(f, me, d, ang = 0, side = 0) {
@@ -308,7 +325,7 @@ export function createTutorBot(f, role, me) {
 export function createTutorState(lesson, { me, combat, cover, match }) {
   const S = { moved: 0, turned: 0, sprinted: false, hits: 0, dodges: 0, inside: false, searched: 0, kills: 0, covered: false, hid: false,
     assassinTries: 0, assassinKills: 0, guarded: 0, skill: false, counters: 0, ultTargets: 0, skillHits: 0, blocked: 0, pierced: 0,
-    pierceHits: 0, wrathHits: 0, evaded: 0 };
+    pierceHits: 0, wrathHits: 0, evaded: 0, miracles: {}, ignited: 0 };
   const ultHit = new Set();
   let lastX = me.x, lastZ = me.z, lastYaw = me.yaw;
   combat.on('hit', ({ attacker, target, amount, guarded, kind }) => {
@@ -323,6 +340,8 @@ export function createTutorState(lesson, { me, combat, cover, match }) {
     if (target === me && guarded) S.guarded++;
   });
   combat.on('skill', ({ fighter }) => { if (fighter === me) S.skill = true; });
+  combat.on('miracle', ({ fighter, id }) => { if (fighter === me) S.miracles[id] = true; });   // 奇跡を唱えた（効き目が出た）
+  combat.on('ignite', ({ by }) => { if (by === me) S.ignited++; });                            // 淨炎で相手を燃やした
   combat.on('counter', ({ fighter }) => { if (fighter === me) S.counters++; });
   combat.on('dodge', ({ fighter }) => { if (fighter === me) S.dodges++; });
   combat.on('searchStart', ({ fighter }) => { if (fighter === me) S.searched++; });

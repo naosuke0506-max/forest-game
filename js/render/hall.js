@@ -246,7 +246,7 @@ export function createHall(app, config) {
     f.x = ORIGIN[0]; f.y = ORIGIN[1] + DAIS; f.z = ORIGIN[2]; f.yaw = 195;   // こちらを向き、少し右（選ぶ画面の側）へ向いて立つ
     const [model] = await Promise.all([
       loadCharacterModel(app, char),
-      loadWeaponModels(app, [f.primary, ...(f.sidearm ? [f.sidearm] : []), ...(f.shield ? ['shield'] : [])]),
+      loadWeaponModels(app, [f.primary, ...(f.sidearm ? [f.sidearm] : []), ...(f.shield ? ['shield'] : []), ...(f.left === 'miracle' ? ['talisman'] : [])]),
     ]);
     if (my !== token) return;   // 読み込む間に別の人物が選ばれた
     view?.destroy();

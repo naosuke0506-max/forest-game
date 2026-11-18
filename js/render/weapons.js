@@ -10,6 +10,7 @@ const MODEL_FILES = {
   armingsword: 'armingsword', longsword: 'longsword', spear: 'spear', shield: 'kite_shield',
   mace: 'mace', warhammer: 'warhammer', lucerne: 'lucerne', dagger: 'dagger',   // 利用者が送った模型（2026-11-09）
   dualsword: 'armingsword',   // 雙劍（二刀流）：片手劍の模型を両手に 1 本ずつ
+  talisman: 'talisman',       // 祓魔僧の護符（奇跡。tools/make_talisman.py で Blender が作った。2026-11-17）
 };
 const models = new Map();
 
@@ -103,6 +104,9 @@ export function createWeaponModel(weaponId, { shadows = true } = {}) {
       string.name = 'string';
       break;
     }
+    case 'talisman':   // 護符（模型が読めないとき）：金の輪を下へ垂らす
+      P('torus', mat('gold', [0.8, 0.58, 0.26], { gloss: 0.7, metal: 1 }), [0, -0.15, 0], [0.09, 0.02, 0.09], [90, 0, 0]);
+      break;
     default:
       P('box', steel(), [0, 0, -0.3], [0.05, 0.05, 0.6]);
   }

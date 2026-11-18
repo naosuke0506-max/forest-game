@@ -248,8 +248,8 @@ make_socket('socket_R', 'R', 'w_1h', 'blade')
 make_socket('socket_L', 'L', 's_mid', 'shield')
 make_socket('socket_bow', 'L', 'w_bow', 'bow')
 # 二刀流の左手の剣の位置（socket_L2）：右手の持ち手の点を、体の左右で映して左手に付ける（ik_rig.py の sL2 と同じ作り方）。
-# 二刀流の動きを作るキャラ（characters.json の "dual"）だけ
-if ch.get('dual'):
+# 二刀流の動きを作るキャラ（characters.json の "dual"）と、左手に護符を持つ祓魔僧（"talisman"。奇跡 2026-11-17）だけ
+if ch.get('dual') or ch.get('talisman'):
     bl = T.data.bones
     mr = bl['R_Hand'].matrix_local @ (bl['R_Hand'].matrix_local.inverted() @ (T.matrix_world.inverted() @ bpy.data.objects['socket_R'].matrix_world))
     S_ = Matrix(((-1, 0, 0), (0, 1, 0), (0, 0, 1)))

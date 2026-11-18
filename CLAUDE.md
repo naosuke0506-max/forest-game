@@ -105,6 +105,12 @@
   `assets/ui/gate/`）・隠れている間の視点（一人称は家具の中の目の位置 `spot.eyeX/eyeZ/eyeH`、三人称は家具の上の前）・
   三人称のカメラは壁・家具・木の幹・岩を貫通しない（`main.js` の `player.cameraClear`。頭からの線と、カメラのまわりの余白まで確かめる）
   設定の試驗用の刻之長（60 秒・30 秒）は端末に残さない（sessionStorage。`settings.js` の `SESSION_KEYS`）。前に試した値が残って「刻が 1 分になっている」と言われたため
+- **祓魔僧の奇跡**（2026-11-17。利用者が選んだ：刻の報酬で 3 つから 1 つ覚える（最大 4 つ）・左手の奇跡ボタン＋替ボタン（PC は K・H）・2 回に分ける）。
+  1 回目（治癒・蘇生・光壁・淨炎）は済み。**2 回目（天光柱・聖火彈・神罰雷）が残り**（`data.js` の `MIRACLES` で planned の物）。
+  数は `data.js` の `MIRACLES`、覚える・替える・待ち時間は `js/game/miracles.js`、唱える・光壁・燃える・蘇るは `combat.js`、見た目は `js/render/miracle-fx.js`、
+  動きは `tools/characters/cleric_moves.py`（cl_pray・cl_bless・cl_wall・cl_flame・cl_rise）、護符の模型は `tools/make_talisman.py`。
+  奇跡を足すときは、`MIRACLES` に clip・time・at・cd を書き、`castMiracle`（combat.js）・見た目・音（sfx.js の `miracle`）・bot（bot.js）・圖鑑・教練を足す。
+  音の注意：`sfx.js` の noiseHit・toneHit・metal の `t` は「今からの秒」（`audio.ctx.currentTime` を渡すと鳴らない。2026-11-17 に神怒の音で見つけた）
 - **歩きの動き**（2026-11-16。`js/render/character-view.js`）：脚の動きは進む向きで選ぶ（`legs`：歩き・走り・後ろ歩き・横歩き strafe_r/l）。
   斜めは腰から下をひねる（`twistLegs`）。楯を構える・弓を引く・横歩きの間は、上半身の層（背骨から上だけを上書き。`setUpper`）で、
   上半身と脚を別々に動かす。全身の動きを足すときは、歩きながらする物かどうかを考えて、上半身の層に入れるかを決める。

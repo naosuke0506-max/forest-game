@@ -16,6 +16,7 @@ import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
 import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY, SKILL_FX, SWORD_ULT, WRATH } from './data.js';
 import { skillOf, skillOn, skillReady } from './skills.js';
+import { canMiracle, miracleReady } from './miracles.js';
 import { techSetOf } from './techniques.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
 
@@ -57,6 +58,7 @@ export function createBot(fighter, rng, fighters) {
     tap: false, hold: 0, wantC2: false, chained: false,
     assassin: false,     // 次のフレームに 1 回だけ暗殺ボタンを押す
     skillTap: false,     // 次のフレームに 1 回だけ技能ボタンを押す
+    miracleTap: null,    // 次のフレームに唱える奇跡の名前（祓魔僧）
     input: { forward: 0, strafe: 0, run: false, yaw: fighter.yaw, pitch: 0, attack: false, guard: false, left: false, dodge: false, dodgeX: 0, dodgeY: 0, search: false },
   };
   const f = fighter;
@@ -334,6 +336,20 @@ export function createBot(fighter, rng, fighters) {
         : false;
       if (use) b.skillTap = true;
     }
+    // 奇跡（祓魔僧。game/miracles.js）：使いどころで唱える（唱える奇跡の名前を 1 フレームだけ渡す）
+    //   治癒：体力が半分を切り、近くに敵がいないとき／蘇生：敵が近くにいるとき（先に加護を受けておく）／
+    //   光壁：弓の相手が見えているとき・体力が少なくて離れた相手がいるとき（相手の方を向いて張る）／淨炎：相手に近づいたとき
+    if (canMiracle(f) && !f.action && !f.hidden && !f.swimming && rng.next() < 0.3) {
+      const t = b.target, d = t ? Math.hypot(t.x - f.x, t.z - f.z) : Infinity;
+      const seen = !!t && !!b.known.get(t)?.seen, hpK = f.stats.hp / f.stats.maxHp;
+      const ranged = !!t && WEAPONS[t.weapon]?.kind === 'bow';
+      let pick = null;
+      if (miracleReady(f, 'heal') && hpK < 0.5 && d > 3.5) pick = 'heal';
+      else if (miracleReady(f, 'revive') && t && d < 25) pick = 'revive';
+      else if (miracleReady(f, 'wall') && seen && d > 5 && d < 30 && (ranged || hpK < 0.4)) { pick = 'wall'; f.yaw = yawTo(f, t.x, t.z); }
+      else if (miracleReady(f, 'flame') && t && d < 12) pick = 'flame';
+      if (pick) b.miracleTap = pick;
+    }
     if (!b.look) setStance(f, 'stand');   // 探しに行っていなければ立つ（相手が見えたら立って戦う）
     // 近くに隠れている人の息遣いが聞こえたら、その場所を覚えて探す（息が荒いほど気づきやすい）
     if (!b.knownSpot) {
@@ -535,7 +551,9 @@ export function createBot(fighter, rng, fighters) {
       b.leftTap = false;
       const skill = b.skillTap;
       b.skillTap = false;
-      return { attack, assassinate, skill, left: f.left === 'guard' ? i.guard || leftTap : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
+      const miracle = b.miracleTap;
+      b.miracleTap = null;
+      return { attack, assassinate, skill, miracle, left: f.left === 'guard' ? i.guard || leftTap : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
     },
   };
 }

@@ -10,6 +10,7 @@
 | `warhammer.glb` | 戰鎚（ウォーハンマー） | 同上（2026-11-09） |
 | `lucerne.glb` | 長柄鎚（ルツェルンハンマー） | 同上（2026-11-09） |
 | `dagger.glb` | 短劍（ダガー） | 同上（2026-11-09） |
+| `talisman.glb` | 祓魔僧の護符（時の輪の日輪。奇跡を唱える） | Claude が Blender で作った（`tools/make_talisman.py`。2026-11-17。写真や他の作品は使っていない） |
 
 - 元の模型（Tripo の書き出しそのまま）は `source_models/weapons/`
 - `tools/process_weapons.mjs` で、持ち手の位置と向きをそろえ、三角形を減らし、質感の画像を小さくした

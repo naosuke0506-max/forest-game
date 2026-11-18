@@ -2,7 +2,7 @@
 // 画面中央の大きな知らせ、フェーズ報酬の選択、試合の結果
 import { L } from './labels.js';
 import * as pc from 'playcanvas';
-import { CHARACTERS, phaseAt, DIVE } from '../game/data.js';
+import { CHARACTERS, phaseAt, DIVE, MIRACLES } from '../game/data.js';
 import { TIMES } from '../world/time-of-day.js';
 import { timeIcon, weaponIconOf } from './icons.js';
 
@@ -71,8 +71,11 @@ export function createHud(match, me, { label = null, trial = null } = {}) {
     r.options.forEach((o, i) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'reward-card';
-      b.innerHTML = `<div class="rc-name">${esc(o.reward.name)}</div><div class="rc-val">+${o.value}${o.reward.unit}</div>`;
+      // 奇跡（祓魔僧）：「奇跡」の印・名前・短い説明。ほかは能力値の名前と、上がる数
+      const mir = o.reward.kind === 'miracle' ? MIRACLES[o.reward.miracle] : null;
+      b.className = `reward-card${mir ? ' miracle' : ''}`;
+      b.innerHTML = mir ? `<div class="rc-kind">${L.miracle}</div><div class="rc-name">${esc(mir.name)}</div><div class="rc-desc">${esc(mir.short)}</div>`
+        : `<div class="rc-name">${esc(o.reward.name)}</div><div class="rc-val">+${o.value}${o.reward.unit}</div>`;
       b.addEventListener('click', () => { match.chooseReward(me, i); });
       cards.appendChild(b);
     });
@@ -92,7 +95,7 @@ export function createHud(match, me, { label = null, trial = null } = {}) {
     if (fighter !== me) return;
     reward.hidden = true;
     shownReward = null;
-    addFeed(`報酬：${option.reward.name} +${option.value}${option.reward.unit}`);
+    addFeed(option.reward.kind === 'miracle' ? `奇跡「${option.reward.name}」を覚えた（左手の奇跡ボタンで唱える）` : `報酬：${option.reward.name} +${option.value}${option.reward.unit}`);
   });
 
   // ===== 戦闘の表示 =====
