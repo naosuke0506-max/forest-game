@@ -7,7 +7,7 @@
 //   （2 回目）天光柱：降る所の地面に金の光の輪が縮んでいき、空から細い光の柱が落ちる（光・輪・光の粒）
 //   聖火彈：金と橙の火の玉（光の玉・炎・火の粉の尾）。爆発すると大きな光・広がる輪・火の粉・一瞬の炎
 //   神罰雷：青白い雷の槍（まっすぐな芯と、まわりでぱちぱちする細い稲妻）。当たると空から稲妻が落ち、しびれている人の体に小さな稲妻が走る
-//   （2026-11-18）地面の火・火炎の人の大きな炎（まとめて 1 つの形）・焦げて倒れた人は黒くなる
+//   （2026-11-18）地面の火・火炎の人の大きな炎（まとめて 1 つの形）・焦げて倒れた人は真っ黒になり、黒い煙が立ち上る（煙も 1 つの形）
 // 描画命令：光の粒 1・光の玉 1・稲妻 1・地面の火と火炎 1（どれも出ている間だけ）、光の柱・輪は 1 本 1 つ、光壁は 1 枚 1 つ、炎は舌 1 枚 1 つ
 // 炎の形・光の玉・板をまとめる道具は render/hall-fire.js（大廳の火）と同じ
 import * as pc from 'playcanvas';
@@ -87,7 +87,19 @@ const FIRE_FS = FLAME_FS.replace('uniform float uSeed;', 'varying float vSeed;')
   .replace(/uSeed/g, 'vSeed').replace(/uIntensity/g, 'vIntensity');
 const FIRE_TONGUES = 200;
 
-const SPARKS = 260, GLOWS = 32, FLAMES = 22, LINES = 120;
+const SPARKS = 260, GLOWS = 32, FLAMES = 22, LINES = 120, SMOKE = 150;
+
+/** 煙の玉：白い色で、まわりへ柔らかく透ける（ふわっとした形にするため、少しむらを付ける）。色の濃さは頂点の色で決める */
+const smokeTex = (device) => canvasTexture(device, 128, (g, S) => {
+  g.clearRect(0, 0, S, S);
+  const blob = (x, y, r, a) => {
+    const q = g.createRadialGradient(x, y, 0, x, y, r);
+    q.addColorStop(0, `rgba(255,255,255,${a})`); q.addColorStop(0.55, `rgba(255,255,255,${a * 0.55})`); q.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = q; g.fillRect(0, 0, S, S);
+  };
+  blob(S / 2, S / 2, S * 0.46, 0.45);
+  for (let i = 0; i < 9; i++) { const a = i * 0.7, r = S * (0.08 + (i % 3) * 0.06); blob(S / 2 + Math.cos(a) * r, S / 2 + Math.sin(a) * r, S * (0.16 + (i % 4) * 0.03), 0.42); }
+});
 const rnd = Math.random;
 
 /** 光の柱：上の開いた円柱（下は明るく、上へ消える。頂点の色で）。半径 1・高さ 1 */
@@ -451,9 +463,38 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
   });
   combat.on('lethal', ({ target, how }) => {
     if (how !== 'charred') return;
-    views.get(target)?.setCharred?.();   // 焦げて倒れた：体が黒くなる
-    for (let i = 0; i < 40; i++) spark(target.x + (rnd() - 0.5) * 0.7, yOf(target) + rnd() * 1.6, target.z + (rnd() - 0.5) * 0.7, (rnd() - 0.5) * 1.5, 0.5 + rnd() * 2.5, (rnd() - 0.5) * 1.5, 0.8 + rnd() * 1.2, 0.03 + rnd() * 0.04, rnd() < 0.5 ? [1, 0.45, 0.1] : [0.35, 0.33, 0.3], { drag: 0.7 });
+    views.get(target)?.setCharred?.();   // 焦げて倒れた：体が真っ黒になる
+    smokers.push({ f: target, t: 0, life: 11 });   // 黒い煙が立ち上る（初めは濃く、だんだん細くなって消える）
+    for (let i = 0; i < 24; i++) spark(target.x + (rnd() - 0.5) * 0.7, yOf(target) + rnd() * 1.4, target.z + (rnd() - 0.5) * 0.7, (rnd() - 0.5) * 1.2, 0.5 + rnd() * 2, (rnd() - 0.5) * 1.2, 0.5 + rnd() * 0.6, 0.025 + rnd() * 0.03, [1, 0.45, 0.1], { drag: 0.7 });   // 崩れるときの最後の火の粉
   });
+
+  // ---- 黒い煙（焦げて倒れた人から立ち上る。利用者の指示 2026-11-18）：全部で 1 つの形。ふつうの重ね方（加算では黒くならない） ----
+  const smq = quads(device, SMOKE);
+  const smokeMat = new pc.StandardMaterial();
+  smokeMat.useLighting = false; smokeMat.useSkybox = false;
+  smokeMat.diffuse = new pc.Color(0, 0, 0);
+  smokeMat.emissive = new pc.Color(1, 1, 1); smokeMat.emissiveVertexColor = true;
+  smokeMat.opacityMap = smokeTex(device); smokeMat.opacityMapChannel = 'a';
+  smokeMat.opacityVertexColor = true; smokeMat.opacityVertexColorChannel = 'a';
+  smokeMat.blendType = pc.BLEND_NORMAL; smokeMat.depthWrite = false; smokeMat.cull = pc.CULLFACE_NONE;
+  smokeMat.update();
+  const smokeMi = new pc.MeshInstance(smq.mesh, smokeMat);
+  smokeMi.cull = false;
+  const smokeE = new pc.Entity('black-smoke');
+  smokeE.addComponent('render', { meshInstances: [smokeMi], castShadows: false, receiveShadows: false });
+  smokeE.enabled = false;
+  app.root.addChild(smokeE);
+  const puffs = Array.from({ length: SMOKE }, () => ({ life: 0, max: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s0: 0.3, s1: 1.5, c: 0.01, ph: 0 }));
+  let puffCursor = 0;
+  const smokers = [];   // 煙を出している所 { f, t, life }
+  function puff(x, y, z) {
+    const p = puffs[puffCursor];
+    puffCursor = (puffCursor + 1) % SMOKE;
+    // 色は真っ黒に近く（頂点の色は光の強さそのまま。0.01 でも画面では 25/255 ほどになる）。昇る速さは、熱い間は速く、上でゆっくりに
+    Object.assign(p, { x, y, z, vx: (rnd() - 0.5) * 0.3, vy: 1.9 + rnd() * 0.8, vz: (rnd() - 0.5) * 0.3, life: 4.5 + rnd() * 2, max: 6.5,
+      s0: 0.25 + rnd() * 0.15, s1: 2.0 + rnd() * 1.1, c: 0.004 + rnd() * 0.022, ph: rnd() * 6.3 });
+    p.max = p.life;
+  }
 
   // ---- 奇跡の知らせ ----
   const GOLD = [1, 0.84, 0.48], GREEN = [0.72, 1, 0.55], WHITE = [1, 0.97, 0.86];
@@ -714,6 +755,33 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
       sparkE.enabled = alive > 0;
       if (alive) { sq.mesh.setPositions(sq.pos); sq.mesh.setColors(sq.col); sq.mesh.update(pc.PRIMITIVE_TRIANGLES); }
 
+      // 黒い煙：焦げた体から出て、昇りながら広がり、薄れて消える（風で少し流れる）
+      for (let i = smokers.length - 1; i >= 0; i--) {
+        const sm = smokers[i];
+        sm.t += dt;
+        sm.acc = (sm.acc || 0) + 20 * Math.max(0, 1 - sm.t / sm.life) * dt;   // 1 秒に 20 個から、だんだん減る（一度に出ている数は 100 ほどまで）
+        // 倒れた体（長さ 1.7 m ほど）のあちこちから出す
+        for (; sm.acc >= 1; sm.acc--) { const f = sm.f; puff(f.x + (rnd() - 0.5) * 0.8, yOf(f) + 0.2 + rnd() * 0.4, f.z + (rnd() - 0.5) * 0.8); }
+        if (sm.t >= sm.life) smokers.splice(i, 1);
+      }
+      let pAlive = 0;
+      for (let i = 0; i < SMOKE; i++) {
+        const p = puffs[i];
+        if (p.life <= 0) { billboard(smq, i, 0, -9999, 0, 0, 0, right, up, 0, 0, 0, 0); continue; }
+        p.life -= dt;
+        p.vy *= Math.pow(0.78, dt);
+        const u = 1 - Math.max(0, p.life / p.max);   // 0 → 1（生まれてから消えるまで）
+        // 上へ行くほど風で流れ、渦を巻くように少し揺れる
+        const wob = Math.sin(p.ph + u * 5) * 0.4 * u;
+        p.x += (p.vx + 0.5 * u + wob) * dt; p.y += p.vy * dt; p.z += (p.vz + 0.15 * u + Math.cos(p.ph + u * 4) * 0.25 * u) * dt;
+        const size = p.s0 + (p.s1 - p.s0) * Math.sqrt(u);
+        const a = Math.min(1, u * 7) * Math.pow(1 - u, 1.15) * 0.8;   // 下は濃く、昇りながら薄れる
+        billboard(smq, i, p.x, p.y, p.z, size, size, right, up, p.c, p.c, p.c, a);
+        pAlive++;
+      }
+      smokeE.enabled = pAlive > 0;
+      if (pAlive) { smq.mesh.setPositions(smq.pos); smq.mesh.setColors(smq.col); smq.mesh.update(pc.PRIMITIVE_TRIANGLES); }
+
       // 光の玉
       let gi = 0;
       for (let i = flashes.length - 1; i >= 0; i--) {
@@ -738,7 +806,7 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
     },
     /** 確認用：今出ている物の数 */
     get stats() {
-      return { sparks: sparks.filter((s) => s.life > 0).length, flames: flameUsed, walls: wallViews.size, bursts: bursts.length, halos: halos.size, lines: lineUsed, spells: (combat.spells || []).length, tongues, fires: (combat.fires || []).length };
+      return { smoke: puffs.filter((p) => p.life > 0).length, sparks: sparks.filter((s) => s.life > 0).length, flames: flameUsed, walls: wallViews.size, bursts: bursts.length, halos: halos.size, lines: lineUsed, spells: (combat.spells || []).length, tongues, fires: (combat.fires || []).length };
     },
   };
 }
