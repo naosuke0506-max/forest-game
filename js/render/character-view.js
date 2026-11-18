@@ -579,11 +579,19 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         flashOn = flash;
         for (const m of materials) { m.emissiveIntensity = flash ? 0.45 : 0; m.update(); }
       }
-      // 火炎で焦げて倒れた（利用者の指示 2026-11-18）：体が黒く焦げ、熾火のように赤く残る
+      // 火炎で焦げて倒れた（利用者の指示 2026-11-18：焦げるのは赤ではなく真っ黒）：体が、つやの無い真っ黒になっていく。
+      // 赤い光は出さない。空の映り込みも消す（黒い体に空が映ると灰色に見えるため）。黒い煙は render/miracle-fx.js
       if (charred && charK < 1) {
-        charK = Math.min(1, charK + dt * 1.6);
-        const k = 1 - 0.86 * charK;
-        for (const m of materials) { m.diffuse.set(k, k * 0.92, k * 0.86); m.emissiveIntensity = 0.35 * charK; m.update(); }
+        if (charK === 0) for (const m of materials) { m.useSkybox = false; m._gloss0 = m.gloss; m._metal0 = m.metalness; }
+        charK = Math.min(1, charK + dt * 1.2);
+        const k = 1 - 0.975 * charK;
+        for (const m of materials) {
+          m.diffuse.set(k, k, k);
+          m.emissiveIntensity = 0;
+          m.gloss = (m._gloss0 ?? 0.5) * (1 - 0.85 * charK);
+          if (m.useMetalness) m.metalness = (m._metal0 ?? 0) * (1 - charK);
+          m.update();
+        }
       }
 
       // 速さと向き（前へ進んでいるか、後ろへ下がっているか）は、位置の変化から求める
