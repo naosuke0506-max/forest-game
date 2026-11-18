@@ -1,5 +1,5 @@
 // 練習モードの試合：あなた＋bot 3 体。試合の計算（game/）と、見た目・画面（render/・ui/）をつなぐ
-import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS, SHIELD_SKILLS, SHIELD_MOVES, SPRINT, DASH, MIRACLES } from './game/data.js';
+import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS, SHIELD_SKILLS, SHIELD_MOVES, SPRINT, DASH, MIRACLES, ELEMENTS } from './game/data.js';
 import { selectedMiracle, miraclesOf, miracleCool } from './game/miracles.js';
 import { createMinimap } from './ui/minimap.js';
 import { ZONE_NAMES } from './world/zones.js';
@@ -62,7 +62,7 @@ export function planRoster(myChar, count = 3) {
  *   staged：試合を作っても、すぐには始めない（マップ紹介 → 棺桶から出る、の後で begin() を呼ぶ。それまで update は呼ばれない）
  *   loadout：試合の前に選んだ武器 { main, side, shield }（game/data.js の LOADOUTS から。無ければキャラの最初の物）
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null, houses = [], tutorial = null, doors = null, roster = null, staged = false }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null, houses = [], tutorial = null, doors = null, roster = null, staged = false, trunks = [] }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる。planRoster）。bot の武器は、選べる物から乱数で選ぶ
@@ -108,7 +108,19 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const cover = createCover(covers, { isFree: obstacles.isFree, groundAt: groundAt || ((x, z) => terrain.heightAt(x, z)) });
   // bot の目と耳（game/senses.js）：見える相手・聞こえた音で気づく。音を鳴らす出来事をつなぐ
   const senses = createSenses({ sight, heightAt: terrain.heightAt });
-  const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt, hiding, cover, senses });
+  // 燃える物（利用者の指示 2026-11-18：火炎の人が草・木に触れると火が移る）：木の幹（4 m の升目で探す）と、大草原の草（1.2 m の升目に寄せる）。家の中は燃えない
+  const trunkGrid = new Map();
+  for (const t of trunks) { const k = `${Math.floor(t.x / 4)},${Math.floor(t.z / 4)}`; if (!trunkGrid.has(k)) trunkGrid.set(k, []); trunkGrid.get(k).push(t); }
+  const flammable = (x, z) => {
+    if (insideHouse && insideHouse(x, z)) return null;
+    const gx = Math.floor(x / 4), gz = Math.floor(z / 4);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+      for (const t of trunkGrid.get(`${gx + i},${gz + j}`) || []) if (Math.hypot(t.x - x, t.z - z) < t.r + 0.8) return { kind: 'tree', x: t.x, z: t.z, top: t.top };
+    }
+    if (zones && zones.weights(x, z).prairie > 0.35) return { kind: 'grass', x: Math.round(x / 1.2) * 1.2, z: Math.round(z / 1.2) * 1.2 };
+    return null;
+  };
+  const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt, hiding, cover, senses, flammable });
   // 教練では、決まった所に置き（自分の近く・家の中・壁の前など）、動きの決まった相手にする（game/tutorial.js）
   const lessonCtx = () => ({
     me, bots: fighters.filter((f) => !f.isPlayer), hides, hiding, coverSegs: covers, houses, isFree: (x, z, r) => obstacles.isFree(x, z, r, true),
@@ -244,16 +256,41 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       if (me.flame > 0) list.push(['', ICONS.m_flame, '淨炎', me.flame]);
       const w = combat.walls.find((x) => x.owner === me);
       if (w) list.push(['', ICONS.m_wall, '光壁', w.left]);
-      if (me.burn) list.push(['burn', ICONS.m_flame, '燃', me.burn.left]);
-      if (me.shock > 0) list.push(['shock', ICONS.m_thunder, '痺', me.shock]);
+      // 状態異常（利用者の指示 2026-11-18）：火炎（回避を続けた数）・雷痺。発動していない間は、溜まり（％）を小さな棒で
+      if (me.blaze) list.push(['blaze', ICONS.m_flame, `火炎 ${me.blaze.dodges}/${ELEMENTS.fire.dodges}`, me.blaze.left]);
+      else if (me.burn) list.push(['burn', ICONS.m_flame, '燃', me.burn.left]);
+      if (me.paralyzed > 0) list.push(['para', ICONS.m_thunder, '雷痺', me.paralyzed]);
+      else if (me.shock > 0) list.push(['shock', ICONS.m_thunder, '痺', me.shock]);
       if (me.blind > 0) list.push(['', ICONS.m_pillar, '眩', me.blind]);
+      const ail = me.ail;
+      if (ail && ail.fire >= 1 && !me.blaze) list.push(['gauge fire', ICONS.m_flame, '炎', ail.fire, true]);
+      if (ail && ail.thunder >= 1 && !(me.paralyzed > 0)) list.push(['gauge thunder', ICONS.m_thunder, '雷', ail.thunder, true]);
     }
-    const key = list.map((b) => `${b[2]}${Math.ceil(b[3])}`).join('|');
+    const key = list.map((b) => `${b[2]}${b[4] ? Math.round(b[3] / 5) : Math.ceil(b[3])}`).join('|');
     if (key === buffsShown) return;
     buffsShown = key;
     buffsEl.hidden = !list.length;
-    buffsEl.innerHTML = list.map(([c, icon, name, sec]) => `<span class="bf ${c}">${icon}${name}<b>${Math.ceil(sec)}</b></span>`).join('');
+    buffsEl.innerHTML = list.map(([c, icon, name, v, gauge]) => gauge
+      ? `<span class="bf ${c}"><i style="width:${Math.round(v)}%"></i>${icon}${name}<b>${Math.round(v)}%</b></span>`
+      : `<span class="bf ${c}">${icon}${name}<b>${Math.ceil(v)}</b></span>`).join('');
   };
+  // 属性と状態異常の知らせ（利用者の指示 2026-11-18）
+  combat.on('blaze', ({ fighter, by }) => {
+    if (fighter === me) hud.centerMsg('火炎', `回避を続けて ${ELEMENTS.fire.dodges} 回転がるか、水に入ると消える（消せないと焦げて倒れる）`, 3);
+    else if (by === me) hud.addFeed(`${fighter.name}が火炎に包まれた`);
+  });
+  combat.on('blazeDodge', ({ fighter, count, need }) => { if (fighter === me) hud.addFeed(`火を消す：あと ${need - count} 回`); });
+  combat.on('blazeEnd', ({ fighter, how }) => { if (fighter === me && how !== 'burnt' && how !== 'gone') hud.addFeed(how === 'water' ? '水で火が消えた' : how === 'heal' ? '治癒で火が消えた' : '転がって火を消した'); });
+  combat.on('paralyzed', ({ fighter, by }) => {
+    if (fighter === me) hud.centerMsg('雷痺', 'しびれて動けない（無防備）', 2.2);
+    else if (by === me || Math.hypot(fighter.x - me.x, fighter.z - me.z) < 20) hud.addFeed(`${fighter.name}が雷痺した（近づいて致命の一撃を）`);
+  });
+  combat.on('fireSpread', ({ fire }) => { if (fire.kind === 'tree' && Math.hypot(fire.x - me.x, fire.z - me.z) < 25) hud.addFeed('木に火が移った'); });
+  combat.on('hit', ({ attacker, target, kind, wound, back }) => {
+    if (kind !== 'assassinate' || !wound) return;
+    if (attacker === me) hud.addFeed(`暗殺（${back ? '背後' : '前・横'}）：体力の ${back ? '6 割' : '2 割 5 分'}を削った`);
+    else if (target === me) hud.addFeed(`暗殺された：体力の ${back ? '6 割' : '2 割 5 分'}を失った`);
+  });
   combat.on('miracle', ({ fighter, id, amount }) => {
     if (fighter !== me) return;
     const M = MIRACLES[id];

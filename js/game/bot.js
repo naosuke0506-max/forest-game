@@ -74,6 +74,16 @@ export function createBot(fighter, rng, fighters) {
    * 目と耳：見える相手・聞こえた相手を覚える（world.senses が無いときは、40m 以内の全員が分かる）
    * @param {number} dt 前に考えてからの時間
    */
+  /** 火炎（利用者の指示 2026-11-18）：燃え上がったら、回避を続けて転がり、火を消す（押す・離すを繰り返す） */
+  function rollOutFire() {
+    if (!f.blaze || f.hidden) return;
+    if (f._dodgeHeld) { b.input.dodge = false; return; }
+    if (!f.action && f.stamina > 10) {
+      b.input.dodge = true; b.input.attack = false; b.hold = 0;
+      b.input.dodgeX = rng.next() < 0.5 ? -0.6 : 0.6; b.input.dodgeY = -1;
+    }
+  }
+
   function perceive(world, dt) {
     const S = world.senses;
     for (const [t, k] of b.known) { k.age += dt; k.track = (k.track || 0) - dt; if (!t.alive || k.age > SENSES.memory) b.known.delete(t); }
@@ -514,6 +524,7 @@ export function createBot(fighter, rng, fighters) {
       if (b.strafeTimer <= 0) { b.strafeTimer = 1 + rng.next() * 2; b.strafeDir = rng.next() < 0.5 ? -1 : 1; }
       if (b.thinkTimer <= 0) { b.lastThink = b.thinkTimer = 0.15 + rng.next() * 0.15; think(world); }
       dodgeAssassin();   // 考えた後に見る（考えるときに回避ボタンを離すことがあるため）
+      rollOutFire();     // 火炎：回避を続けて転がり、火を消す
 
       // 隠れている・壁に隠れている・無防備なときは動かない
       if (f.hidden || f.cover || f.helpless > 0 || SCRIPTED_ACTS.has(f.action?.kind)) return 0;   // 暗殺・隠れる・出る・探す・引きずり出す間は、試合の計算が体を動かす

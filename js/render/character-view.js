@@ -212,6 +212,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   // 姿勢の動き（tools/characters/make_motions.py）：しゃがみ（その場）・しゃがみ歩き・伏せる・伏せ・這う・起き上がる
   const stanceClips = ['crouch', 'crouch_walk', 'prone_down', 'prone', 'crawl', 'prone_up'].every(has);
   let current = '', lastAction = null, lastPhase = '', swingIndex = 0, deathStarted = false;
+  let charred = false, charK = 0, paraHeld = false;   // 火炎で焦げて倒れた（黒くなっていく割合）・雷痺で止めている
   const VICTIM = /^(as_back_v|as_slide_v|drag_wd_v|drag_bed_v)$/;   // される側の動き（倒れても最後の姿のまま）
   // 攻撃を受けた動き（game/reactions.js の fighter.react）：流している受けた動きの番号と残りの時間。
   // 押されて下がった分（knock）：動きの中で体が下がっているので、位置をその分だけ戻して描く（受けた動きが終わったら BLEND の間に 0 へ）
@@ -493,6 +494,8 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       for (const [name, bone] of heatBones) { const p = bone.getPosition(); heatOut[name] = { x: p.x, y: p.y, z: p.z }; }
       return heatOut;
     },
+    /** 火炎で焦げて倒れた：体を黒く焦がす（render/miracle-fx.js が知らせを受けて呼ぶ） */
+    setCharred() { charred = true; },
     /** 片付ける（大廳の人物を替えるとき） */
     destroy() { talisman?.destroy(); root.destroy(); },
     /**
@@ -572,9 +575,15 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
 
       // 質感の画像を消さない程度に、うっすら赤くする。倒れた後は光らせない
       const flash = fighter.alive && fighter.hitFlash > 0;
-      if (flash !== flashOn) {
+      if (flash !== flashOn && !charred) {
         flashOn = flash;
         for (const m of materials) { m.emissiveIntensity = flash ? 0.45 : 0; m.update(); }
+      }
+      // 火炎で焦げて倒れた（利用者の指示 2026-11-18）：体が黒く焦げ、熾火のように赤く残る
+      if (charred && charK < 1) {
+        charK = Math.min(1, charK + dt * 1.6);
+        const k = 1 - 0.86 * charK;
+        for (const m of materials) { m.diffuse.set(k, k * 0.92, k * 0.86); m.emissiveIntensity = 0.35 * charK; m.update(); }
       }
 
       // 速さと向き（前へ進んでいるか、後ろへ下がっているか）は、位置の変化から求める
@@ -618,6 +627,20 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         if (!deathStarted) { deathStarted = true; if (!VICTIM.test(current)) restart('death', 1); }
         return;
       }
+      // 雷痺（神罰雷などで雷が溜まりきった）：よろめいた姿で止まり、小刻みに震える（無防備。致命の一撃を受ける）
+      if (fighter.paralyzed > 0 && has('stagger')) {
+        const dur = clip('stagger').duration;
+        if (current !== 'stagger#hold') {
+          body.anim.baseLayer.transition('stagger', 0.12, dur * 0.42);
+          current = 'stagger#hold';
+        }
+        body.anim.speed = 0;
+        body.anim.baseLayer.activeStateCurrentTime = dur * (0.42 + 0.025 * Math.sin(performance.now() * 0.045));
+        lastAction = fighter.action;
+        paraHeld = true;
+        return;
+      }
+      if (paraHeld) { paraHeld = false; body.anim.speed = 1; current = ''; }
       // 隠れている：隠れる動きの最後の姿（タンスの中に立つ・ベッドの下に伏せる）のまま。隠れる動きを見ていなかった（初めから
       // 隠れていた）ときは、その動きの最後へ飛ぶ
       if (hid) {
@@ -743,6 +766,9 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         } else if (a.kind === 'revive') {
           // 蘇生の加護で蘇る：崩れて膝をついた姿から、光を受けて立ち上がる
           if (has('cl_rise')) restart('cl_rise', clip('cl_rise').duration / REVIVE_TIME);
+        } else if (a.kind === 'getup') {
+          // 暗殺されて生き残った（利用者の指示 2026-11-18：暗殺は体力の一部を削る）：倒れた姿から起き上がる
+          if (has('prone_up')) restart('prone_up', clip('prone_up').duration / ASSASSIN.getup);
         } else if (a.kind === 'dodge') {
           const d = DODGE[fighter.weight] || DODGE.medium;
           restart(d.anim, clip(d.anim) ? clip(d.anim).duration / d.duration : 1);

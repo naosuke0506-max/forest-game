@@ -668,7 +668,8 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 }
 .vitals[hidden] { display: none; }
 /* 効き目の残り（体力の板の上。祓魔僧の奇跡・燃えている）：小さな札を横に並べる */
-.buffs { position: absolute; left: calc(50% - min(200px, 20vw) + 10px); bottom: calc(76px + var(--safe-b)); display: flex; gap: 6px; pointer-events: none; }   /* 体力の板の左の端から右へ並べる（右下のボタンに掛からないように） */
+.buffs { position: absolute; left: calc(50% - min(200px, 20vw) + 10px); bottom: calc(76px + var(--safe-b)); display: flex; flex-wrap: wrap-reverse; gap: 6px; pointer-events: none;
+  max-width: calc(min(400px, 40vw) - 150px); }   /* 体力の板の左の端から右へ並べ、多いときは上の段へ（右下のボタンに掛からないように） */
 .buffs[hidden] { display: none; }
 .buffs .bf { display: flex; align-items: center; gap: 5px; padding: 3px 9px 3px 6px; border-radius: 12px; border: 1px solid rgba(217, 180, 95, .55);
   background: linear-gradient(180deg, rgba(36, 30, 20, .9), rgba(12, 10, 7, .88)); color: #f6e7bf; font: 600 12px/1 var(--serif); letter-spacing: .06em;
@@ -711,6 +712,14 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .blind[hidden] { display: none; }
 .buffs .bf.shock { border-color: rgba(150, 190, 255, .75); color: #dfeaff; }
 .buffs .bf.shock b { color: #a9c8ff; }
+/* 状態異常（2026-11-18）：火炎・雷痺は強く脈打つ。溜まり（炎・雷）は札の下に細い棒 */
+.buffs .bf.blaze { border-color: #ff7a3a; color: #ffe0c8; background: linear-gradient(180deg, rgba(120, 30, 6, .92), rgba(40, 10, 2, .9)); animation: bfPulse .5s ease-in-out infinite alternate; }
+.buffs .bf.blaze b { color: #ffb070; }
+.buffs .bf.para { border-color: #8fb4ff; color: #e6eeff; background: linear-gradient(180deg, rgba(20, 40, 110, .92), rgba(6, 12, 40, .9)); animation: bfPulse .35s ease-in-out infinite alternate; }
+@keyframes bfPulse { from { box-shadow: 0 0 4px rgba(255, 160, 80, .3); } to { box-shadow: 0 0 14px rgba(255, 160, 80, .85); } }
+.buffs .bf.gauge { position: relative; overflow: hidden; padding-bottom: 6px; }
+.buffs .bf.gauge i { position: absolute; left: 0; bottom: 0; height: 3px; background: #ff8a3a; }
+.buffs .bf.gauge.thunder i { background: #8fb4ff; }
 .vitals.low .bar.hp i:not(.trail) { animation: hpLow .7s ease-in-out infinite; }
 .vitals.low .vt-hp { color: #ff9a84; }
 @keyframes hpLow { 0%, 100% { filter: none; } 50% { filter: brightness(1.7); } }

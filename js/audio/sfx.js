@@ -471,7 +471,8 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
     miracle(kind, f, { dur = 1, x, y, z } = {}) {
       const src = x !== undefined ? { x, y, z, isPlayer: false } : f;
       const loud = { cast: 0.8, heal: 0.9, revive: 1.0, revived: 1.4, wall: 0.95, wallHit: 0.8, wallBreak: 1.1, flame: 0.9, ignite: 0.8, broken: 0.6, notReady: 0.35,
-        pillarCall: 1.0, pillarWarn: 0.6, pillarStrike: 1.2, fireball: 0.9, fireballBoom: 1.4, thunder: 1.0, thunderHit: 1.6, shock: 0.7 }[kind] ?? 0.8;
+        pillarCall: 1.0, pillarWarn: 0.6, pillarStrike: 1.2, fireball: 0.9, fireballBoom: 1.4, thunder: 1.0, thunderHit: 1.6, shock: 0.7,
+        blaze: 1.2, blazeOut: 0.8, fireSpread: 0.8, charred: 1.1 }[kind] ?? 0.8;
       const far = kind === 'thunderHit' || kind === 'fireballBoom' || kind === 'pillarStrike';   // 大きな音は遠くまで聞こえる
       const d = at(src, loud, far ? { ref: 20, max: 160 } : { ref: 12, max: 90 });
       if (!d) return;
@@ -561,6 +562,23 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
         noiseHit(d, { t: 0, dur: 0.12, type: 'highpass', freq: 1800, attack: 0.001, gain: 0.9 });     // ばりっ
         noiseHit(d, { t: 0.02, dur: 1.8, type: 'lowpass', freq: 900, freqEnd: 80, attack: 0.02, gain: 0.9 });   // ごろごろ
         toneHit(d, { t: 0.01, dur: 1.5, f0: 70, f1: 30, type: 'sine', attack: 0.01, gain: 0.6 });
+      } else if (kind === 'blaze') {
+        // 火炎：ごうっと燃え上がる（低い炎の音と、たくさんのはぜる音）
+        noiseHit(d, { t: 0, dur: 1.4, type: 'bandpass', freq: 250, freqEnd: 900, q: 0.6, attack: 0.05, gain: 0.8 });
+        noiseHit(d, { t: 0, dur: 0.8, type: 'lowpass', freq: 800, freqEnd: 200, attack: 0.02, gain: 0.5 });
+        for (let i = 0; i < 14; i++) noiseHit(d, { t: R() * 1.3, dur: 0.02, type: 'highpass', freq: 2200, attack: 0.001, gain: 0.12 + R() * 0.1 });
+      } else if (kind === 'blazeOut') {
+        // 火が消える：じゅっという音
+        noiseHit(d, { t: 0, dur: 0.7, type: 'highpass', freq: 3000, freqEnd: 6000, attack: 0.01, gain: 0.35 });
+        noiseHit(d, { t: 0, dur: 0.4, type: 'bandpass', freq: 1200, freqEnd: 600, q: 1, attack: 0.01, gain: 0.2 });
+      } else if (kind === 'fireSpread') {
+        noiseHit(d, { t: 0, dur: 0.6, type: 'bandpass', freq: 300, freqEnd: 1100, q: 0.7, attack: 0.05, gain: 0.45 });
+        for (let i = 0; i < 5; i++) noiseHit(d, { t: 0.1 + R() * 0.5, dur: 0.02, type: 'highpass', freq: 2500, attack: 0.001, gain: 0.1 });
+      } else if (kind === 'charred') {
+        // 焦げて倒れる：はぜる音と、崩れる低い音
+        for (let i = 0; i < 10; i++) noiseHit(d, { t: R() * 0.6, dur: 0.025, type: 'highpass', freq: 1800, attack: 0.001, gain: 0.18 });
+        noiseHit(d, { t: 0, dur: 1.2, type: 'highpass', freq: 2500, freqEnd: 5000, attack: 0.05, gain: 0.25 });
+        toneHit(d, { t: 0.05, dur: 0.8, f0: 110, f1: 45, type: 'sine', attack: 0.01, gain: 0.35 });
       } else if (kind === 'shock') {
         const o = c.createOscillator(), og = c.createGain();                                          // 電気のうなり（ぶーん、と震える）
         o.type = 'sawtooth'; o.frequency.setValueAtTime(110, t0);
@@ -605,6 +623,12 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   combat.on('fireballBoom', ({ owner, x, y, z }) => sfx.miracle('fireballBoom', owner, { x, y, z }));
   combat.on('thunderHit', ({ spell, x, y, z }) => sfx.miracle('thunderHit', spell?.owner, { x, y, z }));
   combat.on('shocked', ({ fighter, time }) => sfx.miracle('shock', fighter, { dur: time }));
+  // 属性と状態異常（2026-11-18）：火炎・燃え移り・火が消える・焦げて倒れる・雷痺（長くしびれる）
+  combat.on('blaze', ({ fighter }) => sfx.miracle('blaze', fighter));
+  combat.on('blazeEnd', ({ fighter, how }) => { if (how !== 'burnt' && how !== 'gone') sfx.miracle('blazeOut', fighter); });
+  combat.on('fireSpread', ({ fire }) => sfx.miracle('fireSpread', null, { x: fire.x, y: fire.y + 0.5, z: fire.z }));
+  combat.on('lethal', ({ target, how }) => { if (how === 'charred') sfx.miracle('charred', target); });
+  combat.on('paralyzed', ({ fighter, time }) => sfx.miracle('shock', fighter, { dur: time }));
   combat.on('revived', ({ fighter }) => sfx.miracle('revived', fighter));
   combat.on('wallHit', ({ wall, x, y, z }) => sfx.miracle('wallHit', wall.owner, { x, y, z }));
   combat.on('wallEnd', ({ wall, broke }) => { if (broke) sfx.miracle('wallBreak', wall.owner, { x: wall.x, y: wall.y + 1.2, z: wall.z }); });
@@ -617,6 +641,7 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   combat.on('switch', ({ fighter }) => sfx.switchWeapon(fighter));
   combat.on('searchStart', ({ fighter, spot }) => sfx.search(fighter, spot.kind));
   combat.on('lethal', ({ target }) => sfx.lethal(target));
+  combat.on('hit', ({ target, kind, wound }) => { if (kind === 'assassinate' && wound) sfx.lethal(target); });   // 暗殺で倒しきらなかったときも、刺す・打つ音（2026-11-18）
   combat.on('assassinate', ({ attacker }) => sfx.assassinate(attacker));
   combat.on('assassinFail', ({ attacker }) => sfx.assassinFail(attacker));
   match.on('eliminated', ({ victim }) => sfx.death(victim));

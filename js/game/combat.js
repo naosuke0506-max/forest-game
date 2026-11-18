@@ -2,7 +2,7 @@
 // 人間も bot も、同じ形の入力 { attack: 押している, guard: 押している } で動かす。
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
 import { updateDive } from './swim.js';
-import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SKILL_FX, SWORD_ULT, WRATH, SWIM, MIRACLES, REVIVE_TIME } from './data.js';
+import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SKILL_FX, SWORD_ULT, WRATH, SWIM, MIRACLES, REVIVE_TIME, ELEMENTS, ASSASSIN } from './data.js';
 import { selectedMiracle, selectMiracle, cycleMiracle, miracleReady, startCool, updateMiracles } from './miracles.js';
 import { skillOf, skillOn, skillReady, useSkill, updateSkill } from './skills.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
@@ -53,8 +53,9 @@ export function attackStats(weaponId, heavy = false) {
  * @param {object} [opt.cover] 壁裏隠れ（game/cover.js）。壁に背を付けた所から暗殺できる
  * @param {object} opt.obstacles 木の幹や岩（矢が刺さる）
  * @param {object} [opt.senses] 目（game/senses.js）
+ * @param {(x: number, z: number) => ({ kind: 'grass'|'tree', x: number, z: number }|null)} [opt.flammable] 燃える物（草・木）。火炎の人が触れると火が移る
  */
-export function createCombat({ match, heightAt, obstacles, groundAt = null, hiding = null, cover = null, senses = null }) {
+export function createCombat({ match, heightAt, obstacles, groundAt = null, hiding = null, cover = null, senses = null, flammable = null }) {
   const floorAt = groundAt || ((x, z) => heightAt(x, z));
   const yOf = (f) => f.y ?? heightAt(f.x, f.z);   // 足の高さ（家の二階にいれば高い）
   const projectiles = [];
@@ -64,6 +65,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   const spells = [];
   // 天光柱の 1 本ずつ：{ owner, plan, at（唱えてから降り始めるまでの秒）, t, warned, x, y, z }
   const strikes = [];
+  // 地面の火（火炎の人が草・木に触れて火が移った所）：{ kind: 'grass'|'tree', x, y, z, r, left, life, owner（燃やした本人。火が効かない）, id }
+  const fires = [];
   const listeners = {};
   const emit = (type, data) => (listeners[type] || []).forEach((fn) => fn(data));
   const fighters = match.fighters;
@@ -85,9 +88,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     }
     if (target.invuln > 0) return;   // 蘇ったばかり（蘇生の奇跡）：傷を受けない
     let amount = (raw * (attacker ? attacker.stats.attack : 1) * target.armor) / target.stats.defense;
-    // 淨炎（奇跡）：鎚矛が炎をまとっている間の近接の当たりは、傷が増え、相手が燃える
+    // 淨炎（奇跡）：鎚矛が炎をまとっている間の近接の当たりは、炎の傷を足す（あとで elementHit。楯でも半分通る）
     const flaming = physical && kind === 'melee' && attacker?.flame > 0;
-    if (flaming) amount *= MIRACLES.flame.damage;
     // 光壁（奇跡）：攻めた所と受ける人の間に光の壁があれば、壁が受け止める（壁を張った人の攻撃は通る。神怒の衝撃波は通る）
     if (kind !== 'wrath' && kind !== 'pillar' && attacker && attacker !== target) {   // 神怒の衝撃波と天光柱（空から）は壁を越える
       const w = wallBetween(fromX, fromZ, target.x, target.z, yOf(target) + 1.1, attacker);
@@ -108,7 +110,13 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     // 通るのは、楯の上から通ると決めた技能だけ（打擊騎士の剛力 50%・鷹目の貫く矢）
     const dx = fromX - target.x, dz = fromZ - target.z;
     const impact = amount;   // 受けた一撃の強さ（防禦の受けの動きを、強さで使い分ける）
-    if (physical && target.guarding && target.stamina > 0 && angleTo(target.yaw, dx, dz) <= COMBAT.guardArc / 2) {
+    if (!physical && kind !== 'burn' && target.guarding && !!target.shield && target.stamina > 0 && angleTo(target.yaw, dx, dz) <= COMBAT.guardArc / 2) {
+      // 物理でない攻撃（炎・雷・聖）：楯で前から受けても半分（ELEMENTS.guardPass）は通る（鳶形楯・大楯でも。利用者の指示 2026-11-18）
+      const blocked = amount * (1 - ELEMENTS.guardPass);
+      spendStamina(target, blocked * COMBAT.guardStaminaPerDamage);
+      amount -= blocked;
+      guarded = true;
+    } else if (physical && target.guarding && target.stamina > 0 && angleTo(target.yaw, dx, dz) <= COMBAT.guardArc / 2) {
       const cut = target.shield ? (SHIELDS[target.shield]?.cut ?? COMBAT.guardReduceShield) : COMBAT.guardReduce;
       const full = !!target.shield && cut >= 1;
       const reduce = cut * (1 - (full ? skillPierce : pierce));
@@ -144,18 +152,155 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       interruptTech(target);
     }
     emit('hit', { attacker, target, amount, guarded, kind, power });
-    // 淨炎で燃える（まともに当たったときだけ。燃えている間にまた当たると、燃える時間が戻る）
-    if (flaming && !guarded && target.stats.hp > 0) {
-      const lit = !target.burn;
-      target.burn = { left: MIRACLES.flame.burn, dps: MIRACLES.flame.burnDps, by: attacker };
-      if (lit) emit('ignite', { fighter: target, by: attacker });
-    }
     if (target.stats.hp <= 0) {
       if (revive(target, attacker)) return;
       target.stats.hp = 0;
       target.action = null;
       target.guarding = false;
       match.eliminate(target, attacker);
+      return;
+    }
+    // 淨炎：物理の当たりのあとに、炎の傷（武器の MIRACLES.flame.fire 倍）・少し燃やす・火炎を溜める（物理を楯で全部止めても、炎は半分通る）
+    if (flaming) elementHit(target, attacker, 'fire', raw * MIRACLES.flame.fire, MIRACLES.flame.buildup, { fromX, fromZ, kind: 'flame' });
+  }
+
+  // ---- 属性（炎・雷）と状態異常（火炎・雷痺）。利用者の指示 2026-11-18（data.js の ELEMENTS） ----
+  const EF = ELEMENTS.fire, ET = ELEMENTS.thunder;
+  /** t が楯を前（fromX, fromZ の方）へ構えているか */
+  const guardsFront = (t, fromX, fromZ) => t.guarding && !!t.shield && t.stamina > 0 && angleTo(t.yaw, fromX - t.x, fromZ - t.z) <= COMBAT.guardArc / 2;
+  /**
+   * 属性の攻撃を当てる：傷（物理でない。楯では半分）・炎は少し燃やす／雷は少ししびれる・状態異常を溜める（楯で受けたら溜まりも半分）。当たったら true
+   */
+  function elementHit(t, by, el, raw, buildup, { fromX, fromZ, kind, power = 'l' }) {
+    if (!t.alive) return false;
+    const guarded = guardsFront(t, fromX, fromZ), before = t.stats.hp;
+    damage(t, raw, by, { fromX, fromZ, kind, power, physical: false });
+    if (!t.alive || t.stats.hp >= before) return false;   // 光壁に止められた・避けられた・傷を受けない・蘇った
+    if (el === 'fire') slip(t, by);
+    else if (el === 'thunder') jolt(t, by, guarded);
+    afflict(t, el, buildup * (guarded ? ELEMENTS.guardPass : 1), by);
+    return true;
+  }
+  /** 炎：少し燃える（燃えている間にまた当たると、燃える時間が戻る。火炎の間は火炎のほうが強いので足さない） */
+  function slip(t, by) {
+    if (t.blaze || t.waterDepth > 0.1) return;
+    const lit = !t.burn;
+    t.burn = { left: Math.max(t.burn?.left || 0, EF.slip), dps: EF.slipDps, by };
+    if (lit) emit('ignite', { fighter: t, by });
+  }
+  /** 雷：少ししびれる（動けない。振り・唱えるのも止まる。楯で受けたらしびれない） */
+  function jolt(t, by, guarded) {
+    if (guarded || t.paralyzed > 0) return;
+    const ta = t.action;
+    if (ta && !LOCKED.has(ta.kind) && ta.kind !== 'dodge') { if (ta.kind === 'miracle' && !ta.done) emit('miracleBroken', { fighter: t, id: ta.id }); t.action = null; }
+    t.guarding = false;
+    interruptTech(t);
+    t.stun = Math.max(t.stun, ET.jolt);
+    t.shock = Math.max(t.shock || 0, ET.jolt);
+    emit('shocked', { fighter: t, time: ET.jolt, by });
+  }
+  /** 状態異常を溜める（0〜100%）。100% で発動する */
+  function afflict(t, el, amount, by) {
+    if (!t.alive || !(amount > 0)) return;
+    const st = (t.ail ||= { fire: 0, thunder: 0, fireT: 0, thunderT: 0 });
+    if ((el === 'fire' && t.blaze) || (el === 'thunder' && t.paralyzed > 0)) return;   // 発動している間は溜めない
+    st[el] = Math.min(100, st[el] + amount);
+    st[`${el}T`] = 0;
+    emit('buildup', { fighter: t, el, value: st[el], by });
+    if (st[el] < 100) return;
+    st[el] = 0;
+    if (el === 'fire') startBlaze(t, by);
+    else startParalysis(t, by);
+  }
+  /** 火炎：強く燃え上がる。消せないまま時間が来ると焦げて倒れる */
+  function startBlaze(t, by) {
+    t.burn = null;
+    t.blaze = { left: EF.blaze, by, dodges: 0, lastDodge: -99, spread: 0 };
+    emit('blaze', { fighter: t, by });
+  }
+  function endBlaze(t, how) {
+    if (!t.blaze) return;
+    const by = t.blaze.by;
+    t.blaze = null;
+    emit('blazeEnd', { fighter: t, how, by });   // how：dodge（回避で消した）・water（水）・heal（治癒）・burnt（焦げて倒れた）・gone（倒れた）
+  }
+  /** 雷痺：しびれ続けて無防備（致命の一撃を受ける） */
+  function startParalysis(t, by) {
+    const ta = t.action;
+    if (ta && !LOCKED.has(ta.kind)) { if (ta.kind === 'miracle' && !ta.done) emit('miracleBroken', { fighter: t, id: ta.id }); t.action = null; }
+    if (t.cover) cover?.exit(t);
+    t.guarding = false;
+    interruptTech(t);
+    t.paralyzed = ET.paralysis;
+    t.helpless = Math.max(t.helpless || 0, ET.paralysis);
+    t.stun = Math.max(t.stun, ET.paralysis);
+    t.shock = Math.max(t.shock || 0, ET.paralysis);
+    emit('paralyzed', { fighter: t, by, time: ET.paralysis });
+  }
+  /** 地面の火を起こす（火炎の人が草・木に触れた）。近くに同じ火があれば起こさない */
+  function kindle(spot, y, owner) {
+    for (const fi of fires) if (Math.hypot(fi.x - spot.x, fi.z - spot.z) < (spot.kind === 'tree' ? 0.6 : 0.9)) return;   // もう燃えている
+    if (fires.length >= EF.ground.max) { const old = fires.shift(); emit('fireOut', { fire: old }); }
+    const life = EF.ground.life[spot.kind];
+    const fi = { kind: spot.kind, x: spot.x, z: spot.z, y, r: EF.ground.radius[spot.kind], left: life, life, owner, id: Math.random() };
+    fires.push(fi);
+    emit('fireSpread', { fire: fi });
+  }
+  /** 毎フレーム：溜まりが減る・燃える・火炎・雷痺・地面の火 */
+  function updateAilments(f, dt) {
+    const st = f.ail;
+    if (st) {
+      for (const [el, E] of [['fire', EF], ['thunder', ET]]) {
+        st[`${el}T`] += dt;
+        if (st[el] > 0 && st[`${el}T`] > E.decayDelay) st[el] = Math.max(0, st[el] - E.decay * dt);
+      }
+    }
+    // 水に触れると、燃えているのも火炎も消える
+    if (f.waterDepth > 0.1) {
+      if (f.burn) { f.burn = null; emit('extinguish', { fighter: f }); }
+      if (f.blaze) endBlaze(f, 'water');
+      if (st) st.fire = 0;
+    }
+    if (f.paralyzed > 0) {
+      f.paralyzed = Math.max(0, f.paralyzed - dt);
+      if (f.paralyzed <= 0) emit('paralysisEnd', { fighter: f });
+    }
+    const B = f.blaze;
+    if (!B) return;
+    B.left -= dt;
+    burnHurt(f, EF.blazeDps * dt, B.by);
+    if (!f.alive) return;
+    // 草・木に触れると火が移る（燃やした本人には、その火は効かない）
+    B.spread -= dt;
+    if (B.spread <= 0 && flammable) {
+      B.spread = EF.ground.every;
+      const spot = flammable(f.x, f.z);
+      if (spot) kindle(spot, yOf(f), B.by);
+    }
+    if (B.left <= 0) {
+      // 消せなかった：焦げて倒れる（教練の自分は倒れない）
+      const by = B.by;
+      endBlaze(f, 'burnt');
+      lethal(f, by && by !== f ? by : null, 'charred');
+    }
+  }
+  /** 地面の火：触れた人を燃やし、火炎を溜める（燃やした本人には効かない）。時間が来たら消える */
+  function updateFires(dt) {
+    for (let i = fires.length - 1; i >= 0; i--) {
+      const fi = fires[i];
+      fi.left -= dt;
+      if (fi.left <= 0) { fires.splice(i, 1); emit('fireOut', { fire: fi }); }
+    }
+    if (!fires.length) return;
+    // 火に触れている人：重なった火に触れていても、1 つ分だけ燃える
+    for (const t of fighters) {
+      if (!t.alive || t.hidden || t.blaze) continue;
+      const fi = fires.find((q) => q.owner !== t && Math.hypot(t.x - q.x, t.z - q.z) <= q.r + COMBAT.bodyRadius && Math.abs(yOf(t) - q.y) <= 2.5);
+      if (!fi) continue;
+      burnHurt(t, EF.ground.dps * dt, fi.owner);
+      if (!t.alive) continue;
+      slip(t, fi.owner);
+      afflict(t, 'fire', EF.ground.buildup * dt, fi.owner);
     }
   }
 
@@ -267,6 +412,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     if (target.invuln > 0) return;
     const amount = target.stats.hp;
     if (revive(target, attacker, how)) return;   // 蘇生の加護があれば、一度だけ蘇る
+    if (target.blaze) endBlaze(target, 'gone');
     target.stats.hp = 0;
     target.hitFlash = 0.25;
     target.action = null; target.helpless = 0;
@@ -285,6 +431,9 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     if (t.miracle) t.miracle.cool.revive = R.cd;
     t.stats.hp = Math.max(1, Math.round(t.stats.maxHp * R.hp));
     t.burn = null;
+    if (t.blaze) endBlaze(t, 'heal');
+    t.paralyzed = 0;
+    if (t.ail) { t.ail.fire = 0; t.ail.thunder = 0; }
     t.invuln = REVIVE_TIME + R.invuln;
     t.helpless = 0; t.stun = 0; t.guarding = false;
     if (t.react) t.react.time = 0;
@@ -298,11 +447,12 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   }
 
   /** 燃えている傷（淨炎）。体力が尽きれば倒れる（蘇生の加護があれば蘇る） */
-  function burnHurt(t, n) {
+  function burnHurt(t, n, byWho = undefined) {
     if (!t.alive || t.invuln > 0 || match.state !== 'running') return;
     t.stats.hp -= n;
     if (t.stats.hp > 0) return;
-    const by = t.burn?.by || null;
+    const by = byWho !== undefined ? byWho : t.burn?.by || null;
+    if (t.blaze) endBlaze(t, 'gone');
     if (revive(t, by, 'burn')) return;
     t.stats.hp = 0;
     t.action = null; t.guarding = false;
@@ -353,6 +503,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       const before = f.stats.hp;
       f.stats.hp = Math.min(f.stats.maxHp, f.stats.hp + f.stats.maxHp * M.amount);
       f.burn = null;
+      if (f.blaze) endBlaze(f, 'heal');   // 治癒は火炎も消す（溜まった炎も消える）
+      if (f.ail) f.ail.fire = 0;
       emit('miracle', { fighter: f, id, amount: f.stats.hp - before });
     } else if (id === 'revive') {
       f.blessing = M.life;
@@ -423,14 +575,10 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       const d = Math.hypot(t.x - sp.x, (yOf(t) + 1) - sp.y, t.z - sp.z);
       if (d > M.radius) continue;
       const k = 1 - d / M.radius;
-      const before = t.stats.hp;
-      damage(t, M.damage * (M.minK + (1 - M.minK) * k), owner, { fromX: sp.x, fromZ: sp.z, kind: 'fireball', power: 'h', physical: false });
-      if (!t.alive || t.stats.hp >= before) continue;   // 光壁に止められた・蘇った
+      const guarded = guardsFront(t, sp.x, sp.z);
+      if (!elementHit(t, owner, 'fire', M.damage * (M.minK + (1 - M.minK) * k), M.buildup * k, { fromX: sp.x, fromZ: sp.z, kind: 'fireball', power: 'h' })) continue;
       hits++;
-      blowAway(t, sp.x, sp.z, M.pushMin + (M.push - M.pushMin) * k, 0.8 + 0.5 * k);
-      const lit = !t.burn;
-      t.burn = { left: M.burn, dps: MIRACLES.flame.burnDps, by: owner };
-      if (lit) emit('ignite', { fighter: t, by: owner });
+      if (!guarded && !(t.paralyzed > 0)) blowAway(t, sp.x, sp.z, M.pushMin + (M.push - M.pushMin) * k, 0.8 + 0.5 * k);   // 楯で受けたら吹き飛ばない
     }
     emit('fireballBoom', { x: sp.x, y: sp.y, z: sp.z, gy: floorAt(sp.x, sp.z, sp.y), owner, hits });
   }
@@ -472,17 +620,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       const kk = Math.max(0, Math.min(1, ((v.x - ox) * sx + (v.z - oz) * sz) / len2));
       if (Math.hypot(ox + sx * kk - v.x, oz + sz * kk - v.z) > R) continue;
       if (sp.kind === 'fireball') { fireballBoom(sp); return false; }
-      // 神罰雷：傷としびれ。楯で前から受けると、傷は半分・しびれは短い
-      const guarded = v.guarding && !!v.shield && v.stamina > 0 && angleTo(v.yaw, ox - v.x, oz - v.z) <= COMBAT.guardArc / 2;
-      const before = v.stats.hp;
-      damage(v, M.damage * (guarded ? 0.5 : 1), owner, { fromX: ox, fromZ: oz, kind: 'thunder', power: 'h', physical: false });
-      if (v.alive && v.stats.hp < before) {
-        const time = guarded ? M.guardShock : M.shock;
-        if (!guarded) { const ta = v.action; if (ta && !LOCKED.has(ta.kind)) v.action = null; v.guarding = false; interruptTech(v); }
-        v.stun = Math.max(v.stun, time);
-        v.shock = Math.max(v.shock || 0, time);
-        emit('shocked', { fighter: v, time, by: owner });
-      }
+      // 神罰雷：雷の傷・少ししびれる・雷痺を溜める（楯で前から受けると、傷も溜まりも半分で、しびれない）
+      elementHit(v, owner, 'thunder', M.damage, M.buildup, { fromX: ox, fromZ: oz, kind: 'thunder', power: 'h' });
       emit('thunderHit', { x: sp.x, y: sp.y, z: sp.z, spell: sp, target: v });
       return false;
     }
@@ -529,6 +668,23 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     return false;
   }
 
+  /**
+   * 暗殺の傷（利用者の指示 2026-11-18）：一撃で倒さず、体力の上限の割合を削る（後ろから 6 割・前と横から 2 割 5 分）。
+   * 残りの体力がそれより少なければ倒れる。生き残った相手は、される動きの後で起き上がる（getup）。教練の自分は今までどおり「やられた」
+   */
+  function assassinWound(t, f, back) {
+    if (!t.alive) return;
+    if (t.deathless) { lethal(t, f, 'assassinate'); return; }
+    if (t.invuln > 0) return;
+    const cut = t.stats.maxHp * (back ? ASSASSIN.cut.back : ASSASSIN.cut.front);
+    if (t.stats.hp <= cut + 0.01) { lethal(t, f, 'assassinate'); return; }
+    t.stats.hp -= cut;
+    t.hitFlash = 0.25;
+    t.lastHitBy = f;
+    if (t.action?.kind === 'assassinated') t.action.struck = true;   // 倒れる動きまで見せてから、起き上がる
+    emit('hit', { attacker: f, target: t, amount: cut, guarded: false, kind: 'assassinate', wound: true, back });
+  }
+
   /** f の近く（reach 以内・同じ高さ）にいる相手のうち、条件に合う一番近い人 */
   function nearestFoe(f, reach, test = () => true) {
     let best = null, bd = reach;
@@ -542,10 +698,10 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   }
   const faceTo = (f, t) => { f.yaw = (Math.atan2(-(t.x - f.x), -(t.z - f.z)) * 180) / Math.PI; };
   // 暗殺（game/assassin.js）：暗殺ボタンで、近くの相手を一撃で倒す
-  const assassin = createAssassin({ fighters, senses, yOf, move: (f, dx, dz) => shove(f, dx, dz), lethal, emit });
+  const assassin = createAssassin({ fighters, senses, yOf, move: (f, dx, dz) => shove(f, dx, dz), lethal, wound: assassinWound, emit });
   // タンス・ベッドに隠れる・出る・探す動きと、見つけたら引きずり出して止め（game/hide-acts.js）
   const acts = hiding ? createHideActs({ hiding, move: (f, dx, dz) => shove(f, dx, dz), lethal, emit }) : null;
-  const LOCKED = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged', 'wrath', 'revive']);   // している間はほかのことができない（神怒の間も）
+  const LOCKED = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged', 'wrath', 'revive', 'getup']);   // している間はほかのことができない（神怒の間も）
   /** 押されて動く（木や岩・壁を避け、歩ける範囲の中・床の高さへ）。実際に動いた分を返す */
   const shove = (f, dx, dz) => {
     const ox = f.x, oz = f.z;
@@ -662,6 +818,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     projectiles,
     walls,
     spells,    // 飛ばす奇跡（見た目は render/miracle-fx.js）
+    fires,     // 地面の火（火炎の人が草・木に触れて火が移った所）
     strikes,   // 天光柱の 1 本ずつ
     on(type, fn) { (listeners[type] ||= []).push(fn); },
 
@@ -798,6 +955,14 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         f.guarding = false;
         spendStamina(f, d.stamina);
         emit('dodge', { fighter: f });
+        // 火炎：回避を続けて（間が EF.gap 秒以内で EF.dodges 回）転がると、火が消える
+        if (f.blaze) {
+          const B = f.blaze;
+          B.dodges = clock - B.lastDodge <= EF.gap ? B.dodges + 1 : 1;
+          B.lastDodge = clock;
+          if (B.dodges >= EF.dodges) endBlaze(f, 'dodge');
+          else emit('blazeDodge', { fighter: f, count: B.dodges, need: EF.dodges });
+        }
         return;
       }
 
@@ -873,6 +1038,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         if (f.helpless > 0) f.helpless = Math.max(0, f.helpless - dt);
         updateSkill(f, dt);   // 技能の効き目と待ち時間
         updateMiracles(f, dt);   // 奇跡の待ち時間と、加護・炎の残り（game/miracles.js）
+        updateAilments(f, dt);   // 属性の溜まり・火炎・雷痺（利用者の指示 2026-11-18）
+        if (!f.alive) continue;
         // 燃えている（淨炎）：少しずつ傷が増える。水に入ると消える
         if (f.burn) {
           if (f.swimming) { f.burn = null; emit('extinguish', { fighter: f }); }
@@ -945,6 +1112,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
             if (a.t >= M.time) f.action = null;
           } else if (a.kind === 'revive') {
             if (a.t >= REVIVE_TIME) f.action = null;   // 蘇る動き（cl_rise）の間は何もできない
+          } else if (a.kind === 'getup') {
+            if (a.t >= ASSASSIN.getup) f.action = null;   // 暗殺されて生き残った：倒れた姿から起き上がる（prone_up）
           } else if (a.kind === 'recover') {
             if (a.t >= a.time) f.action = null;   // 疾驅攻撃の後の隙：動けない・何もできない
           } else if (a.kind === 'shield') {
@@ -964,8 +1133,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
           } else if (a.kind === 'assassinate') {
             assassin.update(f, a, dt);   // 飛びかかって、動きの決まった時刻に止めを刺す（game/assassin.js）
           } else if (a.kind === 'assassinated') {
-            // 暗殺されている：止めを刺される（暗殺する人が倒れた・ひるんだら放される）
-            if (!a.by.alive || a.by.action?.kind !== 'assassinate') f.action = null;
+            // 暗殺されている：止めを刺される（暗殺する人が倒れた・ひるんだら放される）。傷を受けて生き残ったら、起き上がる
+            if (!a.by.alive || a.by.action?.kind !== 'assassinate') f.action = a.struck && f.alive ? { kind: 'getup', t: 0 } : null;
           } else if (a.kind === 'dodge') {
             // 始めに速く、終わりにゆっくり進む
             const d = DODGE[f.weight] || DODGE.medium;
@@ -993,6 +1162,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       // 飛ばす奇跡（聖火彈・神罰雷）と天光柱
       for (let i = spells.length - 1; i >= 0; i--) if (!stepSpell(spells[i], dt)) spells.splice(i, 1);
       for (let i = strikes.length - 1; i >= 0; i--) if (!stepStrike(strikes[i], dt)) strikes.splice(i, 1);
+      updateFires(dt);   // 地面の火（草・木）
       // 光壁：時間が来たら消える（張った人が倒れても消える）
       for (const w of [...walls]) {
         w.left -= dt;

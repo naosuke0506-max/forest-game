@@ -281,6 +281,9 @@ export const BODY_TURN = { neckYaw: 70, neckUp: 55, neckDown: 65, headSpeed: 320
  */
 export const ASSASSIN = {
   reach: 3.0, seen: 0.7, grace: 0.45, dash: 8,
+  // 暗殺の傷（利用者の指示 2026-11-18）：一撃で倒さず、体力の上限のこの割合を削る（残りの体力がそれより少なければ倒れる）。
+  //   後ろから 6 割・前と横から 2 割 5 分。生き残った相手は、倒れた姿から起き上がる（getup 秒）
+  cut: { back: 0.6, front: 0.25 }, getup: 1.3,
   moves: {
     back:  { clip: 'as_back',  victim: 'as_back_v',  gap: 0.64, kill: 0.40, time: 2.03, end: { r: 0, f: 0, yaw: 0 } },
     slide: { clip: 'as_slide', victim: 'as_slide_v', gap: 2.2,  kill: 0.60, time: 2.6,  end: { r: -0.42, f: 3.02, yaw: 150 } },
@@ -435,7 +438,7 @@ export const EXCLUSIVE_SKILLS = {
   archer:  { name: '鷹目', type: 'sense', effect: 'hawk', time: 12, cd: 60,
              desc: '12 秒、目に映る物が白黒になり、80 m 以内の敵が体温で壁越しに見える（隠れ場所の中も）。その間に放つ最初の 1 本は、人も木も壁も貫く矢になる（傷 2 倍・防禦できない）' },
   cleric:  { name: '神怒', type: 'finisher', effect: 'wrath', time: 0, cd: 90,
-             desc: '胸の前で腕を交差して宙に浮き、腕を広げて神の衝撃波を広く放つ（周り 9 m。楯では防げない）。周りの人に傷を与えて吹き飛ばす' },
+             desc: '胸の前で腕を交差して宙に浮き、腕を広げて神の衝撃波を広く放つ（周り 9 m。楯で受けても半分は通る）。周りの人に傷を与えて吹き飛ばす' },
 };
 /**
  * 劍騎士の奧義（必殺技。技能ボタン）：持っている武器ごとの動き（利用者の指示 2026-11-10。数字は Claude の案）。
@@ -470,24 +473,41 @@ export const MIRACLES = {
             desc: '片膝をついて祈り、90 秒の間、加護を受ける。その間に倒されると、一度だけ光の中から蘇る（体力 4 割。蘇ってから 3 秒は傷を受けない）' },
   wall:   { name: '光壁', short: '光の壁で攻撃と矢を防ぐ', type: 'buff', effect: 'wall', clip: 'cl_wall', time: 0.9, at: 0.55, cd: 35, life: 10, guard: 70, width: 3.2, height: 2.6, ahead: 1.5,
             desc: '護符を前へ突き出し、前に光の壁（幅 3.2 m・高さ 2.6 m）を 10 秒張る。向こうからの攻撃と矢を、傷 70 の分まで受け止める（超えると砕ける）。人は通り抜けられる' },
-  flame:  { name: '淨炎', short: '鎚矛に炎。当てた相手が燃える', type: 'buff', effect: 'flame', clip: 'cl_flame', time: 1.1, at: 0.7, cd: 45, life: 15, damage: 1.2, burn: 3, burnDps: 3,
-            desc: '護符で鎚矛をなでて、15 秒、清めの炎をまとわせる。傷が 1.2 倍になり、当たった相手は 3 秒燃える（1 秒に 3 の傷。水に入ると消える）' },
+  flame:  { name: '淨炎', short: '鎚矛に炎。当てた相手が燃える', type: 'buff', effect: 'flame', clip: 'cl_flame', time: 1.1, at: 0.7, cd: 45, life: 15, fire: 0.3, buildup: 30,
+            desc: '護符で鎚矛をなでて、15 秒、清めの炎をまとわせる。当たるたびに炎の傷（武器の 3 割。楯でも半分は通る）を足し、少し燃やし、火炎を 30% 溜める' },
   // 2 回目（2026-11-17。飛ばす・落とす奇跡）
   //   天光柱：range m 以内・前 35 度の中の一番近い敵のまわり（いなければ center m 先）に、dur 秒の間に count 本の光の柱が降る。
   //     1 本ごとに warn 秒前に地面に光の輪が出る（見て避けられる）。半径 radius m に傷 damage と、blind 秒の目くらまし
   pillar:   { name: '天光柱', short: '空から光の柱が降りそそぐ', type: 'finisher', effect: 'pillar', clip: 'cl_heaven', time: 1.4, at: 1.0, cd: 50,
               range: 18, center: 9, spread: 3.0, count: 7, dur: 2.0, warn: 0.55, radius: 1.2, damage: 16, blind: 2.5,
-              desc: '護符を天へ掲げて振り下ろす。前の敵のまわり（いなければ 9 m 先）に、2 秒の間に光の柱が 7 本ばらばらに降る（降る少し前に地面に光の輪が出る）。当たると傷 16 と、2.5 秒目がくらむ（楯では防げない）' },
+              desc: '護符を天へ掲げて振り下ろす。前の敵のまわり（いなければ 9 m 先）に、2 秒の間に光の柱が 7 本ばらばらに降る（降る少し前に地面に光の輪が出る）。当たると傷 16 と、2.5 秒目がくらむ（聖の力。楯で受けても半分は通る）' },
   //   聖火彈：speed m/秒で飛ぶ火の玉。seek m 以内・前 50 度の中の一番近い敵を、1 秒に turn 度まで曲がって追う。life 秒で消える。
   //     人・壁・木・地面に当たると爆発：半径 radius m に傷 damage（端で minK 倍）・外へ吹き飛ばす（push〜pushMin m）・burn 秒燃える
   fireball: { name: '聖火彈', short: '敵を追う火の玉。爆発して吹き飛ばす', type: 'finisher', effect: 'fireball', clip: 'cl_cast', time: 0.9, at: 0.5, cd: 35,
-              speed: 11, turn: 95, life: 3.5, seek: 25, radius: 3, damage: 26, minK: 0.4, push: 4, pushMin: 1.2, burn: 2,
-              desc: '護符を突き出して火の玉を放つ。前の敵を追いかけ（曲がり方には限りがある）、当たると爆発する（周り 3 m に傷 26〜10・外へ吹き飛ばす・2 秒燃える。楯では防げない）' },
+              speed: 11, turn: 95, life: 3.5, seek: 25, radius: 3, damage: 26, minK: 0.4, push: 4, pushMin: 1.2, buildup: 60,
+              desc: '護符を突き出して火の玉を放つ。前の敵を追いかけ（曲がり方には限りがある）、当たると爆発する（周り 3 m に炎の傷 26〜10・外へ吹き飛ばす・少し燃やし、火炎を最大 60% 溜める。楯では半分）' },
   //   神罰雷：speed m/秒でまっすぐ飛ぶ雷の槍（range m まで）。当たると傷 damage と、shock 秒しびれて動けない。楯で受けると傷は半分・しびれは guardShock 秒
-  thunder:  { name: '神罰雷', short: '雷の槍。当たった相手はしびれる', type: 'finisher', effect: 'thunder', clip: 'cl_throw', time: 1.0, at: 0.62, cd: 40,
-              speed: 42, range: 45, damage: 28, shock: 1.6, guardShock: 0.5,
-              desc: '左手を振りかぶり、雷の槍を投げる（まっすぐ速く、45 m まで。上下の向きも狙える）。当たると傷 28 と、1.6 秒しびれて動けない（楯で受けると傷は半分、しびれは短い）' },
+  thunder:  { name: '神罰雷', short: '雷の槍。当たった相手は雷痺する', type: 'finisher', effect: 'thunder', clip: 'cl_throw', time: 1.0, at: 0.62, cd: 40,
+              speed: 42, range: 45, damage: 28, buildup: 100,
+              desc: '左手を振りかぶり、雷の槍を投げる（まっすぐ速く、45 m まで。上下の向きも狙える）。当たると雷の傷 28・少ししびれ、雷痺を 100% 溜める（そのまま雷痺して無防備になる。楯で受けると傷も溜まりも半分）' },
 };
+/**
+ * 属性と状態異常（利用者の指示 2026-11-18）。炎・雷・聖（神怒・天光柱）は物理ではない：
+ *   楯で前から受けても、guardPass の割合は通る（鳶形楯・大楯でも半分）。
+ *   炎・雷は当たるたびに状態異常が溜まり（蓄積。0〜100%。溜まる量は攻撃ごとに違う）、100% で発動する。
+ *   溜まりは decayDelay 秒の間、新しく溜まらないと、1 秒に decay % ずつ減る（Claude の案）
+ *   炎：当たるたびに少し燃える（slip 秒・1 秒に slipDps）。100% で火炎：blaze 秒、強く燃える（1 秒に blazeDps）。その間に草・木に触れると火が移る
+ *       （地面の火 ground。触れた人も燃えて溜まる。燃やした本人には効かない）。消し方：回避を dodges 回続ける（間が gap 秒以内）・水に入る・治癒。
+ *       消せないまま時間が来ると、焦げて倒れる
+ *   雷：当たるたびに少ししびれる（jolt 秒）。100% で雷痺：paralysis 秒しびれ続けて無防備（致命の一撃を受ける）
+ */
+export const ELEMENTS = {
+  guardPass: 0.5,
+  fire: { slip: 3, slipDps: 2, decay: 8, decayDelay: 4, blaze: 10, blazeDps: 4, dodges: 3, gap: 1.6,
+          ground: { life: { grass: 7, tree: 12 }, radius: { grass: 1.1, tree: 1.4 }, dps: 4, buildup: 15, max: 32, every: 0.25 } },
+  thunder: { jolt: 0.45, decay: 8, decayDelay: 4, paralysis: 3.5 },
+};
+
 /** 奇跡を持てる数（利用者の指示 2026-11-17。そろった後の刻の報酬は能力値） */
 export const MIRACLE_SLOTS = 4;
 /** 蘇る動きの長さ（秒。cl_rise。この間と、その後 MIRACLES.revive.invuln 秒は傷を受けない） */

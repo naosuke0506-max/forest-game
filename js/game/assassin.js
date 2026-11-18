@@ -23,9 +23,10 @@ const PLAIN = { approachTo: 0.9, kill: 0.25, time: 0.7 };   // 片手劍を持�
  * @param {(f: object) => number} o.yOf 足の高さ
  * @param {(f: object, dx: number, dz: number) => void} o.move 動かす（木や壁を避ける）
  * @param {(t: object, f: object, how: string) => void} o.lethal 一撃で倒す
+ * @param {(t: object, f: object, back: boolean) => void} [o.wound] 暗殺の傷（体力の割合を削る。game/combat.js の assassinWound）
  * @param {(type: string, data: object) => void} o.emit
  */
-export function createAssassin({ fighters, senses, yOf, move, lethal, emit }) {
+export function createAssassin({ fighters, senses, yOf, move, lethal, wound = null, emit }) {
   /** f が t を暗殺できるか。できれば { grace（避ける猶予があるか） }、できなければ null */
   function check(f, t) {
     if (!f.alive || !t.alive || t === f || t.hidden) return null;
@@ -118,7 +119,7 @@ export function createAssassin({ fighters, senses, yOf, move, lethal, emit }) {
     const killAt = a.move ? a.move.kill : PLAIN.kill;
     if (!a.hit && a.t >= killAt) {
       a.hit = true;
-      if (t.alive) lethal(t, f, 'assassinate');
+      if (t.alive) (wound ? wound(t, f, a.back) : lethal(t, f, 'assassinate'));   // 一撃で倒さず、後ろから 6 割・前と横から 2 割 5 分（利用者の指示 2026-11-18）
     }
     if (a.t >= (a.move ? a.move.time : PLAIN.time)) {
       // 動き終わりの体の位置と向き（滑斬は相手を通り過ぎて振り向いている）。見た目は動きの最後の姿のまま切り替える
