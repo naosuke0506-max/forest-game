@@ -143,6 +143,21 @@
    "loop": false,
    "speed": 0.0
   },
+  "cl_heaven": {
+   "duration": 1.4,
+   "loop": false,
+   "speed": 0.0
+  },
+  "cl_cast": {
+   "duration": 0.9,
+   "loop": false,
+   "speed": 0.0
+  },
+  "cl_throw": {
+   "duration": 1.0,
+   "loop": false,
+   "speed": 0.0
+  },
   "mc_cut1": {
    "duration": 0.8667,
    "loop": false,

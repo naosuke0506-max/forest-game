@@ -60,6 +60,10 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   const projectiles = [];
   // 光壁（祓魔僧の奇跡。game/miracles.js）：{ owner, x, y, z, yaw, half, height, left（残り秒）, guard（受け止められる残りの傷）}
   const walls = [];
+  // 飛ばす奇跡（聖火彈・神罰雷）：{ kind: 'fireball'|'thunder', owner, x, y, z, vx, vy, vz, life, target }。矢（projectiles）とは別に持つ
+  const spells = [];
+  // 天光柱の 1 本ずつ：{ owner, plan, at（唱えてから降り始めるまでの秒）, t, warned, x, y, z }
+  const strikes = [];
   const listeners = {};
   const emit = (type, data) => (listeners[type] || []).forEach((fn) => fn(data));
   const fighters = match.fighters;
@@ -85,7 +89,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     const flaming = physical && kind === 'melee' && attacker?.flame > 0;
     if (flaming) amount *= MIRACLES.flame.damage;
     // 光壁（奇跡）：攻めた所と受ける人の間に光の壁があれば、壁が受け止める（壁を張った人の攻撃は通る。神怒の衝撃波は通る）
-    if (kind !== 'wrath' && attacker && attacker !== target) {
+    if (kind !== 'wrath' && kind !== 'pillar' && attacker && attacker !== target) {   // 神怒の衝撃波と天光柱（空から）は壁を越える
       const w = wallBetween(fromX, fromZ, target.x, target.z, yOf(target) + 1.1, attacker);
       if (w) { hitWall(w, amount, attacker, fromX, fromZ, target); return; }
     }
@@ -365,7 +369,164 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       walls.push(w);
       emit('miracle', { fighter: f, id, wall: w });
       emit('wallUp', { wall: w });
+    } else if (id === 'pillar') {
+      // 天光柱：前の敵のまわり（いなければ前の決まった所）に、光の柱を何本もばらばらに降らせる。1 本目は狙った敵の所
+      const t = aimTarget(f, M.range, 35), rad = f.yaw * DEG;
+      const plan = { owner: f, target: t, cx: t ? t.x : f.x - Math.sin(rad) * M.center, cz: t ? t.z : f.z - Math.cos(rad) * M.center };
+      for (let i = 0; i < M.count; i++) strikes.push({ owner: f, plan, at: (i / M.count) * M.dur + Math.random() * 0.12, t: 0, warned: false, first: i === 0, x: 0, y: 0, z: 0 });
+      emit('miracle', { fighter: f, id, x: plan.cx, z: plan.cz, target: t });
+    } else if (id === 'fireball' || id === 'thunder') {
+      // 聖火彈・神罰雷：左手（護符）の前から放つ。神罰雷は見ている上下の向きも使う。聖火彈は前の敵を追う
+      const rad = f.yaw * DEG, fx = -Math.sin(rad), fz = -Math.cos(rad), rx = Math.cos(rad), rz = -Math.sin(rad);
+      const x = f.x + fx * 0.7 - rx * 0.25, y = yOf(f) + 1.45, z = f.z + fz * 0.7 - rz * 0.25;
+      const pitch = Math.max(-25, Math.min(25, f.pitch || 0)) * DEG * (id === 'fireball' ? 0.4 : 1);
+      const dx = fx * Math.cos(pitch), dy = Math.sin(pitch), dz = fz * Math.cos(pitch);
+      const sp = { kind: id, owner: f, x, y, z, vx: dx * M.speed, vy: dy * M.speed, vz: dz * M.speed, id: Math.random(),
+        life: id === 'fireball' ? M.life : M.range / M.speed, target: id === 'fireball' ? aimTarget(f, M.seek, 50) : null };
+      spells.push(sp);
+      emit('miracle', { fighter: f, id, spell: sp });
     }
+  }
+
+  /** f が狙う相手：range m 以内・前から half 度の中の、一番近い人（隠れている人は狙わない）。いなければ null */
+  function aimTarget(f, range, half) {
+    let best = null, bd = range;
+    const fy = yOf(f);
+    for (const t of fighters) {
+      if (t === f || !t.alive || t.hidden) continue;
+      const dx = t.x - f.x, dz = t.z - f.z, d = Math.hypot(dx, dz);
+      if (d < bd && Math.abs(yOf(t) - fy) < 5 && angleTo(f.yaw, dx, dz) <= half) { bd = d; best = t; }
+    }
+    return best;
+  }
+
+  /** 吹き飛ばす（神怒・聖火彈の爆発）：していたことを取りやめ、よろめいて外へ下がる */
+  function blowAway(t, fromX, fromZ, push, stun) {
+    if (!t.alive) return;
+    if (t.cover) cover?.exit(t);
+    const ta = t.action;
+    if (ta && !LOCKED.has(ta.kind)) t.action = null;
+    t.guarding = false;
+    interruptTech(t);
+    startReact(t, 'stagger', fromX, fromZ);
+    t.react.push = push;
+    t.react.time = 0.9;
+    t.stun = Math.max(t.stun, stun);
+  }
+
+  /** 聖火彈の爆発：周りの人に傷（近いほど大きい。楯では防げない）、外へ吹き飛ばし、燃やす */
+  function fireballBoom(sp) {
+    const M = MIRACLES.fireball, owner = sp.owner;
+    let hits = 0;
+    for (const t of fighters) {
+      if (t === owner || !t.alive || t.hidden) continue;
+      const d = Math.hypot(t.x - sp.x, (yOf(t) + 1) - sp.y, t.z - sp.z);
+      if (d > M.radius) continue;
+      const k = 1 - d / M.radius;
+      const before = t.stats.hp;
+      damage(t, M.damage * (M.minK + (1 - M.minK) * k), owner, { fromX: sp.x, fromZ: sp.z, kind: 'fireball', power: 'h', physical: false });
+      if (!t.alive || t.stats.hp >= before) continue;   // 光壁に止められた・蘇った
+      hits++;
+      blowAway(t, sp.x, sp.z, M.pushMin + (M.push - M.pushMin) * k, 0.8 + 0.5 * k);
+      const lit = !t.burn;
+      t.burn = { left: M.burn, dps: MIRACLES.flame.burnDps, by: owner };
+      if (lit) emit('ignite', { fighter: t, by: owner });
+    }
+    emit('fireballBoom', { x: sp.x, y: sp.y, z: sp.z, gy: floorAt(sp.x, sp.z, sp.y), owner, hits });
+  }
+
+  /** 飛ばす奇跡を 1 歩進める。続くなら true */
+  function stepSpell(sp, dt) {
+    const M = MIRACLES[sp.kind], owner = sp.owner;
+    sp.life -= dt;
+    if (sp.life <= 0) { if (sp.kind === 'fireball') fireballBoom(sp); else emit('thunderHit', { x: sp.x, y: sp.y, z: sp.z, spell: sp }); return false; }
+    // 聖火彈：狙った相手の胸へ向けて、1 秒に turn 度まで曲がる
+    const t = sp.target;
+    if (sp.kind === 'fireball' && t?.alive && !t.hidden) {
+      const tx = t.x - sp.x, ty = yOf(t) + 1.1 - sp.y, tz = t.z - sp.z, tl = Math.hypot(tx, ty, tz) || 1;
+      const sl = Math.hypot(sp.vx, sp.vy, sp.vz) || 1;
+      const ux = sp.vx / sl, uy = sp.vy / sl, uz = sp.vz / sl, wx = tx / tl, wy = ty / tl, wz = tz / tl;
+      const ang = Math.acos(Math.max(-1, Math.min(1, ux * wx + uy * wy + uz * wz)));
+      const k = ang > 1e-4 ? Math.min(1, (M.turn * DEG * dt) / ang) : 1;
+      let nx = ux + (wx - ux) * k, ny = uy + (wy - uy) * k, nz = uz + (wz - uz) * k;
+      const nl = Math.hypot(nx, ny, nz) || 1;
+      sp.vx = (nx / nl) * M.speed; sp.vy = (ny / nl) * M.speed; sp.vz = (nz / nl) * M.speed;
+    }
+    const ox = sp.x, oy = sp.y, oz = sp.z;
+    sp.x += sp.vx * dt; sp.y += sp.vy * dt; sp.z += sp.vz * dt;
+    // 光壁に当たる：壁が受け止める（聖火彈はその場で爆発する）
+    const w = walls.length ? wallBetween(ox, oz, sp.x, sp.z, sp.y, owner) : null;
+    if (w) {
+      hitWall(w, M.damage * (owner ? owner.stats.attack : 1), owner, ox, oz);
+      sp.x = ox; sp.y = oy; sp.z = oz;
+      if (sp.kind === 'fireball') fireballBoom(sp); else emit('thunderHit', { x: ox, y: oy, z: oz, spell: sp, wall: true });
+      return false;
+    }
+    // 人に当たる：線分（前の位置 → 今の位置）と、体の円柱（聖火彈は少し太い）
+    const R = COMBAT.bodyRadius + (sp.kind === 'fireball' ? 0.25 : 0.05);
+    for (const v of fighters) {
+      if (v === owner || !v.alive || v.hidden) continue;
+      const g = yOf(v);
+      if (sp.y < g - 0.2 || sp.y > g + stanceShape(v).height + 0.2) continue;
+      const sx = sp.x - ox, sz = sp.z - oz, len2 = sx * sx + sz * sz || 1e-6;
+      const kk = Math.max(0, Math.min(1, ((v.x - ox) * sx + (v.z - oz) * sz) / len2));
+      if (Math.hypot(ox + sx * kk - v.x, oz + sz * kk - v.z) > R) continue;
+      if (sp.kind === 'fireball') { fireballBoom(sp); return false; }
+      // 神罰雷：傷としびれ。楯で前から受けると、傷は半分・しびれは短い
+      const guarded = v.guarding && !!v.shield && v.stamina > 0 && angleTo(v.yaw, ox - v.x, oz - v.z) <= COMBAT.guardArc / 2;
+      const before = v.stats.hp;
+      damage(v, M.damage * (guarded ? 0.5 : 1), owner, { fromX: ox, fromZ: oz, kind: 'thunder', power: 'h', physical: false });
+      if (v.alive && v.stats.hp < before) {
+        const time = guarded ? M.guardShock : M.shock;
+        if (!guarded) { const ta = v.action; if (ta && !LOCKED.has(ta.kind)) v.action = null; v.guarding = false; interruptTech(v); }
+        v.stun = Math.max(v.stun, time);
+        v.shock = Math.max(v.shock || 0, time);
+        emit('shocked', { fighter: v, time, by: owner });
+      }
+      emit('thunderHit', { x: sp.x, y: sp.y, z: sp.z, spell: sp, target: v });
+      return false;
+    }
+    // 木・岩・壁・地面に当たる
+    const ground = floorAt(sp.x, sp.z, sp.y);
+    const blocked = sp.y <= ground + (sp.kind === 'fireball' ? 0.3 : 0.05) || (obstacles.isFree(sp.x, sp.z, 0.12, true) === false && sp.y < heightAt(sp.x, sp.z) + 8)
+      || Math.hypot(sp.x, sp.z) > match.areaRadius + 0.5;
+    if (blocked) {
+      if (sp.kind === 'fireball') { sp.y = Math.max(sp.y, ground + 0.3); fireballBoom(sp); }
+      else emit('thunderHit', { x: sp.x, y: Math.max(sp.y, ground), z: sp.z, spell: sp });
+      return false;
+    }
+    return true;
+  }
+
+  /** 天光柱を進める：降る少し前に地面に光の輪（知らせ）、時刻が来たら光の柱が降って、半径の中の人に傷と目くらまし */
+  function stepStrike(s, dt) {
+    const M = MIRACLES.pillar, P = s.plan, owner = s.owner;
+    s.t += dt;
+    if (!s.warned && s.t >= s.at) {
+      // 降る所を決める：狙った敵を追って真ん中を寄せる。1 本目はその敵の所。ほかは真ん中のまわりにばらばら
+      const tgt = P.target?.alive && !P.target.hidden ? P.target : null;
+      if (tgt) { P.cx += (tgt.x - P.cx) * 0.5; P.cz += (tgt.z - P.cz) * 0.5; }
+      const a = Math.random() * Math.PI * 2, r = s.first ? 0 : Math.sqrt(Math.random()) * M.spread;
+      s.x = (s.first && tgt ? tgt.x : P.cx) + Math.cos(a) * r;
+      s.z = (s.first && tgt ? tgt.z : P.cz) + Math.sin(a) * r;
+      s.y = floorAt(s.x, s.z, tgt ? yOf(tgt) + 0.5 : yOf(owner) + 0.5);
+      s.warned = true;
+      emit('pillarWarn', { x: s.x, y: s.y, z: s.z, time: M.warn, owner, radius: M.radius });
+    }
+    if (!s.warned || s.t < s.at + M.warn) return true;
+    let hits = 0;
+    for (const t of fighters) {
+      if (t === owner || !t.alive || t.hidden) continue;
+      if (Math.hypot(t.x - s.x, t.z - s.z) > M.radius + COMBAT.bodyRadius || Math.abs(yOf(t) - s.y) > 3) continue;
+      const before = t.stats.hp;
+      damage(t, M.damage, owner, { fromX: s.x, fromZ: s.z, kind: 'pillar', power: 'l', physical: false });
+      if (!t.alive || t.stats.hp >= before) continue;
+      hits++;
+      t.blind = Math.max(t.blind || 0, M.blind);
+      emit('blinded', { fighter: t, time: M.blind, by: owner });
+    }
+    emit('pillarStrike', { x: s.x, y: s.y, z: s.z, owner, hits, radius: M.radius });
+    return false;
   }
 
   /** f の近く（reach 以内・同じ高さ）にいる相手のうち、条件に合う一番近い人 */
@@ -500,6 +661,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   return {
     projectiles,
     walls,
+    spells,    // 飛ばす奇跡（見た目は render/miracle-fx.js）
+    strikes,   // 天光柱の 1 本ずつ
     on(type, fn) { (listeners[type] ||= []).push(fn); },
 
     /**
@@ -827,6 +990,9 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       for (let i = projectiles.length - 1; i >= 0; i--) {
         if (!stepProjectile(projectiles[i], dt)) projectiles.splice(i, 1);
       }
+      // 飛ばす奇跡（聖火彈・神罰雷）と天光柱
+      for (let i = spells.length - 1; i >= 0; i--) if (!stepSpell(spells[i], dt)) spells.splice(i, 1);
+      for (let i = strikes.length - 1; i >= 0; i--) if (!stepStrike(strikes[i], dt)) strikes.splice(i, 1);
       // 光壁：時間が来たら消える（張った人が倒れても消える）
       for (const w of [...walls]) {
         w.left -= dt;

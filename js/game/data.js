@@ -459,7 +459,7 @@ export const WRATH = { clip: 'cl_ult', time: 2.7, at: 1.4, radius: 9, damage: 34
 
 /**
  * 祓魔僧の奇跡（利用者の指示 2026-11-17：刻の報酬で 3 つから 1 つ選んで覚える。持てるのは最大 4 つ。左手の奇跡ボタンで唱え、替ボタンで選ぶ）。
- *   2 回に分けて作る（利用者が選んだ）：1 回目は自分に掛ける奇跡（治癒・蘇生・光壁・淨炎）、2 回目は飛ばす・落とす奇跡（天光柱・聖火彈・神罰雷）。
+ *   2 回に分けて作った（利用者が選んだ）：1 回目は自分に掛ける奇跡（治癒・蘇生・光壁・淨炎）、2 回目は飛ばす・落とす奇跡（天光柱・聖火彈・神罰雷）。
  *   clip・time：唱える動きと長さ（秒）、at：効き目が出る時刻（それより前に攻撃を受けてひるむと、唱えるのが途切れる。待ち時間は始まらない）、
  *   cd：唱えた後の待ち時間（秒）、short：刻の褒美の札に出す短い説明。数字は Claude の案（遊んでみて直す）。effect は game/miracles.js と combat.js が見る
  */
@@ -472,10 +472,21 @@ export const MIRACLES = {
             desc: '護符を前へ突き出し、前に光の壁（幅 3.2 m・高さ 2.6 m）を 10 秒張る。向こうからの攻撃と矢を、傷 70 の分まで受け止める（超えると砕ける）。人は通り抜けられる' },
   flame:  { name: '淨炎', short: '鎚矛に炎。当てた相手が燃える', type: 'buff', effect: 'flame', clip: 'cl_flame', time: 1.1, at: 0.7, cd: 45, life: 15, damage: 1.2, burn: 3, burnDps: 3,
             desc: '護符で鎚矛をなでて、15 秒、清めの炎をまとわせる。傷が 1.2 倍になり、当たった相手は 3 秒燃える（1 秒に 3 の傷。水に入ると消える）' },
-  // 2 回目に作る（まだ使えない。圖鑑に載せるだけ）
-  pillar:   { name: '天光柱', type: 'finisher', effect: 'pillar', cd: 50, planned: true, desc: '空から光の柱がばらばらに落ちる。当たると傷を受け、目がくらむ' },
-  fireball: { name: '聖火彈', type: 'finisher', effect: 'fireball', cd: 35, planned: true, desc: '敵を追いかける火の玉を放つ。当たると爆発し、周りの敵を吹き飛ばす' },
-  thunder:  { name: '神罰雷', type: 'finisher', effect: 'thunder', cd: 40, planned: true, desc: '雷の槍を投げる。当たった相手はしびれて動けない' },
+  // 2 回目（2026-11-17。飛ばす・落とす奇跡）
+  //   天光柱：range m 以内・前 35 度の中の一番近い敵のまわり（いなければ center m 先）に、dur 秒の間に count 本の光の柱が降る。
+  //     1 本ごとに warn 秒前に地面に光の輪が出る（見て避けられる）。半径 radius m に傷 damage と、blind 秒の目くらまし
+  pillar:   { name: '天光柱', short: '空から光の柱が降りそそぐ', type: 'finisher', effect: 'pillar', clip: 'cl_heaven', time: 1.4, at: 1.0, cd: 50,
+              range: 18, center: 9, spread: 3.0, count: 7, dur: 2.0, warn: 0.55, radius: 1.2, damage: 16, blind: 2.5,
+              desc: '護符を天へ掲げて振り下ろす。前の敵のまわり（いなければ 9 m 先）に、2 秒の間に光の柱が 7 本ばらばらに降る（降る少し前に地面に光の輪が出る）。当たると傷 16 と、2.5 秒目がくらむ（楯では防げない）' },
+  //   聖火彈：speed m/秒で飛ぶ火の玉。seek m 以内・前 50 度の中の一番近い敵を、1 秒に turn 度まで曲がって追う。life 秒で消える。
+  //     人・壁・木・地面に当たると爆発：半径 radius m に傷 damage（端で minK 倍）・外へ吹き飛ばす（push〜pushMin m）・burn 秒燃える
+  fireball: { name: '聖火彈', short: '敵を追う火の玉。爆発して吹き飛ばす', type: 'finisher', effect: 'fireball', clip: 'cl_cast', time: 0.9, at: 0.5, cd: 35,
+              speed: 11, turn: 95, life: 3.5, seek: 25, radius: 3, damage: 26, minK: 0.4, push: 4, pushMin: 1.2, burn: 2,
+              desc: '護符を突き出して火の玉を放つ。前の敵を追いかけ（曲がり方には限りがある）、当たると爆発する（周り 3 m に傷 26〜10・外へ吹き飛ばす・2 秒燃える。楯では防げない）' },
+  //   神罰雷：speed m/秒でまっすぐ飛ぶ雷の槍（range m まで）。当たると傷 damage と、shock 秒しびれて動けない。楯で受けると傷は半分・しびれは guardShock 秒
+  thunder:  { name: '神罰雷', short: '雷の槍。当たった相手はしびれる', type: 'finisher', effect: 'thunder', clip: 'cl_throw', time: 1.0, at: 0.62, cd: 40,
+              speed: 42, range: 45, damage: 28, shock: 1.6, guardShock: 0.5,
+              desc: '左手を振りかぶり、雷の槍を投げる（まっすぐ速く、45 m まで。上下の向きも狙える）。当たると傷 28 と、1.6 秒しびれて動けない（楯で受けると傷は半分、しびれは短い）' },
 };
 /** 奇跡を持てる数（利用者の指示 2026-11-17。そろった後の刻の報酬は能力値） */
 export const MIRACLE_SLOTS = 4;

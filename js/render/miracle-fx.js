@@ -4,7 +4,10 @@
 //   蘇る：白金の大きな光の柱と、広がる光の輪、たくさんの光の粒
 //   光壁：前に、菱の目の模様の光の壁（少し丸い）。当たると波打って光り、受け止められる量が減るほど薄くなる。砕けると欠片が散る
 //   淨炎：鎚矛の頭に金色の炎（清めの火）と火の粉／燃えている人：体に橙の炎と火の粉
-// 描画命令：光の粒 1・光の玉 1（どちらも出ている間だけ）、光の柱・輪は 1 本 1 つ、光壁は 1 枚 1 つ、炎は舌 1 枚 1 つ
+//   （2 回目）天光柱：降る所の地面に金の光の輪が縮んでいき、空から細い光の柱が落ちる（光・輪・光の粒）
+//   聖火彈：金と橙の火の玉（光の玉・炎・火の粉の尾）。爆発すると大きな光・広がる輪・火の粉・一瞬の炎
+//   神罰雷：青白い雷の槍（まっすぐな芯と、まわりでぱちぱちする細い稲妻）。当たると空から稲妻が落ち、しびれている人の体に小さな稲妻が走る
+// 描画命令：光の粒 1・光の玉 1・稲妻 1（どれも出ている間だけ）、光の柱・輪は 1 本 1 つ、光壁は 1 枚 1 つ、炎は舌 1 枚 1 つ
 // 炎の形・光の玉・板をまとめる道具は render/hall-fire.js（大廳の火）と同じ
 import * as pc from 'playcanvas';
 import { FLAME_VS, FLAME_FS, flameQuad, canvasTexture, glowTex, addMat, quads, billboard } from './hall-fire.js';
@@ -60,7 +63,7 @@ void main() {
   gl_FragColor = vec4(gammaCorrectOutput(toneMap(c)), clamp(a, 0.0, 0.9));
 }`;
 
-const SPARKS = 220, GLOWS = 24, FLAMES = 14;
+const SPARKS = 260, GLOWS = 32, FLAMES = 22, LINES = 120;
 const rnd = Math.random;
 
 /** 光の柱：上の開いた円柱（下は明るく、上へ消える。頂点の色で）。半径 1・高さ 1 */
@@ -135,6 +138,17 @@ const latticeTex = (device) => canvasTexture(device, 256, (g, S) => {
     g.fillStyle = r; g.fillRect(x - 30, y - 30, 60, 60);
   }
 });
+/** 稲妻の線：横（線の幅の向き）に真ん中が白く強く、外へ柔らかく消える（黒地。加算） */
+const lineTex = (device) => canvasTexture(device, 64, (g, S) => {
+  const img = g.createImageData(S, S), d = img.data;
+  for (let y = 0; y < S; y++) {
+    const v = (y + 0.5) / S - 0.5;
+    const k = Math.min(1, Math.exp(-((v / 0.09) ** 2)) + 0.35 * Math.exp(-((v / 0.28) ** 2)));
+    for (let x = 0; x < S; x++) { const i = (y * S + x) * 4; d[i] = d[i + 1] = d[i + 2] = k * 255; d[i + 3] = 255; }
+  }
+  g.putImageData(img, 0, 0);
+});
+
 /**
  * @param {pc.AppBase} app
  * @param {{ combat: object, fighters: object[], views: Map, camera: pc.Entity, firstPerson: () => boolean, me: object }} o
@@ -184,7 +198,7 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
     app.root.addChild(e);
     return { e, mat, t: -1 };
   });
-  const pillars = Array.from({ length: 4 }, () => {
+  const pillars = Array.from({ length: 12 }, () => {
     const mat = new pc.ShaderMaterial({ uniqueName: 'miracle-pillar', vertexGLSL: PILLAR_VS, fragmentGLSL: PILLAR_FS,
       attributes: { aPosition: pc.SEMANTIC_POSITION, aNormal: pc.SEMANTIC_NORMAL, aUv0: pc.SEMANTIC_TEXCOORD0 } });
     mat.blendType = pc.BLEND_NORMAL; mat.depthWrite = false; mat.cull = pc.CULLFACE_NONE;
@@ -196,21 +210,23 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
     app.root.addChild(e);
     return { e, mat, t: -1, shader: true };
   });
-  const rings = makePool(4, rMesh, null, 'miracle-ring');
+  const rings = makePool(12, rMesh, null, 'miracle-ring');
   const haloPool = makePool(4, hMesh, null, 'miracle-halo');   // 加護の輪（細い）
   const bursts = [];   // { item, kind: 'pillar'|'ring', x, y, z, life, t, color, r0, r1, h, intensity, follow }
   function take(pool) { return pool.find((p) => !p.e.enabled) || null; }
-  function pillar(f, { radius = 0.75, height = 3.4, life = 1.3, color = [1, 0.85, 0.5], intensity = 1.6 } = {}) {
+  /** 光の柱。f：付いていく人（null なら x, y, z の所に立つ）。sky：空から落ちる細い柱（すぐ全部の高さになる） */
+  function pillar(f, { radius = 0.75, height = 3.4, life = 1.3, color = [1, 0.85, 0.5], intensity = 1.6, x, y, z, sky = false } = {}) {
     const it = take(pillars);
     if (!it) return;
     it.e.enabled = true;
-    bursts.push({ it, kind: 'pillar', f, x: f.x, y: yOf(f), z: f.z, life, t: 0, color, r0: radius * 0.4, r1: radius, h: height, intensity });
+    bursts.push({ it, kind: 'pillar', f, x: f ? f.x : x, y: f ? yOf(f) : y, z: f ? f.z : z, life, t: 0, color, r0: radius * (sky ? 0.8 : 0.4), r1: radius, h: height, intensity, sky });
   }
-  function ring(x, y, z, { r0 = 0.4, r1 = 3, life = 0.8, color = [1, 0.86, 0.5], intensity = 2 } = {}) {
+  /** 地面の光の輪。warn：知らせの輪（だんだん明るくなり、最後に消える） */
+  function ring(x, y, z, { r0 = 0.4, r1 = 3, life = 0.8, color = [1, 0.86, 0.5], intensity = 2, warn = false } = {}) {
     const it = take(rings);
     if (!it) return;
     it.e.enabled = true;
-    bursts.push({ it, kind: 'ring', x, y, z, life, t: 0, color, r0, r1, intensity });
+    bursts.push({ it, kind: 'ring', x, y, z, life, t: 0, color, r0, r1, intensity, warn });
   }
   // 加護の輪（蘇生の加護の間ずっと。人ごと）
   const halos = new Map();
@@ -289,10 +305,81 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
     fl.e.enabled = true;
     fl.e.setPosition(x, y, z);
     fl.e.setLocalScale(w, h, 1);
-    if (fl.holy !== holy) { fl.holy = holy; fl.mi.setParameter('uHoly', holy); }
+    if (fl.holy !== holy) { fl.holy = holy; fl.mi.setParameter('uHoly', holy); }   // 0：橙の火、1：金の火（間の値も使える）
     const kk = Math.round(k * 20) / 20;
     if (fl.k !== kk) { fl.k = kk; fl.mi.setParameter('uIntensity', 1.7 * kk); }
   }
+
+  // ---- 稲妻（神罰雷。細い板を線にして全部で 1 つの形） ----
+  const lq = quads(device, LINES);
+  const lineMi = new pc.MeshInstance(lq.mesh, addMat(lineTex(device), [1, 1, 1], 1.8, true));
+  lineMi.cull = false;
+  const lineE = new pc.Entity('miracle-lightning');
+  lineE.addComponent('render', { meshInstances: [lineMi], castShadows: false, receiveShadows: false });
+  lineE.enabled = false;
+  app.root.addChild(lineE);
+  let lineUsed = 0;
+  const camPos = new pc.Vec3(), segD = new pc.Vec3(), segM = new pc.Vec3(), segS = new pc.Vec3();
+  /** 線を 1 本（P から Q。幅 w。カメラの方へ向ける） */
+  function segment(px, py, pz, qx, qy, qz, w, r, g, b) {
+    if (lineUsed >= LINES) return;
+    const i = lineUsed++, o = i * 12, P = lq.pos;
+    segD.set(qx - px, qy - py, qz - pz);
+    segM.set((px + qx) / 2 - camPos.x, (py + qy) / 2 - camPos.y, (pz + qz) / 2 - camPos.z);
+    segS.cross(segD, segM);
+    if (segS.lengthSq() < 1e-10) segS.set(0, 1, 0);
+    segS.normalize().mulScalar(w / 2);
+    P[o] = px - segS.x; P[o + 1] = py - segS.y; P[o + 2] = pz - segS.z;
+    P[o + 3] = qx - segS.x; P[o + 4] = qy - segS.y; P[o + 5] = qz - segS.z;
+    P[o + 6] = qx + segS.x; P[o + 7] = qy + segS.y; P[o + 8] = qz + segS.z;
+    P[o + 9] = px + segS.x; P[o + 10] = py + segS.y; P[o + 11] = pz + segS.z;
+    for (let v = 0; v < 4; v++) { const c = (i * 4 + v) * 4; lq.col[c] = r; lq.col[c + 1] = g; lq.col[c + 2] = b; lq.col[c + 3] = 1; }
+  }
+  /** ぎざぎざの稲妻（P から Q を n 本に分け、横へ jag m までずらす） */
+  function bolt(px, py, pz, qx, qy, qz, n, jag, w, r, g, b) {
+    let ax = px, ay = py, az = pz;
+    for (let k = 1; k <= n; k++) {
+      const u = k / n, j = k === n ? 0 : jag;
+      const bx = px + (qx - px) * u + (rnd() - 0.5) * 2 * j, by = py + (qy - py) * u + (rnd() - 0.5) * 2 * j, bz = pz + (qz - pz) * u + (rnd() - 0.5) * 2 * j;
+      segment(ax, ay, az, bx, by, bz, w, r, g, b);
+      ax = bx; ay = by; az = bz;
+    }
+  }
+  const zaps = [];        // 空から落ちる稲妻 { x, y, z, t, life, sx, sz }
+  const fireBursts = [];  // 爆発の一瞬の炎 { x, y, z, t, life }
+  const BLUE = [0.72, 0.84, 1];
+
+  // ---- 天光柱・聖火彈・神罰雷の知らせ ----
+  combat.on('pillarWarn', ({ x, y, z, time: warn, radius }) => {
+    ring(x, y + 0.05, z, { r0: radius * 1.7, r1: radius, life: warn, color: [1, 0.84, 0.42], intensity: 1.1, warn: true });
+  });
+  combat.on('pillarStrike', ({ x, y, z, radius }) => {
+    pillar(null, { x, y, z, radius: 0.7, height: 26, life: 0.6, color: [1, 0.8, 0.4], intensity: 2.4, sky: true });   // 金の柱
+    pillar(null, { x, y, z, radius: 0.22, height: 26, life: 0.45, color: [1, 0.97, 0.88], intensity: 3, sky: true });   // 白い芯
+    ring(x, y + 0.05, z, { r0: 0.3, r1: radius * 1.9, life: 0.5, color: [1, 0.92, 0.66], intensity: 1.0 });
+    flashes.push({ x, y: y + 0.6, z, size: 1.9, life: 0.35, max: 0.35, color: [1, 0.95, 0.8] });
+    for (let i = 0; i < 24; i++) {
+      const a = rnd() * Math.PI * 2, sp = 1 + rnd() * 3;
+      spark(x + Math.cos(a) * 0.3, y + 0.1, z + Math.sin(a) * 0.3, Math.cos(a) * sp, 1 + rnd() * 3, Math.sin(a) * sp, 0.5 + rnd() * 0.5, 0.035 + rnd() * 0.04, [1, 0.92, 0.65], { grav: 3, drag: 0.6 });
+    }
+  });
+  combat.on('fireballBoom', ({ x, y, z, gy }) => {
+    flashes.push({ x, y, z, size: 3.4, life: 0.4, max: 0.4, color: [1, 0.7, 0.32] });
+    if (y - (gy ?? y) < 2.5) ring(x, (gy ?? y - 1) + 0.05, z, { r0: 0.4, r1: 3.3, life: 0.6, color: [1, 0.6, 0.22], intensity: 1.2 });   // 地面に近ければ、地面に輪
+    fireBursts.push({ x, y, z, t: 0, life: 0.65 });
+    for (let i = 0; i < 46; i++) {
+      const th = rnd() * Math.PI * 2, ph = rnd() * Math.PI * 0.6, sp = 2 + rnd() * 5;
+      spark(x, y, z, Math.cos(th) * Math.sin(ph) * sp, Math.cos(ph) * sp, Math.sin(th) * Math.sin(ph) * sp, 0.5 + rnd() * 0.7, 0.04 + rnd() * 0.05, rnd() < 0.5 ? [1, 0.55, 0.15] : [1, 0.85, 0.45], { grav: 5, drag: 0.4 });
+    }
+  });
+  combat.on('thunderHit', ({ x, y, z }) => {
+    zaps.push({ x, y, z, t: 0, life: 0.32, sx: x + (rnd() - 0.5) * 4, sz: z + (rnd() - 0.5) * 4 });
+    flashes.push({ x, y, z, size: 2.6, life: 0.3, max: 0.3, color: [0.8, 0.9, 1] });
+    for (let i = 0; i < 26; i++) {
+      const a = rnd() * Math.PI * 2, sp = 2 + rnd() * 4;
+      spark(x, y, z, Math.cos(a) * sp, (rnd() - 0.3) * sp, Math.sin(a) * sp, 0.25 + rnd() * 0.3, 0.025 + rnd() * 0.025, [0.85, 0.93, 1], { grav: 2, drag: 0.3 });
+    }
+  });
 
   // ---- 奇跡の知らせ ----
   const GOLD = [1, 0.84, 0.48], GREEN = [0.72, 1, 0.55], WHITE = [1, 0.97, 0.86];
@@ -336,6 +423,8 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
       emberT += dt;
       const wm = camera.getWorldTransform();
       wm.getX(right).normalize(); wm.getY(up).normalize();
+      camPos.copy(camera.getPosition());
+      lineUsed = 0;
       flameMat.setParameter('uTime', time); flameMat.update();
 
       // 唱えている人：護符へ光が集まる（光の玉と、吸い込まれる光の粒）。効き目が出た後は、強い光が収まっていく
@@ -384,14 +473,14 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
         const b = bursts[i];
         b.t += dt;
         const u = Math.min(1, b.t / b.life);
-        const fade = u < 0.15 ? u / 0.15 : 1 - (u - 0.15) / 0.85;
+        const fade = b.warn ? (u < 0.9 ? 0.35 + 0.65 * (u / 0.9) : (1 - u) * 10) : b.sky ? (u < 0.08 ? u / 0.08 : 1 - (u - 0.08) / 0.92) : u < 0.15 ? u / 0.15 : 1 - (u - 0.15) / 0.85;
         const e = b.it.e, m = b.it.mat;
         if (b.kind === 'pillar') {
           if (b.f) { b.x = b.f.x; b.z = b.f.z; b.y = yOf(b.f); }
           const r = b.r0 + (b.r1 - b.r0) * Math.min(1, u * 3);
           e.setPosition(b.x, b.y, b.z);
           e.setEulerAngles(0, time * 30, 0);
-          e.setLocalScale(r, b.h * (0.6 + 0.4 * Math.min(1, u * 4)), r);
+          e.setLocalScale(r, b.h * (b.sky ? 1 : 0.6 + 0.4 * Math.min(1, u * 4)), r);
         } else {
           const r = b.r0 + (b.r1 - b.r0) * (1 - (1 - u) * (1 - u));
           e.setPosition(b.x, b.y, b.z);
@@ -423,6 +512,63 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
       // 炎：淨炎の鎚矛の頭（金の火）と、燃えている人の体（橙の火）
       flameUsed = 0;
       const fp = firstPerson();
+      // 飛んでいる奇跡：聖火彈（光の玉・炎・火の粉の尾）と神罰雷（青白い芯とまわりの細い稲妻）
+      for (const sp of combat.spells || []) {
+        if (sp.kind === 'fireball') {
+          flashes.push({ x: sp.x, y: sp.y, z: sp.z, size: 0.5, life: 1e-3, max: 1e-3, color: [1, 0.95, 0.8], keep: 1 });
+          flashes.push({ x: sp.x, y: sp.y, z: sp.z, size: 1.35, life: 1e-3, max: 1e-3, color: [1, 0.5, 0.15], keep: 0.85 });
+          flame(sp.x, sp.y - 0.42, sp.z, 1.1, 0.7, 0.35, 1);
+          flame(sp.x, sp.y - 0.32, sp.z, 0.8, 0.5, 0.6, 0.9);
+          if (dt > 0) for (let k = 0; k < 3; k++) if (rnd() < dt * 45) spark(sp.x + (rnd() - 0.5) * 0.2, sp.y + (rnd() - 0.5) * 0.2, sp.z + (rnd() - 0.5) * 0.2, (rnd() - 0.5) * 0.6, 0.4 + rnd() * 0.6, (rnd() - 0.5) * 0.6, 0.35 + rnd() * 0.35, 0.03 + rnd() * 0.03, rnd() < 0.5 ? [1, 0.6, 0.2] : [1, 0.85, 0.45], { drag: 0.5 });
+        } else if (sp.kind === 'thunder') {
+          const l = Math.hypot(sp.vx, sp.vy, sp.vz) || 1, ux = sp.vx / l, uy = sp.vy / l, uz = sp.vz / l;
+          const tx = sp.x - ux * 1.7, ty = sp.y - uy * 1.7, tz = sp.z - uz * 1.7;
+          segment(tx, ty, tz, sp.x, sp.y, sp.z, 0.32, BLUE[0] * 0.55, BLUE[1] * 0.6, BLUE[2] * 0.75);
+          segment(tx, ty, tz, sp.x, sp.y, sp.z, 0.11, 1, 1, 1);
+          for (let k = 0; k < 3; k++) bolt(tx, ty, tz, sp.x, sp.y, sp.z, 5, 0.16, 0.045, BLUE[0], BLUE[1], BLUE[2]);
+          flashes.push({ x: sp.x, y: sp.y, z: sp.z, size: 0.9, life: 1e-3, max: 1e-3, color: [0.75, 0.88, 1], keep: 1 });
+        }
+      }
+      // 爆発の一瞬の炎
+      for (let i = fireBursts.length - 1; i >= 0; i--) {
+        const fb = fireBursts[i];
+        fb.t += dt;
+        const k = Math.max(0, 1 - fb.t / fb.life);
+        flame(fb.x, fb.y - 0.9, fb.z, 2.2 * (0.5 + 0.5 * k), 1.6, 0.35, k);
+        flame(fb.x + right.x * 0.6, fb.y - 0.8, fb.z + right.z * 0.6, 1.5 * (0.5 + 0.5 * k), 1.0, 0.35, k * 0.8);
+        flame(fb.x - right.x * 0.6, fb.y - 0.8, fb.z - right.z * 0.6, 1.4 * (0.5 + 0.5 * k), 0.9, 0.35, k * 0.8);
+        if (fb.t >= fb.life) fireBursts.splice(i, 1);
+      }
+      // 空から落ちる稲妻（神罰雷が当たった所）
+      for (let i = zaps.length - 1; i >= 0; i--) {
+        const zp = zaps[i];
+        zp.t += dt;
+        const k = Math.max(0, 1 - zp.t / zp.life), c = 0.4 + 0.6 * k;
+        bolt(zp.sx, zp.y + 14, zp.sz, zp.x, zp.y, zp.z, 12, 0.55, 0.12 * c, BLUE[0] * c, BLUE[1] * c, BLUE[2] * c);
+        bolt(zp.sx, zp.y + 14, zp.sz, zp.x, zp.y, zp.z, 12, 0.45, 0.04, c, c, c);
+        bolt(zp.x + (zp.sx - zp.x) * 0.5, zp.y + 7, zp.z + (zp.sz - zp.z) * 0.5, zp.x + (rnd() - 0.5) * 3, zp.y + 1, zp.z + (rnd() - 0.5) * 3, 6, 0.3, 0.03, BLUE[0] * c, BLUE[1] * c, BLUE[2] * c);
+        if (zp.t >= zp.life) zaps.splice(i, 1);
+      }
+      // しびれている人（神罰雷）：体のまわりに小さな稲妻が走る。神罰雷を唱えている人：護符のまわりにぱちぱち
+      for (const f of fighters) {
+        if (!f.alive || f.hidden) continue;
+        if (f.shock > 0 && !(f === me && fp)) {
+          const y = yOf(f);
+          for (let k = 0; k < 5; k++) {
+            const a1 = rnd() * Math.PI * 2, a2 = a1 + (rnd() - 0.5) * 2.4, h1 = 0.2 + rnd() * 1.5, h2 = h1 + (rnd() - 0.5) * 0.9;
+            bolt(f.x + Math.cos(a1) * 0.34, y + h1, f.z + Math.sin(a1) * 0.34, f.x + Math.cos(a2) * 0.34, y + h2, f.z + Math.sin(a2) * 0.34, 4, 0.1, 0.045, BLUE[0], BLUE[1], BLUE[2]);
+          }
+          if (rnd() < 0.6) flashes.push({ x: f.x, y: y + 0.9 + (rnd() - 0.5) * 0.8, z: f.z, size: 0.7 + rnd() * 0.5, life: 1e-3, max: 1e-3, color: [0.6, 0.75, 1], keep: 0.5 + rnd() * 0.4 });   // 体が青白く明滅する
+        }
+        const a = f.action;
+        if (a?.kind === 'miracle' && a.id === 'thunder' && !a.done) {
+          const p = views.get(f)?.talismanPos?.(tmp2);
+          if (p) for (let k = 0; k < 2; k++) {
+            const th = rnd() * Math.PI * 2, r = 0.12 + rnd() * 0.2;
+            bolt(p.x, p.y, p.z, p.x + Math.cos(th) * r, p.y + (rnd() - 0.3) * r, p.z + Math.sin(th) * r, 3, 0.05, 0.02, BLUE[0], BLUE[1], BLUE[2]);
+          }
+        }
+      }
       for (const f of fighters) {
         if (!f.alive || f.hidden) continue;
         const v = views.get(f);
@@ -476,10 +622,16 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
       for (let i = gi; i < GLOWS; i++) billboard(gq, i, 0, -9999, 0, 0, 0, right, up, 0, 0, 0, 0);
       glowE.enabled = gi > 0;
       if (gi) { gq.mesh.setPositions(gq.pos); gq.mesh.setColors(gq.col); gq.mesh.update(pc.PRIMITIVE_TRIANGLES); }
+
+      // 稲妻：使わなかった線は消して、形を入れ直す
+      const usedLines = lineUsed;
+      for (let i = lineUsed; i < LINES; i++) { const o = i * 12; for (let k = 0; k < 12; k++) lq.pos[o + k] = k % 3 === 1 ? -9999 : 0; }
+      lineE.enabled = usedLines > 0;
+      if (usedLines) { lq.mesh.setPositions(lq.pos); lq.mesh.setColors(lq.col); lq.mesh.update(pc.PRIMITIVE_TRIANGLES); }
     },
     /** 確認用：今出ている物の数 */
     get stats() {
-      return { sparks: sparks.filter((s) => s.life > 0).length, flames: flameUsed, walls: wallViews.size, bursts: bursts.length, halos: halos.size };
+      return { sparks: sparks.filter((s) => s.life > 0).length, flames: flameUsed, walls: wallViews.size, bursts: bursts.length, halos: halos.size, lines: lineUsed, spells: (combat.spells || []).length };
     },
   };
 }

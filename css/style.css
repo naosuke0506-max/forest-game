@@ -705,6 +705,12 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .underwater { position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(ellipse at 50% 22%, rgba(70, 150, 150, .30), rgba(14, 62, 74, .62) 60%, rgba(4, 26, 36, .86) 100%); }
 .underwater[hidden] { display: none; }
+/* 目くらまし（天光柱）：白い光が画面を覆う。濃さは match-session.js が残りの秒で決める */
+.blind { position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse at 50% 45%, rgba(255, 252, 240, .97), rgba(255, 246, 222, .9) 55%, rgba(255, 236, 196, .8)); }
+.blind[hidden] { display: none; }
+.buffs .bf.shock { border-color: rgba(150, 190, 255, .75); color: #dfeaff; }
+.buffs .bf.shock b { color: #a9c8ff; }
 .vitals.low .bar.hp i:not(.trail) { animation: hpLow .7s ease-in-out infinite; }
 .vitals.low .vt-hp { color: #ff9a84; }
 @keyframes hpLow { 0%, 100% { filter: none; } 50% { filter: brightness(1.7); } }

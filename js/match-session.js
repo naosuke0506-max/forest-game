@@ -112,6 +112,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 教練では、決まった所に置き（自分の近く・家の中・壁の前など）、動きの決まった相手にする（game/tutorial.js）
   const lessonCtx = () => ({
     me, bots: fighters.filter((f) => !f.isPlayer), hides, hiding, coverSegs: covers, houses, isFree: (x, z, r) => obstacles.isFree(x, z, r, true),
+    insideHouse: insideHouse || null, heightAt: (x, z) => terrain.heightAt(x, z),   // 家の中か・地面の高さ（教練「奇跡・攻」が開けた所を探す）
     spawn: (x, z, yaw) => { player.spawn(x, z, yaw); me.x = x; me.z = z; me.yaw = yaw; me.y = player.position.y; },
   });
   if (lesson) {
@@ -244,6 +245,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       const w = combat.walls.find((x) => x.owner === me);
       if (w) list.push(['', ICONS.m_wall, '光壁', w.left]);
       if (me.burn) list.push(['burn', ICONS.m_flame, '燃', me.burn.left]);
+      if (me.shock > 0) list.push(['shock', ICONS.m_thunder, '痺', me.shock]);
+      if (me.blind > 0) list.push(['', ICONS.m_pillar, '眩', me.blind]);
     }
     const key = list.map((b) => `${b[2]}${Math.ceil(b[3])}`).join('|');
     if (key === buffsShown) return;
@@ -255,7 +258,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (fighter !== me) return;
     const M = MIRACLES[id];
     hud.addFeed(id === 'heal' ? `治癒を唱えた（体力 +${Math.round(amount)}）` : id === 'revive' ? `蘇生の加護を受けた（${M.life} 秒）`
-      : id === 'wall' ? `光壁を張った（${M.life} 秒）` : `淨炎をまとった（${M.life} 秒）`);
+      : id === 'wall' ? `光壁を張った（${M.life} 秒）` : id === 'flame' ? `淨炎をまとった（${M.life} 秒）`
+      : id === 'pillar' ? '天光柱を唱えた' : id === 'fireball' ? '聖火彈を放った' : '神罰雷を投げた');
   });
   combat.on('miracleBroken', ({ fighter, id }) => { if (fighter === me) hud.addFeed(`${MIRACLES[id].name}が途切れた`); });
   combat.on('revived', ({ fighter }) => {
@@ -263,6 +267,26 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     else hud.addFeed(`${fighter.name}が光の中から蘇った`);
   });
   combat.on('wallEnd', ({ wall, broke }) => { if (wall.owner === me && broke) hud.addFeed('光壁が砕けた'); });
+  combat.on('blinded', ({ fighter, by }) => {
+    if (fighter === me) hud.addFeed('光で目がくらんだ');
+    else if (by === me) hud.addFeed(`${fighter.name}の目がくらんだ`);
+  });
+  combat.on('shocked', ({ fighter, by }) => {
+    if (fighter === me) hud.addFeed('雷でしびれて動けない');
+    else if (by === me) hud.addFeed(`${fighter.name}がしびれた`);
+  });
+  // 目くらまし（天光柱）：白い光が画面を覆い、最後の 1 秒で薄れていく
+  const blindEl = document.getElementById('blind');
+  let blindShown = -1;
+  const showBlind = () => {
+    if (!blindEl) return;
+    const k = me.alive && !spectating ? Math.min(1, (me.blind || 0) / 1.0) * 0.94 : 0;
+    const v = Math.round(k * 50) / 50;
+    if (v === blindShown) return;
+    blindShown = v;
+    blindEl.hidden = v <= 0;
+    blindEl.style.opacity = String(v);
+  };
   combat.on('ignite', ({ fighter, by }) => {
     if (fighter === me) hud.addFeed('燃えている！（水に入ると消える）');
     else if (by === me) hud.addFeed(`${fighter.name}が燃えた`);
@@ -648,6 +672,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       showSkill();
       showMiracle(running && me.alive && !me.hidden && !spectating);
       showBuffs();
+      showBlind();
       player.setEyeHeight((config.player.eyeHeight * stanceShape(me).eye) / STANCES.stand.eye);
       me.gait = (player.moving > 0.75 || me.sprinting) && canRun(me) ? 'run' : player.moving > 0.05 ? 'walk' : 'still';   // 足音の大きさ（bot の耳）
       refreshStance();

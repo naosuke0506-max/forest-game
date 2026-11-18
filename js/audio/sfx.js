@@ -465,11 +465,15 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
      *   cast（唱え始め：祈りの和音がふくらむ。dur 秒）・heal（鈴の上がる分散和音と温かい和音）・revive（加護：深い鐘と聖歌の和音）・
      *   revived（蘇る：低い響きと大きな聖歌と鐘）・wall（光壁：ガラスのきらめきが立ち上がる）・wallHit（壁に当たる：澄んだ音）・
      *   wallBreak（砕ける：ガラスの割れる音）・flame（淨炎：炎が吹き上がる）・ignite（相手が燃える）・broken（途切れる）・notReady（まだ唱えられない）
+     *   （2 回目）pillarCall（天光柱を唱えた：天へ昇る和音）・pillarWarn（降る前：高い光の音が上がる）・pillarStrike（降った：光の轟きと鐘）・
+     *   fireball（聖火彈を放つ：炎の吹き出し）・fireballBoom（爆発）・thunder（神罰雷を投げる：雷のはじける音）・thunderHit（雷鳴）・shock（しびれ：電気のうなり）
      */
     miracle(kind, f, { dur = 1, x, y, z } = {}) {
       const src = x !== undefined ? { x, y, z, isPlayer: false } : f;
-      const loud = { cast: 0.8, heal: 0.9, revive: 1.0, revived: 1.4, wall: 0.95, wallHit: 0.8, wallBreak: 1.1, flame: 0.9, ignite: 0.8, broken: 0.6, notReady: 0.35 }[kind] ?? 0.8;
-      const d = at(src, loud, { ref: 12, max: 90 });
+      const loud = { cast: 0.8, heal: 0.9, revive: 1.0, revived: 1.4, wall: 0.95, wallHit: 0.8, wallBreak: 1.1, flame: 0.9, ignite: 0.8, broken: 0.6, notReady: 0.35,
+        pillarCall: 1.0, pillarWarn: 0.6, pillarStrike: 1.2, fireball: 0.9, fireballBoom: 1.4, thunder: 1.0, thunderHit: 1.6, shock: 0.7 }[kind] ?? 0.8;
+      const far = kind === 'thunderHit' || kind === 'fireballBoom' || kind === 'pillarStrike';   // 大きな音は遠くまで聞こえる
+      const d = at(src, loud, far ? { ref: 20, max: 160 } : { ref: 12, max: 90 });
       if (!d) return;
       const c = audio.ctx, t0 = c.currentTime;
       const verb = (g) => { if (audio.reverb) { const send = c.createGain(); send.gain.value = g; d.connect(send); send.connect(audio.reverb); } };
@@ -525,6 +529,45 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
         toneHit(d, { t: 0, dur: 0.4, f0: 330, f1: 200, type: 'triangle', attack: 0.003, gain: 0.12 });
       } else if (kind === 'notReady') {
         toneHit(d, { t: 0, dur: 0.12, f0: 220, f1: 180, type: 'square', attack: 0.002, gain: 0.05 });
+      } else if (kind === 'pillarCall') {
+        verb(0.8);
+        pad([293.7, 370, 440, 587.3], t0, 1.6, 0.045, 0.2);                                        // 天へ昇る和音
+        noiseHit(d, { t: 0, dur: 0.9, type: 'bandpass', freq: 1200, freqEnd: 5000, q: 1.5, attack: 0.5, gain: 0.15 });
+      } else if (kind === 'pillarWarn') {
+        verb(0.5);
+        toneHit(d, { t: 0, dur: 0.55, f0: 900, f1: 1800, type: 'sine', attack: 0.4, gain: 0.06 });   // 高い光の音が上がる
+        noiseHit(d, { t: 0, dur: 0.55, type: 'highpass', freq: 3000, freqEnd: 7000, attack: 0.45, gain: 0.06 });
+      } else if (kind === 'pillarStrike') {
+        verb(0.8);
+        toneHit(d, { t: 0, dur: 1.1, f0: 140, f1: 40, type: 'sine', attack: 0.004, gain: 0.55 });   // 光が落ちた轟き
+        noiseHit(d, { t: 0, dur: 0.5, type: 'lowpass', freq: 3500, freqEnd: 300, attack: 0.003, gain: 0.5 });
+        metal(d, { t: 0.01, base: 990 * jitter(0.05), ratios: [1, 1.5, 2.01, 2.76], dur: 1.6, gain: 0.12, decay: 0.7 });   // 鐘のきらめき
+      } else if (kind === 'fireball') {
+        noiseHit(d, { t: 0, dur: 0.6, type: 'bandpass', freq: 400, freqEnd: 1600, q: 0.8, attack: 0.03, gain: 0.6 });   // 炎が吹き出す
+        toneHit(d, { t: 0, dur: 0.4, f0: 120, f1: 70, type: 'triangle', attack: 0.01, gain: 0.2 });
+        for (let i = 0; i < 6; i++) noiseHit(d, { t: 0.05 + R() * 0.5, dur: 0.02, type: 'highpass', freq: 2500, attack: 0.001, gain: 0.1 });
+      } else if (kind === 'fireballBoom') {
+        verb(0.7);
+        toneHit(d, { t: 0, dur: 1.2, f0: 90, f1: 30, type: 'sine', attack: 0.003, gain: 0.8 });     // 爆発の低い音
+        noiseHit(d, { t: 0, dur: 0.9, type: 'lowpass', freq: 2200, freqEnd: 150, attack: 0.002, gain: 0.85 });
+        noiseHit(d, { t: 0.02, dur: 0.6, type: 'bandpass', freq: 600, freqEnd: 250, q: 0.7, attack: 0.01, gain: 0.4 });   // 炎のごうっという音
+        for (let i = 0; i < 8; i++) noiseHit(d, { t: 0.1 + R() * 0.7, dur: 0.02, type: 'highpass', freq: 2200, attack: 0.001, gain: 0.12 });
+      } else if (kind === 'thunder') {
+        noiseHit(d, { t: 0, dur: 0.25, type: 'highpass', freq: 2500, freqEnd: 6000, attack: 0.002, gain: 0.5 });   // 雷のはじける音
+        toneHit(d, { t: 0, dur: 0.35, f0: 1400, f1: 300, type: 'sawtooth', attack: 0.002, gain: 0.06 });
+        for (let i = 0; i < 10; i++) noiseHit(d, { t: R() * 0.3, dur: 0.012, type: 'highpass', freq: 4000, attack: 0.001, gain: 0.15 });
+      } else if (kind === 'thunderHit') {
+        verb(1.0);
+        noiseHit(d, { t: 0, dur: 0.12, type: 'highpass', freq: 1800, attack: 0.001, gain: 0.9 });     // ばりっ
+        noiseHit(d, { t: 0.02, dur: 1.8, type: 'lowpass', freq: 900, freqEnd: 80, attack: 0.02, gain: 0.9 });   // ごろごろ
+        toneHit(d, { t: 0.01, dur: 1.5, f0: 70, f1: 30, type: 'sine', attack: 0.01, gain: 0.6 });
+      } else if (kind === 'shock') {
+        const o = c.createOscillator(), og = c.createGain();                                          // 電気のうなり（ぶーん、と震える）
+        o.type = 'sawtooth'; o.frequency.setValueAtTime(110, t0);
+        og.gain.setValueAtTime(0.0001, t0); og.gain.exponentialRampToValueAtTime(0.07, t0 + 0.05); og.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        const lp = c.createBiquadFilter(); lp.type = 'bandpass'; lp.frequency.value = 900; lp.Q.value = 2;
+        o.connect(lp); lp.connect(og); og.connect(d); o.start(t0); o.stop(t0 + dur + 0.05);
+        for (let i = 0; i < 12; i++) noiseHit(d, { t: R() * dur, dur: 0.01, type: 'highpass', freq: 3500, attack: 0.001, gain: 0.12 });
       }
     },
     /** 神怒の衝撃波：地を揺らす大きな爆音と、光のきらめき、長い響き */
@@ -556,7 +599,12 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   combat.on('wrath', ({ fighter }) => sfx.wrathBlast(fighter));                                              // 神怒：衝撃波の大きな音
   // 祓魔僧の奇跡（game/miracles.js）：唱え始め・効き目・蘇る・光壁・炎・途切れる
   combat.on('miracleCast', ({ fighter, id }) => sfx.miracle('cast', fighter, { dur: MIRACLES[id].at }));
-  combat.on('miracle', ({ fighter, id }) => sfx.miracle(id === 'heal' ? 'heal' : id === 'revive' ? 'revive' : id === 'wall' ? 'wall' : 'flame', fighter));
+  combat.on('miracle', ({ fighter, id }) => sfx.miracle({ heal: 'heal', revive: 'revive', wall: 'wall', flame: 'flame', pillar: 'pillarCall', fireball: 'fireball', thunder: 'thunder' }[id] || 'cast', fighter));
+  combat.on('pillarWarn', ({ owner, x, y, z }) => sfx.miracle('pillarWarn', owner, { x, y, z }));
+  combat.on('pillarStrike', ({ owner, x, y, z }) => sfx.miracle('pillarStrike', owner, { x, y, z }));
+  combat.on('fireballBoom', ({ owner, x, y, z }) => sfx.miracle('fireballBoom', owner, { x, y, z }));
+  combat.on('thunderHit', ({ spell, x, y, z }) => sfx.miracle('thunderHit', spell?.owner, { x, y, z }));
+  combat.on('shocked', ({ fighter, time }) => sfx.miracle('shock', fighter, { dur: time }));
   combat.on('revived', ({ fighter }) => sfx.miracle('revived', fighter));
   combat.on('wallHit', ({ wall, x, y, z }) => sfx.miracle('wallHit', wall.owner, { x, y, z }));
   combat.on('wallEnd', ({ wall, broke }) => { if (broke) sfx.miracle('wallBreak', wall.owner, { x: wall.x, y: wall.y + 1.2, z: wall.z }); });

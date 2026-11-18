@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-17.3';</script>
+<script>window.__BUILD = '2026-11-18.1';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -185,6 +185,8 @@
   <div id="hideview" class="hideview" hidden><div class="hv-label">潛伏中</div></div>
   <!-- 水の中に潜っている間：目が水面の下にあるとき、画面を青緑に染める -->
   <div id="underwater" class="underwater" hidden></div>
+  <!-- 天光柱で目がくらんだ：画面が白い光に包まれ、だんだん戻る（祓魔僧の奇跡） -->
+  <div id="blind" class="blind" hidden></div>
   <!-- 上の真ん中：フェーズ・時間帯と残り時間 -->
   <div class="hud-top">
     <div class="phase-row"><span id="phase-icon" class="phase-icon"></span><span id="phase-name" class="phase-name"></span></div>

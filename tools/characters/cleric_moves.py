@@ -38,6 +38,7 @@ def wrath_keys():
 
 
 # ===== 奇跡（利用者の指示 2026-11-17。左手に護符を持って唱える。js/game/data.js の MIRACLES の clip・time・at と同じにする） =====
+#   1 回目：治癒 cl_pray・蘇生 cl_bless・光壁 cl_wall・淨炎 cl_flame・蘇る cl_rise。2 回目：天光柱 cl_heaven・聖火彈 cl_cast・神罰雷 cl_throw
 #   護符は左の拳から鎖で下がる（ゲームが拳の位置 socket_L2 から垂らす）。唱える間は左手を胸・頭の上・前へ上げる
 
 def _knees(p):
@@ -118,11 +119,52 @@ def rise_keys():
     return [(0.0, slump, None), (0.45, stir, 'io'), (0.95, open_, 'io'), (1.45, stand, 'io'), (1.90, S, 'io')]
 
 
+# ===== 奇跡の 2 回目（2026-11-17。飛ばす・落とす奇跡） =====
+
+def heaven_keys():
+    """天光柱（cl_heaven。1.4 秒、1.0 秒で効く）：護符を天へ高く掲げて顔を上げ、力を込めてから、前の地面へ振り下ろして指し示す"""
+    S = _knees(stance(False))
+    low_mace = _R((0.28, -0.60, 0.30), (0.12, 0.80, 0.55))
+    lift = P(S, hip=(0.0, -0.06, 0.0), hip_rot=(8, 0, 0), chest=(0, -12, 0), look=(0, -34), R=low_mace, L_clav=20.0,
+             L={'wrist': (0.06, 0.92, 0.12), 'pole': (-1, -0.1, -0.2)})
+    hold = P(lift, chest=(0, -16, 0), look=(0, -40), L={'wrist': (0.04, 0.96, 0.10)})
+    point = P(S, hip=(0.0, -0.14, 0.10), hip_rot=(-4, 10, 0), chest=(-4, 12, 0), look=(0, 12), R=low_mace, L_clav=6.0,
+              L={'wrist': (0.06, -0.05, 0.98), 'pole': (-1, -0.6, 0)}, L_foot=(-0.20, 0.28, 6, 0, 0))
+    return [(0.0, S, None), (0.38, lift, 'o'), (0.80, hold, 'io'), (1.00, _knees(point), 'i'), (1.15, _knees(point), 'io'), (1.40, S, 'io')]
+
+
+def cast_keys():
+    """聖火彈（cl_cast。0.9 秒、0.5 秒で効く）：護符を胸へ引き寄せて溜め、一歩踏み込んで前へ突き出し、火の玉を放つ"""
+    S = _knees(stance(False))
+    R0 = S['R']
+    gather = P(S, hip=(0.0, -0.12, -0.08), hip_rot=(40, 6, 0), chest=(12, 8, 0), look=(-10, 4), L_clav=2.0,
+               L={'wrist': (0.22, -0.12, 0.20), 'pole': (-1, -0.7, -0.2)})
+    push = P(S, hip=(0.0, -0.16, 0.16), hip_rot=(-10, 10, 0), chest=(-10, 8, 0), look=(0, 2), L_clav=12.0, R=R0,
+             L={'wrist': (0.14, 0.04, 1.0), 'pole': (-1, -0.5, 0)}, L_foot=(-0.20, 0.34, 6, 0, 0))
+    return [(0.0, S, None), (0.26, _knees(gather), 'io'), (0.48, _knees(push), 'o'), (0.62, _knees(P(push, L={'wrist': (0.14, 0.06, 0.98)})), 'io'),
+            (0.90, S, 'io')]
+
+
+def throw_keys():
+    """神罰雷（cl_throw。1.0 秒、0.62 秒で効く）：左手を後ろ上へ振りかぶって体をひねり、右足を踏み出して投げ下ろすように雷の槍を投げる"""
+    S = _knees(stance(False))
+    low_mace = _R((0.30, -0.55, 0.40), (0.15, 0.80, 0.55))
+    wind = P(S, hip=(0.0, -0.10, -0.10), hip_rot=(-48, 2, 0), chest=(-22, -6, 0), look=(30, -4), R=low_mace, L_clav=18.0,
+             L={'wrist': (-0.30, 0.50, -0.40), 'pole': (-1, -0.2, 0.4)}, L_foot=(-0.22, 0.05, 20, 0, 0), R_foot=(0.18, -0.30, 50, 0, 0))
+    cock = P(wind, chest=(-26, -10, 0), L={'wrist': (-0.32, 0.56, -0.46)})
+    release = P(S, hip=(0.0, -0.16, 0.14), hip_rot=(30, 12, 0), chest=(20, 14, 0), look=(-10, 6), R=low_mace, L_clav=8.0,
+                L={'wrist': (0.20, 0.30, 0.92), 'pole': (-1, -0.4, 0)}, L_foot=(-0.20, 0.0, 20, 40, 0), R_foot=(0.20, 0.30, 10, 0, 0))
+    follow = P(release, chest=(30, 22, 0), L={'wrist': (0.45, -0.30, 0.60), 'pole': (-1, -0.8, 0)})
+    return [(0.0, S, None), (0.30, _knees(wind), 'io'), (0.48, _knees(cock), 'io'), (0.62, _knees(release), 'i'), (0.76, _knees(follow), 'o'),
+            (1.00, S, 'io')]
+
+
 def build(rig):
     """神怒と奇跡の動きを作る。返り値：[(ゲームの名前, action, 情報)]"""
     out = []
     for name, fn in (('cl_ult', wrath_keys), ('cl_pray', pray_keys), ('cl_bless', bless_keys), ('cl_wall', wall_keys),
-                     ('cl_flame', flame_keys), ('cl_rise', rise_keys)):
+                     ('cl_flame', flame_keys), ('cl_rise', rise_keys), ('cl_heaven', heaven_keys), ('cl_cast', cast_keys),
+                     ('cl_throw', throw_keys)):
         k = fn()
         out.append(make_clip(rig, name, lambda t, k=k: sample(k, t), k[-1][0]))
     return out

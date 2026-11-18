@@ -1,11 +1,12 @@
 // 祓魔僧の奇跡（docs/DESIGN.md「祓魔僧の奇跡」）。計算だけ（PlayCanvas に依存しない）。
 //   利用者の指示（2026-11-17）：刻を越えたときの褒美で、奇跡を 3 つから 1 つ選んで覚える（最大 4 つ。そろった後は能力値）。
-//   左手の奇跡ボタン（PC は K）で選んでいる奇跡を唱え、替ボタン（PC は H）で次の奇跡へ替える。
+//   左手の奇跡ボタン（PC は K）で選んでいる奇跡を唱え、替ボタン（PC は H）で次の奇跡へ替える。全部で 7 つ（2 回に分けて作った）。
 //   唱えるのは game/combat.js（動きの間に攻撃を受けてひるむと途切れる）。効き目の数字は data.js の MIRACLES
 //
 //   f.miracle = { owned: [名前…], sel: 選んでいる番号, cool: { 名前: 残りの待ち時間 } }
 //   効き目：f.blessing（蘇生の加護の残り秒）・f.flame（淨炎の残り秒）・f.burn（燃えている { left, dps, by }）・
-//          f.invuln（傷を受けない残り秒。蘇った後）。光壁は combat.js が場所ごとに持つ
+//          f.invuln（傷を受けない残り秒。蘇った後）・f.blind（天光柱の目くらまし）・f.shock（神罰雷のしびれ）。
+//          光壁・聖火彈・神罰雷・天光柱は combat.js が持つ（walls・spells・strikes）
 import { CHARACTERS, MIRACLES, MIRACLE_SLOTS } from './data.js';
 
 /** 奇跡を使う人か（祓魔僧） */
@@ -76,6 +77,8 @@ export function updateMiracles(f, dt) {
   const m = f.miracle;
   if (m) for (const id of m.owned) if (m.cool[id] > 0) m.cool[id] = Math.max(0, m.cool[id] - dt);
   if (f.flame > 0) f.flame = Math.max(0, f.flame - dt);
+  if (f.blind > 0) f.blind = Math.max(0, f.blind - dt);   // 天光柱で目がくらんでいる（bot は見えない。自分は画面が白い）
+  if (f.shock > 0) f.shock = Math.max(0, f.shock - dt);   // 神罰雷でしびれている（動けないのは stun。shock は見た目と知らせ）
   if (f.invuln > 0) f.invuln = Math.max(0, f.invuln - dt);
   if (f.blessing > 0) {
     f.blessing = Math.max(0, f.blessing - dt);

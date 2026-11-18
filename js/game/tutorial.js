@@ -3,7 +3,7 @@
 //   共通：基本（動く・見回す・疾驅・攻擊・迴避）、暗殺・簞笥（タンスに隠れた敵を見つけて倒す）、暗殺・寢臺（ベッドの下に隠れた敵を見つけて倒す）、
 //         暗殺・潛伏（タンスかベッドに隠れて待ち、部屋に入ってきた敵を暗殺）、暗殺・壁潛（壁に背を付けて待ち、通りかかった敵を暗殺）。
 //         寢臺・潛伏は利用者の指示（2026-11-14）。暗殺・迴避（タンスから飛び出してくる敵の暗殺を、回避でかわす）も利用者の指示（2026-11-14「暗殺避け」）
-//   人物ごと：楯劍騎士（防禦と反擊）・劍騎士（奧義）・長柄騎士（強靱）・打擊騎士（剛力）・弓兵（鷹目）・祓魔僧（神怒・奇跡）
+//   人物ごと：楯劍騎士（防禦と反擊）・劍騎士（奧義）・長柄騎士（強靱）・打擊騎士（剛力）・弓兵（鷹目）・祓魔僧（神怒・奇跡・奇跡・攻）
 // 教練では時間で刻が進まず、自分は倒れない（体力が 3 割を切ると戻る）。計算だけ（PlayCanvas に依存しない）
 import { moveFighter } from './movement.js';
 import { BODY_TURN } from './data.js';
@@ -233,9 +233,38 @@ export const LESSONS = {
       { text: '「光壁」に替えて唱え、前に光の壁を張る', done: (S) => S.miracles.wall },
     ],
   },
+  // 奇跡・攻（2026-11-17。奇跡の 2 回目）：天光柱・聖火彈・神罰雷で、離れた案山子を攻める
+  miracleStrike: {
+    name: '奇跡・攻', char: 'cleric', desc: '天光柱・聖火彈・神罰雷で、離れた敵を攻める（祓魔僧）',
+    bots: [{ char: 'polearm', role: 'dummy' }, { char: 'shield', role: 'dummy' }, { char: 'blunt', role: 'dummy' }],
+    setup({ me, bots, isFree, insideHouse, heightAt, spawn }) {
+      for (const id of ['pillar', 'fireball', 'thunder']) learnMiracle(me, id);
+      selectMiracle(me, 'pillar');
+      // 開けた所を探す：前 18 m・左右 3 m に、木・岩・家が無く、地面の高さがほぼ同じ所（火の玉と雷の槍が、途中の物に当たらないように）
+      const open = (x, z, h0) => (!isFree || isFree(x, z, 0.9)) && !(insideHouse && insideHouse(x, z)) && (!heightAt || Math.abs(heightAt(x, z) - h0) < 1.0);
+      const lane = (x, z, yaw) => {
+        const h0 = heightAt ? heightAt(x, z) : 0, [fx, fz] = fwd(yaw), rx = Math.cos(yaw * DEG), rz = -Math.sin(yaw * DEG);
+        for (let d = 1; d <= 18; d++) for (const s of [-3, 0, 3]) if (!open(x + fx * d + rx * s * (d / 18), z + fz * d + rz * s * (d / 18), h0)) return false;
+        return true;
+      };
+      search: for (let r = 0; r <= 80; r += 8) {
+        for (let k = 0; k < (r ? 12 : 1); k++) {
+          const a = k * 30 * DEG, x = me.x + Math.cos(a) * r, z = me.z + Math.sin(a) * r;
+          if (!open(x, z, heightAt ? heightAt(x, z) : 0)) continue;
+          for (let yaw = 0; yaw < 360; yaw += 30) if (lane(x, z, yaw)) { spawn?.(x, z, yaw); break search; }
+        }
+      }
+      place(bots[0], me, 10, 0); place(bots[1], me, 13, 12); place(bots[2], me, 15, -10);
+    },
+    steps: [
+      { text: '奇跡ボタン（PC は K）で「天光柱」を唱え、降ってくる光の柱を案山子に当てる', done: (S) => S.strikeHits.pillar >= 1 },
+      { text: '替ボタン（PC は H）で「聖火彈」に替えて唱え、火の玉を案山子に当てる', done: (S) => S.strikeHits.fireball >= 1 },
+      { text: '「神罰雷」に替えて、案山子を狙って雷の槍を投げ、当てる', done: (S) => S.strikeHits.thunder >= 1 },
+    ],
+  },
 };
 /** 大廳に並べる順 */
-export const LESSON_ORDER = ['basic', 'search', 'searchBed', 'ambush', 'cover', 'evade', 'shield', 'sword', 'polearm', 'blunt', 'archer', 'cleric', 'miracle'];
+export const LESSON_ORDER = ['basic', 'search', 'searchBed', 'ambush', 'cover', 'evade', 'shield', 'sword', 'polearm', 'blunt', 'archer', 'cleric', 'miracle', 'miracleStrike'];
 
 /** 相手を、自分の向きから右へ ang 度の向きに d m、さらに右へ side m ずらして置き、こちらを向かせる */
 function place(f, me, d, ang = 0, side = 0) {
@@ -325,7 +354,7 @@ export function createTutorBot(f, role, me) {
 export function createTutorState(lesson, { me, combat, cover, match }) {
   const S = { moved: 0, turned: 0, sprinted: false, hits: 0, dodges: 0, inside: false, searched: 0, kills: 0, covered: false, hid: false,
     assassinTries: 0, assassinKills: 0, guarded: 0, skill: false, counters: 0, ultTargets: 0, skillHits: 0, blocked: 0, pierced: 0,
-    pierceHits: 0, wrathHits: 0, evaded: 0, miracles: {}, ignited: 0 };
+    pierceHits: 0, wrathHits: 0, evaded: 0, miracles: {}, ignited: 0, strikeHits: { pillar: 0, fireball: 0, thunder: 0 } };
   const ultHit = new Set();
   let lastX = me.x, lastZ = me.z, lastYaw = me.yaw;
   combat.on('hit', ({ attacker, target, amount, guarded, kind }) => {
@@ -336,6 +365,7 @@ export function createTutorState(lesson, { me, combat, cover, match }) {
       if (guarded && amount <= 0.01) S.blocked++;
       if (guarded && amount > 0.01 && me.skillLeft > 0) S.pierced++;
       if (kind === 'wrath') S.wrathHits++;
+      if (kind in S.strikeHits) S.strikeHits[kind]++;   // 天光柱・聖火彈・神罰雷が当たった
     }
     if (target === me && guarded) S.guarded++;
   });
