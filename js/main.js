@@ -33,6 +33,8 @@ import { createStats } from './ui/screens.js';
 import { createLobby } from './ui/lobby.js';
 import { createHall } from './render/hall.js';
 import { createTitleScene } from './render/title-scene.js';
+import { createTitleShow } from './render/title-show.js';
+import { createEraBackdrop } from './render/era-backdrop.js';
 import { createMusic } from './audio/music.js';
 import { playTimeStart, TIME_START_PEAK } from './audio/ui-sounds.js';
 import { createSettings, loadSettings } from './ui/settings.js';
@@ -50,7 +52,7 @@ import { refreshIfStale } from './core/freshness.js';
 
 // 題の画面と大廳（大廳の 3D の広間は、森を組み立てた後に作る。それまでは押されない）
 //   最初に画面に触れたら音を出せるようにして題の曲を流し、「入」で「時が動き出す音」を鳴らして大廳へ（大廳の曲に替える）
-let hall = null, titleScene = null, applyWorld = null, debugRef = null;
+let hall = null, titleScene = null, applyWorld = null, debugRef = null, eraBackdrop = null;
 const music = createMusic(BUILD, loadSettings().titleBgm);
 window.__music = music;   // 確認用（自動テストから題の曲の拍を読むため）
 // 設定（性能表示・音の大きさ・題曲の版・試験用）：題の画面からも開けるよう、森を読み込む前に作る。
@@ -71,6 +73,7 @@ const titleScreen = createLobby({
   },
   onHall: () => {   // 「入」の後、画面が暗くなったところで大廳に切り替える
     titleScene?.setActive(false);
+    eraBackdrop?.release();
     hall?.setActive(true, window.__forest?.player.camera);
   },
   onShow: (char, loadout) => { hall?.show(char, loadout).catch((err) => console.warn('大廳の人物:', err)); },
@@ -86,9 +89,28 @@ async function boot() {
   // 題の画面の背景（時の輪）：森を読み込む間も動かして見せる（先に描き始める）
   titleScene = createTitleScene(app, CONFIG);
   titleScene.setActive(true);
-  titleScene.setBeatSource(() => music.titleBeat);   // 時の輪の針を、題の曲の時計の刻みに合わせる
+  // 題の曲「歷代」（2026-11-20）：曲の時刻表に合わせて、時の輪の刻みと歯車が速くなり、合図で時代の背景（原始〜未来）に替わる。
+  //   時代が終わるたびに時の輪へ戻り、また速くなってから次の時代へ。前の版の曲では、今までどおり拍で針を進める
+  const show = createTitleShow();
+  eraBackdrop = createEraBackdrop({ quality: CONFIG.qualityName });
+  let showState = null, eraFade = 0, lastEraState = null;
+  titleScene.setBeatSource(() => (showState ? showState.hand : music.titleBeat));   // 時の輪の針を、題の曲の時計の刻みに合わせる
+  titleScene.setSpinSource(() => showState?.spin ?? 1);
+  window.__titleShow = () => showState;   // 確認用
   document.body.classList.add('in-hall');
-  app.on('update', (dt) => titleScene.update(dt));
+  app.on('update', (dt) => {
+    const ct = titleScene.active ? music.titleClock : null;
+    showState = ct == null ? null : show.state(ct % show.duration);
+    // 時代の背景：曲が止まった・題の画面を離れたときは、すぐ消さずに薄めていく
+    if (showState?.era) eraFade = showState.alpha;
+    else eraFade = Math.max(0, eraFade - dt * 2.5);
+    if (showState && !showState.era) eraBackdrop.prepare(show.nextEra(showState.t));   // 次の時代の絵を先に作っておく
+    titleScene.rest(eraFade >= 0.999);
+    titleScene.update(dt);
+    if (eraFade > 0 && titleScene.active) eraBackdrop.update({ ...(showState?.era ? showState : lastEraState || {}), alpha: eraFade, dt });
+    else eraBackdrop.update(null);
+    if (showState?.era) lastEraState = showState;
+  });
   app.start();
 
   // 実写の質感画像（地面・樹皮・岩）と空を、並行して読み込む
