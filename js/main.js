@@ -37,7 +37,7 @@ import { createTitleShow } from './render/title-show.js';
 import { createEraBackdrop } from './render/era-backdrop.js';
 import { createMusic } from './audio/music.js';
 import { playTimeStart, TIME_START_PEAK } from './audio/ui-sounds.js';
-import { createSettings, loadSettings } from './ui/settings.js';
+import { createSettings } from './ui/settings.js';
 import { ICONS } from './ui/icons.js';
 import { startPracticeMatch, planRoster } from './match-session.js';
 import { createMatching } from './ui/matching.js';
@@ -53,14 +53,13 @@ import { refreshIfStale } from './core/freshness.js';
 // 題の画面と大廳（大廳の 3D の広間は、森を組み立てた後に作る。それまでは押されない）
 //   最初に画面に触れたら音を出せるようにして題の曲を流し、「入」で「時が動き出す音」を鳴らして大廳へ（大廳の曲に替える）
 let hall = null, titleScene = null, applyWorld = null, debugRef = null, eraBackdrop = null;
-const music = createMusic(BUILD, loadSettings().titleBgm);
+const music = createMusic(BUILD);
 window.__music = music;   // 確認用（自動テストから題の曲の拍を読むため）
-// 設定（性能表示・音の大きさ・題曲の版・試験用）：題の画面からも開けるよう、森を読み込む前に作る。
+// 設定（性能表示・音の大きさ・視點・試験用）：題の画面からも開けるよう、森を読み込む前に作る。
 // 森に関わる分（視点）は、森ができてから applyWorld で反映する
 const settings = createSettings((st) => {
   document.getElementById('stats').hidden = st.stats === 'off';
   audio.setVolume({ high: 1, mid: 0.7, low: 0.4, off: 0 }[st.sound] ?? 0.7);
-  music.setTitleVersion(st.titleBgm);   // 題の曲が流れていれば、すぐその版に替わる
   applyWorld?.(st);
 }, (act) => debugRef?.(act));
 const titleScreen = createLobby({
@@ -90,11 +89,11 @@ async function boot() {
   titleScene = createTitleScene(app, CONFIG);
   titleScene.setActive(true);
   // 題の曲「歷代」（2026-11-20）：曲の時刻表に合わせて、時の輪の刻みと歯車が速くなり、合図で時代の背景（原始〜未来）に替わる。
-  //   時代が終わるたびに時の輪へ戻り、また速くなってから次の時代へ。前の版の曲では、今までどおり拍で針を進める
+  //   時代が終わるたびに時の輪へ戻り、また速くなってから次の時代へ
   const show = createTitleShow();
   eraBackdrop = createEraBackdrop({ quality: CONFIG.qualityName });
   let showState = null, eraFade = 0, lastEraState = null;
-  titleScene.setBeatSource(() => (showState ? showState.hand : music.titleBeat));   // 時の輪の針を、題の曲の時計の刻みに合わせる
+  titleScene.setBeatSource(() => (showState ? showState.hand : null));   // 時の輪の針を、題の曲の時計の刻みに合わせる（曲が流れる前は、自分で 1 秒に 2 歩）
   titleScene.setSpinSource(() => showState?.spin ?? 1);
   window.__titleShow = () => showState;   // 確認用
   document.body.classList.add('in-hall');

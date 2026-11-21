@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-20.1';</script>
+<script>window.__BUILD = '2026-11-21.1';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -329,18 +329,6 @@
       <button type="button" data-val="off">消</button>
     </div>
   </div>
-  <div class="set-row">
-    <span data-ruby>題曲<small class="set-note">題の画面の曲</small></span>
-    <div class="seg" data-key="titleBgm" data-ruby-all>
-      <button type="button" data-val="jidai">歷代</button>
-      <button type="button" data-val="ja">日本</button>
-      <button type="button" data-val="la">羅甸</button>
-      <button type="button" data-val="de">獨逸</button>
-      <button type="button" data-val="it">伊太利</button>
-      <button type="button" data-val="es">西班牙</button>
-      <button type="button" data-val="en">英吉利</button>
-    </div>
-  </div>
   <h3 class="test-head" data-ruby>試驗用<small class="set-note">遊びを確かめるための道具</small></h3>
   <div class="set-row">
     <span data-ruby>刻之長<small class="set-note">1 つの刻（試合の区切り）の長さ</small></span>
@@ -372,7 +360,7 @@
     <button id="start" class="start" type="button" disabled>讀込中…</button>
   </div>
   <p class="hint">左下のスティックで移動　／　右側をなぞって見回す　／　右下のボタンで攻撃・左手・回避</p>
-  <!-- 設定（題曲の版・音の大きさなど） -->
+  <!-- 設定（音の大きさ・視點など） -->
   <button id="title-settings" class="icon-btn title-gear" type="button" aria-label="設定"></button>
 </section>
 <!-- 「入」を押したとき：一瞬暗くして大廳へ -->
