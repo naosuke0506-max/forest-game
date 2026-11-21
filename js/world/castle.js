@@ -15,6 +15,7 @@ import { v3 } from './build-kit.js';
 import { well, barrel, bench, hay, woodpile } from './village-props.js';
 import { createFurnitureMotion } from '../render/furniture-motion.js';
 import { createDoors } from './doors.js';
+import { buildRoadside } from './roadside.js';
 
 /**
  * 木の柵（杭と 2 本の横木）を a から b へ。杭の間は約 2.4m
@@ -39,8 +40,9 @@ function fenceRun(B, terrain, a, b, solidLine, sight) {
  * @param {object} obstacles 当たり判定（家・橋の欄干・井戸などを通れないように円を並べる）
  * @param {object} floors 歩ける床（world/floors.js。家の床と階段・橋を登録する）
  * @param {object} plan 村・道・橋の配置
+ * @param {object} land 地形（world/landform.js。川の水面・洞窟の口。道まわりが使う）
  */
-export function createVillage(app, config, terrain, obstacles, zones, floors, sight = null, plan = null) {
+export function createVillage(app, config, terrain, obstacles, zones, floors, sight = null, plan = null, land = null) {
   const B = builder();
   const footprints = [];   // 地図に描く形：{ type: 'rect', x, z, w, d, yaw } / { type: 'circle', x, z, r } / { type: 'line', pts }
   const rnd = createRandom(config.seed + 333);
@@ -153,93 +155,10 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
     }
   }
 
-  // 橋：道が川を渡る所（world/villages.js の bridges）。長い木の橋（利用者の指示 2026-11-14：橋の所は川幅を広げて、橋を長く。
-  //   前の橋は短く、丸く盛り上がって、端が地面から浮いていた）。
-  //   床はほぼ水平（真ん中が少しだけ高い）で、横板を 1 枚ずつ並べる。約 4 m ごとに橋脚（川床まで立つ 2 本の柱・上の横木・筋交い）、
-  //   その上に縦の桁 3 本。両側に欄干（柱・上と中の横木）。両端は石積みの橋台で、地面を床の高さまで盛ってある（villages.js の pads）
-  for (const b of plan?.bridges || []) {
-    const dx = b.bx - b.ax, dz = b.bz - b.az, L = Math.hypot(dx, dz), yaw = (Math.atan2(dx, dz) * 180) / Math.PI;
-    const tx = dx / L, tz = dz / L, nx = -tz, nz = tx, hw = b.width / 2;
-    const yAt = (t) => b.deck + b.camber * Math.sin(Math.min(1, Math.max(0, t)) * Math.PI);   // 床の上の面の高さ
-    const at = (t, side = 0) => [b.ax + dx * t + nx * side, b.az + dz * t + nz * side];
-    const T = [tx, 0, tz], N = [nx, 0, nz], UP = [0, 1, 0];
-    const brnd = createRandom(config.seed + 911 + Math.round(b.ax * 7 + b.az * 13));
-    // 床板：横板を 1 枚ずつ（幅 0.27 m、間に 3 cm のすき間。少しずつ色と長さを変える）
-    const nPlank = Math.round(L / 0.3);
-    for (let k = 0; k < nPlank; k++) {
-      const t = (k + 0.5) / nPlank, [x, z] = at(t);
-      box(B, 'wood', x, yAt(t) - 0.07, z, b.width + 0.16 + (brnd.next() - 0.5) * 0.12, L / nPlank - 0.03, 0.07, yaw + (brnd.next() - 0.5) * 1.6, { shade: 0.82 + brnd.next() * 0.22, bottom: true });
-    }
-    // 橋脚と桁
-    const nSpan = Math.max(2, Math.round(L / 4.2));
-    for (let k = 0; k <= nSpan; k++) {
-      const t = k / nSpan, y = yAt(t);
-      const posts = [];
-      for (const sd of [-1, 1]) {
-        const [x, z] = at(t, sd * (hw - 0.3)), g = terrain.heightAt(x, z);
-        posts.push([x, z, g]);
-        if (g < y - 0.55) box(B, 'wood', x, g - 0.5, z, 0.3, 0.3, y - 0.35 - (g - 0.5), yaw, { shade: 0.62 });   // 柱（川床の中まで）
-      }
-      const [cx, cz] = at(t);
-      box(B, 'wood', cx, y - 0.63, cz, b.width + 0.5, 0.3, 0.28, yaw, { shade: 0.7, bottom: true });                // 柱の上の横木
-      // 筋交い：柱が 1.6 m より長い橋脚だけ（水の上に見える。× の形）
-      const low = Math.max(posts[0][2], posts[1][2]) + 0.25, high = y - 0.75;
-      if (high - low > 1.3) for (const sd of [-1, 1]) {
-        const p0 = [posts[0][0], sd > 0 ? low : high, posts[0][1]], p1 = [posts[1][0], sd > 0 ? high : low, posts[1][1]];
-        const d = v3.sub(p1, p0), len = Math.hypot(...d), a = v3.norm(d), n2 = v3.norm(v3.cross(a, T));
-        obox(B, 'wood', v3.add(v3.mul(v3.add(p0, p1), 0.5), v3.mul(T, sd * 0.09)), a, n2, T, len, 0.16, 0.07, 0.66);
-      }
-      // 桁：次の橋脚まで 3 本（床板のすぐ下）
-      if (k < nSpan) {
-        const t1 = (k + 1) / nSpan, y1 = yAt(t1), segL = L / nSpan, sl = Math.hypot(segL, y1 - y), a = [tx * segL / sl, (y1 - y) / sl, tz * segL / sl];
-        const up = v3.norm(v3.cross(N, a)), nUp = up[1] < 0 ? v3.mul(up, -1) : up;
-        for (const sd of [-1, 0, 1]) {
-          const [mx, mz] = at((t + t1) / 2, sd * (hw - 0.45));
-          obox(B, 'wood', [mx, (y + y1) / 2 - 0.07 - 0.14, mz], a, N, nUp, sl + 0.1, 0.2, 0.28, 0.72);
-        }
-      }
-    }
-    // 欄干：柱（橋脚の所と、その間）・上の横木・中の横木
-    const nRail = nSpan * 2;
-    for (const sd of [-1, 1]) {
-      for (let k = 0; k <= nRail; k++) {
-        const t = k / nRail, [x, z] = at(t, sd * (hw - 0.06));
-        box(B, 'wood', x, yAt(t) - 0.12, z, 0.13, 0.13, 1.17, yaw, { shade: 0.8 });
-        if (k < nRail) {
-          const t1 = (k + 1) / nRail, y0 = yAt(t), y1 = yAt(t1), segL = L / nRail, sl = Math.hypot(segL, y1 - y0), a = [tx * segL / sl, (y1 - y0) / sl, tz * segL / sl];
-          const up = v3.norm(v3.cross(N, a)), nUp = up[1] < 0 ? v3.mul(up, -1) : up;
-          const [mx, mz] = at((t + t1) / 2, sd * (hw - 0.06));
-          obox(B, 'wood', [mx, (y0 + y1) / 2 + 0.98, mz], a, N, nUp, sl + 0.06, 0.1, 0.1, 0.86);    // 上の横木
-          obox(B, 'wood', [mx, (y0 + y1) / 2 + 0.52, mz], a, N, nUp, sl, 0.06, 0.09, 0.78);          // 中の横木
-          sight?.addYawBox(mx, (y0 + y1) / 2, mz, 0.1, segL, 1.05, yaw);
-        }
-      }
-    }
-    // 橋台：両端の石積み（床板の下で地面を受ける）と、欄干の端の太い親柱
-    for (const [t, out] of [[0, -1], [1, 1]]) {
-      const [x, z] = at(t), g = Math.min(terrain.heightAt(x + tx * out * 1.2, z + tz * out * 1.2), terrain.heightAt(x, z), terrain.heightAt(x - tx * out * 1.2, z - tz * out * 1.2)) - 0.8;
-      box(B, 'stone', x + tx * out * 0.35, g, z + tz * out * 0.35, b.width + 1.1, 1.5, b.deck - 0.07 - g, yaw, { shade: 0.86, grad: [0.7, 1] });
-      for (const sd of [-1, 1]) {
-        const [px, pz] = at(t, sd * (hw - 0.02));
-        box(B, 'wood', px + tx * out * 0.12, b.deck - 0.2, pz + tz * out * 0.12, 0.24, 0.24, 1.42, yaw, { shade: 0.7 });
-        solid(px + tx * out * 0.12, pz + tz * out * 0.12, 0.2, { y0: b.deck - 0.5, y1: b.deck + 1.4 });
-      }
-    }
-    // 歩ける面：真ん中が少し高いので、4 つの坂に分けて登録する
-    for (let k = 0; k < 4; k++) {
-      const t0 = k / 4, t1 = (k + 1) / 4, [cx, cz] = at((t0 + t1) / 2);
-      floors.addRamp({ cx, cz, yaw, hw, hd: L / 8 + 0.02, y0: yAt(t0), y1: yAt(t1) });
-    }
-    // 欄干は通れない（橋の高さだけ）
-    for (const sd of [-1, 1]) {
-      const n = Math.ceil(L / 0.6);
-      for (let k = 0; k <= n; k++) {
-        const t = k / n, [x, z] = at(t, sd * (hw + 0.1));
-        obstacles.add(x, z, 0.3, true, { y0: yAt(t) - 0.5, y1: yAt(t) + 1.2 });
-      }
-    }
-    footprints.push({ type: 'bridge', x: (b.ax + b.bx) / 2, z: (b.az + b.bz) / 2, w: b.width, d: L, yaw });
-  }
+  // 道まわり（2026-11-21。マップは全部現代）：舗装の道・コンクリートの橋（前の長い木の橋を作り替えた。利用者が選んだ ① 道と電気）・
+  //   ガードレール・電柱と電線・街灯・道路標識・バス停（world/roadside.js）。同じ入れ物に貯める
+  const roadside = plan ? buildRoadside(B, { app, config, terrain, plan, land, zones, obstacles, floors, sight, solid, solidLine }) : null;
+  if (roadside) footprints.push(...roadside.footprints);
 
   // ---- 形にして描く（質感ごとに 1 つ） ----
   const materials = {};
@@ -255,6 +174,9 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
     m.metalness = 0;
     m.gloss = 0.25;
     m.cull = pc.CULLFACE_NONE;   // 屋根は下からも見え、壁は両側から見えるので両面を描く
+    if (surf === 'steel') { m.metalness = 0.55; m.gloss = 0.5; }            // 亜鉛めっきの鉄
+    if (surf === 'asphalt' || surf === 'paint') { m.depthBias = -1; m.depthBiasSlope = -3; }   // 地面の上に貼る：ちらつかないよう手前へ
+    if (surf === 'paint') m.gloss = 0.35;
     m.update();
     materials[surf] = m;
     const e = new pc.Entity(`village-${surf}`);
@@ -280,5 +202,5 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
       m.update();
     });
   }
-  return { houses, triangles: tris, footprints, hides, covers, insideHouse, furniture, doors, materials };   // materials：村の質感（棺桶 render/coffin.js が木の質感を使う）
+  return { houses, triangles: tris, footprints, hides, covers, insideHouse, furniture, doors, materials, roadside };   // roadside：街灯を夜に点ける（update）   // materials：村の質感（棺桶 render/coffin.js が木の質感を使う）
 }

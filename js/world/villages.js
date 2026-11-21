@@ -17,13 +17,14 @@ export const VILLAGES = [
 ];
 
 /** 道（通る点。なめらかな線にする）：w は道の幅の半分 */
+// paved：舗装の道（2026-11-21。マップは全部現代。world/roadside.js がアスファルトの帯を敷く）。無い 2 本は森へ入る土の林道
 const ROADS = [
-  { w: 2.0, pts: [[44, -114], [64, -84], [86, -50], [108, -16]] },                                  // 山邑 → 野邑
-  { w: 2.0, pts: [[108, -16], [96, 14], [66, 36], [36, 52], [8, 62], [-12, 62], [-28, 58]] },     // 野邑 → 橋 → 川邑
+  { w: 2.0, paved: true, pts: [[44, -114], [64, -84], [86, -50], [108, -16]] },                                  // 山邑 → 野邑
+  { w: 2.0, paved: true, pts: [[108, -16], [96, 14], [66, 36], [36, 52], [8, 62], [-12, 62], [-28, 58]] },     // 野邑 → 橋 → 川邑
   { w: 2.0, pts: [[-28, 58], [-42, 40], [-56, 14], [-78, -16], [-94, -36], [-98, -42]] },         // 川邑 → 北西の深い森（風穴の口）
   { w: 1.8, pts: [[44, -114], [16, -104], [-6, -92], [-30, -88], [-58, -74], [-82, -52], [-94, -40], [-98, -42]] },   // 山邑 → 浅瀬 → 深い森（風穴の口）
-  { w: 1.8, pts: [[0, 0], [16, 2], [34, -2], [60, -12], [86, -50]] },                              // 盆地の真ん中 → 橋 → 山邑と野邑の道
-  { w: 1.8, pts: [[0, 0], [-14, 18], [-42, 40]] },                                                // 盆地の真ん中 → 川邑の道
+  { w: 1.8, paved: true, pts: [[0, 0], [16, 2], [34, -2], [60, -12], [86, -50]] },                              // 盆地の真ん中 → 橋 → 山邑と野邑の道
+  { w: 1.8, paved: true, pts: [[0, 0], [-14, 18], [-42, 40]] },                                                // 盆地の真ん中 → 川邑の道
 ];
 const LANES = 1.4;   // 村の中の小道の幅の半分
 const GRID = 2;      // 道と村の広がりを覚えておく升目（m）
@@ -99,7 +100,7 @@ export function planVillages(seed, land, { size, playRadius }) {
     }
     return out;
   };
-  const roads = ROADS.map((r) => ({ w: r.w, pts: spline(wiggle(r.pts), 2) }));
+  const roads = ROADS.map((r) => ({ w: r.w, paved: !!r.paved, pts: spline(wiggle(r.pts), 2) }));
   // 村の中の小道：村の真ん中に一番近い道の点から、横へ曲がって伸びる（家がまっすぐ一列に並ばないように）
   for (const v of VILLAGES) {
     let best = null;
@@ -114,7 +115,7 @@ export function planVillages(seed, land, { size, playRadius }) {
     const L = v.r * 0.75;
     const lane = [[px, pz], [px + nx * L * 0.35 + tx * L * 0.1, pz + nz * L * 0.35 + tz * L * 0.1],
       [px + (nx + tx * bend) * L * 0.7, pz + (nz + tz * bend) * L * 0.7], [px + (nx + tx * bend * 1.6) * L, pz + (nz + tz * bend * 1.6) * L]];
-    roads.push({ w: LANES, pts: spline(lane, 2), lane: true, village: v.id });
+    roads.push({ w: LANES, pts: spline(lane, 2), lane: true, paved: true, village: v.id });
   }
 
   // ---- 2. 橋：道が川を渡る所（水が 0.8 m より深い所がある所。浅瀬は歩いて渡る） ----
@@ -398,7 +399,12 @@ export function planVillages(seed, land, { size, playRadius }) {
       if (v > G[k]) G[k] = v;
     }
   };
-  for (const r of roads) for (const [x, z] of r.pts) stamp(pathG, x, z, r.w * 0.6, r.w * 1.6);
+  // 舗装の道は、アスファルトの幅（world/roadside.js の halfOf）の外 0.6 m までを道とし、その外 2 m で草地へ戻す（木・岩・草が舗装の上に生えないように）
+  const paveHalf = (r) => (r.lane ? 1.6 : r.w >= 2 ? 2.2 : 2.0);
+  for (const r of roads) for (const [x, z] of r.pts) {
+    if (r.paved) stamp(pathG, x, z, paveHalf(r) + 0.6, paveHalf(r) + 2.6);
+    else stamp(pathG, x, z, r.w * 0.6, r.w * 1.6);
+  }
   for (const h of houses) stamp(areaG, h.x, h.z, Math.max(h.w, h.d) * 0.5 + 4, Math.max(h.w, h.d) * 0.5 + 12);
   for (const w of wells) stamp(areaG, w.plaza.x, w.plaza.z, w.plaza.r + 2, w.plaza.r + 10);
   for (const f of fields) for (const [x, z] of [[f.x, f.z], ...corners(f, -2)]) stamp(areaG, x, z, 6, 12);

@@ -25,6 +25,9 @@ SIZES = {
     'clay_roof_tiles': {'diff': 512, 'nor_gl': 512, 'arm': 512},
     'cobblestone_floor_04': {'diff': 512, 'nor_gl': 512, 'arm': 512},
     'wooden_gate': {'diff': 512, 'nor_gl': 512, 'arm': 512},
+    # 現代の村（2026-11-21）：舗装の道は画面に大きく映るので色を 1024 に。橋とバス停の台のコンクリート
+    'asphalt_02': {'diff': 1024, 'nor_gl': 512, 'arm': 512},
+    'concrete': {'diff': 512, 'nor_gl': 512, 'arm': 512},
     # 大廳（中世の城の広間）。壁と床は画面に大きく映るので色を 1024 に
     'medieval_blocks_03': {'diff': 1024, 'nor_gl': 512, 'arm': 512},
     'large_floor_tiles_02': {'diff': 1024, 'nor_gl': 1024, 'arm': 512},
