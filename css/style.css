@@ -640,11 +640,6 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .seg button + button { border-left: 1px solid var(--edge-soft); }
 .seg button.on { background: linear-gradient(180deg, rgba(110, 86, 40, .9), rgba(60, 46, 20, .9)); color: var(--gold-hi); }
 /* 題曲：6 つの版を 3 つずつ 2 段に（1 段では設定の枠からはみ出す） */
-.seg[data-key="titleBgm"] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-/* 歷代（時代をめぐる 1 曲。2026-11-20 から初めの値）は一段を全部使い、その下に前の 6 版を 3 つずつ並べる */
-.seg[data-key="titleBgm"] button:first-child { grid-column: 1 / -1; }
-.seg[data-key="titleBgm"] button:nth-child(3n + 2) { border-left: 0; }
-.seg[data-key="titleBgm"] button:nth-child(n + 2) { border-top: 1px solid var(--edge-soft); }
 
 /* 設定画面のテスト用の欄 */
 .settings .test-head { margin: 18px 0 6px; font-size: 14px; opacity: .7; font-weight: normal; letter-spacing: .1em; }
