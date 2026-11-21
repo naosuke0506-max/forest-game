@@ -3,7 +3,8 @@
 //         石積みの壁（隅石・石のまぐさと窓台・石の扉の枠）。扉口（開いた板戸と鉄の帯・石の段 2 つ・一階建ては小さな庇）
 //   二階建て：二階は前へ張り出す（根太の端と持ち送り）。木組みか板張り。階段の前に踊り場、階段の穴の周りに手すり
 //   屋根：切妻（棟は奥行きの向き）。厚み・軒裏・瓦は破風板と垂木と棟瓦、わらぶきは太い棟。妻壁の木組みと小窓。暖炉の煙突
-//   家具：ベッド・タンス・机と腰掛け・長持・棚・袋・暖炉。ベッドの下とタンスの中は隠れ場所
+//   家具（world/furniture.js）：今の家具（2026-11-21）。ベッド・タンス・食卓と椅子・台所と冷蔵庫・薪ストーブ・ソファ・整理だんすとテレビ・本棚など。
+//         ベッドの下とタンスの中は隠れ場所
 //   歩ける面（床・階段）は world/floors.js へ、ぶつかる物（壁・家具・手すり）は world/obstacles.js へ登録する
 // 家の中の座標：x は横（右が +）、z は奥行き（前＝扉の側が +）、y は高さ
 import { frame, box } from './build-kit.js';
@@ -105,6 +106,7 @@ export function buildHouse(B, h, reg) {
   }
   const win = (c) => ({ c, w: WIN_W, y: SILL, h: WIN_H });
   const isWin = (o) => o.h === WIN_H;
+  const wins = [];   // 窓（夜の灯り。下の「家具」で家ごとの記録に入れる）
   for (let s = 0; s < stories; s++) {
     const kind = kindOf(s);
     const surf = kind === 'stone' ? 'stone' : kind === 'boards' ? 'wood' : 'plaster';
@@ -147,6 +149,10 @@ export function buildHouse(B, h, reg) {
     for (const o of front) if (isWin(o)) P.windowDress(fFront, o.c, SILL, WIN_W, WIN_H, T, kind, tone, { shutter, flowers });
     for (const o of back) P.windowDress(fBack, o.c, SILL, WIN_W, WIN_H, T, kind, tone, { shutter });
     for (const sd of [-1, 1]) for (const o of sideWins(sd)) P.windowDress(fSide(sd), o.c, SILL, WIN_W, WIN_H, T, kind, tone, { shutter });
+    // 窓の場所（夜に灯りの漏れる窓。world/house-life.js）
+    for (const o of front) if (isWin(o)) wins.push({ fc: fFront, c: o.c, s });
+    for (const o of back) wins.push({ fc: fBack, c: o.c, s });
+    for (const sd of [-1, 1]) for (const o of sideWins(sd)) wins.push({ fc: fSide(sd), c: o.c, s });
     if (s === 0) {
       P.doorDress(fFront, DOOR_W, DOOR_H, T, kind, tone);
       if (!twoStory) P.canopy(fFront, DOOR_W + 1.0, 0.85, DOOR_H + 0.62, roof, tone);
@@ -300,30 +306,76 @@ export function buildHouse(B, h, reg) {
   // 部屋の内側の広さ（家の中の座標。隠れ場所に付けて、家の外から隠れたり探したりできないようにする。game/hiding.js の inRoom）
   //   一階は前後 -id〜id、一番上の階（二階建ての二階）は前へ張り出した分だけ広い（-id〜idF）
   const rooms = [{ x: cx, z: cz, yaw, hw: iw, z0: -id, z1: id }, { x: cx, z: cz, yaw, hw: iw, z0: -id, z1: idF }];
-  const furniture = new Furniture(B, F, y0, yaw, reg, range, routes, rooms);
+  // 家ごとの「人が消えた直後」の記録（world/house-life.js が光らせる）：灯りが点いたままか（一階・二階）・テレビが点いたままか・
+  // ストーブに熾火が残っているか。灯・テレビ・熾火・窓の場所は家具を置くときに書く。飾りの乱数で決める（家の並びは変わらない）
+  const life = reg.houseLife ? {
+    x: cx, z: cz, y: y0, stories,
+    lit: deco.next() < 0.78, litUp: twoStory && deco.next() < 0.55, tvOn: deco.next() < 0.7, emberOn: deco.next() < 0.55,
+    lamps: [], glows: [], tvs: [], embers: [], windows: [],
+  } : null;
+  if (life) {
+    for (const wv of wins) {
+      const o = wv.fc.o, u = wv.fc.u, n = wv.fc.n, k = -T * 0.55;
+      life.windows.push({ p: F.at(o[0] + u[0] * wv.c + n[0] * k, o[1] + SILL + WIN_H / 2, o[2] + u[2] * wv.c + n[2] * k), n: F.dir(...n), u: F.dir(...u), w: WIN_W, h: WIN_H, floor: wv.s });
+    }
+    reg.houseLife.push(life);
+  }
+  const furniture = new Furniture(B, F, y0, yaw, reg, range, routes, rooms, { deco, life });
+  // 壁の飾り（額・時計）：窓から離れた所だけ。face：'back'（後ろの壁）・'front'・'right'・'left'、t：壁に沿った位置、v：床からの高さ
+  const winsOn = (face, s) => wins.filter((wv) => wv.s === s && (
+    face === 'back' ? wv.fc.n[2] < 0 : face === 'front' ? wv.fc.n[2] > 0 : face === 'right' ? wv.fc.n[0] > 0 : wv.fc.n[0] < 0));
+  const onWall = (id, face, t, floorY, v, s) => {
+    if (winsOn(face, s).some((wv) => Math.abs(wv.c - t) < WIN_W / 2 + 0.45)) return false;
+    const zIn = s >= 1 ? idF : id;
+    if (face === 'back') furniture.wall(id, t, floorY + v, -id + 0.005, 0);
+    else if (face === 'front') furniture.wall(id, t, floorY + v, zIn - 0.005, 180);
+    else if (face === 'right') furniture.wall(id, iw - 0.005, floorY + v, t, -90);
+    else furniture.wall(id, -iw + 0.005, floorY + v, t, 90);
+    return true;
+  };
+  const pictures = ['fancy_picture_frame_01', 'hanging_picture_frame_02'];
   if (twoStory) {
     const g = fy[0], u = fy[1];
-    // 一階：暖炉（右の壁）、机と腰掛け、長持、タンス（後ろの壁）、袋（後ろの右の隅。階段の前は空ける）
-    furniture.hearth(iw - 0.32, -0.3, g, chimneyTop, -90);
-    furniture.table(Math.min(iw - 1.1, 0.6), 0.1, g, rnd);
-    furniture.chest(iw - 0.32, id - 1.1, g, -90);
+    // 一階：台所（後ろの壁）と冷蔵庫・食卓と吊り灯・ソファ（前の長持の所）・薪ストーブ（前の暖炉の所）・タンス（後ろの壁）
+    furniture.stove(iw - 0.32, -0.3, g, chimneyTop, -90);
+    furniture.table(Math.min(iw - 1.1, 0.6), 0.1, g, rnd, { ceil: FOUND + STORY - 0.14 });
+    furniture.sofa(iw - 0.47, id - 1.35, g, -90);
     furniture.wardrobe(sx1 + 0.75, -id + 0.3, g, 0);
-    furniture.sacks(iw - 0.75, -id + 0.45, g, rnd);
-    // 二階：ベッド（後ろの壁の右）、タンス（右の壁の前）、長持（ベッドの足もと）。広い家はもう 1 つベッド
+    furniture.burnSacks(rnd);
+    furniture.fridge(iw - 0.34, -id + 0.36, g, 0);
+    { const k0 = Math.max(-iw + 2.5, -0.3), k1 = iw - 0.7;
+      if (k1 - k0 >= 0.8) furniture.kitchen((k0 + k1) / 2, -id + 0.31, k1 - k0, g, 0, { stove: k1 - k0 >= 1.6 ? -1 : 0 }); }
+    furniture.rug(iw - 1.55, id - 1.35, g, 1.2, 1.9, 0);
+    furniture.armchair(iw - 1.25, -1.6, g, 35);   // ストーブの方を向いた一人掛け
+    onWall('wall_clock', 'back', iw - 1.05, g, 2.05, 0);
+    onWall(furniture.pick(pictures), 'front', -iw + 0.85, g, 1.6, 0);
+    // 二階：ベッドとナイトテーブル（後ろの壁の右）・タンス（右の壁の前）・整理だんすとテレビ（ベッドの足もと）・本棚（前の壁）。広い家はもう 1 つベッド
     furniture.bed(iw - 0.62, -id + 1.08, u, 0, rnd);
+    furniture.nightstand(iw - 1.42, -id + 0.26, u, 0);
     furniture.wardrobe(iw - 0.3, idF - 0.8, u, -90);
-    furniture.chest(iw - 1.3, -id + 2.4, u, 0);
+    furniture.dresser(iw - 1.3, -id + 2.4, u, 0, { tv: true, tvRot: 180 });
     if (w >= 7) furniture.bed(-iw + 1.08, -id + 0.6, u, 90, rnd);
     furniture.shelf(0, idF - 0.12, u + 1.2, 180);
+    furniture.rug(0.3, -0.2, u, 1.4, 2.0, 0);
+    onWall(furniture.pick(pictures), 'back', iw - 0.62, u, 1.62, 1);
   } else {
     const g = fy[0];
+    // 一部屋の家：ベッドとナイトテーブル（左の後ろ）・整理だんすとテレビ（ベッドの足もと。ベッドの方を向く）・タンス（右の壁）・
+    //   食卓と吊り灯（右の壁寄り）・本棚（後ろの壁）・台所と冷蔵庫（前の壁の、扉の右。窓の下に流し）・薪ストーブ（左の壁の前）
     furniture.bed(-iw + 0.62, -id + 1.08, g, 0, rnd);
-    furniture.chest(-iw + 0.62, -id + 2.45, g, 0);
+    furniture.nightstand(-iw + 1.42, -id + 0.26, g, 0);
+    furniture.dresser(-iw + 0.62, -id + 2.45, g, 0, { tv: true, tvRot: 180 });
     furniture.wardrobe(iw - 0.3, -id + 0.8, g, -90);
-    furniture.table(iw - 1.05, id * 0.25, g, rnd);   // 右の壁寄り（扉から奥への通り道を空ける）
+    furniture.table(iw - 1.05, id * 0.25, g, rnd, { ceil: top - 0.2 });   // 右の壁寄り（扉から奥への通り道を空ける）
     furniture.shelf(iw - 1.3, -id + 0.12, g + 1.3, 0);
-    furniture.sacks(iw - 0.7, id - 0.55, g, rnd);
-    furniture.hearth(-iw + 0.32, id - 1.0, g, chimneyTop, 90);
+    furniture.burnSacks(rnd);
+    furniture.fridge(iw - 0.34, id - 0.36, g, 180);
+    { const k0 = DOOR_W / 2 + 0.35, k1 = iw - 0.7;
+      if (k1 - k0 >= 0.55) furniture.kitchen((k0 + k1) / 2, id - 0.31, k1 - k0, g, 180, { stove: k1 - k0 >= 1.5 ? -1 : 0 }); }
+    furniture.stove(-iw + 0.32, id - 1.0, g, chimneyTop, 90);
+    furniture.rug(-0.35, -0.15, g, 1.4, 2.0, 0);
+    onWall(furniture.pick(pictures), 'back', -iw + 0.62, g, 1.6, 0);
+    onWall('wall_clock', 'back', iw - 1.3, g, 2.25, 0);
   }
   S?.endGroup();
   return { top: top + rh };

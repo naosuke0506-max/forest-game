@@ -1,0 +1,367 @@
+{
+  "metal_trash_can": {
+    "tris": 694,
+    "min": [
+      -0.453,
+      0,
+      -0.276
+    ],
+    "max": [
+      0.324,
+      0.906,
+      0.274
+    ],
+    "materials": [
+      "metal_trash_can"
+    ],
+    "kb": 50
+  },
+  "trashbag": {
+    "tris": 500,
+    "min": [
+      -0.255,
+      -0.001,
+      -0.24
+    ],
+    "max": [
+      0.263,
+      0.567,
+      0.223
+    ],
+    "materials": [
+      "trashbag"
+    ],
+    "kb": 40
+  },
+  "exterior_aircon_unit": {
+    "tris": 912,
+    "min": [
+      -0.391,
+      -0.319,
+      -0.216
+    ],
+    "max": [
+      0.405,
+      0.603,
+      0.158
+    ],
+    "materials": [
+      "exterior_aircon_unit_01",
+      "exterior_aircon_unit_02"
+    ],
+    "kb": 79
+  },
+  "propane_tank": {
+    "tris": 956,
+    "min": [
+      -0.165,
+      0,
+      -0.169
+    ],
+    "max": [
+      0.162,
+      0.553,
+      0.165
+    ],
+    "materials": [
+      "propane_tank"
+    ],
+    "kb": 50
+  },
+  "wooden_picnic_table": {
+    "tris": 1125,
+    "min": [
+      -1.119,
+      0,
+      -1.502
+    ],
+    "max": [
+      1.117,
+      0.744,
+      1.521
+    ],
+    "materials": [
+      "wooden_picnic_table_bottom",
+      "wooden_picnic_table_table"
+    ],
+    "kb": 132
+  },
+  "plastic_monobloc_chair_01": {
+    "tris": 700,
+    "min": [
+      -0.321,
+      0,
+      -0.336
+    ],
+    "max": [
+      0.321,
+      0.88,
+      0.292
+    ],
+    "materials": [
+      "plastic_monobloc_chair_01"
+    ],
+    "kb": 56
+  },
+  "planter_box_01": {
+    "tris": 900,
+    "min": [
+      -0.456,
+      0,
+      -0.207
+    ],
+    "max": [
+      0.455,
+      0.425,
+      0.206
+    ],
+    "materials": [
+      "planter_box_01"
+    ],
+    "kb": 54
+  },
+  "old_tyre": {
+    "tris": 600,
+    "min": [
+      -0.294,
+      -0.3,
+      -0.083
+    ],
+    "max": [
+      0.3,
+      0.3,
+      0.08
+    ],
+    "materials": [
+      "old_tyre"
+    ],
+    "kb": 37
+  },
+  "metal_jerrycan": {
+    "tris": 499,
+    "min": [
+      -0.169,
+      0.001,
+      -0.087
+    ],
+    "max": [
+      0.179,
+      0.453,
+      0.082
+    ],
+    "materials": [
+      "metal_jerrycan"
+    ],
+    "kb": 39
+  },
+  "covered_car": {
+    "tris": 2983,
+    "min": [
+      -0.847,
+      0.006,
+      -2.148
+    ],
+    "max": [
+      0.941,
+      1.411,
+      2.196
+    ],
+    "materials": [
+      "covered_car"
+    ],
+    "kb": 150
+  },
+  "electric_stove": {
+    "tris": 2565,
+    "min": [
+      -0.251,
+      0,
+      -0.3
+    ],
+    "max": [
+      0.251,
+      0.858,
+      0.345
+    ],
+    "materials": [
+      "electric_stove",
+      "electric_stove_glass"
+    ],
+    "kb": 109
+  },
+  "wall_clock": {
+    "tris": 676,
+    "min": [
+      -0.16,
+      -0.16,
+      0
+    ],
+    "max": [
+      0.159,
+      0.16,
+      0.047
+    ],
+    "materials": [
+      "wall_clock",
+      "wall_clock_glass"
+    ],
+    "kb": 40
+  },
+  "hanging_picture_frame_02": {
+    "tris": 303,
+    "min": [
+      -0.376,
+      -0.278,
+      0.002
+    ],
+    "max": [
+      0.376,
+      0.221,
+      0.035
+    ],
+    "materials": [
+      "hanging_picture_frame_02_artwork",
+      "hanging_picture_frame_02",
+      "hanging_picture_frame_02_glass"
+    ],
+    "kb": 35
+  },
+  "fancy_picture_frame_01": {
+    "tris": 600,
+    "min": [
+      -0.302,
+      -0.232,
+      0.002
+    ],
+    "max": [
+      0.302,
+      0.232,
+      0.022
+    ],
+    "materials": [
+      "fancy_picture_frame_01",
+      "fancy_picture_frame_01_canvas"
+    ],
+    "kb": 103
+  },
+  "painted_wooden_chair_01": {
+    "tris": 724,
+    "min": [
+      -0.217,
+      -0.001,
+      -0.301
+    ],
+    "max": [
+      0.214,
+      0.956,
+      0.239
+    ],
+    "materials": [
+      "painted_wooden_chair_01"
+    ],
+    "kb": 49
+  },
+  "mid_century_lounge_chair": {
+    "tris": 1500,
+    "min": [
+      -0.503,
+      0.001,
+      -0.661
+    ],
+    "max": [
+      0.503,
+      1.169,
+      0.527
+    ],
+    "materials": [
+      "mid_century_lounge_chair"
+    ],
+    "kb": 61
+  },
+  "modern_ceiling_lamp_01": {
+    "tris": 889,
+    "min": [
+      -0.214,
+      0.221,
+      -0.212
+    ],
+    "max": [
+      0.216,
+      1.173,
+      0.215
+    ],
+    "materials": [
+      "modern_ceiling_lamp_01_glass",
+      "modern_ceiling_globe"
+    ],
+    "kb": 32
+  },
+  "food_apple_01": {
+    "tris": 288,
+    "min": [
+      -0.048,
+      0.001,
+      -0.046
+    ],
+    "max": [
+      0.049,
+      0.083,
+      0.049
+    ],
+    "materials": [
+      "food_apple_01"
+    ],
+    "kb": 14
+  },
+  "croissant": {
+    "tris": 298,
+    "min": [
+      -0.1,
+      -0.001,
+      -0.032
+    ],
+    "max": [
+      0.097,
+      0.061,
+      0.043
+    ],
+    "materials": [
+      "croissant"
+    ],
+    "kb": 38
+  },
+  "jug_01": {
+    "tris": 500,
+    "min": [
+      -0.15,
+      0,
+      -0.084
+    ],
+    "max": [
+      0.123,
+      0.211,
+      0.083
+    ],
+    "materials": [
+      "jug_01"
+    ],
+    "kb": 19
+  },
+  "ceramic_vase_01": {
+    "tris": 944,
+    "min": [
+      -0.101,
+      0.002,
+      -0.101
+    ],
+    "max": [
+      0.101,
+      0.401,
+      0.1
+    ],
+    "materials": [
+      "ceramic_vase_01"
+    ],
+    "kb": 26
+  }
+}
