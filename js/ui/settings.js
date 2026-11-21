@@ -2,7 +2,7 @@
 import { returnToHall } from '../core/resume.js';
 
 const KEY = 'forest-game.settings';
-const DEFAULTS = { stats: 'on', phaseLen: 'normal', sound: 'mid', titleBgm: 'ja', view: 'first' };   // view：視點（一人稱・三人稱）   // titleBgm：題曲の版（日本・羅甸・獨逸・伊太利・西班牙・英吉利）
+const DEFAULTS = { stats: 'on', phaseLen: 'normal', sound: 'mid', titleBgm: 'jidai', view: 'first' };   // view：視點（一人稱・三人稱）   // titleBgm：題曲の版（歷代・日本・羅甸・獨逸・伊太利・西班牙・英吉利）
 
 /** この端末に保存した設定（無ければ初めの値）。設定の画面を作る前に読むとき用 */
 export function loadSettings() { return load(); }
@@ -12,6 +12,8 @@ const SESSION_KEYS = ['phaseLen'];
 function load() {
   let s;
   try { s = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { s = { ...DEFAULTS }; }
+  // 題曲は 2026-11-20 から「歷代」（1 曲で時代をめぐる）。前の版を選んだまま残っている端末も、一度だけ歷代にする
+  if (!s.titleBgmV2) { s.titleBgm = 'jidai'; s.titleBgmV2 = 1; }
   for (const k of SESSION_KEYS) {
     let v = null;
     try { v = sessionStorage.getItem(`${KEY}.${k}`); } catch { /* 読めなければ初めの値 */ }

@@ -15,19 +15,23 @@ const TRACKS = {
   title_it: { url: 'assets/music/title_it.mp3', volume: 0.7, bpm: 120.0, phase: 0.133, rot: 4 },
   title_es: { url: 'assets/music/title_es.mp3', volume: 0.7, bpm: 120.01, phase: 0.12, rot: 0 },
   title_en: { url: 'assets/music/title_en.mp3', volume: 0.7, bpm: 120.12, phase: 0.15, rot: 0 },   // 始めの 30 秒は少し速め（ずれは 60 ms まで）
+  // 歷代（2026-11-20）：時代の曲（原始・中世・近世・現代・未来。利用者が Suno で作った）のサビを、時計の刻みが速くなる切り替えでつないだ 1 曲。
+  //   時計の針・歯車の速さ・時代の背景は、拍ではなく時刻表（audio/title-timeline.js）で合わせる（timeline）
+  title_jidai: { url: 'assets/music/title_jidai.mp3', volume: 0.75, timeline: true },
   // 大廳（中世の城）：利用者が Suno で作った曲（歌なし）から、一番盛り上がる 8 小節（133.155 拍/分・約 14.42 秒）を切り出した物。
   //   ファイルは「8 小節＋頭の 1 秒」。0.5 秒から 8 小節を繰り返す（MP3 の頭の無音の長さが分からなくても、継ぎ目がそろう）
   hall_medieval: { url: 'assets/music/hall_medieval.mp3', volume: 0.6, loop: [0.5, 0.5 + (32 * 60) / 133.155] },
 };
 /** 大廳の曲：大廳の背景の時代ごとに替える（今は中世の城だけ） */
 const HALL_MUSIC = { medieval: 'hall_medieval' };
-/** 題曲の版（設定の題曲。日本・羅甸・獨逸・伊太利・西班牙・英吉利） */
-export const TITLE_VERSIONS = ['ja', 'la', 'de', 'it', 'es', 'en'];
+/** 題曲の版（設定の題曲。歷代・日本・羅甸・獨逸・伊太利・西班牙・英吉利） */
+export const TITLE_VERSIONS = ['jidai', 'ja', 'la', 'de', 'it', 'es', 'en'];
 
-export function createMusic(build = '', titleVersion = 'ja') {
+export function createMusic(build = '', titleVersion = 'jidai') {
   const tracks = {};
   let current = null;
-  let version = TITLE_VERSIONS.includes(titleVersion) ? titleVersion : 'ja';
+  let version = TITLE_VERSIONS.includes(titleVersion) ? titleVersion : 'jidai';
+  let clockAt = null;   // 題の曲の時刻を滑らかにする（<audio> の時刻は粗く進むことがあるので、前の値から経った時間で補う）
   let hallEra = 'medieval';
   const resolve = (name) => (name === 'title' ? `title_${version}` : name === 'hall' ? HALL_MUSIC[hallEra] : name);
 
@@ -155,6 +159,17 @@ export function createMusic(build = '', titleVersion = 'ja') {
       version = v;
       if (wasTitle && audio.ctx) this.play('title', { fade: 1.2 });
       else track(resolve('title'));
+    },
+    /** 題の曲が時刻表で動く版（歷代）か */
+    get titleTimeline() { return !!TRACKS[resolve('title')]?.timeline; },
+    /** 時刻表で動く題の曲の、今の時刻（秒。流れていなければ null） */
+    get titleClock() {
+      const t = tracks[current];
+      if (!t?.T.timeline || !t.el || t.el.paused) { clockAt = null; return null; }
+      const ct = t.el.currentTime, now = performance.now() / 1000;
+      if (clockAt && clockAt.ct === ct && now - clockAt.now < 0.3 && ct > 0) return ct + (now - clockAt.now);
+      if (!clockAt || clockAt.ct !== ct) clockAt = { ct, now };
+      return ct;
     },
     /** 題の曲の、今の拍（時計の刻み。鐘の鳴る拍が 8 の倍数。流れていなければ null） */
     get titleBeat() {

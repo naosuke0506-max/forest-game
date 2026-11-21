@@ -877,30 +877,43 @@ export function createTitleScene(app, config) {
   root.addChild(cam);
   const look = new pc.Vec3();
 
-  let active = false, time = 0, beatOf = null;
-  let lastStep = null, flash = 0, sinceStep = 9, waveT = 1;
+  let active = false, time = 0, beatOf = null, spinOf = null, resting = false;
+  let lastStep = null, flash = 0, sinceStep = 9, waveT = 1, rayAngle = 0;
   return {
     /** 時計の針の拍を受け取る（題の曲が流れていれば、その拍。無ければ 120 拍で自分で進む） */
     setBeatSource(fn) { beatOf = fn; },
+    /** 歯車の回る速さの倍を受け取る（題の曲「歷代」の、時代へ切り替わる前に速くなる所。無ければ 1） */
+    setSpinSource(fn) { spinOf = fn; },
+    /** 時代の背景が画面を覆っている間は描かない（v＝true で休む） */
+    rest(v) {
+      if (v === resting || !active) return;
+      resting = v;
+      root.enabled = !v;
+    },
     get active() { return active; },
     /** 題の画面の背景を出す（このカメラで描く）・しまう */
     setActive(v, otherCameras = []) {
       active = v;
+      resting = false;
       root.enabled = v;
       for (const c of otherCameras) if (c) c.enabled = !v;
     },
     update(dt) {
-      if (!active) return;
+      if (!active || resting) return;
       time += dt;
+      // 歯車の速さ：題の曲「歷代」の切り替わりの前は、刻みに合わせて速く回る（光も強める）
+      const spin = Math.max(1, spinOf?.() ?? 1);
+      const rush = Math.min(1, (spin - 1) / 12);
       // 輪：それぞれの軸で回し、傾きもゆっくり揺らす。小さな歯車は外の輪と噛み合う比で逆に回す
       for (const r of rings) {
-        r.angle = (r.angle + r.speed * dt) % 360;
+        r.angle = (r.angle + r.speed * dt * spin) % 360;
         r.spin.setLocalEulerAngles(0, r.angle, 0);
         r.pivot.setLocalEulerAngles(r.tilt[0] + Math.sin(time * 0.11 + r.wob) * 2.5, r.tilt[1] + Math.sin(time * 0.07 + r.wob * 1.7) * 3, r.tilt[2]);
       }
       for (const s of sats) s.e.setLocalEulerAngles(0, s.a0 - s.ratio * outerRing.angle, 0);
-      rayA.setLocalEulerAngles(0, 0, time * 2.2);
-      rayB.setLocalEulerAngles(0, 0, -time * 1.5 + 40);
+      rayAngle += dt * spin;
+      rayA.setLocalEulerAngles(0, 0, rayAngle * 2.2);
+      rayB.setLocalEulerAngles(0, 0, -rayAngle * 1.5 + 40);
 
       // 時計の針：曲の拍に合わせて進め、鐘の鳴る拍（8 拍ごと）で一周したら光る
       const beat = beatOf?.() ?? time * 2;
@@ -935,10 +948,10 @@ export function createTitleScene(app, config) {
       for (const m of bandMats) setGlow(m, 1.1 + flash * 1.6);
       setGlow(gold, 1 + flash * 2.2);
 
-      const pulse = 1 + 0.06 * Math.sin(time * 1.7) + 0.03 * Math.sin(time * 4.3);
+      const pulse = 1 + 0.06 * Math.sin(time * 1.7) + 0.03 * Math.sin(time * 4.3) + rush * 0.5;
       halo.setLocalScale(13 * (pulse + flash * 0.35), 13 * (pulse + flash * 0.35), 1);
       hot.setLocalScale(3.2 * (pulse + flash * 0.6), 3.2 * (pulse + flash * 0.6), 1);
-      light.light.intensity = 2.2 * pulse + flash * 2.4;
+      light.light.intensity = 2.2 * pulse + flash * 2.4 + rush * 2;
 
       for (const s of shards) {
         s.a += s.w * dt;
