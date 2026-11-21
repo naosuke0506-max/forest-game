@@ -12,6 +12,11 @@ export const SURFACES = {
   cobble: { id: 'cobblestone_floor_04', tile: 2.5, color: [0.85, 0.85, 0.82] },
   gate:   { id: 'wooden_gate', tile: 4.0, color: [0.85, 0.8, 0.75] },
   cloth:  { id: null, tile: 1.0, color: [1, 1, 1] },        // 布団・敷布・袋・鉄・ガラス（色は頂点色で）
+  // 現代の村（2026-11-21。world/roadside.js）
+  asphalt:  { id: 'asphalt_02', tile: 3.0, color: [0.6, 0.6, 0.61] },    // 舗装の道・橋の上（画像が明るいので暗めに掛ける）
+  concrete: { id: 'concrete', tile: 4.0, color: [0.9, 0.89, 0.86] },     // 橋・バス停の台
+  steel:    { id: null, tile: 1.0, color: [1, 1, 1] },                    // 鉄（ガードレール・欄干・街灯・標識の柱。色は頂点色で）
+  paint:    { id: null, tile: 1.0, color: [1, 1, 1] },                    // 道の白線（舗装の少し上。ちらつかないよう手前へずらして描く）
 };
 
 /** 形を貯めていく入れ物（質感ごと） */

@@ -156,7 +156,7 @@ async function boot() {
   });
   for (const t of trees?.trunks || []) sight.addCyl(t.x, t.z, t.r, terrain.heightAt(t.x, t.z) - 0.3, t.top);
   for (const b of props?.blockers || []) sight.addCyl(b.x, b.z, b.r, b.y0, b.y1);
-  const village = createVillage(app, CONFIG, terrain, obstacles, zones, floors, sight, plan);
+  const village = createVillage(app, CONFIG, terrain, obstacles, zones, floors, sight, plan, land);
   // 洞窟（world/cave.js。配置は world/cave-plan.js）：北西の岩山（風穴）の口から、マップの地下へ広がる。
   // 床・壁・天井の殻と、口の岩の面・口のまわりの細かい地面を作り、中の床と壁の当たり判定を登録する
   const cave = createCave(app, land, { obstacles, floors, rockTex: tex.rock, seed: CONFIG.seed, terrain });
@@ -217,7 +217,7 @@ async function boot() {
   const IDLE = { attack: false, left: false, dodge: false, use: false, moveX: 0, moveY: 0 };
 
   // 今どこか：lobby（題の画面・大廳）→ intro（マップの紹介）→ coffin（棺桶の中）→ play（試合）。教練と ?intro=0 は lobby から play へ
-  let stage = 'lobby', session = null, deepK = 0, caveK = 0;
+  let stage = 'lobby', session = null, deepK = 0, caveK = 0, lampK = 0;
   app.on('update', (dt) => {
     // 題の画面・大廳にいる間は、その 3D だけを動かす（森は描かず、動かさない。森の音も止める）
     const lobbyOn = hall.active || titleScene.active || stage === 'lobby';
@@ -235,6 +235,10 @@ async function boot() {
     groundCover?.update(dt, player.camera.getPosition(), player.camera.forward);
     props?.update(dt, player.camera.getPosition(), player.camera.forward);
     wind.update(dt);
+    // 街灯（world/roadside.js）：夕方に点き始め、夜は明るく。朝と昼は消す
+    const lampWant = timeOfDay.current === 'night' ? 1 : timeOfDay.current === 'dusk' ? 0.6 : 0;
+    lampK += (lampWant - lampK) * Math.min(1, dt * 0.8);
+    village.roadside?.update(dt, lampK);
     // 深い森の中は霧が濃く暗い（遠くは見えないので、木も近くだけ描く）
     const cp = player.camera.getPosition();
     const deep = zones.weights(cp.x, cp.z).deep;

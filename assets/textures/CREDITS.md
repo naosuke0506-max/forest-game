@@ -22,6 +22,8 @@
 | [clay_roof_tiles](https://polyhaven.com/a/clay_roof_tiles) | 瓦屋根 |
 | [cobblestone_floor_04](https://polyhaven.com/a/cobblestone_floor_04) | 村の広場の石畳 |
 | [wooden_gate](https://polyhaven.com/a/wooden_gate) | 家の扉 |
+| [asphalt_02](https://polyhaven.com/a/asphalt_02) | 舗装の道・橋の上（2026-11-21。現代の村。`js/world/roadside.js`） |
+| [concrete](https://polyhaven.com/a/concrete) | 橋・バス停の台（2026-11-21） |
 
 どれも Poly Haven（CC0）。取り込んだときに MD5 を確かめた。色は 1024（石）か 512、凹凸と陰影・粗さは 512 の WebP にした。
 

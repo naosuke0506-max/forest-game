@@ -198,6 +198,7 @@ assets/hall/             大廳の小物（Poly Haven の模型を軽くした G
 assets/ui/gate/          刻の門の絵（左の扉・右の扉・かんぬき。Blender で描いた WebP。出典は CREDITS.md）
 tools/fetch_polyhaven_hall.py, tools/process_hall_props.mjs  大廳の質感と小物を取り込んで軽くする道具（開発用）
 tools/fetch_polyhaven_models.py  Poly Haven の模型を取り込む道具（開発用）
+tools/fetch_polyhaven_modern.py 現代の村の質感（アスファルト・コンクリート）を取り込む道具（開発用）
 tools/music/build_title.py 題の曲「歷代」を、時代の曲のサビと切り替えの音で組み立て、時刻表を書き出す道具（開発用。beats.py・sfxinfo.py・mix_genshi.py と使う。手順は頭の注釈）
 tools/process_props.mjs  森の小物をゲーム用に軽くする道具（開発用）
 tools/process_tripo_props.mjs, tools/props_blender/  Tripo の小物を Blender で軽くして色を焼き付け直す道具（開発用）
@@ -241,6 +242,7 @@ js/
   world/arrow-holes.js   鷹目の貫く矢が通り抜けた家の壁に、矢の大きさの穴の絵を貼る
   render/title-scene.js  題の画面の背景（3D）：星空に三重の青銅の「時の輪」（歯車・目盛りの環・内歯車）が回り、光る文字盤と金の針（曲の拍で進む）・光る核・岩のかけら・火の粉。絵はその場で作る
   render/title-show.js   題の曲「歷代」の時刻から、時の輪の針・歯車の速さ・時代の背景の出し入れを決める（計算だけ）
+  world/roadside.js      現代の村の道まわり（舗装の道と白線・コンクリートの橋・ガードレール・電柱と電線・夜に点く街灯・道路標識・バス停）
   render/era-backdrop.js 題の画面の時代の背景（原始・中世・近世・現代・未来の 2D の絵。canvas にその場で描く）
   render/hall.js         大廳の 3D：中世の城の広間と、選んだ人物（森とは別の層に作り、大廳のカメラだけが描く）。光・カメラ・仕上げ
   render/intro.js        マップの紹介（開戰の後、戦場の特徴のある 6 か所を順に映すカメラと、名前・説明・「略」）
@@ -263,7 +265,7 @@ js/
                          中の床・壁・見通し・bot の道順も、この升目から。PlayCanvas に依存しない
   world/cave.js          洞窟の見た目（床・壁・天井の殻・鍾乳石・光る結晶・口の岩の面・口のまわりの細かい地面）と、床・壁の登録
   world/villages.js      村 3 つ・道・橋の配置（家の位置と向き・道の路面の高さをならす・家の下を平らにする所・井戸と広場・畑・道の升目）。PlayCanvas に依存しない
-  world/castle.js        村の形（家・井戸・広場・畑の柵・橋。Poly Haven の石・しっくい・木・わら・瓦・石畳の質感を貼る。当たり判定・歩ける床も登録）
+  world/castle.js        村の形（家・井戸・広場・畑の柵。橋と道まわりは world/roadside.js。Poly Haven の石・しっくい・木・わら・瓦・石畳の質感を貼る。当たり判定・歩ける床も登録）
   world/house-builder.js 家の作り：大きさ・一階建て / 二階建て・壁と開口・床・階段（踊り場）・手すり・屋根と妻壁・当たり判定・隠れ場所への道順
   world/house-parts.js   家の外の細部（凹凸）：木組み・張り出し・隅石・窓（台・桟・鎧戸・花箱）・扉（枠・庇）・厚い屋根・妻壁の木組み
   world/furniture.js     家具：ベッド・タンス・机と腰掛け・長持・棚・袋・暖炉と煙突（ベッドの下とタンスの中は隠れ場所。扉と掛け布は動く部品として記録）
