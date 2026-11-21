@@ -261,6 +261,65 @@ export function planVillages(seed, land, { size, playRadius }) {
     for (const r of roads) for (const p of r.pts) if (Math.abs(p[0] - x) < R && Math.abs(p[1] - z) < R) out.push({ x: p[0], z: p[1], w: r.w });
     return out;
   };
+  // ---- 3a. 教会とガソリンスタンドの場所（② 村の暮らしの物。2026-11-21。形は world/landmarks.js）----
+  //   家の並びを変えないよう、別の乱数を使う。家はこの 2 つを避けて建つ
+  const rs = createRandom(seed + 4400);
+  const specials = [];
+  const STATION = { w: 26, d: 19 };   // ガソリンスタンドの敷地（道に沿った幅・奥行き）
+  const CHURCH = { w: 11, d: 22 };    // 教会の敷地（塔・身廊・前の段）
+  const halfPave = (r) => (r.lane ? 1.6 : r.w >= 2 ? 2.2 : 2.0);
+  const nearBridge = (x, z, m) => bridges.some((b) => {
+    const dx = b.bx - b.ax, dz = b.bz - b.az, t = Math.min(1, Math.max(0, ((x - b.ax) * dx + (z - b.az) * dz) / (dx * dx + dz * dz)));
+    return Math.hypot(b.ax + dx * t - x, b.az + dz * t - z) < m;
+  });
+  /** 敷地を道の横に置けるか：水・洞窟・ほかの道・急な坂を見る。置けるなら坂の大きさを返す */
+  const siteFits = (o, own) => {
+    const cs = corners(o, 0.8);
+    if ([...cs, [o.x, o.z]].some(([x, z]) => land.wet(x, z) > 0.02 || (land.cave && land.cave.area(x, z) > 0))) return null;
+    if (Math.hypot(o.x, o.z) > playRadius - 16 - Math.max(o.w, o.d) / 2) return null;
+    for (const r of roads) for (const [x, z] of r.pts) {
+      if (Math.abs(x - o.x) > 30 || Math.abs(z - o.z) > 30) continue;
+      if (rectDist(o, x, z) < (r === own ? 0.4 : r.w + 1.5)) return null;
+    }
+    if (specials.some((q) => overlap(q, o, 6)) || houses.some((q) => overlap(q, o, 3))) return null;
+    const hs = cs.map(([x, z]) => land.heightAt(x, z));
+    return Math.max(...hs) - Math.min(...hs);
+  };
+  /** 道の点 i の横（side）に、道を向いた敷地を作る */
+  const siteAt = (r, i, side, size, gap) => {
+    const [px, pz] = r.pts[i], [qx, qz] = r.pts[i + 1], tl = Math.hypot(qx - px, qz - pz) || 1;
+    const nx = -(qz - pz) / tl * side, nz = (qx - px) / tl * side;
+    const off = halfPave(r) + gap + size.d / 2;
+    const o = { x: px + nx * off, z: pz + nz * off, w: size.w, d: size.d, yaw: (Math.atan2(-nx, -nz) * 180) / Math.PI };
+    // 敷地の高さ：前の縁（道の側）の、道をならした後の高さ（道からそのまま入れる）
+    const fx = px + nx * (halfPave(r) + gap), fz = pz + nz * (halfPave(r) + gap);
+    o.y = gradeHeight(fx, fz, land.heightAt(fx, fz));
+    return o;
+  };
+  // ガソリンスタンド：村の外の、まっすぐな舗装の道の横（分かれ道・橋から離す）
+  {
+    let best = null;
+    for (const r of roads) {
+      if (!r.paved || r.lane) continue;
+      for (let i = 5; i < r.pts.length - 6; i += 2) {
+        const [px, pz] = r.pts[i];
+        if (VILLAGES.some((v) => Math.hypot(px - v.x, pz - v.z) < v.r + 14)) continue;
+        if (nearBridge(px, pz, 28)) continue;
+        if (roads.some((o) => o !== r && o.pts.some((q) => Math.hypot(q[0] - px, q[1] - pz) < 26))) continue;
+        const [ax, az] = r.pts[i - 5], [bx, bz] = r.pts[i + 5], [cx, cz] = r.pts[i + 1];
+        const tl = Math.hypot(cx - px, cz - pz) || 1, L = Math.hypot(bx - ax, bz - az);
+        if (Math.abs(((bx - ax) * (cx - px) + (bz - az) * (cz - pz)) / (tl * L)) < 0.985) continue;   // 曲がっている所は避ける
+        for (const side of [-1, 1]) {
+          const o = siteAt(r, i, side, STATION, 0.6);
+          const slope = siteFits(o, r);
+          if (slope === null || slope > 2.4) continue;
+          const score = slope + rs.next() * 0.8;
+          if (!best || score < best.score) best = { o, score };
+        }
+      }
+    }
+    if (best) specials.push({ kind: 'station', ...best.o });
+  }
   for (const v of VILLAGES) {
     // 井戸と広場：村の真ん中に一番近い道の点の横
     let c = null;
@@ -276,6 +335,28 @@ export function planVillages(seed, land, { size, playRadius }) {
       wells.push({ village: v.id, x: px + nx * s * (c.r.w + 3.2), z: pz + nz * s * (c.r.w + 3.2), plaza: { x: px + nx * s * 1.5, z: pz + nz * s * 1.5, r: 6.5 } });
     }
     const well = wells[wells.length - 1];
+    // 教会：川邑（一番大きい村）の、広場に近い道の横
+    if (v.id === 'river') {
+      let best = null;
+      for (const r of roads) {
+        if (r.lane && r.village !== v.id) continue;
+        for (let i = 2; i < r.pts.length - 2; i++) {
+          const [px, pz] = r.pts[i];
+          const dist = Math.hypot(px - v.x, pz - v.z);
+          if (dist > v.r * 0.8) continue;
+          for (const side of [-1, 1]) {
+            const o = siteAt(r, i, side, CHURCH, 2.6);
+            if (Math.hypot(o.x - v.x, o.z - v.z) > v.r + 4) continue;
+            if (rectDist(o, well.x, well.z) < 4 || rectDist(o, well.plaza.x, well.plaza.z) < well.plaza.r + 1.5 || nearBridge(o.x, o.z, 15 + o.d / 2)) continue;
+            const slope = siteFits(o, r);
+            if (slope === null || slope > 2.2) continue;
+            const score = slope * 1.5 + Math.hypot(px - well.plaza.x, pz - well.plaza.z) * 0.05 + rs.next() * 0.6;
+            if (!best || score < best.score) best = { o, score };
+          }
+        }
+      }
+      if (best) specials.push({ kind: 'church', village: v.id, ...best.o });
+    }
     const mine = [];
     const tryHouse = (px, pz, tx, tz, side, rw) => {
       const two = rnd.next() < 0.42;
@@ -294,6 +375,7 @@ export function planVillages(seed, land, { size, playRadius }) {
       // 網が斜めにつないで、家の角が浮いたり、地面が家の中に入ったりする）
       const gapTo = (o) => { const dy = Math.abs(o.y0 - h.y0); return dy > 0.25 ? Math.max(2.2, Math.min(9, 2.6 + dy * 2.6)) : 2.2; };
       if (houses.some((o) => overlap(o, h, gapTo(o)))) return false;
+      if (specials.some((o) => overlap(o, h, 3))) return false;   // 教会・ガソリンスタンドの敷地
       if (rectDist(h, well.x, well.z) < 2.8 || rectDist(h, well.plaza.x, well.plaza.z) < well.plaza.r - 1) return false;
       for (const q of roadNear(h.x, h.z, 14)) if (rectDist(h, q.x, q.z) < q.w + 0.7) return false;
       // 橋（端から端までの線）から 15 m は建てない（橋が長くなったので、真ん中からの距離ではなく線からの距離で見る。
@@ -341,7 +423,7 @@ export function planVillages(seed, land, { size, playRadius }) {
       const a = rnd.next() * Math.PI * 2, dist = v.r + 4 + rnd.next() * 14;
       const f = { x: v.x + Math.cos(a) * dist, z: v.z + Math.sin(a) * dist, w: 18 + rnd.next() * 8, d: 12 + rnd.next() * 6, yaw: rnd.next() * 180 };
       if (Math.hypot(f.x, f.z) > playRadius - 16) continue;
-      if (houses.some((o) => overlap(o, f, 3)) || fields.some((o) => overlap(o, f, 4))) continue;
+      if (houses.some((o) => overlap(o, f, 3)) || fields.some((o) => overlap(o, f, 4)) || specials.some((o) => overlap(o, f, 5))) continue;
       if (roadNear(f.x, f.z, 24).some((q) => rectDist(f, q.x, q.z) < q.w + 1.2)) continue;
       if (corners(f, 1).some(([x, z]) => land.wet(x, z) > 0)) continue;
       fields.push(f);
@@ -352,6 +434,7 @@ export function planVillages(seed, land, { size, playRadius }) {
   const pads = [
     ...houses.map((h) => ({ x: h.x, z: h.z, w: h.w + 1.2, d: h.d + 2.2, yaw: h.yaw, y: h.y0, fade: 3.5 })),
     ...wells.map((w) => ({ x: w.plaza.x, z: w.plaza.z, w: w.plaza.r * 2, d: w.plaza.r * 2, yaw: 0, y: gradeHeight(w.plaza.x, w.plaza.z, land.heightAt(w.plaza.x, w.plaza.z)), fade: 4 })),
+    ...specials.map((o) => ({ x: o.x, z: o.z, w: o.w + 4, d: o.d + 2, yaw: o.yaw, y: o.y, fade: 4.5 })),   // 縁の外 2 m まで平らに（地面の網が敷地の縁で下がらないように）
   ];
   const PC = 8, padGrid = new Map();
   pads.forEach((p, i) => {
@@ -407,6 +490,7 @@ export function planVillages(seed, land, { size, playRadius }) {
   }
   for (const h of houses) stamp(areaG, h.x, h.z, Math.max(h.w, h.d) * 0.5 + 4, Math.max(h.w, h.d) * 0.5 + 12);
   for (const w of wells) stamp(areaG, w.plaza.x, w.plaza.z, w.plaza.r + 2, w.plaza.r + 10);
+  for (const o of specials) for (const [x, z] of [[o.x, o.z], ...corners(o, -3)]) stamp(areaG, x, z, Math.min(o.w, o.d) * 0.5 + 2, Math.min(o.w, o.d) * 0.5 + 10);
   for (const f of fields) for (const [x, z] of [[f.x, f.z], ...corners(f, -2)]) stamp(areaG, x, z, 6, 12);
   const sample = (G, x, z) => {
     const fx = (x + half) / GRID, fz = (z + half) / GRID;
@@ -423,6 +507,7 @@ export function planVillages(seed, land, { size, playRadius }) {
 
   return {
     villages: VILLAGES, roads, bridges, houses, wells, fields, pads,
+    specials,   // 教会（church）・ガソリンスタンド（station）：{ kind, x, z, w, d, yaw, y }。前（+z）が道を向く
     padHeight,
     /** 道の上か（1 = 真ん中、0 = 道ではない） */
     pathAt: (x, z) => sample(pathG, x, z),

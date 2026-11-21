@@ -17,6 +17,7 @@ export const SURFACES = {
   concrete: { id: 'concrete', tile: 4.0, color: [0.9, 0.89, 0.86] },     // 橋・バス停の台
   steel:    { id: null, tile: 1.0, color: [1, 1, 1] },                    // 鉄（ガードレール・欄干・街灯・標識の柱。色は頂点色で）
   paint:    { id: null, tile: 1.0, color: [1, 1, 1] },                    // 道の白線（舗装の少し上。ちらつかないよう手前へずらして描く）
+  slab:     { id: 'concrete', tile: 4.0, color: [0.8, 0.79, 0.76] },     // ガソリンスタンドの敷地（地面のすぐ上の板。ちらつかないよう手前へずらして描く）
 };
 
 /** 形を貯めていく入れ物（質感ごと） */

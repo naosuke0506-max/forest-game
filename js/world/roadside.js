@@ -56,8 +56,8 @@ function signAtlas() {
 const SIGN = { v50: 0, v70: 1, curveR: 2, curveL: 3, deer: 4, yield: 5, bus: 6, back: 7 };
 
 /** 光の玉の絵（街灯の光・地面に落ちる光の輪。白。色は頂点の色で付ける）。加算で重ねるので黒地にする
- *  （透明にすると、薄い所の色が白のまま残り、四角や白い円がくっきり出た。2026-11-21） */
-function glowTexture(device) {
+ *  （透明にすると、薄い所の色が白のまま残り、四角や白い円がくっきり出た。2026-11-21）。ガソリンスタンドの屋根の灯（world/landmarks.js）も使う */
+export function glowTexture(device) {
   const S = 128, c = document.createElement('canvas');
   c.width = S; c.height = S;
   const g = c.getContext('2d');
@@ -84,7 +84,8 @@ export function buildRoadside(B, o) {
   const footprints = [];
   const plazas = plan.wells.map((w) => w.plaza);
   const inPlaza = (x, z, pad = 0) => plazas.some((q) => Math.hypot(x - q.x, z - q.z) < q.r + pad);
-  const nearHouse = (x, z, pad) => plan.houses.some((h) => {
+  // 家と、教会・ガソリンスタンドの敷地（plan.specials。world/landmarks.js）の近くか
+  const nearHouse = (x, z, pad) => [...plan.houses, ...(plan.specials || [])].some((h) => {
     const a = (h.yaw * Math.PI) / 180, dx = x - h.x, dz = z - h.z;
     const lx = dx * Math.cos(a) - dz * Math.sin(a), lz = dx * Math.sin(a) + dz * Math.cos(a);
     return Math.abs(lx) < h.w / 2 + pad && Math.abs(lz) < h.d / 2 + pad;
