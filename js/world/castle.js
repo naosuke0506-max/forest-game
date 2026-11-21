@@ -16,6 +16,9 @@ import { well, barrel, bench, hay, woodpile } from './village-props.js';
 import { createFurnitureMotion } from '../render/furniture-motion.js';
 import { createDoors } from './doors.js';
 import { buildRoadside } from './roadside.js';
+import { buildLandmarks } from './landmarks.js';
+import { placeVillageLife } from './village-life.js';
+import { createVillageItems } from './village-items.js';
 
 /**
  * 木の柵（杭と 2 本の横木）を a から b へ。杭の間は約 2.4m
@@ -66,7 +69,9 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
     const ps = rndProp.next() < 0.5 ? -1 : 1;   // 扉のどちら側に置くか
     const put = (lx, lz, r) => { const q = F.at(lx, 0, lz); solid(q[0], q[2], r); return q; };
     const k = rndProp.next();
+    const used = { front: 0, side: 0 };   // 前からある小物が使った所（現代の小物 world/village-life.js が避ける）
     if (k < 0.4) {
+      used.front = ps;
       // 扉の横に樽 1〜2 つ
       const q = put(ps * (w / 2 - 0.45), d / 2 + 0.55, 0.36);
       const by = terrain.heightAt(q[0], q[2]);
@@ -76,6 +81,7 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
         barrel(B, q2[0], by2 - 0.02, q2[2], 0.27, 0.74); sight?.addCyl(q2[0], q2[2], 0.28, by2 - 0.02, by2 + 0.72);
       }
     } else if (k < 0.75 && w >= 5.4) {
+      used.front = ps;
       // 壁に沿った長椅子
       const lx = ps * (w / 2 - 1.15);
       for (const dx of [-0.45, 0.45]) put(lx + dx, d / 2 + 0.42, 0.28);
@@ -85,6 +91,7 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
     // 横の壁に薪の山（屋根付き）
     if (rndProp.next() < 0.45) {
       const ss = rndProp.next() < 0.5 ? -1 : 1, z0 = -d / 2 + 0.6, z1 = Math.min(d / 2 - 1.0, z0 + 1.6 + rndProp.next() * 0.8);
+      used.side = ss;
       for (let lz = z0 + 0.3; lz <= z1 - 0.2; lz += 0.55) put(ss * (w / 2 + 0.6), lz, 0.42);
       const gp = F.at(ss * (w / 2 + 0.5), 0, (z0 + z1) / 2);
       const wy = terrain.heightAt(gp[0], gp[2]);
@@ -99,14 +106,16 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
       hay(B, frame(q[0], terrain.heightAt(q[0], q[2]) - 0.03, q[2], yaw), yaw, 0, 0, rndProp);
       sight?.addYawBox(q[0], terrain.heightAt(q[0], q[2]) - 0.03, q[2], 1.6, 0.5, 0.46, yaw);
     }
+    return used;
   }
+  const usedList = [];
   for (const h of plan?.houses || []) {
     const roof = rnd.next() < 0.55 ? 'thatch' : 'tiles';
     const y0 = h.y0;
     buildHouse(B, { cx: h.x, cz: h.z, y0, yaw: h.yaw, w: h.w, d: h.d, stories: h.stories, roof, wall: walls[i++ % walls.length], rnd, deco: createRandom(config.seed + 1000 + houses.length) }, reg);
     houses.push({ x: h.x, z: h.z, w: h.w, d: h.d, yaw: h.yaw, y0, stories: h.stories });   // y0：地面の高さ（鷹目の矢の穴。world/arrow-holes.js）
     footprints.push({ type: 'rect', x: h.x, z: h.z, w: h.w, d: h.d, yaw: h.yaw, roof });
-    houseProps(h.x, y0, h.z, h.yaw, h.w, h.d);
+    usedList.push(houseProps(h.x, y0, h.z, h.yaw, h.w, h.d));
   }
   /** 家の中か（家の中の音の響き・bot の判断に使う） */
   const insideHouse = (x, z) => houses.some((hh) => {
@@ -160,6 +169,13 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
   const roadside = plan ? buildRoadside(B, { app, config, terrain, plan, land, zones, obstacles, floors, sight, solid, solidLine }) : null;
   if (roadside) footprints.push(...roadside.footprints);
 
+  // 現代の村の暮らしの物（2026-11-21。利用者が選んだ ② 村の暮らしの物）：教会・ガソリンスタンド（world/landmarks.js）と、
+  //   家のまわりの小物・車・自転車・畑のトラクター（world/village-life.js）。模型は world/village-items.js が裏で読み込んで描く
+  const items = createVillageItems(app, config);
+  const landmarks = plan ? buildLandmarks(B, { app, plan, terrain, items, solid, solidLine, sight, covers }) : null;
+  if (landmarks) footprints.push(...landmarks.footprints);
+  const life = plan ? placeVillageLife({ plan, terrain, land, obstacles, sight, items, solid, seed: config.seed, used: usedList, avoid: plan.specials || [] }) : null;
+
   // ---- 形にして描く（質感ごとに 1 つ） ----
   const materials = {};
   let tris = 0;
@@ -175,7 +191,7 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
     m.gloss = 0.25;
     m.cull = pc.CULLFACE_NONE;   // 屋根は下からも見え、壁は両側から見えるので両面を描く
     if (surf === 'steel') { m.metalness = 0.55; m.gloss = 0.5; }            // 亜鉛めっきの鉄
-    if (surf === 'asphalt' || surf === 'paint') { m.depthBias = -1; m.depthBiasSlope = -3; }   // 地面の上に貼る：ちらつかないよう手前へ
+    if (surf === 'asphalt' || surf === 'paint' || surf === 'slab') { m.depthBias = -1; m.depthBiasSlope = -3; }   // 地面の上に貼る：ちらつかないよう手前へ
     if (surf === 'paint') m.gloss = 0.35;
     m.update();
     materials[surf] = m;
@@ -190,6 +206,9 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
   // 家の扉（開け閉めできる。どの家にも 1 枚）
   const doors = createDoors(app, doorList, { material: materials.gate });
 
+  // 小物と車の模型は裏で読み込む（届くまでは当たり判定だけ）
+  items.load();
+
   // 質感の画像は裏で読み込み、届いたら貼る（それまでは色だけ）
   for (const [surf, m] of Object.entries(materials)) {
     if (!SURFACES[surf].id) continue;   // 画像のない質感（布団・袋の布）は色だけ
@@ -202,5 +221,5 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
       m.update();
     });
   }
-  return { houses, triangles: tris, footprints, hides, covers, insideHouse, furniture, doors, materials, roadside };   // roadside：街灯を夜に点ける（update）   // materials：村の質感（棺桶 render/coffin.js が木の質感を使う）
+  return { houses, triangles: tris, footprints, hides, covers, insideHouse, furniture, doors, materials, roadside, landmarks, items, life };   // roadside：街灯を夜に点ける（update）   // materials：村の質感（棺桶 render/coffin.js が木の質感を使う）
 }

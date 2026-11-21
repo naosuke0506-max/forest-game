@@ -198,7 +198,10 @@ assets/hall/             大廳の小物（Poly Haven の模型を軽くした G
 assets/ui/gate/          刻の門の絵（左の扉・右の扉・かんぬき。Blender で描いた WebP。出典は CREDITS.md）
 tools/fetch_polyhaven_hall.py, tools/process_hall_props.mjs  大廳の質感と小物を取り込んで軽くする道具（開発用）
 tools/fetch_polyhaven_models.py  Poly Haven の模型を取り込む道具（開発用）
-tools/fetch_polyhaven_modern.py 現代の村の質感（アスファルト・コンクリート）を取り込む道具（開発用）
+tools/fetch_polyhaven_modern.py 現代の村の質感（アスファルト・コンクリート）と小物の模型を取り込む道具（開発用）
+assets/village/          現代の村の小物（Poly Haven の模型を軽くした GLB）と、乗り物と給油機（vehicles.glb。Blender で作った）。出典は CREDITS.md
+tools/process_village_props.mjs  村の小物を軽くする道具（開発用）
+tools/make_vehicles.py, tools/process_vehicles.mjs  車 3 種・トラクター・自転車・給油機を Blender で作り、軽くする道具（開発用）
 tools/music/build_title.py 題の曲「歷代」を、時代の曲のサビと切り替えの音で組み立て、時刻表を書き出す道具（開発用。beats.py・sfxinfo.py・mix_genshi.py と使う。手順は頭の注釈）
 tools/process_props.mjs  森の小物をゲーム用に軽くする道具（開発用）
 tools/process_tripo_props.mjs, tools/props_blender/  Tripo の小物を Blender で軽くして色を焼き付け直す道具（開発用）
@@ -243,6 +246,9 @@ js/
   render/title-scene.js  題の画面の背景（3D）：星空に三重の青銅の「時の輪」（歯車・目盛りの環・内歯車）が回り、光る文字盤と金の針（曲の拍で進む）・光る核・岩のかけら・火の粉。絵はその場で作る
   render/title-show.js   題の曲「歷代」の時刻から、時の輪の針・歯車の速さ・時代の背景の出し入れを決める（計算だけ）
   world/roadside.js      現代の村の道まわり（舗装の道と白線・コンクリートの橋・ガードレール・電柱と電線・夜に点く街灯・道路標識・バス停）
+  world/landmarks.js     村の目印の建物（川邑の教会・道ばたのガソリンスタンド。夜に点く屋根の灯）。場所は world/villages.js の specials
+  world/village-life.js  村の暮らしの物を置く所を決める（家のまわりの小物・止めた車・自転車・畑のトラクター。当たり判定と bot の目）
+  world/village-items.js 村の小物（近くだけインスタンシングで描く）と乗り物（場所ごとに 2 つの形へ焼き込む）を読み込んで描く
   render/era-backdrop.js 題の画面の時代の背景（原始・中世・近世・現代・未来の 2D の絵。canvas にその場で描く）
   render/hall.js         大廳の 3D：中世の城の広間と、選んだ人物（森とは別の層に作り、大廳のカメラだけが描く）。光・カメラ・仕上げ
   render/intro.js        マップの紹介（開戰の後、戦場の特徴のある 6 か所を順に映すカメラと、名前・説明・「略」）
@@ -334,6 +340,17 @@ blender -b --python tools/make_gate.py -- <質感のフォルダ> <出力先フ�
 
 ```
 blender -b --python tools/make_talisman.py -- assets/weapons/talisman.glb
+```
+
+## 村の乗り物と給油機を作り直す（開発用）
+
+車 3 種（小さい車・ワゴン・荷台のある車）・トラクター・自転車・給油機を、Blender 4.2 で形から作ります（写真や画像は使わない）。
+1 つの GLB に部品の名前（car_small など）と材質の名前（paint・glass など）で書き出し、軽くしてから `assets/village/vehicles.glb` に置きます。
+見本の絵のフォルダを渡すと、並べて斜め前と斜め後ろから撮った絵も出ます。
+
+```
+blender -b --python tools/make_vehicles.py -- <作業用の場所>/vehicles.glb [見本の絵のフォルダ]
+cd tools && npm ci && node process_vehicles.mjs <作業用の場所>/vehicles.glb ../assets/village/vehicles.glb
 ```
 
 ## キャラの模型を作り直す（開発用）

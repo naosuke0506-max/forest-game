@@ -239,6 +239,8 @@ async function boot() {
     const lampWant = timeOfDay.current === 'night' ? 1 : timeOfDay.current === 'dusk' ? 0.6 : 0;
     lampK += (lampWant - lampK) * Math.min(1, dt * 0.8);
     village.roadside?.update(dt, lampK);
+    village.landmarks?.update(dt, lampK);   // ガソリンスタンドの屋根の灯（world/landmarks.js）
+    { const cp = player.camera.getPosition(); village.items?.update(dt, cp.x, cp.z); }   // 村の小物：近くの物だけ描く（world/village-items.js）
     // 深い森の中は霧が濃く暗い（遠くは見えないので、木も近くだけ描く）
     const cp = player.camera.getPosition();
     const deep = zones.weights(cp.x, cp.z).deep;

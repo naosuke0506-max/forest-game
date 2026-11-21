@@ -138,6 +138,13 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       fctx.fillStyle = '#7a5434'; fctx.fillRect((-b.w / 2) * kD, (-b.d / 2) * kD, b.w * kD, b.d * kD);
       fctx.strokeStyle = 'rgba(40, 26, 14, .9)'; fctx.lineWidth = 1; fctx.strokeRect((-b.w / 2) * kD, (-b.d / 2) * kD, b.w * kD, b.d * kD);
       fctx.restore();
+    } else if (b.type === 'slab') {
+      // コンクリートの敷地・ガソリンスタンドの屋根（2026-11-21）：灰色の四角
+      fctx.save(); fctx.translate(bx, by); fctx.rotate((-b.yaw * Math.PI) / 180);
+      fctx.fillStyle = b.shade === 'canopy' ? '#d8d8d2' : '#a7a49c';
+      fctx.fillRect((-b.w / 2) * kD, (-b.d / 2) * kD, b.w * kD, b.d * kD);
+      if (b.shade === 'canopy') { fctx.strokeStyle = 'rgba(30, 90, 50, .9)'; fctx.lineWidth = 1.4; fctx.strokeRect((-b.w / 2) * kD, (-b.d / 2) * kD, b.w * kD, b.d * kD); }
+      fctx.restore();
     } else if (b.type === 'circle') {
       fctx.fillStyle = '#8c8478';
       fctx.beginPath(); fctx.arc(bx, by, b.r * kD, 0, Math.PI * 2); fctx.fill();
@@ -145,7 +152,7 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       fctx.save(); fctx.translate(bx, by); fctx.rotate((-b.yaw * Math.PI) / 180);
       const w = b.w * kD, d = b.d * kD;
       fctx.fillStyle = 'rgba(0,0,0,.35)'; fctx.fillRect(-w / 2 + 2, -d / 2 + 2, w, d);           // 影
-      fctx.fillStyle = b.roof === 'thatch' ? '#c4a062' : '#a9543a';
+      fctx.fillStyle = b.roof === 'thatch' ? '#c4a062' : b.roof === 'flat' ? '#6f6d68' : '#a9543a';   // flat：平らな屋根（ガソリンスタンドの売店）
       fctx.fillRect(-w / 2, -d / 2, w, d);
       fctx.fillStyle = 'rgba(255,255,255,.18)'; fctx.fillRect(-w / 2, -d / 2, w / 2, d);          // 屋根の日の当たる側
       fctx.strokeStyle = 'rgba(40, 26, 14, .9)'; fctx.lineWidth = 1; fctx.strokeRect(-w / 2, -d / 2, w, d);
