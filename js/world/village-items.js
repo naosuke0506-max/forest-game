@@ -165,6 +165,7 @@ export function createVillageItems(app, config) {
           if (dx * dx + dz * dz < lim) g.data.set(p.mat.data, (n++) * 16);
         }
         g.mi.instancingCount = n;
+        g.e.enabled = n > 0;   // 1 つも描かない物は、描画命令も出さない
         if (n) g.vb.unlock(0, n * 64);
         tris += n * g.tris;
       }
@@ -204,11 +205,11 @@ export function createVillageItems(app, config) {
         const e = new pc.Entity(`village-item-${id}`);
         e.addComponent('render', { meshInstances: [mi], castShadows: !!info.shadow, receiveShadows: true });
         app.root.addChild(e);
-        // 大きな物（覆いの車・食卓）は遠くまで描く
-        const reach = info.r > 0.8 ? 1.8 : 1;
+        // 大きな物（覆いの車・食卓）は遠くまで、家の中の物は近くだけ描く
+        const reach = info.inside ? 0.45 : info.r > 0.8 ? 1.8 : 1;
         // 置き場所の行列 × 部品の行列
         const mats = list.map((p) => ({ x: p.x, z: p.z, mat: new pc.Mat4().mul2(p.mat, part.local) }));
-        groups.push({ id, list: mats, data, vb, mi, reach, tris: part.mesh.primitive[0].count / 3 });
+        groups.push({ id, list: mats, data, vb, mi, e, reach, tris: part.mesh.primitive[0].count / 3 });
       }
       stats.props += list.length;
     }));

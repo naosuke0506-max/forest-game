@@ -16,7 +16,11 @@ TEXTURES = ['asphalt_02', 'concrete']
 # 村の小物（② 村の暮らしの物）：ゴミ箱・ゴミ袋・エアコンの室外機・プロパンガスのボンベ・ピクニックテーブル・プラスチックの椅子・
 # プランター・古タイヤ・燃料の携行缶・覆いの掛かった車（植木鉢と配電箱は、三角形が減りきらず重いので外した）
 MODELS = ['metal_trash_can', 'trashbag', 'exterior_aircon_unit', 'propane_tank', 'wooden_picnic_table',
-          'plastic_monobloc_chair_01', 'planter_box_01', 'old_tyre', 'metal_jerrycan', 'covered_car']
+          'plastic_monobloc_chair_01', 'planter_box_01', 'old_tyre', 'metal_jerrycan', 'covered_car',
+          # 家の中（③ 家の中と人が消えた直後。2026-11-21）：電気コンロ・掛け時計・額 2 つ・白い椅子・一人掛けの椅子・吊り灯・
+          # りんご・クロワッサン・水差し・花瓶（ソファ・テレビ・冷蔵庫・ベッドなどは今ふうの物が無いので、コードで作る）
+          'electric_stove', 'wall_clock', 'hanging_picture_frame_02', 'fancy_picture_frame_01', 'painted_wooden_chair_01',
+          'mid_century_lounge_chair', 'modern_ceiling_lamp_01', 'food_apple_01', 'croissant', 'jug_01', 'ceramic_vase_01']
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets', 'textures')
 

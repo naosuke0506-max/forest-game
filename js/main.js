@@ -240,6 +240,7 @@ async function boot() {
     lampK += (lampWant - lampK) * Math.min(1, dt * 0.8);
     village.roadside?.update(dt, lampK);
     village.landmarks?.update(dt, lampK);   // ガソリンスタンドの屋根の灯（world/landmarks.js）
+    { const cp = player.camera.getPosition(); village.interior?.update(dt, lampK, cp.x, cp.y, cp.z); }   // 家の中の点いたままの灯り・テレビ（world/house-life.js）
     { const cp = player.camera.getPosition(); village.items?.update(dt, cp.x, cp.z); }   // 村の小物：近くの物だけ描く（world/village-items.js）
     // 深い森の中は霧が濃く暗い（遠くは見えないので、木も近くだけ描く）
     const cp = player.camera.getPosition();

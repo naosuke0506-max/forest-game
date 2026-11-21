@@ -19,6 +19,7 @@ import { buildRoadside } from './roadside.js';
 import { buildLandmarks } from './landmarks.js';
 import { placeVillageLife } from './village-life.js';
 import { createVillageItems } from './village-items.js';
+import { createHouseLife } from './house-life.js';
 
 /**
  * 木の柵（杭と 2 本の横木）を a から b へ。杭の間は約 2.4m
@@ -59,7 +60,10 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
   const hides = [];   // 隠れ場所（ベッドの下・タンスの中）
   const covers = [];  // 壁裏隠れの線（家の外の壁と中の壁。game/cover.js）
   const doorList = [];   // 家の扉（開け閉めできる。world/doors.js）
-  const reg = { floors, solid, hides, sight, covers, doors: doorList };
+  // 小物と乗り物の模型（Poly Haven・Blender。world/village-items.js）。家の中の椅子・電気コンロ・額なども置くので、家より先に作る
+  const items = createVillageItems(app, config);
+  const houseLife = [];   // 家ごとの「人が消えた直後」の記録（灯り・テレビ・熾火・窓。world/house-life.js）
+  const reg = { floors, solid, hides, sight, covers, doors: doorList, items, houseLife };
   const walls = [1, [1, 0.94, 0.84], [0.98, 0.9, 0.86], [0.92, 0.92, 0.9], [1, 0.97, 0.88]];   // しっくいの色（白・黄土・薄紅・灰・生成り）
   let i = 0;
   // 家の周りの小物（樽・長椅子・薪の山・干し草）。家の並びを変えないよう、別の乱数で選ぶ
@@ -171,7 +175,6 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
 
   // 現代の村の暮らしの物（2026-11-21。利用者が選んだ ② 村の暮らしの物）：教会・ガソリンスタンド（world/landmarks.js）と、
   //   家のまわりの小物・車・自転車・畑のトラクター（world/village-life.js）。模型は world/village-items.js が裏で読み込んで描く
-  const items = createVillageItems(app, config);
   const landmarks = plan ? buildLandmarks(B, { app, plan, terrain, items, solid, solidLine, sight, covers }) : null;
   if (landmarks) footprints.push(...landmarks.footprints);
   const life = plan ? placeVillageLife({ plan, terrain, land, obstacles, sight, items, solid, seed: config.seed, used: usedList, avoid: plan.specials || [] }) : null;
@@ -208,6 +211,8 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
 
   // 小物と車の模型は裏で読み込む（届くまでは当たり判定だけ）
   items.load();
+  // 家の中の「人が消えた直後」：点いたままの灯り・テレビ・熾火と、夜の窓の灯り（③ 2026-11-21）
+  const interior = createHouseLife(app, houseLife, config.seed);
 
   // 質感の画像は裏で読み込み、届いたら貼る（それまでは色だけ）
   for (const [surf, m] of Object.entries(materials)) {
@@ -221,5 +226,5 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
       m.update();
     });
   }
-  return { houses, triangles: tris, footprints, hides, covers, insideHouse, furniture, doors, materials, roadside, landmarks, items, life };   // roadside：街灯を夜に点ける（update）   // materials：村の質感（棺桶 render/coffin.js が木の質感を使う）
+  return { houses, triangles: tris, footprints, hides, covers, insideHouse, furniture, doors, materials, roadside, landmarks, items, life, interior };   // roadside：街灯を夜に点ける（update）   // materials：村の質感（棺桶 render/coffin.js が木の質感を使う）
 }

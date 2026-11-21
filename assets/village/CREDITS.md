@@ -21,8 +21,19 @@
 | `old_tyre.glb` | [Old Tyre](https://polyhaven.com/a/old_tyre) | MP | 2,880 → 600 | 家の裏・売店の横に重ねた古いタイヤ |
 | `metal_jerrycan.glb` | [Metal Jerrycan](https://polyhaven.com/a/metal_jerrycan) | Sean Buckley | 20,022 → 499 | 家の横・トラクターの横・売店の横の携行缶 |
 | `covered_car.glb` | [Covered Car](https://polyhaven.com/a/covered_car) | MP | 12,592 → 2,983 | 家の横の、覆いを掛けた車（たまに） |
+| `electric_stove.glb` | [Electric Stove](https://polyhaven.com/a/electric_stove) | Kuutti Siitonen | 13,914 → 2,565 | 家の中：台所の電気コンロ（オーブン付き） |
+| `wall_clock.glb` | [Wall Clock](https://polyhaven.com/a/wall_clock) | PierreB3D | 3,658 → 676 | 家の中：掛け時計 |
+| `hanging_picture_frame_02.glb` | [Hanging Picture Frame 02](https://polyhaven.com/a/hanging_picture_frame_02) | James Ray Cock | 3,678 → 303 | 家の中：写真の額 |
+| `fancy_picture_frame_01.glb` | [Fancy Picture Frame 01](https://polyhaven.com/a/fancy_picture_frame_01) | Rob Tuytel, Rico Cilliers | 938 → 600 | 家の中：絵の額 |
+| `painted_wooden_chair_01.glb` | [Painted Wooden Chair 01](https://polyhaven.com/a/painted_wooden_chair_01) | Kuutti Siitonen | 724 | 家の中：食卓の白い椅子 |
+| `mid_century_lounge_chair.glb` | [Mid Century Lounge Chair](https://polyhaven.com/a/mid_century_lounge_chair) | Kuutti Siitonen | 6,148 → 1,500 | 家の中：ストーブの前の一人掛け（二階建ての家） |
+| `modern_ceiling_lamp_01.glb` | [Modern Ceiling Lamp 01](https://polyhaven.com/a/modern_ceiling_lamp_01) | James Ray Cock | 5,602 → 889 | 家の中：食卓の上の吊り灯 |
+| `food_apple_01.glb` | [Apple](https://polyhaven.com/a/food_apple_01) | Oliver Harries | 7,012 → 288 | 家の中：食卓の皿の上 |
+| `croissant.glb` | [Croissant](https://polyhaven.com/a/croissant) | Greg Zaal, Dario Barresi | 1,990 → 298 | 家の中：食卓の皿の上（食べかけ） |
+| `jug_01.glb` | [Jug 01](https://polyhaven.com/a/jug_01) | Kuutti Siitonen | 5,770 → 500 | 家の中：食卓の水差し |
+| `ceramic_vase_01.glb` | [Ceramic Vase 01](https://polyhaven.com/a/ceramic_vase_01) | James Ray Cock | 10,296 → 944 | 家の中：食卓と本棚の花瓶 |
 
-（「元の面の数」は Poly Haven の表示の数）
+（「元の面の数」は Poly Haven の表示の数。家の中の物は ③ 家の中と人が消えた直後（2026-11-21）で足した）
 
 ## 乗り物と給油機（このゲームのために作った物）
 

@@ -5,7 +5,7 @@
 import * as pc from 'playcanvas';
 import { createMesh, sceneBudget } from '../core/mesh-utils.js';
 import { builder, box } from '../world/build-kit.js';
-import { BLANKETS } from '../world/furniture.js';
+import { BLANKETS, CABINET } from '../world/furniture.js';
 
 // 扉の開く角度（度）：{動き: [右の扉 [[時刻, 角度]…], 左の扉]}。右・左は、タンスに向いて立った人から見て
 const DOORS = {
@@ -77,7 +77,7 @@ export function instanced(app, name, mesh, material, parts) {
 /**
  * @param {pc.Application} app
  * @param {object[]} hides 隠れ場所（world/furniture.js が doors・flap を付けたもの）
- * @param {Record<string, pc.StandardMaterial>} materials 村の質感（gate：扉、cloth：布）
+ * @param {Record<string, pc.StandardMaterial>} materials 村の質感（cloth：布。タンスの扉と掛け布）
  */
 export function createFurnitureMotion(app, hides, materials) {
   const pos = new pc.Vec3(), q = new pc.Quat(), qb = new pc.Quat(), one = new pc.Vec3(1, 1, 1), m = new pc.Mat4();
@@ -86,11 +86,12 @@ export function createFurnitureMotion(app, hides, materials) {
   const doors = [];
   for (const s of hides) if (s.doors) s.doors.forEach((d, i) => doors.push(Object.assign(d, { i, angle: 0, spot: s })));
   let doorSet = null;
-  if (doors.length && materials.gate) {
+  // 今ふうの平らな扉（2026-11-21。③ 家の中：家具は全部今の物。明るい木の色）と、細い鉄の棒の取っ手（色は頂点の色。布の質感で描く）
+  if (doors.length && materials.cloth) {
     const B = builder();
-    box(B, 'gate', -0.235, 0, 0, 0.47, 0.03, 1.72, 0, { shade: 0.8, bottom: true });
-    box(B, 'gate', -0.445, 0.83, 0.025, 0.04, 0.04, 0.12, 0, { shade: 0.3, bottom: true });   // 取っ手
-    doorSet = { kind: 'door', parts: doors, ...instanced(app, 'wardrobe-doors', createMesh(app.graphicsDevice, B.parts.gate), materials.gate, doors) };
+    box(B, 'cloth', -0.235, 0, 0, 0.47, 0.03, 1.72, 0, { shade: CABINET, bottom: true });
+    box(B, 'cloth', -0.43, 0.62, 0.028, 0.025, 0.025, 0.42, 0, { shade: [0.45, 0.45, 0.47], bottom: true });   // 取っ手
+    doorSet = { kind: 'door', parts: doors, ...instanced(app, 'wardrobe-doors', createMesh(app.graphicsDevice, B.parts.cloth), materials.cloth, doors) };
   }
   // ---- 掛け布（毛布の縁を原点に、下へ垂れる。毛布の色ごと） ----
   const flapSets = [];

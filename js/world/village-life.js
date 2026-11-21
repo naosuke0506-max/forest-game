@@ -23,6 +23,18 @@ export const PROP_INFO = {
   old_tyre: { r: 0.3, h: 0.6, lift: 0.3, flatLift: 0.083 },
   metal_jerrycan: { r: 0.15, h: 0.45 },
   covered_car: { r: 0.9, h: 1.41, box: [1.79, 4.34], shadow: true },
+  // 家の中（③ 2026-11-21。inside：家の中の物。近くだけ描き、影は落とさない。置く場所は world/furniture.js）
+  electric_stove: { r: 0.3, h: 0.86, inside: true },
+  wall_clock: { r: 0.16, h: 0.32, inside: true },
+  hanging_picture_frame_02: { r: 0.38, h: 0.5, inside: true },
+  fancy_picture_frame_01: { r: 0.3, h: 0.46, inside: true },
+  painted_wooden_chair_01: { r: 0.25, h: 0.96, inside: true },
+  mid_century_lounge_chair: { r: 0.55, h: 1.17, inside: true },
+  modern_ceiling_lamp_01: { r: 0.22, h: 0.95, inside: true },
+  food_apple_01: { r: 0.05, h: 0.08, inside: true },
+  croissant: { r: 0.1, h: 0.06, inside: true },
+  jug_01: { r: 0.14, h: 0.21, inside: true },
+  ceramic_vase_01: { r: 0.1, h: 0.4, inside: true },
 };
 /** 乗り物の大きさ（tools/make_vehicles.py の三角形と大きさ）。前は +Z */
 export const VEHICLE_INFO = {

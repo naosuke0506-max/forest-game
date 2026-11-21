@@ -16,7 +16,7 @@ import { flatten, join, weld, simplify, prune, dedup, textureCompress, quantize,
 import { MeshoptSimplifier } from 'meshoptimizer';
 import sharp from 'sharp';
 
-// target：三角形の目標（全体）。tex：色・凹凸の画像の一辺、arm：陰影と粗さの画像の一辺
+// target：三角形の目標（全体）。tex：色・凹凸の画像の一辺、arm：陰影と粗さの画像の一辺。error：減らすときに許す形のずれ（無ければ 0.02）
 const PROPS = {
   metal_trash_can: { target: 700, tex: 256, arm: 128, keep: /^metal_trash_can(?!_rust)/, shift: [-0.5, 0, 0] },   // 中にきれいな物と錆びた物。きれいな方（蓋・取っ手ごと）
   trashbag: { target: 500, tex: 256, arm: 128 },
@@ -28,20 +28,36 @@ const PROPS = {
   old_tyre: { target: 600, tex: 256, arm: 128 },
   metal_jerrycan: { target: 500, tex: 256, arm: 128 },
   covered_car: { target: 3000, tex: 512, arm: 256 },
+  // 家の中（③ 家の中と人が消えた直後。2026-11-21）
+  electric_stove: { target: 1200, tex: 256, arm: 128, error: 0.06 },   // 部品が多く、誤差 0.02 では 2600 までしか減らない
+  wall_clock: { target: 600, tex: 256, arm: 128 },
+  hanging_picture_frame_02: { target: 300, tex: 256, arm: 128 },
+  fancy_picture_frame_01: { target: 600, tex: 512, arm: 128 },
+  painted_wooden_chair_01: { target: 724, tex: 256, arm: 128 },
+  mid_century_lounge_chair: { target: 1500, tex: 256, arm: 128 },
+  modern_ceiling_lamp_01: { target: 700, tex: 256, arm: 128 },
+  food_apple_01: { target: 250, tex: 128, arm: 64 },
+  croissant: { target: 300, tex: 256, arm: 128 },
+  jug_01: { target: 500, tex: 256, arm: 128 },
+  ceramic_vase_01: { target: 400, tex: 256, arm: 128, error: 0.06 },
 };
 
-const [srcDir, outDir] = process.argv.slice(2);
+const [srcDir, outDir, onlyArg] = process.argv.slice(2);
 if (!srcDir || !outDir) {
-  console.error('使い方: node process_hall_props.mjs <取り込み先> <出力フォルダ>');
+  console.error('使い方: node process_village_props.mjs <取り込み先> <出力フォルダ> [名前,名前…（この物だけ作り直す）]');
   process.exit(1);
 }
+const only = onlyArg ? new Set(onlyArg.split(',')) : null;
 await MeshoptSimplifier.ready;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 await fs.mkdir(outDir, { recursive: true });
 
 const tris = (doc) => doc.getRoot().listMeshes().reduce((n, m) => n + m.listPrimitives().reduce((k, p) => k + p.getIndices().getCount() / 3, 0), 0);
-const meta = {};
+// 前に作った物の記録は残し、作り直した物だけ書き換える
+let meta = {};
+try { meta = JSON.parse(await fs.readFile(path.join(outDir, 'village.json'), 'utf8')); } catch { meta = {}; }
 for (const [id, opt] of Object.entries(PROPS)) {
+  if (only && !only.has(id)) continue;
   const doc = await io.read(path.join(srcDir, id, `${id}_1k.gltf`));
   // keep：名前が合う部品だけを残し、shift だけずらして真ん中へ寄せる（1 つのファイルに型違いが並んでいる物）
   if (opt.keep) {
@@ -55,7 +71,7 @@ for (const [id, opt] of Object.entries(PROPS)) {
   // 部品の位置を焼き込み、同じ質感の部品を 1 つにまとめる
   await doc.transform(flatten(), join({ keepNamed: false }), weld());
   if (before > opt.target) {
-    await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio: opt.target / tris(doc), error: 0.02, lockBorder: false }));
+    await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio: opt.target / tris(doc), error: opt.error ?? 0.02, lockBorder: false }));
   }
   // 質感画像：色と凹凸は opt.tex、陰影・粗さ（ARM）は opt.arm の WebP に
   await doc.transform(
