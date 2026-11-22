@@ -26,4 +26,5 @@ export const L = {
   cleared: '突破', rewardPick: '褒賞擇一', kills: '擊破', points: '點',
   // 地圖
   north: '北', road: '徑', house: '家屋', tree: '樹', span: '東西 350 米', meter: '米',
+  caveMap: '地底圖', cavePath: '洞', caveMouth: '洞口',   // 地下の地図（洞窟の中で切り替わる）：題・通り道・口
 };

@@ -627,7 +627,9 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     }
     // 木・岩・壁・地面に当たる
     const ground = floorAt(sp.x, sp.z, sp.y);
-    const blocked = sp.y <= ground + (sp.kind === 'fireball' ? 0.3 : 0.05) || (obstacles.isFree(sp.x, sp.z, 0.12, true) === false && sp.y < heightAt(sp.x, sp.z) + 8)
+    // 地上の木・岩には、地上を飛ぶ物だけが当たる（地下の洞窟の中では、真上の木の幹に当たらない。2026-11-21）
+    const gh = heightAt(sp.x, sp.z);
+    const blocked = sp.y <= ground + (sp.kind === 'fireball' ? 0.3 : 0.05) || (obstacles.isFree(sp.x, sp.z, 0.12, true) === false && sp.y < gh + 8 && sp.y > gh - 2.5)
       || Math.hypot(sp.x, sp.z) > match.areaRadius + 0.5;
     if (blocked) {
       if (sp.kind === 'fireball') { sp.y = Math.max(sp.y, ground + 0.3); fireballBoom(sp); }
@@ -733,7 +735,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     let blocked = false;
     if (!hits) {
       const yaw = f.yaw * DEG, r = w.reach * 0.75;
-      blocked = !obstacles.isFree(f.x - Math.sin(yaw) * r, f.z - Math.cos(yaw) * r, 0.15, true);
+      const bx = f.x - Math.sin(yaw) * r, bz = f.z - Math.cos(yaw) * r;
+      blocked = (f.y === undefined || f.y > heightAt(bx, bz) - 2.5) && !obstacles.isFree(bx, bz, 0.15, true);   // 地下では地上の物に当てない
     }
     emit('strike', { fighter: f, weapon: f.weapon, hits, blocked });
   }
@@ -800,14 +803,16 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       }
     }
     // 貫く矢：木・壁・床は通り抜ける（建物に穴が開くのは、建物を壊す仕組みを作るとき）。地面と外周では消える
-    if (p.pierce) return p.y > heightAt(p.x, p.z) && Math.hypot(p.x, p.z) <= match.areaRadius + 0.5;
+    // （地下の洞窟の中では、地面ではなく洞窟の床で消える。前は地面の高さで見ていたので、洞窟の中ではすぐ消えていた）
+    if (p.pierce) return p.y > floorAt(p.x, p.z, p.y) && Math.hypot(p.x, p.z) <= match.areaRadius + 0.5;
     // 外周の柵（と、その上の見えない壁）：柵の高さまでなら柵に刺さり、それより上は落ちて消える
     if (Math.hypot(p.x, p.z) > match.areaRadius + 0.5) {
       if (p.y < heightAt(p.x, p.z) + 10) { p.stuck = 1e-6; emit('projectileStuck', { projectile: p }); return true; }
       return false;
     }
     // 地面や木の幹に刺さる
-    if (p.y <= floorAt(p.x, p.z, p.y) || obstacles.isFree(p.x, p.z, 0.05, true) === false && p.y < heightAt(p.x, p.z) + 8) {
+    // （地上の木の幹には、地上を飛ぶ矢だけが刺さる。地下の洞窟の中では刺さらない）
+    if (p.y <= floorAt(p.x, p.z, p.y) || obstacles.isFree(p.x, p.z, 0.05, true) === false && p.y < heightAt(p.x, p.z) + 8 && p.y > heightAt(p.x, p.z) - 2.5) {
       p.stuck = 0.0001;
       emit('projectileStuck', { projectile: p });
     }

@@ -295,7 +295,7 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
   const footprints = [];
   let patchTris = 0;
   for (const m of C.mouths) {
-    const face = { positions: [], normals: [], uvs: [], colors: [], indices: [] };
+    const face = { positions: [], uvs: [], colors: [], indices: [] };   // 向き（法線）は形から計算する
     const patch = { positions: [], uvs: [], colors: [], indices: [] };
     const at = (s, l) => [m.x + m.in[0] * s + m.in[1] * l, m.z + m.in[1] * s - m.in[0] * l];
     // 岩の面：口の面（少し奥）に立てる。横に 0.25 m ごとの柱に分け、穴の所だけ開ける
@@ -317,15 +317,26 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
       if (okAll) hole = [floor - 0.4, Math.min(ceil - 0.15, top - 0.2)];
       cols.push({ l, x: px, z: pz, top, bottom, hole });
     }
-    // 岩の面のでこぼこ：口の面から手前へ最大 0.55 m ふくらませる（まっすぐな板に見えないように）。穴とその両脇 0.5 m、上と下のふちはふくらませない
+    // 岩の面のでこぼこ（2026-11-21 に強めた。利用者の指摘「入り口が平ら」）：口の面から手前へ最大 1.6 m ふくらませる（大きなうねりと細かいでこぼこの 2 段）。
+    // 穴の上は、口にかぶさる張り出し（岩のひさし）にする。穴とその両脇の低い所、上と下のふちはふくらませない（通り道に岩が出ないように）
+    // 前は向き（法線）を全部同じにしていたので、ふくらみに陰影が付かず、平らな板に見えていた → 形から向きを計算する（createMesh）
     const holeL = cols.filter((c) => c.hole).map((c) => c.l), hl0 = Math.min(...holeL), hl1 = Math.max(...holeL);
-    const ROWS = Math.max(2, Math.ceil(Math.max(...cols.map((c) => c.top - c.bottom)) / 1.3));
+    const holeTop = Math.min(...cols.filter((c) => c.hole).map((c) => c.hole[1]));
+    const ROWS = Math.max(3, Math.ceil(Math.max(...cols.map((c) => c.top - c.bottom)) / 0.8));
     const fv = (c, y, shade, edge) => {
       const nearHole = Math.max(hl0 - c.l, c.l - hl1, 0);
-      const k = edge * smooth(0.5, 1.8, nearHole);
-      const out = 0.55 * fbm(c.l * 0.45 + 7, y * 0.5, seed + 131) * k;
-      face.positions.push(c.x - m.in[0] * out, y, c.z - m.in[1] * out); face.normals.push(-m.in[0], 0, -m.in[1]); face.uvs.push(c.l / 3, y / 3);
-      const sh = shade * (0.9 + 0.2 * fbm(c.l * 0.3, y * 0.3, seed + 133));
+      const low = smooth(m.y + 0.5, m.y + 3.2, y);                       // 通り道の高さ（人の背まで）は、穴の横でふくらませない
+      const k = edge * Math.max(smooth(0.5, 1.8, nearHole), low * smooth(0, 0.6, nearHole));
+      const big = fbm(c.l * 0.18 + 3, y * 0.22, seed + 129), fine = fbm(c.l * 0.7 + 7, y * 0.75, seed + 131);
+      // 高い岩の面（風穴の大きな岩山）ほど大きくふくらませ、縦のひだ（岩の割れ目）も付ける（遠くから見ても平らな壁に見えないように）
+      const tall = Math.min(1, Math.max(0, (c.top - c.bottom - 5) / 8));
+      const ridge = Math.abs(Math.sin(c.l * 0.55 + big * 4));
+      let out = ((1.15 + 1.4 * tall) * big + 0.45 * fine + (0.25 + 0.6 * tall) * ridge) * k;
+      // 口のひさし：穴の上 0.3〜3 m を、穴の幅の所で手前へ張り出す
+      const lip = smooth(holeTop + 0.1, holeTop + 0.9, y) * (1 - smooth(holeTop + 2.2, holeTop + 4, y)) * (1 - smooth(0.5, 3.5, nearHole)) * edge;
+      out += lip * (0.8 + 0.5 * fine);
+      face.positions.push(c.x - m.in[0] * out, y, c.z - m.in[1] * out); face.uvs.push(c.l / 3, y / 3);
+      const sh = shade * (0.78 + 0.32 * fbm(c.l * 0.3, y * 0.3, seed + 133)) * (1 - 0.18 * lip);
       face.colors.push(sh, sh * 0.97, sh * 0.93, 1);
       return face.positions.length / 3 - 1;
     };
@@ -337,7 +348,7 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
       for (let r = 1; r <= n; r++) {
         const t = r / n, edge = r === n ? 0 : 1;
         const qa = fv(a, ya0 + (ya1 - ya0) * t, s0 + (s1 - s0) * t, edge), qb = fv(b, yb0 + (yb1 - yb0) * t, s0 + (s1 - s0) * t, edge);
-        face.indices.push(pa, pb, qb, pa, qb, qa);
+        face.indices.push(pa, qb, pb, pa, qa, qb);   // 外（口の前）から見て表になる向き（形から計算する法線が外を向くように）
         pa = qa; pb = qb;
       }
     };
@@ -359,7 +370,15 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
       const l = -LW + (2 * LW * j) / nl, [x, z] = at(sp, l), [hx, hz] = at(sh, l);
       patch.positions.push(x, groundAt(hx, hz) + 0.05, z);
       patch.uvs.push(x / (terrain?.uvTile || 2), z / (terrain?.uvTile || 2));
-      patch.colors.push(...(terrain ? terrain.colorAt(hx, hz) : [0.6, 0.6, 0.55, 0.5]));
+      // 口のまわりは草を生やさず、土と灰色の岩肌に（2026-11-21。前は芝の盛り土のように見えた）：
+      //   切り通しの床は土、口の面の近く（前 6 m・後ろ 4 m）と切り通しの壁は、岩の色の土
+      const base = terrain ? terrain.colorAt(hx, hz) : [0.6, 0.6, 0.55, 0.5];
+      const al = Math.abs(l);
+      const rock = sp < 0 ? (1 - smooth(5, 10, -sp)) * (1 - smooth(m.hw + 4, m.hw + 9, al)) : (1 - smooth(2.5, 6, sp)) * (1 - smooth(m.hw + 3, m.hw + 8, al));
+      const floorK = sp < 0 ? (1 - smooth(m.hw - 0.5, m.hw + 1.5, al)) * smooth(-m.len - 5, -m.len + 1, sp) : 0;
+      const ROCK = [0.5, 0.48, 0.45, 0.5], DIRT = [0.62, 0.55, 0.46, 0.5];
+      const c4 = base.map((v, i) => v + (ROCK[i] - v) * Math.min(1, rock * 1.2));
+      patch.colors.push(...c4.map((v, i) => v + (DIRT[i] - v) * floorK));
     }
     for (let r = 0; r < rowsS.length - 1; r++) {
       if (rowsS[r][1] < 0 && rowsS[r + 1][1] > 0) continue;   // 口の面をまたぐ所は作らない（そこは岩の面）

@@ -132,7 +132,7 @@ async function boot() {
   const water = createWater(app, land, terrain);
   const env = createEnvironment(app, CONFIG, sky);
   const wind = createWind(app, CONFIG);
-  const obstacles = createObstacles();
+  const obstacles = createObstacles(terrain.heightAt);   // 地面の高さ：地下の洞窟の中にいる人には、地上の木や家を当てない
   // 外周の柵は無くした（2026-11-14。利用者の指示：周りの山が端になる。通れない仕組みは今までどおりの見えない円）
   // 木：Tripo AI の模型。読み込めなかったときは仮の木
   const trees = treeModels
@@ -141,7 +141,7 @@ async function boot() {
   // 森の小物（岩・切り株・落ち枝・シダ・草）：Poly Haven の模型。読み込めなかったときは仮の岩と草
   let props = null;
   if (propTypes) {
-    props = createProps(app, CONFIG, CONFIG.seed, terrain, obstacles, propTypes, zones);
+    props = createProps(app, CONFIG, CONFIG.seed, terrain, obstacles, propTypes, zones, { fixed: land.cave.mouthRocks() });   // 洞窟の口のまわりの岩（world/cave-plan.js）
   } else {
     createRocks(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.rock);
     createGrass(app, CONFIG, CONFIG.seed, terrain, obstacles);

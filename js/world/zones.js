@@ -76,5 +76,6 @@ export function createZones(seed, radius, land = null, plan = null) {
   const plazas = plan ? plan.wells.map((w) => w.plaza) : [];   // 村の広場（石畳の足音。audio/sfx.js）
   /** 洞窟の中の、今いる所の名前（風穴・地底洞・大空洞） */
   const caveName = (x, z) => (land?.cave ? land.cave.nameAt(x, z) : '風穴');
-  return { weights, zoneAt, path, treeDensity, wet, rocky, caveArea, caveAt, caveName, castle, villages, villageAt, plazas, paths, centerR, sectors, blobs };
+  return { weights, zoneAt, path, treeDensity, wet, rocky, caveArea, caveAt, caveName, castle, villages, villageAt, plazas, paths, centerR, sectors, blobs,
+    cave: land?.cave || null };   // cave：洞窟の形（地下の地図。ui/minimap.js）
 }

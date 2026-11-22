@@ -261,6 +261,12 @@ export function createCavePlan(seed) {
       const end = smooth(-m.len - 4, -m.len + 1.5, s);            // 外の端はなだらかに始まる
       const cut = floor + (Math.max(h, floor) - floor) * k;
       h = h + (cut - h) * end;
+      // 口の手前 3 m：洞窟の穴が開いている所は、洞窟の床（真ん中が少し低く、奥へ下る）の高さまで下げる。前は外の地面が平らなまま
+      // 口まで来ていて、洞窟の床より 0.2〜1.2 m 高く、その段の下が抜けて空が見えていた（2026-11-21。利用者の指摘「入り口の地面がおかしい」）
+      if (baked && s > -3) {
+        const q = at(m.x + m.in[0] * 0.4 + m.in[1] * l, m.z + m.in[1] * 0.4 - m.in[0] * l);
+        if (q && q.d < -0.05) h = h + (Math.min(h, q.floor + 0.02) - h) * smooth(-3, -0.3, s) * smooth(-0.05, -0.6, q.d);
+      }
     }
     return h;
   }
@@ -437,6 +443,41 @@ export function createCavePlan(seed) {
 
   /** 升目から読む（4 点の間をなめらかに）。洞窟から遠ければ null */
   const out = { d: 0, floor: 0, ceil: 0, dist: 0, open: 0 };
+  /**
+   * 口のまわりに置く岩（森の小物の岩の模型。world/props.js が置く）。2026-11-21：利用者の指摘「入り口が平ら」。
+   * 平らな岩の面と、つるっとした盛り土を隠し、自然な岩場の口にする：
+   *   ・口の両脇に縦に起こした大岩（崖の一部）と、その外の大岩
+   *   ・口の上（岩山の上、口の面のすぐ後ろ）に、口へかぶさる大岩（ひさし）
+   *   ・切り通しの壁ぎわの岩と、壁ぎわに落ちた小さな岩（通り道は空ける）
+   * 返す形：{ id, x, z, scale, yaw, pitch, roll, sink（高さに対する埋める割合）, r（当たり判定の半径。0 は無し）, vi（模型の型の番号） }
+   */
+  function mouthRocks() {
+    const out = [];
+    mouths.forEach((m, mi) => {
+      const rnd = createRandom(seed + 9100 + mi * 131);
+      const r = () => rnd.next();
+      const faceYaw = (Math.atan2(-m.in[0], -m.in[1]) * 180) / Math.PI;   // 外を向く向き
+      const put = (id, s, l, scale, o = {}) => {
+        const x = m.x + m.in[0] * s + m.in[1] * l, z = m.z + m.in[1] * s - m.in[0] * l;
+        out.push({ id, x, z, scale, yaw: faceYaw + (o.yaw ?? (r() - 0.5) * 50), pitch: o.pitch ?? (r() - 0.5) * 24, roll: o.roll ?? (r() - 0.5) * 24,
+          sink: o.sink ?? 0.3, r: o.r ?? 0, vi: Math.floor(r() * 8) });
+      };
+      for (const sd of [-1, 1]) {
+        // 口の両脇：縦に起こした大岩（長い向きを上へ）。内側の端が通り道の外に来るように
+        put('rock_large', -1.0 + r() * 0.5, sd * (m.hw + 3.6 + r() * 0.5), 2.8 + r() * 0.6, { yaw: (r() - 0.5) * 16, pitch: 68 + r() * 16, roll: sd * (4 + r() * 8), sink: 0.22, r: 2.2 });
+        // その外：斜めに寄りかかる大岩
+        put('rock_large', -3.0 - r() * 2.0, sd * (m.hw + 6.2 + r() * 1.2), 2.2 + r() * 0.6, { pitch: 25 + r() * 25, sink: 0.3, r: 2.0 });
+        // 切り通しの壁ぎわ（坂の上）
+        for (const t of [0.35, 0.72]) put('rock_medium', -m.len * t - r() * 1.5, sd * (m.hw + 2.3 + r() * 1.2), 1.3 + r() * 0.6, { sink: 0.35, r: 0.8 });
+        // 壁ぎわに落ちた小さな岩（通り道の端。真ん中は空ける）
+        put('rock_medium', -1.8 - r() * Math.max(1, m.len - 3), sd * (m.hw - 0.1 + r() * 0.3), 0.55 + r() * 0.3, { sink: 0.28, r: 0.45 });
+      }
+      // 口の上：岩山の上から、口の前へかぶさる大岩 3 つ（ひさし。下の通り道より十分高い）
+      for (const k of [-1, 0, 1]) put('rock_large', 1.5 + r() * 1.4, k * m.hw * 0.8 + (r() - 0.5) * 1.2, 2.4 + r() * 0.6, { pitch: (r() - 0.5) * 20, roll: (r() - 0.5) * 20, sink: 0.38, r: 1.4 });
+    });
+    return out;
+  }
+
   function at(x, z) {
     const b = baked;
     const fx = (x - b.x0) / b.G, fz = (z - b.z0) / b.G, ix = Math.floor(fx), iz = Math.floor(fz);
@@ -474,7 +515,7 @@ export function createCavePlan(seed) {
   };
 
   const api = {
-    CAVE, mouths, passages, samples, pillars: PILLARS, hill, carve, settle, at, frame,
+    CAVE, mouths, passages, samples, pillars: PILLARS, hill, carve, settle, at, frame, mouthRocks,
     get baked() { return baked; },
     /** 洞窟の空いた所（屋根の下）の中か。(x, y, z)。bot の目・矢・カメラが使う */
     voidAt(x, y, z) {
@@ -582,6 +623,8 @@ export function createCavePlan(seed) {
     get entrances() { return mouths.map((m) => ({ id: m.id, x: m.from[0] - m.in[0] * 2, z: m.from[1] - m.in[1] * 2 })); },
     /** 一番近い口の名前 */
     nearestMouth(x, z) { let b = null, bd = Infinity; for (const m of mouths) { const d = Math.hypot(m.x - x, m.z - z); if (d < bd) { bd = d; b = m.id; } } return b; },
+    /** 地下の地図に書く名前（広間）：[{ name, x, z }] */
+    get names() { return Object.values(NODES).filter((n) => n.name).map((n) => ({ name: n.name, x: n.x, z: n.z })); },
     /** 今いる所の名前（「〜に入った」の知らせ）：大空洞の中は「大空洞」、深い所は「地底洞」、北西の岩山の中は「風穴」 */
     nameAt(x, z) {
       const H = NODES.H;
