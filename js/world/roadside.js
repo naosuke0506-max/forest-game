@@ -450,6 +450,7 @@ export function buildRoadside(B, o) {
       const [mx, mz] = at((t0 + t1) / 2), my = (y0 + y1) / 2;
       // 床の板（コンクリート。厚さ 0.55 m）と、上のアスファルト
       obox(B, 'concrete', [mx, my - 0.3, mz], a, N, up, sl + 0.02, b.width + 2 * curb + 0.3, 0.55, 0.92);
+      sight?.addBox([mx, my - 0.3, mz], a, N, up, sl + 0.02, b.width + 2 * curb + 0.3, 0.55);   // 床の板は視線をさえぎる（橋の下から床越しに太陽が見えないように。2026-11-22）
       const pA = (t, s) => { const [x, z] = at(t, s); return [x, yAt(t) + 0.005, z]; };
       B.quad('asphalt', pA(t0, -hw + 0.05), pA(t1, -hw + 0.05), pA(t1, hw - 0.05), pA(t0, hw - 0.05), up, 0.95);
       // 縁石（両側。高さ 0.22 m）

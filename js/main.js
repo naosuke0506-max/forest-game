@@ -12,7 +12,7 @@ import { createVillage } from './world/castle.js';
 import { createFloors } from './world/floors.js';
 import { createZones } from './world/zones.js';
 import { loadGroundCover, createGroundCover } from './world/ground-cover.js';
-import { createSunGlare } from './render/sun-glare.js';
+import { createSunGlare, createSkyOcclusion } from './render/sun-glare.js';
 import { createSkyLights } from './render/sky-lights.js';
 import { createAirParticles } from './render/air-particles.js';
 import { audio, loadSounds } from './audio/engine.js';
@@ -190,13 +190,14 @@ async function boot() {
   // 時間帯（朝・昼・夕暮れ・深夜）。霧の色が変わったら、空の無い所の背景色も合わせる
   env.onFogColor = (c) => { player.camera.camera.clearColor = c; };
   const timeOfDay = createTimeOfDay(app, env, CONFIG, player.camera);
-  const sunGlare = createSunGlare(player.camera, env.sun, timeOfDay, {
-    canopies: trees?.canopies || [], trunks: trees?.trunks || [],
-    heightAt: terrain.heightAt,
+  // 太陽（月）が直接見えるか：地面の起伏・建物と物（bot の目と同じ形。家・教会・岩・車・木の幹など）・木の葉で調べる（2026-11-22）
+  const skyOcclusion = createSkyOcclusion({
+    canopies: trees?.canopies || [], trunks: trees?.trunks || [], heightAt: terrain.heightAt, sight, reach: CONFIG.atmosphere.farClip,
   });
+  const sunGlare = createSunGlare(player.camera, env.sun, timeOfDay, { occlusion: skyOcclusion });
   // 太陽と月の円盤・木漏れ日の光の筋、空気の中の塵・舞い落ちる葉・蛍
   const skyLights = createSkyLights(app, player.camera, env.sun, timeOfDay, {
-    canopies: trees?.canopies || [], heightAt: terrain.heightAt, zones, farClip: CONFIG.atmosphere.farClip,
+    canopies: trees?.canopies || [], heightAt: terrain.heightAt, zones, farClip: CONFIG.atmosphere.farClip, occlusion: skyOcclusion,
   });
   const air = createAirParticles(app, player.camera, timeOfDay, { heightAt: terrain.heightAt, zones, sun: env.sun });
   // 環境音（風・葉・鳥・虫・カラス）。音は試合を始めるボタンを押したときから出る（iPad の決まり）。
@@ -282,7 +283,7 @@ async function boot() {
     .then(([grass, litter]) => terrain.setGroundTextures(grass, litter));
 
   // 確認用（自動テストから状態を読むため）
-  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, air, floors, sight, land, water, plan, cave, intro, coffins,
+  window.__forest = { app, player, obstacles, terrain, trees, props, wind, timeOfDay, zones, groundCover, village, skyLights, skyOcclusion, air, floors, sight, land, water, plan, cave, intro, coffins,
     get stage() { return stage; } };
 
   // 設定のうち森に関わる分（視点）。変わるたびに反映する
