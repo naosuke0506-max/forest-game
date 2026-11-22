@@ -38,6 +38,14 @@ export function createZones(seed, radius, land = null, plan = null) {
 
   /** 道の上か（1 = 道の真ん中、0 = 道ではない） */
   const path = (x, z) => (plan ? plan.pathAt(x, z) : 0);
+  const paved = (x, z) => (plan?.pavedAt ? plan.pavedAt(x, z) : 0);   // 舗装（アスファルトと広場の石畳）の上か。草を生やさない（2026-11-22）
+  // 林道の上の草の多さ（2026-11-22）：2 本の轍（真ん中から 0.45〜1.05 m）はほぼ無し、轍の間の筋は多め。林道の外は null（今までどおり）
+  const trackGrass = (x, z) => {
+    const l = plan?.trackAt ? plan.trackAt(x, z) : null;
+    if (l === null) return null;
+    const a = Math.abs(l);
+    return a < 0.32 ? 0.75 : a < 0.45 ? 0.3 : a < 1.05 ? 0.02 : a < 1.25 ? 0.25 : null;
+  };
 
   /** 地点 (x, z) が、それぞれのエリアにどれだけ属するか（合わせて 1） */
   function weights(x, z) {
@@ -76,6 +84,6 @@ export function createZones(seed, radius, land = null, plan = null) {
   const plazas = plan ? plan.wells.map((w) => w.plaza) : [];   // 村の広場（石畳の足音。audio/sfx.js）
   /** 洞窟の中の、今いる所の名前（風穴・地底洞・大空洞） */
   const caveName = (x, z) => (land?.cave ? land.cave.nameAt(x, z) : '風穴');
-  return { weights, zoneAt, path, treeDensity, wet, rocky, caveArea, caveAt, caveName, castle, villages, villageAt, plazas, paths, centerR, sectors, blobs,
+  return { weights, zoneAt, path, paved, trackGrass, treeDensity, wet, rocky, caveArea, caveAt, caveName, castle, villages, villageAt, plazas, paths, centerR, sectors, blobs,
     cave: land?.cave || null };   // cave：洞窟の形（地下の地図。ui/minimap.js）
 }

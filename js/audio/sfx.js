@@ -67,7 +67,8 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
     const g = terrain.heightAt(f.x, f.z);
     if ((f.y ?? g) > g + 0.25) return 'wood';
     if (!zones) return 'grass';
-    if (plazas.some((p) => Math.hypot(f.x - p.x, f.z - p.z) < p.r)) return 'stone';   // 村の広場の石畳（橋の上は 'wood'）
+    if (plazas.some((p) => (p.inside ? p.inside(f.x, f.z) : Math.hypot(f.x - p.x, f.z - p.z) < p.r))) return 'stone';   // 村の広場の石畳（橋の上は 'wood'）
+    if (zones.paved?.(f.x, f.z)) return 'stone';   // アスファルト（硬い音。2026-11-22。前は土の道の音だった）
     if (zones.path(f.x, f.z) > 0.5) return 'dirt';
     const w = zones.weights(f.x, f.z);
     if (w.castle > 0.6) return 'dirt';

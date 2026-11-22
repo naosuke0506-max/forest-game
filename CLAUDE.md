@@ -94,7 +94,7 @@
   - 洞窟の仕上げ（2026-11-21。利用者が選んだ 4 回の 1 回目）：地上の物の当たり判定（高さの範囲なし）は、地面より 2.5 m 下にいる人に当てない（`obstacles.js` の `UNDER`）。
     口の手前 3 m は外の地面を洞窟の床まで下げる（`carve`）。口の岩の面は形から法線を計算し、ひさしとでこぼこ。口のまわりの岩は `mouthRocks`（props.js の `fixed`）。
     地下の地図は `minimap.js` の `buildCaveMap`（升目の壁からの距離から描く）。口を直したら、作業用の場所の `cavewalk_rocks.mjs`・`routetest_rocks.mjs`（岩の当たり判定を足した試験）と
-    `caveshot.js`（口・中・地図を撮る）を回す。残りの 1 回（広場と道路）は `docs/DESIGN.md` の「洞窟の仕上げ」
+    `caveshot.js`（口・中・地図を撮る）を回す。4 回とも済み（2026-11-22）
   - 天坑（2026-11-22。仕上げの 2 回目）：大空洞の天井の穴と、下の池。数と場所は `cave-plan.js` の `SKY`（穴・縦穴・池・天井の持ち上げ）。
     穴の上の足もとは大空洞の床（`layer`）、落ちるのは `js/game/fall.js`（プレイヤーと bot が同じ計算。泳いでいる人は落ちない）、池の水は `pondAt`
     （`terrain.js` の `waterAt` が川と合わせる。地上の地図は川だけの `riverAt`）。見た目（縦穴の壁・ふちの地面・池・光の筋）は `cave.js` の「天坑」。
@@ -105,6 +105,11 @@
     下の間 `CH` と地下道 `crypt`（PASSAGES の最後に足す＝前からある通り道の形を変えない）。梯子の操作は `controller.js` の `climb`（grabLadder）、ボタンは match-session.js の `ladderEnd`。
     梯子の動き（ladder_up・ladder_down・ladder_idle）は `body_moves.py` の `ladder_fn`。模型を作り直したら、作業用の場所の `animdiff.mjs` を tools/ の中へ写して回す
     （@gltf-transform は tools/node_modules にある）。確かめは作業用の場所の `laddertest.js`（石板を開ける→下りる→上る）・`churchshot.js`・`cryptcheck.mjs`
+  - 井戸の広場と道路（2026-11-22。仕上げの 4 回目）：広場の縁の形は `villages.js` の `shapePlaza`（48 の向きの半径・道の入る所はまっすぐ＝`P.cuts`・`P.inside`・`P.edgeAt`）、
+    形は `js/world/plaza.js`（石畳・縁石・井戸のまわりの敷石の輪。castle.js の村の乱数は前と同じ 18 回だけ使う）。アスファルトは `roadside.js` の 1（区間 runs・
+    広場の縁でぴったり切る・分かれ道の丸い角 junctions・丸い端 caps・白線と中央線・補修の跡・格子蓋とマンホール・林道の轍）、白い杭は 3b。
+    草を生やさない所は `villages.js` の `pavedAt`（舗装と広場）と `trackAt`（林道の轍）。確かめは作業用の場所の `plazacheck.mjs`（村の配置が前と同じ・縁が家にかからない）と
+    `roadshot.js`（広場・道・分かれ道・林道を撮る）・`measure_road.js`（重さ）
 - **2026-11-14 の大きな依頼（進行中）**。利用者が選んだ順番は「マップを全部先に」：
   ① マップ：洞窟の中から外が見える不具合・坂の上り下りの不自然さ・橋の不自然さ・**橋の所は川幅を広げて橋を長く**・川の中を見えづらく
      （ここまで 2026-11-14 に済み。PR #84）・**地下の大洞窟**（2026-11-15 に済み）・

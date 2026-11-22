@@ -6,7 +6,7 @@
 import * as pc from 'playcanvas';
 import { createMesh, sceneBudget } from '../core/mesh-utils.js';
 import { box, obox, prism, v3 } from './build-kit.js';
-import { createRandom } from '../core/random.js';
+import { createRandom, valueNoise } from '../core/random.js';
 
 const STEEL = [0.62, 0.64, 0.66];       // 亜鉛めっきの鉄
 const DARK = [0.16, 0.16, 0.17];        // 黒い鉄・電線
@@ -83,7 +83,8 @@ export function buildRoadside(B, o) {
   const roads = plan.roads;
   const footprints = [];
   const plazas = plan.wells.map((w) => w.plaza);
-  const inPlaza = (x, z, pad = 0) => plazas.some((q) => Math.hypot(x - q.x, z - q.z) < q.r + pad);
+  // 広場の中か（縁は world/villages.js の shapePlaza が決めた形。pad：縁を外へ広げる m）
+  const inPlaza = (x, z, pad = 0) => plazas.some((q) => (q.inside ? q.inside(x, z, pad) : Math.hypot(x - q.x, z - q.z) < q.r + pad));
   // 家と、教会・ガソリンスタンドの敷地（plan.specials。world/landmarks.js）の近くか
   const nearHouse = (x, z, pad) => [...plan.houses, ...(plan.specials || [])].some((h) => {
     const a = (h.yaw * Math.PI) / 180, dx = x - h.x, dz = z - h.z;
@@ -101,38 +102,335 @@ export function buildRoadside(B, o) {
   };
   const halfOf = (r) => (r.lane ? 1.6 : r.w >= 2 ? 2.2 : 2.0);   // 舗装の幅の半分（m）
 
-  // ================= 1. 舗装の道（アスファルトの帯）と白線 =================
-  // 地面の起伏に沿わせる（横に 4 つに分けて、それぞれの点の地面の高さ + 4 cm）。広場の石畳の上と、橋の上（橋は別に作る）は描かない
+  // ================= 1. 舗装の道：アスファルトの帯・白線・中央線・分かれ道の角・丸い端・補修の跡・雨水の蓋 =================
+  // 地面の起伏に沿わせる（横に 5 点。それぞれの点の地面の高さ + 8〜10 cm）。橋の上（橋は別に作る）と水の上は描かない
   // 舗装するのは world/villages.js の ROADS の paved（村をつなぐ 4 本）と村の小道。森へ入る 2 本は土の林道のまま
-  roads.forEach((r, ri) => {
+  // 2026-11-22（④ 広場と道路。利用者の指示「道路も完成させてください」）に作り直した：
+  //   ・画像（ひび割れ）を道に沿わせる（前は東西南北にそろい、ひびが道を斜めに横切っていた）。明るさのむら・轍・路肩の汚れ
+  //   ・広場に入る所は、広場の縁（道に直角のまっすぐな縁。world/villages.js の shapePlaza）でぴったり切る（前は手前で止まり、草地のすき間があった）
+  //   ・白線はすり減らせ、ほかの道のアスファルトの上（分かれ道の口）では切る。村をつなぐ道には破線の中央線
+  //   ・ほかの道の途中につながる端は、両側の角を丸く埋める。どこにもつながらない端は丸く閉じる
+  //   ・補修の跡（色の違う四角いアスファルト）と、村の中の雨水の格子蓋・マンホール
+  // 乱数は別の物（rnd の使う回数を変えると、後の街灯の場所が変わるので）
+  const rr = createRandom(config.seed + 2112);
+  const NS = config.seed + 801;
+  const nrmAt = (x, z) => { const e = 0.5; return v3.norm([-(H(x + e, z) - H(x - e, z)) / (2 * e), 1, -(H(x, z + e) - H(x, z - e)) / (2 * e)]); };
+  const liftOf = (ri) => 0.08 + (ri % 5) * 0.005;   // 道どうしが重なる所でちらつかないよう、少しずつ高さを変える
+  const plazaAt = (x, z) => plazas.find((q) => q.inside(x, z)) || null;
+  /** 広場の縁の手前 3.5 m で、アスファルトを広場の石畳の高さ（5 cm）近くまで下げる（広場の地面は平らなので、地面の網は突き抜けない） */
+  const liftAt = (base, x, z) => {
+    let gap = 99;
+    for (const q of plazas) if (q.edgeAt) gap = Math.min(gap, Math.hypot(x - q.cx, z - q.cz) - q.edgeAt(Math.atan2(z - q.cz, x - q.cx)));
+    const t = Math.min(1, Math.max(0, gap / 3.5)), k = t * t * (3 - 2 * t);
+    return 0.055 + (base - 0.055) * k;
+  };
+  // 舗装の道の線分を 8 m の升目に入れておく（ほかの道のアスファルトの上か、を速く調べる）
+  const SH = 8, segHash = new Map();
+  roads.forEach((r) => {
     if (!r.paved) return;
-    // 地面の網（2.6 m ごと）の頂点が帯の中で盛り上がると突き抜けるので、少し高めに浮かせる。道どうしが重なる所でちらつかないよう、少しずつ高さを変える
-    const hw = halfOf(r), lift = 0.08 + (ri % 5) * 0.005;
-    const lines = !r.lane;
-    let prev = null;
-    for (let i = 0; i < r.pts.length; i++) {
-      const [x, z] = r.pts[i];
-      const skip = onBridge(r, i) || inPlaza(x, z, -0.6) || wet(x, z);
-      if (skip) { prev = null; continue; }
-      const d = dirAt(r.pts, i);
-      const across = [-1, -0.5, 0, 0.5, 1].map((k) => { const px = x + d.nx * hw * k, pz = z + d.nz * hw * k; return [px, H(px, pz) + lift, pz]; });
-      const lineL = [-1, 1].map((sd) => [-0.28, -0.16].map((off) => { const k = sd * (hw + off); const px = x + d.nx * k, pz = z + d.nz * k; return [px, H(px, pz) + lift + 0.012, pz]; }));
-      if (prev) {
-        for (let k = 0; k < 4; k++) {
-          const p0 = prev.across[k], p1 = prev.across[k + 1], p2 = across[k + 1], p3 = across[k];
-          const nrm = v3.norm(v3.cross(v3.sub(p3, p0), v3.sub(p1, p0)));
-          const n = nrm[1] < 0 ? v3.mul(nrm, -1) : nrm;
-          const edge = (kk) => (kk === 0 || kk === 4 ? 0.78 : 1);   // 路肩は少し汚れて暗い
-          B.quad('asphalt', p0, p1, p2, p3, n, 1, [edge(k), edge(k + 1), edge(k + 1), edge(k)]);
+    const hw = halfOf(r);
+    for (let i = 0; i + 1 < r.pts.length; i++) {
+      const a = r.pts[i], b = r.pts[i + 1];
+      for (let gx = Math.floor((Math.min(a[0], b[0]) - hw - 2) / SH); gx <= Math.floor((Math.max(a[0], b[0]) + hw + 2) / SH); gx++)
+        for (let gz = Math.floor((Math.min(a[1], b[1]) - hw - 2) / SH); gz <= Math.floor((Math.max(a[1], b[1]) + hw + 2) / SH); gz++) {
+          const k = gx * 65536 + gz;
+          if (!segHash.has(k)) segHash.set(k, []);
+          segHash.get(k).push({ r, a, b, hw });
         }
-        if (lines) for (let s = 0; s < 2; s++) {
-          const a = prev.lineL[s], b = lineL[s];
-          B.quad('paint', a[0], a[1], b[1], b[0], [0, 1, 0], WHITE);
-        }
-      }
-      prev = { across, lineL };
     }
   });
+  const segDist = (x, z, a, b) => {
+    const dx = b[0] - a[0], dz = b[1] - a[1], t = Math.min(1, Math.max(0, ((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz || 1)));
+    return Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z);
+  };
+  /** ほかの舗装の道（except 以外）のアスファルトの上か（pad：幅を広げる m） */
+  const onAsphalt = (x, z, except, pad = 0) => {
+    const l = segHash.get(Math.floor(x / SH) * 65536 + Math.floor(z / SH));
+    return !!l && l.some((s) => s.r !== except && segDist(x, z, s.a, s.b) < s.hw + pad);
+  };
+
+  // ---- 1a. 道ごとに「帯にする区間」を決める（橋・水で切る。広場の縁ではぴったり切る） ----
+  const runs = [];   // { r, ri, hw, lift, st: [{ x, z, s, nx, nz }], startEnd, endEnd }（startEnd/endEnd：道の本当の端なら 0 / n-1）
+  roads.forEach((r, ri) => {
+    if (!r.paved) return;
+    const n = r.pts.length, hw = halfOf(r);
+    const S = [0];
+    for (let i = 1; i < n; i++) S.push(S[i - 1] + Math.hypot(r.pts[i][0] - r.pts[i - 1][0], r.pts[i][1] - r.pts[i - 1][1]));
+    const state = r.pts.map(([x, z], i) => (onBridge(r, i) ? 'bridge' : wet(x, z) ? 'cut' : plazaAt(x, z) ? 'plaza' : 'ok'));
+    /** 橋の端（橋台の上）までつなぐ点：幅は橋の床に合わせてすぼめる（前は橋の 3 m ほど手前で切れて、土が見えていた） */
+    const bridgeEnd = (i, atStart) => {
+      const b = plan.bridges.find((q) => q.road === r && i >= q.i0 - 1 && i <= q.i1 + 1);
+      if (!b) return null;
+      const L = Math.hypot(b.bx - b.ax, b.bz - b.az) || 1, tx = (b.bx - b.ax) / L, tz = (b.bz - b.az) / L;
+      const x = atStart ? b.ax + tx * 0.05 : b.bx - tx * 0.05, z = atStart ? b.az + tz * 0.05 : b.bz - tz * 0.05;
+      const j = atStart ? b.i0 : b.i1;
+      return { x, z, s: S[j] + (atStart ? 0.05 : -0.05), nx: -tz, nz: tx, hw: b.width / 2 + 0.05 };
+    };
+    const station = (i) => { const d = dirAt(r.pts, i); return { x: r.pts[i][0], z: r.pts[i][1], s: S[i], nx: d.nx, nz: d.nz }; };
+    /** 線分 i-1 → i の上で、広場の縁を越える所（道に直角の縁と合わせるため、横の向きは線分に直角） */
+    const crossing = (i, P, into) => {
+      const a = r.pts[i - 1], b = r.pts[i];
+      let lo = 0, hi = 1;
+      for (let it = 0; it < 30; it++) { const m = (lo + hi) / 2; if (P.inside(a[0] + (b[0] - a[0]) * m, a[1] + (b[1] - a[1]) * m) === into) hi = m; else lo = m; }
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L;
+      const t = (lo + hi) / 2 + (into ? 0.04 : -0.04) / L;   // 縁石の下へ 4 cm もぐらせる（すき間が出ないように）
+      return { x: a[0] + (b[0] - a[0]) * t, z: a[1] + (b[1] - a[1]) * t, s: S[i - 1] + (S[i] - S[i - 1]) * t, nx: -tz, nz: tx };
+    };
+    let cur = null;
+    const close = (endEnd) => { if (cur && cur.st.length > 1) { cur.endEnd = endEnd; runs.push(cur); } cur = null; };
+    for (let i = 0; i < n; i++) {
+      if (state[i] === 'ok') {
+        if (!cur) {
+          cur = { r, ri, hw, lift: liftOf(ri), st: [], startEnd: i === 0 ? 0 : -1, endEnd: -1 };
+          if (i > 0 && state[i - 1] === 'plaza') cur.st.push(crossing(i, plazaAt(...r.pts[i - 1]), false));
+          if (i > 0 && state[i - 1] === 'bridge') { const e = bridgeEnd(i - 1, false); if (e) cur.st.push(e); }
+        }
+        cur.st.push(station(i));
+        if (i === n - 1) close(n - 1);
+      } else {
+        if (cur && state[i] === 'plaza') cur.st.push(crossing(i, plazaAt(...r.pts[i]), true));
+        if (cur && state[i] === 'bridge') { const e = bridgeEnd(i, true); if (e) cur.st.push(e); }
+        close(-1);
+      }
+    }
+  });
+  /** 区間の中の、道のりの位置 s の点（真ん中・横の向き） */
+  const runAt = (run, s) => {
+    const st = run.st;
+    let j = 0;
+    while (j < st.length - 2 && st[j + 1].s < s) j++;
+    const a = st[j], b = st[j + 1], t = Math.min(1, Math.max(0, (s - a.s) / (b.s - a.s || 1)));
+    const nx = a.nx + (b.nx - a.nx) * t, nz = a.nz + (b.nz - a.nz) * t, nl = Math.hypot(nx, nz) || 1;
+    return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, nx: nx / nl, nz: nz / nl };
+  };
+
+  // ---- 1b. 道の端：ほかの舗装の道の途中につながるか（つながる：角を丸く埋める／つながらない：丸く閉じる） ----
+  const junctions = [];   // { r, other, E, d, hw, hwO, Rf }（other の白線は、この口の所で切る）
+  const caps = [];        // { run, at: 'start' | 'end' }
+  for (const run of runs) {
+    const { r } = run, n = r.pts.length;
+    for (const [at, e, inner] of [['start', run.startEnd, 2], ['end', run.endEnd, n - 3]]) {
+      if (e < 0) continue;
+      const E = r.pts[e], q = r.pts[Math.max(0, Math.min(n - 1, inner))], dl = Math.hypot(q[0] - E[0], q[1] - E[1]) || 1;
+      const d = [(q[0] - E[0]) / dl, (q[1] - E[1]) / dl];   // 端から道の中へ向かう向き
+      // つながる先：ほかの舗装の道で、端がその道のアスファルトの上にあり、近い所がその道の端ではない
+      let best = null;
+      for (const o of roads) {
+        if (o === r || !o.paved) continue;
+        for (let i = 0; i + 1 < o.pts.length; i++) {
+          const a = o.pts[i], b = o.pts[i + 1], dd = segDist(E[0], E[1], a, b);
+          if (dd < halfOf(o) + 0.6 && (!best || dd < best.dd)) best = { o, i, dd };
+        }
+      }
+      const endOfOther = best && [best.o.pts[0], best.o.pts[best.o.pts.length - 1]].some((p) => Math.hypot(p[0] - E[0], p[1] - E[1]) < 1.2);
+      if (best && !endOfOther) {
+        const a = best.o.pts[best.i], b = best.o.pts[best.i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        junctions.push({ r, run, other: best.o, E, d, t: [(b[0] - a[0]) / L, (b[1] - a[1]) / L], a, hw: run.hw, hwO: halfOf(best.o), Rf: 2.4 });
+      } else caps.push({ run, at });
+    }
+  }
+  /** 白線を切る所：分かれ道の口（つながる道の幅 ＋ 丸く埋めた角） */
+  const inMouth = (x, z, road) => junctions.some((j) => {
+    if (j.other !== road) return false;
+    const px = x - j.E[0], pz = z - j.E[1];
+    const along = px * j.d[0] + pz * j.d[1], lat = Math.abs(px * -j.d[1] + pz * j.d[0]);
+    return lat < j.hw + j.Rf + 0.3 && along > -j.hwO - 1 && along < j.Rf + 1;
+  });
+
+  // ---- 1c. アスファルトの帯（画像は道に沿わせる：横 = 道の横、縦 = 道のり） ----
+  const ACROSS = [-1, -0.5, 0, 0.5, 1];
+  for (const run of runs) {
+    const { ri, hw, lift, st } = run;
+    const offU = rr.next() * 3, offV = rr.next() * 30;
+    const V = [], I = [];
+    for (const p of st) {
+      const pw = p.hw ?? hw;   // 橋の端だけは橋の床の幅
+      for (const k of ACROSS) {
+        const x = p.x + p.nx * pw * k, z = p.z + p.nz * pw * k;
+        // 明るさ：路肩は汚れて暗い・轍（車線の真ん中）は少し暗い・道のりに沿った大きなむら・細かいむら
+        const edge = Math.abs(k) === 1 ? 0.78 : 1, track = Math.abs(k) === 0.5 ? 0.95 : 1;
+        const big = 0.86 + 0.2 * valueNoise(p.s * 0.05, ri * 7.3, NS), fine = 0.94 + 0.1 * valueNoise(p.s * 0.4, k * 3 + ri * 11, NS + 1);
+        V.push({ p: [x, H(x, z) + liftAt(lift, x, z), z], n: nrmAt(x, z), uv: [pw * k + offU, p.s + offV], c: edge * track * big * fine });
+      }
+    }
+    for (let j = 0; j + 1 < st.length; j++) for (let k = 0; k < 4; k++) {
+      const a = j * 5 + k, b = (j + 1) * 5 + k;
+      I.push(a, a + 1, b + 1, a, b + 1, b);
+    }
+    B.tris('asphalt', V, I);
+  }
+
+  // ---- 1d. 丸い端（どこにもつながらない端）と、分かれ道の丸く埋めた角 ----
+  for (const c of caps) {
+    const { run } = c, st = run.st, p = c.at === 'start' ? st[0] : st[st.length - 1], q = c.at === 'start' ? st[1] : st[st.length - 2];
+    const ox = p.x - q.x, oz = p.z - q.z, ol = Math.hypot(ox, oz) || 1, out = [ox / ol, oz / ol];   // 道の外へ向かう向き
+    const side = [-out[1], out[0]], V = [], I = [], SEG = 10;
+    V.push({ p: [p.x, H(p.x, p.z) + liftAt(run.lift, p.x, p.z), p.z], n: nrmAt(p.x, p.z), uv: [p.x, p.z], c: 0.95 });
+    for (let k = 0; k <= SEG; k++) {
+      const a = (k / SEG) * Math.PI, ca = Math.cos(a), sa = Math.sin(a);
+      const x = p.x + (side[0] * ca + out[0] * sa) * run.hw, z = p.z + (side[1] * ca + out[1] * sa) * run.hw;
+      V.push({ p: [x, H(x, z) + liftAt(run.lift, x, z), z], n: nrmAt(x, z), uv: [x, z], c: 0.78 });
+      if (k > 0) I.push(0, k, k + 1);
+    }
+    B.tris('asphalt', V, I);
+  }
+  for (const j of junctions) {
+    const nL = [-j.d[1], j.d[0]], nO = [-j.t[1], j.t[0]];
+    const sig = Math.sign(j.d[0] * nO[0] + j.d[1] * nO[1]) || 1;   // 小道は、つながる道のどちら側へ出ていくか
+    if (Math.abs(j.d[0] * j.t[1] - j.d[1] * j.t[0]) < 0.35) continue;   // 浅い角度で合わさる所は埋めない
+    for (const sd of [-1, 1]) {
+      // 小道の縁の線（E + nL·sd·hw + d·λ）と、つながる道の縁の線（a + nO·sig·hwO + t·μ）の交わる所 C
+      const px = j.E[0] + nL[0] * sd * j.hw, pz = j.E[1] + nL[1] * sd * j.hw;
+      const qx = j.a[0] + nO[0] * sig * j.hwO, qz = j.a[1] + nO[1] * sig * j.hwO;
+      const den = j.d[0] * -j.t[1] - j.d[1] * -j.t[0];
+      const lam = ((qx - px) * -j.t[1] - (qz - pz) * -j.t[0]) / den;
+      if (!(lam > -1.5 && lam < 6)) continue;
+      const C = [px + j.d[0] * lam, pz + j.d[1] * lam];
+      const tt = Math.sign(j.t[0] * nL[0] * sd + j.t[1] * nL[1] * sd) || 1;   // つながる道の縁を、小道から離れる向き
+      const A = [C[0] + j.d[0] * j.Rf, C[1] + j.d[1] * j.Rf], Bq = [C[0] + j.t[0] * tt * j.Rf, C[1] + j.t[1] * tt * j.Rf];
+      if ([C, A, Bq].some(([x, z]) => nearHouse(x, z, 0.2) || plazaAt(x, z) || wet(x, z))) continue;
+      const lift = Math.max(liftOf(j.run.ri), 0.08) - 0.002, V = [], I = [], SEG = 8;
+      V.push({ p: [C[0], H(C[0], C[1]) + lift, C[1]], n: nrmAt(C[0], C[1]), uv: [C[0], C[1]], c: 0.9 });
+      for (let k = 0; k <= SEG; k++) {
+        const u = k / SEG, w0 = (1 - u) * (1 - u), w1 = 2 * u * (1 - u), w2 = u * u;
+        const x = A[0] * w0 + C[0] * w1 + Bq[0] * w2, z = A[1] * w0 + C[1] * w1 + Bq[1] * w2;
+        V.push({ p: [x, H(x, z) + lift, z], n: nrmAt(x, z), uv: [x, z], c: 0.8 });
+        if (k > 0) I.push(0, k, k + 1);
+      }
+      B.tris('asphalt', V, I);
+    }
+  }
+
+  // ---- 1e. 白線（路肩の実線・村をつなぐ道の破線の中央線）。すり減らせ、分かれ道の口・ほかの道の上では切る ----
+  const paintAt = (x, z, lift) => [x, H(x, z) + liftAt(lift, x, z) + 0.012, z];
+  const wear = (s, salt) => 0.62 + 0.36 * valueNoise(s * 0.22, salt, NS + 7);   // すり減り（明るさの掛け算）
+  const worn = (s, salt) => WHITE.map((c) => c * wear(s, salt));
+  const lineOk = (x, z, r) => !onAsphalt(x, z, r, 0.05) && !inMouth(x, z, r) && !plazaAt(x, z);
+  for (const run of runs) {
+    const { r, ri, hw, lift, st } = run;
+    if (r.lane) continue;   // 村の小道は線なし
+    // 路肩の実線（幅 12 cm。アスファルトの縁から 16 cm 内）
+    for (const sd of [-1, 1]) {
+      for (let j = 0; j + 1 < st.length; j++) {
+        const a = st[j], b = st[j + 1], oa = sd * ((a.hw ?? hw) - 0.22), ob = sd * ((b.hw ?? hw) - 0.22);
+        const ax = a.x + a.nx * oa, az = a.z + a.nz * oa, bx = b.x + b.nx * ob, bz = b.z + b.nz * ob;
+        if (!lineOk(ax, az, r) || !lineOk(bx, bz, r)) continue;
+        const w = 0.06;
+        const ma = wear(a.s, sd * 5 + ri), mb = wear(b.s, sd * 5 + ri);
+        B.quad('paint', paintAt(ax - a.nx * w, az - a.nz * w, lift), paintAt(ax + a.nx * w, az + a.nz * w, lift), paintAt(bx + b.nx * w, bz + b.nz * w, lift), paintAt(bx - b.nx * w, bz - b.nz * w, lift), [0, 1, 0], WHITE, [ma, ma, mb, mb]);
+      }
+    }
+    // 中央線（破線：3 m 引いて 6 m 空ける。幅 10 cm）
+    const s0 = st[0].s, s1 = st[st.length - 1].s, phase = (ri * 2.3) % 9;
+    for (let d0 = Math.ceil((s0 - phase) / 9) * 9 + phase; d0 < s1 - 0.5; d0 += 9) {
+      const a = Math.max(s0 + 0.5, d0), b = Math.min(s1 - 0.5, d0 + 3);
+      if (b - a < 1) continue;
+      const P0 = runAt(run, a), P1 = runAt(run, (a + b) / 2), P2 = runAt(run, b);
+      if (![P0, P1, P2].every((p) => lineOk(p.x, p.z, r))) continue;
+      const w = 0.05, col = worn(a, 31 + ri);
+      for (const [p, q] of [[P0, P1], [P1, P2]]) {
+        B.quad('paint', paintAt(p.x - p.nx * w, p.z - p.nz * w, lift), paintAt(p.x + p.nx * w, p.z + p.nz * w, lift), paintAt(q.x + q.nx * w, q.z + q.nz * w, lift), paintAt(q.x - q.nx * w, q.z - q.nz * w, lift), [0, 1, 0], col);
+      }
+    }
+  }
+
+  // ---- 1f. 補修の跡（少し暗い四角いアスファルト。1〜2.2 m × 0.7〜1.4 m。35〜70 m に 1 つ） ----
+  for (const run of runs) {
+    const { hw, lift, st } = run;
+    const s0 = st[0].s + 2, s1 = st[st.length - 1].s - 2;
+    for (let s = s0 + rr.next() * 30; s < s1 - 3; s += 35 + rr.next() * 35) {
+      const len = 1.0 + rr.next() * 1.2, wid = Math.min(hw * 2 - 0.5, 0.7 + rr.next() * 0.7);
+      const lat = (rr.next() * 2 - 1) * (hw - 0.25 - wid / 2), tone = 0.8 + rr.next() * 0.1, ou = rr.next() * 3, ov = rr.next() * 3;
+      const V = [], I = [];
+      for (let a = 0; a <= 2; a++) {
+        const p = runAt(run, s + (len * a) / 2);
+        for (let b = 0; b <= 2; b++) {
+          const k = lat + (b / 2 - 0.5) * wid, x = p.x + p.nx * k, z = p.z + p.nz * k;
+          V.push({ p: [x, H(x, z) + liftAt(lift, x, z) + 0.008, z], n: nrmAt(x, z), uv: [k + ou, s + (len * a) / 2 + ov], c: tone * (a === 1 && b === 1 ? 1 : 0.96) });
+        }
+      }
+      if (V.some((v) => plazaAt(v.p[0], v.p[2]))) continue;
+      for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) { const i0 = a * 3 + b; I.push(i0, i0 + 1, i0 + 4, i0, i0 + 4, i0 + 3); }
+      B.tris('asphalt', V, I);
+    }
+  }
+
+  // ---- 1g. 村の中の雨水の格子蓋（路肩。約 24 m ごとに左右交互）とマンホール（車線の真ん中。約 45 m ごと） ----
+  let grates = 0, manholes = 0;
+  for (const run of runs) {
+    const { r, hw, lift, st } = run;
+    let side = 1;
+    const s0 = st[0].s + 3, s1 = st[st.length - 1].s - 3;
+    for (let s = s0 + 6; s < s1; s += 24) {
+      const p = runAt(run, s);
+      if (!villageNear(p.x, p.z, 0)) continue;
+      const off = side * (hw - 0.3), cx = p.x + p.nx * off, cz = p.z + p.nz * off;
+      side = -side;
+      if (onAsphalt(cx, cz, r, 0.5) || inMouth(cx, cz, r) || plazaAt(cx, cz)) continue;
+      const tx = -p.nz, tz = p.nx;   // 道の向き
+      const rect = (u0, u1, v0, v1, col, dy) => {   // 道に沿った四角（u：道の向き、v：横）
+        const P = (u, v) => paintAt(cx + tx * u + p.nx * v, cz + tz * u + p.nz * v, lift + dy);
+        B.quad('paint', P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1), [0, 1, 0], col);
+      };
+      rect(-0.3, 0.3, -0.2, 0.2, [0.2, 0.2, 0.21], 0);                                   // 鉄の枠
+      for (let k = 0; k < 5; k++) rect(-0.24 + k * 0.1, -0.2 + k * 0.1, -0.15, 0.15, [0.03, 0.03, 0.03], 0.002);   // すき間
+      grates++;
+    }
+    for (let s = s0 + 18; s < s1; s += 45) {
+      const p = runAt(run, s);
+      if (!villageNear(p.x, p.z, 0)) continue;
+      const off = (r.lane ? 0 : (manholes % 2 ? 1 : -1) * hw * 0.5), cx = p.x + p.nx * off, cz = p.z + p.nz * off;
+      if (onAsphalt(cx, cz, r, 0.6) || inMouth(cx, cz, r) || plazaAt(cx, cz)) continue;
+      for (const [rad, col, dy] of [[0.36, [0.16, 0.16, 0.17], 0], [0.3, [0.27, 0.27, 0.28], 0.002]]) {
+        const SEG = 14;
+        for (let k = 0; k < SEG; k++) {
+          const a0 = (k / SEG) * Math.PI * 2, a1 = ((k + 1) / SEG) * Math.PI * 2;
+          const c = paintAt(cx, cz, lift + dy);
+          B.tri('paint', c, paintAt(cx + Math.cos(a1) * rad, cz + Math.sin(a1) * rad, lift + dy), paintAt(cx + Math.cos(a0) * rad, cz + Math.sin(a0) * rad, lift + dy), [0, 1, 0], col);
+        }
+      }
+      manholes++;
+    }
+  }
+
+  // ---- 1h. 林道の轍（2026-11-22）：土の道の 2 本の轍を、地面と同じ見た目（地面のマテリアル・頂点色・画像の位置）で、真ん中ほど暗く描く。
+  //   縁は地面の色とそろえるので、帯の境目が出ない。轍の間の草の筋は world/ground-cover.js・props.js（zones.trackGrass）。描画命令 +1
+  let rutTris = 0;
+  if (terrain.material && terrain.colorAt) {
+    const pos = [], nor = [], col = [], uv = [], idx = [];
+    const OFF = [-0.34, -0.17, 0, 0.17, 0.34], DIM = [1, 0.86, 0.76, 0.86, 1], tile = terrain.uvTile;
+    roads.forEach((r, ri) => {
+      if (r.paved) return;
+      let prev = -1;
+      for (let i = 0; i < r.pts.length; i++) {
+        const [x, z] = r.pts[i];
+        if (wet(x, z) || inPlaza(x, z, 0.8) || land.cave?.area?.(x, z) > 0 || land.cave?.patchAt?.(x, z)) { prev = -1; continue; }
+        const d = dirAt(r.pts, i), base = pos.length / 3;
+        for (const sd of [-1, 1]) for (let k = 0; k < 5; k++) {
+          const l = sd * 0.78 + OFF[k], px = x + d.nx * l, pz = z + d.nz * l;
+          const c = terrain.colorAt(px, pz), m = DIM[k] === 1 ? 1 : DIM[k] * (0.9 + 0.16 * valueNoise(i * 0.35, sd * 4 + ri * 9, NS + 3));
+          const soil = DIM[k] === 1 ? c[3] : 0.5 + (c[3] - 0.5) * 0.25;   // 轍の中は土の画像だけ（草地・落ち葉の画像を混ぜない）
+          pos.push(px, H(px, pz) + 0.035, pz);
+          nor.push(...nrmAt(px, pz));
+          col.push(c[0] * m, c[1] * m, c[2] * m, soil);
+          uv.push(px / tile, pz / tile);
+        }
+        if (prev >= 0) for (let s2 = 0; s2 < 2; s2++) for (let k = 0; k < 4; k++) {
+          const a = prev + s2 * 5 + k, b = base + s2 * 5 + k;
+          idx.push(a, a + 1, b, a + 1, b + 1, b);
+        }
+        prev = base;
+      }
+    });
+    if (idx.length) {
+      const mesh = createMesh(app.graphicsDevice, { positions: pos, normals: nor, colors: col, uvs: uv, indices: idx });
+      const e = new pc.Entity('forest-track-ruts');
+      e.addComponent('render', { meshInstances: [new pc.MeshInstance(mesh, terrain.material)], castShadows: false, receiveShadows: true });
+      app.root.addChild(e);
+      rutTris = idx.length / 3;
+      sceneBudget.triangles += rutTris;
+    }
+  }
 
   // ================= 2. コンクリートの橋（前の木の橋を作り替えた。利用者の指示 2026-11-21） =================
   //   床は厚いコンクリートの板（上はアスファルト）、両側に縁石と鉄の欄干。約 8 m ごとにコンクリートの橋脚（川床まで 2 本の柱と上の梁）。
@@ -272,6 +570,30 @@ export function buildRoadside(B, o) {
     }
   }
 
+  // ================= 3b. 視線誘導の白い杭（2026-11-22。④ 広場と道路）=================
+  //   村の外の、村をつなぐ道の両側に約 24 m ごと（左右は半分ずらす）。白い柱（高さ 1 m）の上に黒い帯と橙の反射板（ヨーロッパの田舎道の杭）。
+  //   ガードレールのある所・橋の前後・ほかの道の口・家・広場・洞窟の口の近くには立てない
+  let posts = 0;
+  roads.forEach((r) => {
+    if (!r.paved || r.lane) return;
+    const hw = halfOf(r), n = r.pts.length;
+    for (const sd of [-1, 1]) {
+      for (let i = sd < 0 ? 3 : 9; i < n - 3; i += 13) {
+        const [x, z] = r.pts[i];
+        if (villageNear(x, z, 4) || plan.bridges.some((b) => b.road === r && i >= b.i0 - 3 && i <= b.i1 + 3)) continue;
+        if (rails.some((q) => q.r === r && q.sd === sd && i >= q.a - 1 && i <= q.b + 1)) continue;
+        const d = dirAt(r.pts, i), off = sd * (hw + 0.55), px = x + d.nx * off, pz = z + d.nz * off;
+        if (wet(px, pz) || nearHouse(px, pz, 1) || inPlaza(px, pz, 1) || onAsphalt(px, pz, r, 1.5) || land.cave.patchAt?.(px, pz)) continue;
+        const y = H(px, pz), yaw = (Math.atan2(d.tx, d.tz) * 180) / Math.PI;
+        box(B, 'cloth', px, y - 0.2, pz, 0.12, 0.1, 1.2, yaw, { shade: [0.9, 0.9, 0.87] });                       // 白い柱（20 cm 埋める）
+        box(B, 'cloth', px, y + 0.72, pz, 0.125, 0.105, 0.24, yaw, { shade: [0.06, 0.06, 0.06], bottom: true });   // 黒い帯
+        box(B, 'cloth', px, y + 0.8, pz, 0.05, 0.112, 0.12, yaw, { shade: [0.95, 0.5, 0.08], top: false });         // 橙の反射板（道の前後へ向く面）
+        solid(px, pz, 0.08);
+        posts++;
+      }
+    }
+  });
+
   // ================= 4. 電柱と電線（村をつなぐ道に沿って、左側に約 32 m ごと。村の家へ引き込み線） =================
   const poles = [];
   roads.forEach((r, ri) => {
@@ -343,7 +665,8 @@ export function buildRoadside(B, o) {
     }
   });
   for (const q of plazas) {   // 広場の縁に 1 本ずつ（昔ふうの灯籠形）
-    const a = rnd.next() * Math.PI * 2, px = q.x + Math.cos(a) * (q.r - 0.8), pz = q.z + Math.sin(a) * (q.r - 0.8);
+    const a = rnd.next() * Math.PI * 2, rr2 = q.edgeAt ? q.edgeAt(a) - 0.75 : q.r - 0.8;   // 縁石の 0.5 m 内側
+    const cx = q.cx ?? q.x, cz = q.cz ?? q.z, px = cx + Math.cos(a) * rr2, pz = cz + Math.sin(a) * rr2;
     if (!nearHouse(px, pz, 0.6)) lamps.push({ x: px, z: pz, y: H(px, pz), ax: 0, az: 0, old: true });
   }
   const LAMP_H = 5.2;
@@ -548,9 +871,10 @@ export function buildRoadside(B, o) {
   let lit = -1;
   return {
     footprints,
-    lamps: lamps.length, poles: poleCount, signs: signs.length, rails: rails.length, stops: stops.length,
+    lamps: lamps.length, poles: poleCount, signs: signs.length, rails: rails.length, stops: stops.length, posts, grates, manholes, junctions: junctions.length, caps: caps.length, rutTris,
     /** 確かめ用：置いた所 */
-    where: { stops, signs: signs.map((s) => ({ x: s.x, z: s.z, kind: s.kind, yaw: s.yaw })), lamps: lamps.map((l) => ({ x: l.x, z: l.z, old: !!l.old })) },
+    where: { stops, signs: signs.map((s) => ({ x: s.x, z: s.z, kind: s.kind, yaw: s.yaw })), lamps: lamps.map((l) => ({ x: l.x, z: l.z, old: !!l.old })),
+      junctions: junctions.map((j) => ({ x: j.E[0], z: j.E[1], dx: j.d[0], dz: j.d[1] })), caps: caps.map((c) => { const p = c.at === 'start' ? c.run.st[0] : c.run.st[c.run.st.length - 1]; return { x: p.x, z: p.z }; }) },
     /** 毎フレーム：night（0〜1。夕方から夜で 1） */
     update(dt, night) {
       const v = Math.round(Math.min(1, Math.max(0, night)) * 50) / 50;
