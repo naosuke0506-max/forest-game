@@ -168,6 +168,13 @@ export function createProps(app, config, seed, terrain, obstacles, types, zones 
     const wet = Math.max(zones.wet ? zones.wet(x, z) : 0, zones.caveArea ? zones.caveArea(x, z) : 0), rk = zones.rocky ? zones.rocky(x, z) : 0;   // 洞窟の中も水辺と同じく置かない
     if (id.startsWith('rock')) v = v * (1 - wet * 0.5) + wet * 0.5 + rk * 1.2;
     else v *= (1 - wet) * (1 - rk * 0.7);
+    // 自分のまわりだけに置く物（草・シダ・きのこ・落ち枝。stream）：アスファルトと広場の石畳の上には置かない（前は草とシダが 15% 生えていた）。
+    // 林道は、轍には置かず、轍の間の筋は草が多め（2026-11-22）。岩・木などは前と同じ（置き方の乱数の並びを変えないため）
+    if (RULES[id].stream) {
+      if (zones.paved?.(x, z)) return 0;
+      const tg = zones.trackGrass?.(x, z);
+      if (tg != null) return id === 'grass' ? v * tg * 0.8 : id === 'fern' ? v * tg * 0.3 : 0;
+    }
     return id === 'grass' || id === 'fern' ? v * (1 - zones.path(x, z) * 0.85) : v * (1 - zones.path(x, z));
   };
 

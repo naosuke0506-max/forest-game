@@ -133,7 +133,8 @@ export function createGroundCover(app, config, seed, terrain, obstacles, texture
         const x = (cx + rnd.next()) * CELL, z = (cz + rnd.next()) * CELL;
         if (Math.hypot(x, z) > config.world.playRadius + 2) continue;
         // 道の上・ぶつかる物（木の幹や岩）の上には少なく
-        if (zones && zones.path(x, z) > 0.5 && rnd.next() > PATH_DENSITY) continue;
+        // 林道は轍に生えず、轍の間の筋は多め（zones.trackGrass。乱数を使う回数は前と同じ）
+        if (zones && zones.path(x, z) > 0.5 && rnd.next() > (zones.trackGrass?.(x, z) ?? PATH_DENSITY)) continue;
         // 川の中には生えない（岸は少し。world/landform.js の wet）
         if (zones?.wet && rnd.next() < zones.wet(x, z) * 1.2) continue;
         if (zones?.caveArea && zones.caveArea(x, z) > 0.2) continue;   // 洞窟の中と切り通しには生えない
@@ -142,7 +143,9 @@ export function createGroundCover(app, config, seed, terrain, obstacles, texture
         if (fbm(x * 0.08, z * 0.08, seed + 55) < 0.35 && rnd.next() < 0.6) continue;
         const sw = k.size[0][0] + (k.size[0][1] - k.size[0][0]) * rnd.next();
         const sh = k.size[1][0] + (k.size[1][1] - k.size[1][0]) * rnd.next();
-        items.push({ kind, x, z, y: terrain.heightAt(x, z) - 0.03, yaw: rnd.next() * 360, sw, sh });
+        const yaw = rnd.next() * 360;
+        if (zones?.paved?.(x, z)) continue;   // アスファルトと広場の石畳の上には生えない（乱数を全部使ってから外す＝ほかの草の場所は前と同じ。2026-11-22）
+        items.push({ kind, x, z, y: terrain.heightAt(x, z) - 0.03, yaw, sw, sh });
       }
     }
     return items;

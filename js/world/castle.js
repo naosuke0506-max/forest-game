@@ -18,6 +18,7 @@ import { createDoors } from './doors.js';
 import { buildRoadside } from './roadside.js';
 import { buildLandmarks } from './landmarks.js';
 import { placeVillageLife } from './village-life.js';
+import { buildPlaza } from './plaza.js';
 import { createVillageItems } from './village-items.js';
 import { createHouseLife } from './house-life.js';
 
@@ -127,18 +128,12 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
     const lx = dx * Math.cos(a) - dz * Math.sin(a), lz = dx * Math.sin(a) + dz * Math.cos(a);
     return Math.abs(lx) < hh.w / 2 + 0.5 && Math.abs(lz) < hh.d / 2 + 0.5;
   });
-  // 村ごとの広場（石畳。角のある丸）と井戸
-  for (const w of plan?.wells || []) {
-    const P = w.plaza, y = terrain.heightAt(P.x, P.z) + 0.04;
-    const SEG = 9, pts = [];
-    for (let k = 0; k < SEG; k++) {
-      const a = (k / SEG) * Math.PI * 2 + rnd.next() * 0.3, r = P.r * (0.78 + rnd.next() * 0.3);
-      pts.push([P.x + Math.cos(a) * r, y, P.z + Math.sin(a) * r]);
-    }
-    for (let k = 0; k < SEG; k++) {
-      const a = pts[k], b = pts[(k + 1) % SEG];
-      B.quad('cobble', [P.x, y, P.z], b, a, [P.x + 0.001, y, P.z + 0.001], [0, 1, 0]);
-    }
+  // 村ごとの広場（石畳）と井戸（2026-11-22 に作り直した。形は world/plaza.js、縁は world/villages.js の shapePlaza）
+  //   村の乱数 rnd は、前の広場と同じ 18 回だけ使う（後の畑・干し草の並びを変えないため。石の列のずらしなどに使う）
+  for (const [wi, w] of (plan?.wells || []).entries()) {
+    const rv = [];
+    for (let k = 0; k < 18; k++) rv.push(rnd.next());
+    buildPlaza(B, w, { terrain, roads: plan.roads, rv, seed: config.seed + 61 * wi });
     const wy = terrain.heightAt(w.x, w.z);
     well(B, w.x, wy, w.z);
     solid(w.x, w.z, 1.3);

@@ -28,6 +28,8 @@ const ROADS = [
 ];
 const LANES = 1.4;   // 村の中の小道の幅の半分
 const GRID = 2;      // 道と村の広がりを覚えておく升目（m）
+const PLAZA_N = 48;  // 広場の縁の半径を決める向きの数（world/plaza.js）
+const PAVE_G = 0.5;  // 舗装の上かを覚えておく升目（m）
 
 /** なめらかな線（Catmull-Rom）で、step m ごとに区切る */
 function spline(pts, step) {
@@ -430,6 +432,82 @@ export function planVillages(seed, land, { size, playRadius }) {
     }
   }
 
+  // ---- 3c. 広場の縁（2026-11-22。④ 広場と道路。形は world/plaza.js）----
+  //   井戸の側へ 1 m 寄せた所を真ん中に、48 の向きの半径で縁を決める（ゆるやかな丸）。家・教会・ガソリンスタンド・水の手前 0.6 m まで。
+  //   井戸のまわり（敷石の輪と、その外の石畳）は必ず中に入れる。舗装の道が入る所は、道に直角のまっすぐな縁にする
+  //   （アスファルトの端とぴったり合わせる。world/roadside.js が cuts を読む）。乱数は広場ごとの別の物（家の並びを変えない）
+  wells.forEach((w, wi) => shapePlaza(w, wi));
+  function shapePlaza(w, wi) {
+    const P = w.plaza, rr = createRandom(seed + 4700 + wi), N = PLAZA_N, TAU = Math.PI * 2;
+    const ux = w.x - P.x, uz = w.z - P.z, ul = Math.hypot(ux, uz) || 1;
+    const cx = P.x + (ux / ul) * 1.0, cz = P.z + (uz / ul) * 1.0;
+    const wellA = Math.atan2(w.z - cz, w.x - cx), wellD = Math.hypot(w.x - cx, w.z - cz);
+    const ph = [rr.next() * TAU, rr.next() * TAU, rr.next() * TAU];
+    const am = [0.06 + rr.next() * 0.04, 0.03 + rr.next() * 0.03, 0.015 + rr.next() * 0.015];
+    const blocked = (x, z) => houses.some((h) => rectDist(h, x, z) < 0.6) || specials.some((o) => rectDist(o, x, z) < 0.6) || land.wet(x, z) > 0.02;
+    const angOf = (k) => (k / N) * TAU;
+    const dAng = (a, b) => { let d = a - b; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; return d; };
+    // 1. ゆるやかな丸（井戸のまわり 2.9 m は必ず入れる）
+    const blob = new Float32Array(N);
+    for (let k = 0; k < N; k++) {
+      const a = angOf(k);
+      let r = P.r * (0.96 + am[0] * Math.sin(2 * a + ph[0]) + am[1] * Math.sin(3 * a + ph[1]) + am[2] * Math.sin(5 * a + ph[2]));
+      const da = dAng(a, wellA), side = wellD * Math.sin(da);
+      if (Math.abs(da) < Math.PI / 2 && Math.abs(side) < 2.9) r = Math.max(r, wellD * Math.cos(da) + Math.sqrt(2.9 * 2.9 - side * side));
+      blob[k] = r;
+    }
+    const edgeOf = (E, a) => { const f = ((a / TAU) % 1 + 1) % 1 * N, k0 = Math.floor(f) % N, t = f - Math.floor(f); return E[k0] * (1 - t) + E[(k0 + 1) % N] * t; };
+    const insideOf = (E, x, z, pad = 0) => Math.hypot(x - cx, z - cz) < edgeOf(E, Math.atan2(z - cz, x - cx)) + pad;
+    // 2. 舗装の道が縁を横切る所（丸の縁と、道の真ん中の線が交わる点）
+    const cuts = [];
+    for (const r of roads) {
+      if (!r.paved) continue;
+      for (let i = 0; i + 1 < r.pts.length; i++) {
+        const a = r.pts[i], b = r.pts[i + 1], ia = insideOf(blob, a[0], a[1]), ib = insideOf(blob, b[0], b[1]);
+        if (ia === ib) continue;
+        let lo = 0, hi = 1;
+        for (let it = 0; it < 30; it++) { const m = (lo + hi) / 2, mx = a[0] + (b[0] - a[0]) * m, mz = a[1] + (b[1] - a[1]) * m; if (insideOf(blob, mx, mz) === ia) lo = m; else hi = m; }
+        const t = (lo + hi) / 2, L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        cuts.push({ x: a[0] + (b[0] - a[0]) * t, z: a[1] + (b[1] - a[1]) * t, tx: (b[0] - a[0]) / L, tz: (b[1] - a[1]) / L, hw: halfPave(r), road: r, i, t, enter: ib });
+      }
+    }
+    // 3. 道の入る所はまっすぐ（道の幅 ＋ 0.35 m）、その外 2.25 m で丸へ戻す
+    const edge = new Float32Array(blob), entry = new Float32Array(N);   // entry：道の入る所（1 = まっすぐな縁。縁石を平らにして、アスファルトとつなぐ）
+    for (let k = 0; k < N; k++) {
+      const a = angOf(k), dx = Math.cos(a), dz = Math.sin(a);
+      for (const c of cuts) {
+        const den = dx * c.tx + dz * c.tz;
+        if (Math.abs(den) < 0.2) continue;
+        const s = ((c.x - cx) * c.tx + (c.z - cz) * c.tz) / den;
+        if (s <= 0) continue;
+        const lat = Math.abs((cx + dx * s - c.x) * -c.tz + (cz + dz * s - c.z) * c.tx);
+        const f = smooth(c.hw + 0.35, c.hw + 2.6, lat);
+        if (f < 1) { edge[k] = s + (edge[k] - s) * f; entry[k] = Math.max(entry[k], 1 - smooth(c.hw + 0.1, c.hw + 0.9, lat)); }
+      }
+    }
+    // 4. 家・水の手前で止める。止めた所のへこみは、なだらかにする（隣の向きとの差を 1 m につき 0.8 m まで）
+    const clip = new Float32Array(N);
+    for (let k = 0; k < N; k++) {
+      const a = angOf(k);
+      let r = edge[k];
+      for (let t = 1; t <= edge[k]; t += 0.1) if (blocked(cx + Math.cos(a) * t, cz + Math.sin(a) * t)) { r = t - 0.1; break; }
+      clip[k] = Math.max(2, r);
+    }
+    for (let k = 0; k < N; k++) {
+      let m = clip[k];
+      for (let j = 0; j < N; j++) { const dk = Math.min(Math.abs(j - k), N - Math.abs(j - k)); m = Math.min(m, clip[j] + dk * (TAU / N) * clip[j] * 0.8); }
+      edge[k] = m;
+    }
+    const E = Array.from(edge);
+    Object.assign(P, {
+      cx, cz, edge: E, cuts, entry: Array.from(entry),
+      /** 真ん中から向き a（ラジアン。x 軸から z 軸へ）の縁までの距離 */
+      edgeAt: (a) => edgeOf(E, a),
+      /** 広場の中か（pad：縁を外へ広げる m） */
+      inside: (x, z, pad = 0) => insideOf(E, x, z, pad),
+    });
+  }
+
   // ---- 4. 平らにする所（家の下と広場）と、道・村の広がりの升目 ----
   const pads = [
     ...houses.map((h) => ({ x: h.x, z: h.z, w: h.w + 1.2, d: h.d + 2.2, yaw: h.yaw, y: h.y0, fade: 3.5 })),
@@ -488,6 +566,44 @@ export function planVillages(seed, land, { size, playRadius }) {
     if (r.paved) stamp(pathG, x, z, paveHalf(r) + 0.6, paveHalf(r) + 2.6);
     else stamp(pathG, x, z, r.w * 0.6, r.w * 1.6);
   }
+  // 舗装の上か（2026-11-22。④ 広場と道路）：0.5 m の升目。アスファルト（幅の半分 ＋ 0.3 m）と広場の中は 1。
+  // 草・シダ（world/ground-cover.js・props.js）は生えない（前は道の上にも 15% 生え、アスファルトの真ん中に背の高い草が立っていた）
+  const PN = Math.ceil(size / PAVE_G) + 1, paveG = new Uint8Array(PN * PN);
+  const markCells = (x0, z0, x1, z1, test) => {
+    const g0x = Math.max(0, Math.floor((x0 + half) / PAVE_G)), g1x = Math.min(PN - 1, Math.ceil((x1 + half) / PAVE_G));
+    const g0z = Math.max(0, Math.floor((z0 + half) / PAVE_G)), g1z = Math.min(PN - 1, Math.ceil((z1 + half) / PAVE_G));
+    for (let gz = g0z; gz <= g1z; gz++) for (let gx = g0x; gx <= g1x; gx++) if (test(gx * PAVE_G - half, gz * PAVE_G - half)) paveG[gz * PN + gx] = 1;
+  };
+  for (const r of roads) {
+    if (!r.paved) continue;
+    const R = halfPave(r) + 0.3;
+    for (let i = 0; i + 1 < r.pts.length; i++) {
+      const [ax, az] = r.pts[i], [bx, bz] = r.pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1;
+      markCells(Math.min(ax, bx) - R, Math.min(az, bz) - R, Math.max(ax, bx) + R, Math.max(az, bz) + R, (x, z) => {
+        const t = Math.min(1, Math.max(0, ((x - ax) * dx + (z - az) * dz) / L2));
+        return Math.hypot(ax + dx * t - x, az + dz * t - z) < R;
+      });
+    }
+  }
+  for (const w of wells) { const P = w.plaza; markCells(P.cx - 9, P.cz - 9, P.cx + 9, P.cz + 9, (x, z) => P.inside(x, z, 0.25)); }
+  // 林道（舗装していない道）の真ん中の線からの横の距離（2026-11-22。④）：0.5 m の升目に 0.1 m 単位で覚える（無い所は 127）。
+  // 2 本の轍には草を生やさず、轍の間に草の筋を残す（world/ground-cover.js・props.js）。轍の土の帯は world/roadside.js
+  const trackG = new Int8Array(PN * PN).fill(127);
+  for (const r of roads) {
+    if (r.paved) continue;
+    const R = 1.6;
+    for (let i = 0; i + 1 < r.pts.length; i++) {
+      const [ax, az] = r.pts[i], [bx, bz] = r.pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1, L = Math.sqrt(L2);
+      const g0x = Math.max(0, Math.floor((Math.min(ax, bx) - R + half) / PAVE_G)), g1x = Math.min(PN - 1, Math.ceil((Math.max(ax, bx) + R + half) / PAVE_G));
+      const g0z = Math.max(0, Math.floor((Math.min(az, bz) - R + half) / PAVE_G)), g1z = Math.min(PN - 1, Math.ceil((Math.max(az, bz) + R + half) / PAVE_G));
+      for (let gz = g0z; gz <= g1z; gz++) for (let gx = g0x; gx <= g1x; gx++) {
+        const x = gx * PAVE_G - half, z = gz * PAVE_G - half, t = ((x - ax) * dx + (z - az) * dz) / L2;
+        if (t < 0 || t > 1) continue;
+        const lat = ((x - ax) * dz - (z - az) * dx) / L, k = gz * PN + gx;   // 左右で符号が違う
+        if (Math.abs(lat) < R && (trackG[k] === 127 || Math.abs(lat) < Math.abs(trackG[k] / 10))) trackG[k] = Math.round(lat * 10);
+      }
+    }
+  }
   for (const h of houses) stamp(areaG, h.x, h.z, Math.max(h.w, h.d) * 0.5 + 4, Math.max(h.w, h.d) * 0.5 + 12);
   for (const w of wells) stamp(areaG, w.plaza.x, w.plaza.z, w.plaza.r + 2, w.plaza.r + 10);
   for (const o of specials) for (const [x, z] of [[o.x, o.z], ...corners(o, -3)]) stamp(areaG, x, z, Math.min(o.w, o.d) * 0.5 + 2, Math.min(o.w, o.d) * 0.5 + 10);
@@ -511,6 +627,18 @@ export function planVillages(seed, land, { size, playRadius }) {
     padHeight,
     /** 道の上か（1 = 真ん中、0 = 道ではない） */
     pathAt: (x, z) => sample(pathG, x, z),
+    /** 林道の真ん中の線からの横の距離（m。林道の上でなければ null） */
+    trackAt: (x, z) => {
+      const gx = Math.round((x + half) / PAVE_G), gz = Math.round((z + half) / PAVE_G);
+      if (gx < 0 || gz < 0 || gx >= PN || gz >= PN) return null;
+      const v = trackG[gz * PN + gx];
+      return v === 127 ? null : v / 10;
+    },
+    /** 舗装（アスファルトと広場の石畳）の上か（0 か 1。草を生やさない） */
+    pavedAt: (x, z) => {
+      const gx = Math.round((x + half) / PAVE_G), gz = Math.round((z + half) / PAVE_G);
+      return gx < 0 || gz < 0 || gx >= PN || gz >= PN ? 0 : paveG[gz * PN + gx];
+    },
     /** 村の広がり（家・広場・畑のまわり。0〜1） */
     areaAt: (x, z) => sample(areaG, x, z),
     fieldAt,

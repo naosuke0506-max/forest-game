@@ -9,7 +9,7 @@ export const SURFACES = {
   wood:   { id: 'weathered_brown_planks', tile: 1.6, color: [0.8, 0.72, 0.64] },
   thatch: { id: 'thatch_roof_angled', tile: 2.0, color: [0.95, 0.9, 0.8] },
   tiles:  { id: 'clay_roof_tiles', tile: 2.0, color: [0.95, 0.9, 0.88] },
-  cobble: { id: 'cobblestone_floor_04', tile: 2.5, color: [0.85, 0.85, 0.82] },
+  cobble: { id: 'cobblestone_floor_04', tile: 1.3, color: [0.85, 0.85, 0.82] },   // 村の広場の石畳（world/plaza.js）。2026-11-22 に 2.5 → 1.3（石 1 個 13 cm ほど）
   gate:   { id: 'wooden_gate', tile: 4.0, color: [0.85, 0.8, 0.75] },
   cloth:  { id: null, tile: 1.0, color: [1, 1, 1] },        // 布団・敷布・袋・鉄・ガラス（色は頂点色で）
   // 現代の村（2026-11-21。world/roadside.js）
@@ -74,7 +74,22 @@ export function builder() {
     }
     g.indices.push(b, b + 1, b + 2);
   }
-  return { parts, quad, slope, tri };
+  /**
+   * 自由な形（三角形の並び。2026-11-22 の広場と道路）：v は [{ p, n, uv: [u, v]（m。画像を貼る位置）, c: 明るさ（数）か色 }]、
+   * idx は v の番号を 3 つずつ（三角形）。画像の向き・つなぎ目を自分で決めたい所（石畳の輪・道に沿ったアスファルト）に使う
+   */
+  function tris(surf, v, idx) {
+    const g = parts[surf], tile = SURFACES[surf].tile, b = g.positions.length / 3;
+    for (const q of v) {
+      g.positions.push(q.p[0], q.p[1], q.p[2]);
+      g.normals.push(q.n[0], q.n[1], q.n[2]);
+      g.uvs.push(q.uv[0] / tile, -q.uv[1] / tile);
+      const c = tint(SURFACES[surf].color, q.c ?? 1);
+      g.colors.push(c[0], c[1], c[2], 1);
+    }
+    for (const i of idx) g.indices.push(b + i);
+  }
+  return { parts, quad, slope, tri, tris };
 }
 
 /** 向き（ヨー角）で回した座標系：原点 o、前 f（地面の上の単位ベクトル）、右 r */
