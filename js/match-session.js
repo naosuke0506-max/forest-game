@@ -62,7 +62,7 @@ export function planRoster(myChar, count = 3) {
  *   staged：試合を作っても、すぐには始めない（マップ紹介 → 棺桶から出る、の後で begin() を呼ぶ。それまで update は呼ばれない）
  *   loadout：試合の前に選んだ武器 { main, side, shield }（game/data.js の LOADOUTS から。無ければキャラの最初の物）
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null, houses = [], tutorial = null, doors = null, roster = null, staged = false, trunks = [] }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null, houses = [], tutorial = null, doors = null, church = null, roster = null, staged = false, trunks = [] }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる。planRoster）。bot の武器は、選べる物から乱数で選ぶ
@@ -377,6 +377,21 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (by) senses.noise(by, 'search');   // 扉の音は、探す音と同じくらい遠くまで聞こえる
     if (by) views.get(by)?.doorPush?.();  // 左手を伸ばして扉を押す・引く動き（上半身だけ。render/character-view.js）
   });
+  // 教会の隠し扉の石板（world/church.js。扉のボタンで開け閉め。石の擦れる音は、扉と同じく bot に聞こえる）と梯子
+  const slab = church?.slab || null, ladderDef = church?.ladder || null;
+  if (slab) slab.listeners = [({ open, by }) => { sfx.slab?.(by || { x: slab.cx, z: slab.cz, y: slab.y }, open); if (by) { senses.noise(by, 'search'); views.get(by)?.doorPush?.(); } }];
+  /** 扉のボタンで開け閉めできる石板（近くにいて、同じ高さ・梯子に掴まっていない） */
+  const nearSlab = () => (slab && !player.ladder && Math.abs((me.y ?? slab.y) - slab.y) < 1.3 && Math.hypot(me.x - slab.cx, me.z - slab.cz) < 1.7 ? slab : null);
+  /** 掴める梯子の端（'top'：上の床から下りる・'bottom'：下の間から上る）。上は石板が開いているときだけ */
+  const ladderEnd = () => {
+    const L = ladderDef;
+    if (!L || player.ladder || me.swimming || me.falling) return null;
+    if (L.open && Math.abs((me.y ?? 0) - L.top) < 0.5 && Math.hypot(me.x - L.topStand.x, me.z - L.topStand.z) < 0.9) return 'top';
+    if (Math.abs((me.y ?? 0) - L.bottom) < 0.8 && Math.hypot(me.x - L.x, me.z - L.z) < 1.1) return 'bottom';
+    return null;
+  };
+  let ladderNear = null;
+  player.onLadderOff = (end) => { if (end === 'offTop') hud.addFeed('教会の後陣へ上がった'); };
   let coverStick = null;   // 壁際を歩く向きの見方（スティックを倒し始めたときのカメラの右と前）
   const searchBtn = document.getElementById('btn-search');
   const assassinBtn = document.getElementById('btn-assassinate');
@@ -680,7 +695,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       showLantern();
       // 家の扉：近くの扉を開ける・閉める（扉口に人がいる間は閉められない）
       if (doorPressed && nearDoor && running && me.alive && !me.hidden && !(me.helpless > 0)) {
-        if (!doors.toggle(nearDoor, me, fighters)) hud.addFeed('扉口に人がいて閉められない');
+        if (nearDoor.custom) { if (!nearDoor.toggle(me, fighters)) hud.addFeed('石板の上に人がいて閉められない'); }   // 教会の隠し扉の石板
+        else if (!doors.toggle(nearDoor, me, fighters)) hud.addFeed('扉口に人がいて閉められない');
         useTimer = 0;
       }
       // bot は、閉じた扉へ向かって歩いているときに、自分で開ける
@@ -725,9 +741,13 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       const scripted = SCRIPTED.has(me.action?.kind);
       if (me.alive && !me.hidden && !me.cover && !scripted) { me.x = player.position.x; me.z = player.position.z; me.y = player.position.y; me.yaw = player.yaw; me.pitch = player.pitch; me.headYaw = player.headYaw; }
       // 川（game/swim.js）：足もとの水の深さ・泳いでいるか。泳ぐ速さはキャラの速さとスタミナで決まる
+      if (!me.alive && player.ladder) { player.leaveLadder(); me.ladder = null; }   // 梯子に掴まったまま倒れたら、手を離す
+      // 下から梯子を上って、閉じた石板に頭が届いた：押し開ける（重い石の音）
+      if (player.ladder && slab && !slab.open && ladderDef && player.position.y > ladderDef.top - 1.45) { slab.toggle(me); hud.addFeed('石板を押し上げて開けた'); }
       if (me.alive && !me.hidden) {
         me.waterDepth = player.waterDepth; me.waterSurface = player.waterSurface; me.swimming = player.swimming;
         me.falling = player.falling;   // 天坑の縦穴を落ちている（game/fall.js。その間は何もできない）
+        me.ladder = player.ladder;     // 梯子に掴まっている（その間は何もできない。動きは render/character-view.js）
         if (me.waterDepth > 0.35 && me.stance && me.stance !== 'stand') resetStance(me);   // 水の中ではしゃがめない・伏せられない
       }
       player.swimSpeed = swimSpeed(me);
@@ -762,10 +782,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // 右のボタン：隠れている間は「出る」。近くにベッドやタンスがあれば「隠れる」と「探す」、家の壁があれば「壁に背を付ける」
       if ((useTimer -= dt) <= 0) {
         useTimer = 0.12;
-        const free = running && me.alive && !(me.helpless > 0) && !me.action;
+        const free = running && me.alive && !(me.helpless > 0) && !me.action && !player.ladder;   // 梯子に掴まっている間は、ほかのボタンは出ない
         nearSpot = free && !me.hidden && !me.cover ? hiding.nearest(me) : null;
         nearWall = free && !me.hidden && !me.cover && !nearSpot ? cover.nearest(me) : null;
-        const mode = me.hidden ? 'exit' : me.cover ? 'leave' : nearSpot ? 'hide' : nearWall ? 'wall' : '';
+        ladderNear = free && !me.hidden && !me.cover && !nearSpot ? ladderEnd() : null;   // 教会の隠し扉の梯子
+        const mode = me.hidden ? 'exit' : me.cover ? 'leave' : nearSpot ? 'hide' : ladderNear ? 'ladder' : nearWall ? 'wall' : '';
         useBtn.hidden = !mode;
         stanceBtn.hidden = !running || !me.alive || !!me.hidden || !!me.cover;
         shieldBtn.hidden = !shieldMoves || stanceBtn.hidden;
@@ -775,10 +796,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
           else if (mode === 'hide') setBtn(useBtn, ICONS.hood, L.hide);
           else if (mode === 'wall') setBtn(useBtn, ICONS.wall, L.wall);
           else if (mode === 'leave') setBtn(useBtn, ICONS.exit, L.leave);
+          else if (mode === 'ladder') setBtn(useBtn, ICONS.ladder, L.ladder);
         }
         searchBtn.hidden = !nearSpot;
         // 扉のボタン
-        nearDoor = doors && free && !me.hidden && !me.cover ? doors.nearest(me.x, me.z, me.y ?? null) : null;
+        nearDoor = free && !me.hidden && !me.cover ? (doors?.nearest(me.x, me.z, me.y ?? null) || nearSlab()) : null;
         if (doorBtn) {
           doorBtn.hidden = !nearDoor;
           const dm = nearDoor ? (nearDoor.open ? 'close' : 'open') : '';
@@ -795,6 +817,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         if (me.hidden) combat.hideOut(me);                // 出る動きをしてから出る（game/hide-acts.js）
         else if (me.cover) cover.exit(me);
         else if (nearSpot) combat.hideIn(me, nearSpot);   // 隠れる動きをしてから隠れる。誰かがいれば、覗いて見つけて引きずり出す
+        else if (ladderNear && !player.ladder) { player.grabLadder(ladderDef, ladderNear === 'top'); ladderNear = null; useBtn.hidden = true; }   // 梯子を掴む
         else if (nearWall) {
           // 覗く向き：今見ている向きが、壁に背を付けたときの右か左か
           const sg = nearWall.seg, a = (player.yaw * Math.PI) / 180;

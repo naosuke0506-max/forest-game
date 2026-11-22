@@ -270,6 +270,14 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       g.save(); g.setLineDash([4, 3]); g.strokeStyle = 'rgba(250, 236, 190, .95)'; g.lineWidth = 1.6;
       g.beginPath(); g.arc(x, y, cave.sky.low * kD, 0, Math.PI * 2); g.stroke(); g.restore();
     }
+    // 教会の隠し扉の梯子（下の間 CH の縦穴）：小さな梯子の印
+    if (cave.crypt && cave.crypt.top !== null) {
+      const [x, y] = toD(cave.crypt.x, cave.crypt.z), h = 5;
+      g.save(); g.strokeStyle = 'rgba(250, 236, 190, .95)'; g.lineWidth = 1.4;
+      g.beginPath(); g.moveTo(x - 2.5, y - h); g.lineTo(x - 2.5, y + h); g.moveTo(x + 2.5, y - h); g.lineTo(x + 2.5, y + h);
+      for (const dy of [-3, 0, 3]) { g.moveTo(x - 2.5, y + dy); g.lineTo(x + 2.5, y + dy); }
+      g.stroke(); g.restore();
+    }
     // 柱（大空洞の岩の柱）
     g.fillStyle = 'rgba(40, 28, 16, .95)';
     for (const p of cave.pillars || []) { const [x, y] = toD(p.x, p.z); g.beginPath(); g.arc(x, y, p.r * kD, 0, Math.PI * 2); g.fill(); }

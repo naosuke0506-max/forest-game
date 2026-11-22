@@ -4,6 +4,7 @@
 #   strafe_r・strafe_l  横歩き（顔と体は前を向いたまま、右・左へ足を開いては寄せて進む。2026-11-16）
 #   jog・sprint     普通の走り（ゆっくり大きく足と腕を振る）・全速力（前傾姿勢で全力で走る）。2026-11-16
 #   door            扉を開ける・閉める（左手を伸ばして押す・引く。ゲームでは上半身だけに重ねる）。2026-11-16
+#   ladder_up・ladder_down・ladder_idle  梯子を上る・下りる・掴まって止まる（教会の隠し扉の縦穴。2026-11-22。利用者が選んだ「専用の動き」）
 #   crouch_walk     しゃがみ歩き（深くしゃがんで歩く。顔はまっすぐ前）。前の動き（make_motions.py の中腰の物）と入れ替える
 #   prone_up        伏せから起き上がる（腕で押し上げる → 片膝を引き寄せる → 片膝立ち → 立つ）。前の動きと入れ替える
 #   hit_l_<向き>    被弾（軽い）：攻撃された向き（f 前・b 後ろ・l 左・r 右）と反対へ、体がはじかれる
@@ -463,6 +464,51 @@ def door_keys(shield):
     return [(0.0, base, None), (0.16, reach, 'io'), (0.32, push, 'io'), (0.42, push, 'io'), (0.62, base, 'io')]
 
 
+# ======================= 梯子（教会の隠し扉の縦穴。2026-11-22） =======================
+LADDER_D = 0.6          # 1 回り（右手と左足、左手と右足が 1 回ずつ）で上る高さ（m。横木 2 段）
+LADDER_DUR = 0.7        # 1 回りの秒（0.86 m/秒。ゲームは上り下りの速さ 1.25 m/秒に合わせて速めて流す）
+LADDER_STANCE = 0.6     # 1 回りのうち、手足が横木を掴んでいる（乗っている）割合
+
+
+def ladder_fn(shield):
+    """梯子を上る（その場。体の前 0.33 m に梯子）。右手と左足、左手と右足が組になって交互に、横木 2 段ずつ上へ掴み直す。
+    掴んでいる手足は、体が上がる分だけ体に対して下がる（梯子に止まっている）。離れている手足は、少し手前へ引いてから上の横木へ。
+    体はまっすぐで、少し前へ傾き、膝を軽く曲げる。上を見る"""
+    D, dur, st = LADDER_D, LADDER_DUR, LADDER_STANCE
+    drop = D * st                       # 掴んでいる間に、体に対して下がる長さ
+
+    def limb(ph, hi, f0, back):
+        """高さ（掴んだときが hi）と、前への位置。ph：0 で掴む"""
+        q = ph % 1.0
+        if q < st:
+            return hi - drop * (q / st), f0, 0.0
+        v = (q - st) / (1 - st)
+        e = v * v * (3 - 2 * v)
+        return hi - drop + drop * e, f0 - back * math.sin(math.pi * v), v
+
+    def fn(t):
+        ph = (t / dur) % 1.0
+        # 右手と左足は 0 で掴み、左手と右足は 0.5 で掴む
+        rh = limb(ph, 2.08, 0.28, 0.10)
+        lh = limb(ph + 0.5, 2.08, 0.28, 0.10)
+        rf = limb(ph + 0.5, 0.50, 0.17, 0.12)
+        lf = limb(ph, 0.50, 0.17, 0.12)
+        sway = 0.025 * math.sin(2 * math.pi * (ph - 0.15))   # 腰は、掴んでいる足の側へ少し寄る
+        p = {
+            # 腰は立ち姿より少し上（足は横木の上＝足もとより 0.1〜0.5 m 上なので。前は腰が低く、しゃがんだ形に見えた）
+            'hip': (sway, 0.08 + 0.015 * math.cos(4 * math.pi * ph), -0.02), 'hip_rot': (0, 10, 0), 'chest': (0, 5, 0),
+            'look': (0, -14), 'look_k': 0.9, 'R_clav': 6.0, 'L_clav': 6.0,
+            'R': {'wrist_w': (0.21, rh[0], rh[1]), 'pole': (0.9, -1, -0.6)},
+            'L': {'wrist_w': (-0.21, lh[0], lh[1]), 'pole': (-0.9, -1, -0.6)},
+            # 足：横木の上に母趾球。離れている間は、かかとを下げてつま先を上げる
+            'R_foot': (0.12, rf[1], 4, -10 * math.sin(math.pi * rf[2]), rf[0], 0.0),
+            'L_foot': (-0.12, lf[1], -4, -10 * math.sin(math.pi * lf[2]), lf[0], 0.0),
+            'R_knee': (0.25, 0, 1), 'L_knee': (-0.25, 0, 1),
+        }
+        return p
+    return fn, dur, D / dur
+
+
 # ======================= その場で回る（向きを変えるスティック） =======================
 TURN_DEG_S = 150.0   # この動きを 1 倍で流したときに体が回る速さ（度/秒）。ゲームは実際に回る速さとの比で流す（情報の turn）
 
@@ -642,6 +688,12 @@ def build(rig, has_shield, made_by_name, group=None):
     # 扉を開ける・閉める
     kd = door_keys(has_shield)
     out.append(make_clip(rig, 'door', lambda t: sample(kd, t), kd[-1][0]))
+    # 梯子：上る・下りる（上るのを逆に流す）・掴まって止まる（上る途中の姿のまま）
+    fn, dur, spd = ladder_fn(has_shield)
+    out.append(make_clip(rig, 'ladder_up', fn, dur, loop=True, speed=spd * rig.K))
+    out.append(make_clip(rig, 'ladder_down', lambda t, fn=fn, dur=dur: fn(dur - t), dur, loop=True, speed=spd * rig.K))
+    hold = fn(dur * 0.25)
+    out.append(make_clip(rig, 'ladder_idle', lambda t, hold=hold: hold, 1.0, loop=True))
     # その場で回る（右回り・左回り）
     for side in ('r', 'l'):
         fn, dur = turn_fn(side, has_shield)

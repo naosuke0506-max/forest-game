@@ -1,5 +1,6 @@
 // 村の目印の建物（② 村の暮らしの物。2026-11-21。利用者の指示：マップは全部現代。森はヨーロッパの山村の「人が消えた直後」）
-//   教会（川邑）：白いしっくいの身廊と後ろの半円の張り出し、前に高い鐘の塔（鐘の窓・時計・緑青の尖り屋根と十字架）。扉は閉じている（入れない）
+//   教会（川邑）：白いしっくいの身廊と後ろの半円の張り出し、前に高い鐘の塔（鐘の窓・時計・緑青の尖り屋根と十字架）。
+//         2026-11-22 から中に入れる（両開きの扉・内装・祭壇の後ろの隠し扉と梯子。world/church.js）
 //   ガソリンスタンド（山邑と野邑の間の道ばた）：コンクリートの敷地・屋根（夜は下の灯が点く）・給油の島 2 つと給油機 4 台・
 //                   売店（閉まっている）・値段の看板・止まった車
 // 場所は world/villages.js の specials（敷地は前＝+z が道を向く）。形は村の入れ物（build-kit の builder）に貯める。
@@ -9,6 +10,7 @@ import { createMesh, sceneBudget } from '../core/mesh-utils.js';
 import { box, frame, prism, v3 } from './build-kit.js';
 import { glowTexture } from './roadside.js';
 import { CAR_COLORS } from './village-life.js';
+import { buildChurchInterior } from './church.js';
 
 const smoothstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const WHITE = [1.03, 1.04, 1.1];               // しっくい（質感の黄みを打ち消して白く）
@@ -21,11 +23,12 @@ const BRAND2 = [0.95, 0.72, 0.12];             // 差し色（黄）
 
 /**
  * @param {object} B 村の形の入れ物
- * @param {object} ctx { app, plan, terrain, items, solid, solidLine, sight, covers }
- * @returns {{ footprints: object[], update(dt, night): void, triangles: number }}
+ * @param {object} ctx { app, plan, terrain, items, solid, solidLine, sight, covers, floors, doorList, houseLife, cave }
+ * @returns {{ footprints: object[], update(dt, night): void, finish(materials): void, church: object|null, triangles: number }}
  */
 export function buildLandmarks(B, ctx) {
   const { app, plan, items, solid, solidLine, sight, covers } = ctx;
+  let churchIn = null;   // 教会の中（world/church.js）
   const footprints = [];
   // 夜に光る物（屋根の下の灯）：加算の板。街灯と同じ作り
   const lg = { positions: [], normals: [], uvs: [], colors: [], indices: [] };
@@ -72,9 +75,15 @@ export function buildLandmarks(B, ctx) {
     const RH = WH + NX + 0.15;                                     // 棟の高さ（45 度）
     const TX = 2.3, TZ0 = Z1 - 0.2, TZ1 = Z1 + 4.4, TH = 17.5;     // 塔：横の半分・後ろ・前・壁の高さ
     const mid = (Z0 + Z1) / 2, len = Z1 - Z0;
+    const DW = 0.95, DH = 3.0;   // 扉口の半分の幅・高さ（両開きの扉。world/church.js）
+    const AR = 3.3, AH = 5.6;      // 後ろの半円の張り出し（後陣）：半径・壁の高さ
     // 身廊：石の台・しっくいの壁・石の軒
     bx('stone', 0, -0.6, mid, NX * 2 + 0.3, len + 0.3, PL + 0.6, { grad: [0.75, 0.95] });
-    bx('plaster', 0, PL, mid, NX * 2, len, WH - PL, { top: false, grad: [0.86, 1], shade: WHITE });
+    // 前と後ろの面は、中への開口（塔の下の間への拱門・後陣）をふさがないよう、外から見える所だけ（2026-11-22。world/church.js）
+    bx('plaster', 0, PL, mid, NX * 2, len, WH - PL, { top: false, grad: [0.86, 1], shade: WHITE, skip: 'front back' });
+    for (const sx of [-1, 1]) panel('plaster', sx * (TX + NX) / 2, Z1, 'x', 1, NX - TX, PL, WH, WHITE);    // 前（塔の左右）
+    for (const sx of [-1, 1]) panel('plaster', sx * (AR + NX) / 2, Z0, 'x', -1, NX - AR, PL, WH, WHITE);   // 後ろ（後陣の左右）
+    panel('plaster', 0, Z0, 'x', -1, AR * 2, AH - 0.3, WH, WHITE);                                          // 後ろ（後陣の屋根の上）
     bx('stone', 0, WH - 0.28, mid, NX * 2 + 0.36, len + 0.36, 0.3, { shade: 0.95, bottom: true });
     // 屋根（瓦。軒は 0.5 m 張り出す）
     const eave = NX + 0.55, ey = WH - 0.55, rz0 = Z0 - 0.45, rz1 = Z1 + 0.1;
@@ -96,7 +105,7 @@ export function buildLandmarks(B, ctx) {
       for (const e of [-1, 1]) bx('stone', sx * (NX + 0.05), y0, wz + e * (w / 2 + 0.07), 0.12, 0.14, y1 - y0 + 0.3);   // 縁
     }
     // 後ろの半円の張り出し（多角形 5 面。しっくいの壁と瓦の屋根）
-    const AR = 3.3, AH = 5.6, AS = 5;
+    const AS = 5;
     const ap = [];
     for (let k = 0; k <= AS; k++) { const a = Math.PI + (k / AS) * Math.PI; ap.push([Math.cos(a) * AR, Z0 + Math.sin(a) * AR * 1.1]); }
     for (let k = 0; k < AS; k++) {
@@ -113,7 +122,10 @@ export function buildLandmarks(B, ctx) {
     // 塔：石の台・しっくいの壁・角の石・軒
     const tm = (TZ0 + TZ1) / 2, tl = TZ1 - TZ0;
     bx('stone', 0, -0.6, tm, TX * 2 + 0.3, tl + 0.3, PL + 0.6, { grad: [0.75, 0.95] });
-    bx('plaster', 0, PL, tm, TX * 2, tl, TH - PL, { top: false, grad: [0.86, 1], shade: WHITE });
+    bx('plaster', 0, PL, tm, TX * 2, tl, TH - PL, { top: false, grad: [0.86, 1], shade: WHITE, skip: 'front back' });   // 後ろは身廊の壁の中
+    // 塔の前の面（扉口を開ける）：扉口の左右と上
+    for (const sx of [-1, 1]) panel('plaster', sx * (DW + TX) / 2, TZ1, 'x', 1, TX - DW, PL, TH, WHITE);
+    panel('plaster', 0, TZ1, 'x', 1, DW * 2, PL + DH, TH, WHITE);
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) bx('stone', sx * (TX - 0.18), PL, tm + sz * (tl / 2 - 0.18), 0.4, 0.4, TH - PL, { top: false, shade: 0.92 });
     bx('stone', 0, TH - 0.35, tm, TX * 2 + 0.4, tl + 0.4, 0.38, { shade: 0.95, bottom: true });
     bx('stone', 0, 9.6, tm, TX * 2 + 0.16, tl + 0.16, 0.22, { shade: 0.95, bottom: true });     // 中ほどの帯
@@ -159,21 +171,17 @@ export function buildLandmarks(B, ctx) {
     prism(B, 'steel', at(0, SH + 0.15, tm), [0, 1, 0], 0.3, 0.18, 8, GOLD);
     bx('steel', 0, SH + 0.3, tm, 0.09, 0.09, 1.5, { shade: GOLD });
     bx('steel', 0, SH + 1.25, tm, 0.75, 0.09, 0.09, { shade: GOLD });
-    // 扉（閉じた両開きの板戸）・石の枠・前の段
-    panel('gate', 0, TZ1 + 0.02, 'x', 1, 1.9, PL, PL + 3.0, 0.85);
-    { const a = at(0, PL, TZ1 + 0.035), b = at(0, PL + 3.0, TZ1 + 0.035); B.quad('cloth', v3.add(a, dir(-0.03, 0, 0)), v3.add(a, dir(0.03, 0, 0)), v3.add(b, dir(0.03, 0, 0)), v3.add(b, dir(-0.03, 0, 0)), dir(0, 0, 1), [0.1, 0.08, 0.06]); }
+    // 扉口の石の枠・前の段（扉は両開きの板戸。world/doors.js が描き、開け閉めする）
     for (const e of [-1, 1]) bx('stone', e * 1.1, PL, TZ1 + 0.08, 0.3, 0.2, 3.25);
     bx('stone', 0, PL + 3.05, TZ1 + 0.08, 2.6, 0.24, 0.42);
     for (let k = 0; k < 3; k++) bx('stone', 0, -0.4, TZ1 + 0.3 + (2 - k) * 0.4 - 0.2, 3.4 - k * 0.2, 0.4 + (2 - k) * 0.8, 0.4 + (k + 1) * 0.233, { shade: 0.9 - k * 0.03 });
     // 当たり判定・bot の目・壁裏隠れの線・地図
     wallLine(-NX, Z0, -NX, Z1); wallLine(NX, Z0, NX, Z1); wallLine(-NX, Z0, -AR, Z0); wallLine(AR, Z0, NX, Z0);
-    wallLine(-TX, TZ0, -TX, TZ1); wallLine(TX, TZ0, TX, TZ1); wallLine(-TX, TZ1, TX, TZ1);
+    wallLine(-TX, TZ0, -TX, TZ1); wallLine(TX, TZ0, TX, TZ1);
+    wallLine(-TX, TZ1, -DW - 0.32, TZ1); wallLine(DW + 0.32, TZ1, TX, TZ1);   // 塔の前の壁（扉口は開ける。閉じた扉の当たり判定は world/church.js）
     wallLine(-NX, Z1, -TX, Z1); wallLine(TX, Z1, NX, Z1);
-    wallLine(-1.6, TZ1 + 1.7, 1.6, TZ1 + 1.7, 0.25);   // 前の段（扉は閉じている）
-    for (const s of [-1, 1]) wallLine(s * 1.7, TZ1 + 0.2, s * 1.7, TZ1 + 1.7, 0.25);
-    sightBox(0, -0.5, mid, NX * 2, len, RH - 1.2);
-    sightBox(0, -0.5, tm, TX * 2, tl, TH);
-    sightBox(0, -0.5, Z0 - AR * 0.5, AR * 1.8, AR * 1.0, AH);
+    for (const s of [-1, 1]) wallLine(s * 1.7, TZ1 + 0.2, s * 1.7, TZ1 + 1.7, 0.25);   // 前の段の両脇
+    // 視線をさえぎる物は、壁と屋根ごと（中に入れるので。world/church.js）
     const OUT = 0.5;
     cover(-NX - OUT, Z0 + 0.6, -NX - OUT, Z1 - 0.4, -1, 0);
     cover(NX + OUT, Z0 + 0.6, NX + OUT, Z1 - 0.4, 1, 0);
@@ -183,6 +191,8 @@ export function buildLandmarks(B, ctx) {
     rect(0, tm, TX * 2, tl, { roof: 'tiles', kind: 'church' });
     // 前の長椅子のかわりに、扉の横に植木箱
     for (const s of [-1, 1]) { const p = at(s * 2.6, 0, TZ1 + 0.5); items.prop('planter_box_01', p[0], o.y, p[2], o.yaw); solid(p[0], p[2], 0.3); }
+    // 中（world/church.js）：内の壁・床・天井・家具・扉・隠し扉と梯子・灯り
+    churchIn = buildChurchInterior(B, { at, dir, bx, wallLine }, ctx, o, { NX, Z0, Z1, WH, PL, TX, TZ0, TZ1, TH, AR, AH });
   }
 
   // ==================== ガソリンスタンド ====================
@@ -316,9 +326,14 @@ export function buildLandmarks(B, ctx) {
   }
   return {
     footprints,
-    triangles: tris,
+    get triangles() { return tris + (churchIn?.triangles || 0); },
+    /** 教会の中（扉・隠し扉の石板・梯子・中か）。無ければ null */
+    church: churchIn,
+    /** 村の質感ができてから（教会の石板・ステンドグラス） */
+    finish(materials) { churchIn?.finish(materials); },
     /** 毎フレーム：night（0〜1。夕方から夜で 1）。ガソリンスタンドの屋根の灯は、人が消えても点いたまま */
     update(dt, night) {
+      churchIn?.update(dt, night);
       const v = Math.round(Math.min(1, Math.max(0, night)) * 50) / 50;
       if (v === lit || !glowMat) return;
       lit = v;
