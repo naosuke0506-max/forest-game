@@ -132,7 +132,7 @@ async function boot() {
   const water = createWater(app, land, terrain);
   const env = createEnvironment(app, CONFIG, sky);
   const wind = createWind(app, CONFIG);
-  const obstacles = createObstacles();
+  const obstacles = createObstacles(terrain.heightAt);   // 地面の高さ：地下の洞窟の中にいる人には、地上の木や家を当てない
   // 外周の柵は無くした（2026-11-14。利用者の指示：周りの山が端になる。通れない仕組みは今までどおりの見えない円）
   // 木：Tripo AI の模型。読み込めなかったときは仮の木
   const trees = treeModels
@@ -141,7 +141,7 @@ async function boot() {
   // 森の小物（岩・切り株・落ち枝・シダ・草）：Poly Haven の模型。読み込めなかったときは仮の岩と草
   let props = null;
   if (propTypes) {
-    props = createProps(app, CONFIG, CONFIG.seed, terrain, obstacles, propTypes, zones);
+    props = createProps(app, CONFIG, CONFIG.seed, terrain, obstacles, propTypes, zones, { fixed: [...land.cave.mouthRocks(), ...land.cave.skyRocks()] });   // 洞窟の口と天坑のふちの岩（world/cave-plan.js）
   } else {
     createRocks(app, CONFIG, CONFIG.seed, terrain, obstacles, tex.rock);
     createGrass(app, CONFIG, CONFIG.seed, terrain, obstacles);
@@ -159,7 +159,7 @@ async function boot() {
   const village = createVillage(app, CONFIG, terrain, obstacles, zones, floors, sight, plan, land);
   // 洞窟（world/cave.js。配置は world/cave-plan.js）：北西の岩山（風穴）の口から、マップの地下へ広がる。
   // 床・壁・天井の殻と、口の岩の面・口のまわりの細かい地面を作り、中の床と壁の当たり判定を登録する
-  const cave = createCave(app, land, { obstacles, floors, rockTex: tex.rock, seed: CONFIG.seed, terrain });
+  const cave = createCave(app, land, { obstacles, floors, rockTex: tex.rock, seed: CONFIG.seed, terrain, waterMat: water.pondMaterial });   // waterMat：天坑の下の池の水面
   // 地面を覆う草（自分の周りだけ。短い草・穂・白い花・大草原の背の高い草）
   const groundCover = grassTex ? createGroundCover(app, CONFIG, CONFIG.seed, terrain, obstacles, grassTex, zones) : null;
 
@@ -179,6 +179,8 @@ async function boot() {
     const dx = x - p0[0], dz = z - p0[2], dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl;
     const pts = [[x, y, z], [x + ux * 0.3, y, z + uz * 0.3], [x - uz * 0.22, y, z + ux * 0.22], [x + uz * 0.22, y, z - ux * 0.22], [x, y + 0.2, z]];
     for (const q of pts) if (sight.blocked(p0, q, { solidsOnly: true })) return false;
+    // 天坑の縦穴を落ちている間：カメラは縦穴の中だけ（壁の外へ出ると、岩の裏や地面の下が見える）
+    if (player.falling && land.cave.inShaft(cp.x, cp.y, cp.z)) return land.cave.inShaft(x, y, z, 0.4);
     if (land.cave.inside(cp.x, cp.z, cp.y) < 0.3) return true;
     const q = land.cave.at(x, z);
     return !!q && q.d < -0.3 && y > q.floor + 0.25 && y < q.ceil - 0.3;
@@ -248,8 +250,10 @@ async function boot() {
     deepK += (deep - deepK) * Math.min(1, dt * 1.5);
     // 洞窟の中は暗い（奥ほど暗いのは洞窟の頂点の色。ここは空と太陽の光を弱くする。岩山の上にいるときは外）
     const inCave = land.cave.inside(cp.x, cp.z, cp.y);
-    caveK += (inCave - caveK) * Math.min(1, dt * 2);
-    cave.update(dt, cp, Math.max(inCave, caveK));   // 近くの洞窟の殻だけ描く
+    // 天坑の下は、天井の穴から空の光が入るので、暗さを弱める（穴の真下で半分ほど。world/cave-plan.js の skyLight）
+    const caveDark = inCave * (1 - 0.5 * land.cave.skyLight(cp.x, cp.z));
+    caveK += (caveDark - caveK) * Math.min(1, dt * 2);
+    cave.update(dt, cp, Math.max(inCave, caveK), 1 - lampK);   // 近くの洞窟の殻だけ描く。天坑の光の筋は昼ほど濃い
     // 洞窟の中は霧も薄くする（霧の色は明るいので、奥が明るく光って見えてしまう）。塵・落ち葉・光の筋・太陽のまぶしさは出さない
     // マップの紹介の間は、遠くまで見えるように霧を薄くする（render/intro.js の fog）
     timeOfDay.setLocal({ fog: (1 + 1.3 * deepK) * (1 - 0.85 * caveK) * (stage === 'intro' ? intro.fog : 1), light: (1 - 0.35 * deepK) * (1 - 0.5 * caveK), sun: 1 - 0.7 * caveK, fx: 1 - caveK });

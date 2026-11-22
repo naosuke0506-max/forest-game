@@ -112,6 +112,19 @@ const MOUTHS = {
 // 大空洞の中に立つ岩の柱（天井まで届く）
 // 通り道の入る所（北西・北東・東・南・西）を避けて置く
 const PILLARS = [{ x: -47, z: 19, r: 2.3 }, { x: -29, z: 7, r: 1.9 }, { x: -41, z: 25, r: 1.6 }, { x: -50, z: 9, r: 1.4 }];
+/**
+ * 天坑（大空洞の天井に開いた穴。2026-11-22。利用者の指示：地上から見ると大きく穴が開いた地面で、入ろうとすると落ちて池に飛び込む。
+ * 洞窟の中から見ると、天井に穴が開いていて、唯一空が見える所）。
+ * 場所：大空洞の南の、上の岩が一番薄い所（地面から天井まで約 8 m）。道・家・柱から離した（計算で探した）。
+ *   r：地面の穴の半径（縦穴の一番細い所）、low：縦穴の下の端（大空洞の天井）の半径（下ほど広い）、lip：穴のふちで地面が穴へ下る幅、dip：その深さ、
+ *   pond：池の半径、depth：池の一番深い所（m）、lift：穴のまわりの天井を、穴へ向かって持ち上げる高さ（天井と縦穴の壁を丸くつなぐ）
+ */
+export const SKY = { x: -40, z: 2, r: 4.3, low: 5.4, lip: 1.1, dip: 0.75, pond: 7.6, depth: 2.7, lift: 1.4, name: '天坑' };
+/**
+ * 天坑の穴の形のゆがみ（向き a ラジアンで、半径に掛ける倍率 0.82〜1.18）：まん丸の穴は、地面を丸く切り抜いたように見えるので。
+ * 穴・ふち・縦穴・天井の穴の半径に掛ける（池と、地面を作り直す範囲は丸いまま）。world/cave.js も同じ形を使う
+ */
+export const skyWarp = (a) => 1 + 0.08 * Math.sin(3 * a + 1.3) + 0.06 * Math.sin(5 * a + 0.4) + 0.035 * Math.sin(9 * a + 2.1);
 
 /** なめらかな線（Catmull-Rom）で、step m ごとに区切る */
 function spline(pts, step) {
@@ -261,7 +274,16 @@ export function createCavePlan(seed) {
       const end = smooth(-m.len - 4, -m.len + 1.5, s);            // 外の端はなだらかに始まる
       const cut = floor + (Math.max(h, floor) - floor) * k;
       h = h + (cut - h) * end;
+      // 口の手前 3 m：洞窟の穴が開いている所は、洞窟の床（真ん中が少し低く、奥へ下る）の高さまで下げる。前は外の地面が平らなまま
+      // 口まで来ていて、洞窟の床より 0.2〜1.2 m 高く、その段の下が抜けて空が見えていた（2026-11-21。利用者の指摘「入り口の地面がおかしい」）
+      if (baked && s > -3) {
+        const q = at(m.x + m.in[0] * 0.4 + m.in[1] * l, m.z + m.in[1] * 0.4 - m.in[0] * l);
+        if (q && q.d < -0.05) h = h + (Math.min(h, q.floor + 0.02) - h) * smooth(-3, -0.3, s) * smooth(-0.05, -0.6, q.d);
+      }
     }
+    // 天坑のふち：地面が穴へ向かって丸く下る（穴の縁が、地面にナイフで切ったような段にならないように）
+    const ds = skyN(x, z);
+    if (ds < SKY.r + SKY.lip) h -= SKY.dip * (1 - smooth(SKY.r - 0.2, SKY.r + SKY.lip, ds));
     return h;
   }
 
@@ -341,6 +363,16 @@ export function createCavePlan(seed) {
     for (const s of samples) s.dist = Infinity;
     for (const m of mouths) for (const [s, d] of walk(nodeSample[m.id])) s.dist = Math.min(s.dist, d);
     baked = bake();
+    // 天坑の高さ：地面の穴のふち（穴の半径の所の地面のならし）と、縦穴の下の端（その半径の所の天井のならし）
+    {
+      let t = 0, c = 0;
+      for (let a = 0; a < 16; a++) {
+        const an = (a / 16) * Math.PI * 2, ca = Math.cos(an), sa = Math.sin(an), w = skyWarp(an);
+        t += ground(SKY.x + ca * SKY.r * w, SKY.z + sa * SKY.r * w);
+        c += at(SKY.x + ca * SKY.low * w, SKY.z + sa * SKY.low * w)?.ceil ?? -10;
+      }
+      sky.top = t / 16; sky.ceil = c / 16;
+    }
     return api;
   }
 
@@ -432,11 +464,102 @@ export function createCavePlan(seed) {
       C[k] = fl + wallH + (hd - wallH) * dome * (0.86 + 0.28 * fbm(x * 0.16, z * 0.16, seed + 909));
       S[k] = sd; O[k] = od; W[k] = wallH;
     }
+    // 天坑の下：池（床をすり鉢にくぼませる）と、穴のまわりの天井（穴へ向かって持ち上げ、縦穴の壁と丸くつなぐ）。
+    // 天井は床から決めたので、床をくぼませるのは天井を決めた後（池の所の天井まで下がらないように）
+    {
+      const ix0 = Math.max(0, Math.floor((SKY.x - SKY.pond - 4 - x0) / G)), ix1 = Math.min(nx - 1, Math.ceil((SKY.x + SKY.pond + 4 - x0) / G));
+      const iz0 = Math.max(0, Math.floor((SKY.z - SKY.pond - 4 - z0) / G)), iz1 = Math.min(nz - 1, Math.ceil((SKY.z + SKY.pond + 4 - z0) / G));
+      let a = 0, n = 0;
+      for (let iz = iz0; iz <= iz1; iz++) for (let ix = ix0; ix <= ix1; ix++) {
+        const k = iz * nx + ix;
+        if (D[k] < 0 && Math.hypot(x0 + ix * G - SKY.x, z0 + iz * G - SKY.z) < SKY.pond) { a += F[k]; n++; }
+      }
+      // 水面：池のあたりの床の高さのならしより少し下（岸の線は、床のでこぼこに沿ってくねる）
+      sky.surface = (n ? a / n : -20) - 0.22;
+      for (let iz = iz0; iz <= iz1; iz++) for (let ix = ix0; ix <= ix1; ix++) {
+        const k = iz * nx + ix, x = x0 + ix * G, z = z0 + iz * G, ds = Math.hypot(x - SKY.x, z - SKY.z);
+        if (D[k] > 2.9) continue;
+        const dn = ds / skyWarp(Math.atan2(z - SKY.z, x - SKY.x));   // 穴の形にならした距離
+        C[k] += SKY.lift * (1 - smooth(SKY.low, SKY.low + 3.6, dn));
+        if (ds < SKY.pond) {
+          const bowl = sky.surface + 0.3 - (SKY.depth + 0.3) * (1 - smooth(SKY.pond * 0.15, SKY.pond, ds)) + (fbm(x * 0.4, z * 0.4, seed + 913) - 0.5) * 0.35;
+          F[k] = Math.min(F[k], bowl);
+        }
+      }
+    }
     return { G, x0, z0, nx, nz, D, F, C, S, O, W };
   }
+  // 天坑の高さ（settle が決める）：top 地面の穴のふちの高さ、ceil 縦穴の下の端（天井）の高さ、surface 池の水面
+  const sky = { ...SKY, top: 0, ceil: -10, surface: -20 };
+  /** 天坑の真ん中からの距離 */
+  const skyDist = (x, z) => Math.hypot(x - SKY.x, z - SKY.z);
+  /** 天坑の穴の形にならした距離（穴のゆがみで割る。SKY の r・lip・low と比べる） */
+  const skyN = (x, z) => skyDist(x, z) / skyWarp(Math.atan2(z - SKY.z, x - SKY.x));
+  /** 縦穴の、高さ y での半径（下ほど広い。地面のふちより上・天井より下は穴の半径） */
+  const shaftR = (y) => lerp(SKY.low, SKY.r, smooth(sky.ceil, sky.top - SKY.lip * 0.6, y));
+  // 天坑のまわりの地面：網を抜く半径（穴のふちの下りの外まで）と、細かい地面を作る半径（抜いた網の升の対角 3.7 m より外まで）
+  const SKY_HOLE = (SKY.r + SKY.lip) * 1.18 + 0.4, SKY_PATCH = SKY_HOLE + 4.1;   // 1.18：穴のゆがみの一番大きい倍率
+  /** 縦穴の中か（天井より上・地面より下の、穴の中） */
+  const inShaft = (x, y, z, margin = 0) => y > sky.ceil - 0.6 && y < sky.top + 0.4 && skyN(x, z) < shaftR(y) - margin;
 
   /** 升目から読む（4 点の間をなめらかに）。洞窟から遠ければ null */
   const out = { d: 0, floor: 0, ceil: 0, dist: 0, open: 0 };
+  /**
+   * 口のまわりに置く岩（森の小物の岩の模型。world/props.js が置く）。2026-11-21：利用者の指摘「入り口が平ら」。
+   * 平らな岩の面と、つるっとした盛り土を隠し、自然な岩場の口にする：
+   *   ・口の両脇に縦に起こした大岩（崖の一部）と、その外の大岩
+   *   ・口の上（岩山の上、口の面のすぐ後ろ）に、口へかぶさる大岩（ひさし）
+   *   ・切り通しの壁ぎわの岩と、壁ぎわに落ちた小さな岩（通り道は空ける）
+   * 返す形：{ id, x, z, scale, yaw, pitch, roll, sink（高さに対する埋める割合）, r（当たり判定の半径。0 は無し）, vi（模型の型の番号） }
+   */
+  function mouthRocks() {
+    const out = [];
+    mouths.forEach((m, mi) => {
+      const rnd = createRandom(seed + 9100 + mi * 131);
+      const r = () => rnd.next();
+      const faceYaw = (Math.atan2(-m.in[0], -m.in[1]) * 180) / Math.PI;   // 外を向く向き
+      const put = (id, s, l, scale, o = {}) => {
+        const x = m.x + m.in[0] * s + m.in[1] * l, z = m.z + m.in[1] * s - m.in[0] * l;
+        out.push({ id, x, z, scale, yaw: faceYaw + (o.yaw ?? (r() - 0.5) * 50), pitch: o.pitch ?? (r() - 0.5) * 24, roll: o.roll ?? (r() - 0.5) * 24,
+          sink: o.sink ?? 0.3, r: o.r ?? 0, vi: Math.floor(r() * 8) });
+      };
+      for (const sd of [-1, 1]) {
+        // 口の両脇：縦に起こした大岩（長い向きを上へ）。内側の端が通り道の外に来るように
+        put('rock_large', -1.0 + r() * 0.5, sd * (m.hw + 3.6 + r() * 0.5), 2.8 + r() * 0.6, { yaw: (r() - 0.5) * 16, pitch: 68 + r() * 16, roll: sd * (4 + r() * 8), sink: 0.22, r: 2.2 });
+        // その外：斜めに寄りかかる大岩
+        put('rock_large', -3.0 - r() * 2.0, sd * (m.hw + 6.2 + r() * 1.2), 2.2 + r() * 0.6, { pitch: 25 + r() * 25, sink: 0.3, r: 2.0 });
+        // 切り通しの壁ぎわ（坂の上）
+        for (const t of [0.35, 0.72]) put('rock_medium', -m.len * t - r() * 1.5, sd * (m.hw + 2.3 + r() * 1.2), 1.3 + r() * 0.6, { sink: 0.35, r: 0.8 });
+        // 壁ぎわに落ちた小さな岩（通り道の端。真ん中は空ける）
+        put('rock_medium', -1.8 - r() * Math.max(1, m.len - 3), sd * (m.hw - 0.1 + r() * 0.3), 0.55 + r() * 0.3, { sink: 0.28, r: 0.45 });
+      }
+      // 口の上：岩山の上から、口の前へかぶさる大岩 3 つ（ひさし。下の通り道より十分高い）
+      for (const k of [-1, 0, 1]) put('rock_large', 1.5 + r() * 1.4, k * m.hw * 0.8 + (r() - 0.5) * 1.2, 2.4 + r() * 0.6, { pitch: (r() - 0.5) * 20, roll: (r() - 0.5) * 20, sink: 0.38, r: 1.4 });
+    });
+    return out;
+  }
+
+  /**
+   * 天坑のふちに置く岩（world/props.js が置く。形は mouthRocks と同じ）：ふちから穴へ張り出す大岩（間は通れるように空ける）と、
+   * その外に散らばる岩。穴のふちが、地面を丸く切り抜いただけに見えないように
+   */
+  function skyRocks() {
+    const out = [], rnd = createRandom(seed + 9400), r = () => rnd.next();
+    const put = (id, a, d, scale, o = {}) => {
+      const x = SKY.x + Math.cos(a) * d, z = SKY.z + Math.sin(a) * d;
+      out.push({ id, x, z, scale, yaw: o.yaw ?? r() * 360, pitch: o.pitch ?? (r() - 0.5) * 30, roll: o.roll ?? (r() - 0.5) * 30, sink: o.sink ?? 0.32, r: o.r ?? 0, vi: Math.floor(r() * 8) });
+    };
+    // ふちの大岩 3 つ：ふちの下りのすぐ外に、半分埋めて穴の方へ傾ける（縦穴の中へは出さない。前は縦穴の壁から突き出て、下から黒い塊に見えた）。
+    // 大きすぎると、近づいても岩で穴が見えない（2026-11-22 に撮って小さくした）。間は 4 m 以上空く
+    for (let k = 0; k < 3; k++) {
+      const a = ((k + 0.15 + r() * 0.5) / 3) * Math.PI * 2, w = skyWarp(a);
+      put('rock_large', a, (SKY.r + SKY.lip) * w + 1.1 + r() * 0.5, 0.85 + r() * 0.3, { pitch: 8 + r() * 10, yaw: (a * 180) / Math.PI + 90 + (r() - 0.5) * 40, sink: 0.45, r: 0.8 });
+    }
+    // 外に散らばる小さめの岩
+    for (let k = 0; k < 5; k++) { const a = r() * Math.PI * 2; put('rock_medium', a, (SKY.r + SKY.lip) * skyWarp(a) + 1.0 + r() * 3.2, 0.5 + r() * 0.5, { r: 0.4 }); }
+    return out;
+  }
+
   function at(x, z) {
     const b = baked;
     const fx = (x - b.x0) / b.G, fz = (z - b.z0) / b.G, ix = Math.floor(fx), iz = Math.floor(fz);
@@ -474,10 +597,11 @@ export function createCavePlan(seed) {
   };
 
   const api = {
-    CAVE, mouths, passages, samples, pillars: PILLARS, hill, carve, settle, at, frame,
+    CAVE, mouths, passages, samples, pillars: PILLARS, hill, carve, settle, at, frame, mouthRocks, skyRocks,
     get baked() { return baked; },
     /** 洞窟の空いた所（屋根の下）の中か。(x, y, z)。bot の目・矢・カメラが使う */
     voidAt(x, y, z) {
+      if (inShaft(x, y, z)) return true;   // 天坑の縦穴（地面の穴から大空洞まで、空いている）
       const q = at(x, z);
       if (!q || q.d > 0 || inCut(x, z)) return false;
       return y > q.floor - 0.4 && y < q.ceil;
@@ -497,6 +621,8 @@ export function createCavePlan(seed) {
       if (y === null || y === undefined) return null;
       const q = at(x, z);
       if (!q || q.d > 0.9) return null;
+      // 天坑の穴の上（地面の穴のふちより内）と縦穴の中：足もとは下の大空洞の床（池の底）。そこへ落ちる（game/fall.js）
+      if (skyN(x, z) < SKY.r - 0.05 && y < sky.top + 1.5 && y > q.floor - 2.5) return q;
       if (y > q.ceil + 0.3 || y < q.floor - 2.5) return null;
       if (inCut(x, z)) return null;   // 口の面より前は、掘った地面の上（口の面で、同じ高さにつながる）
       return q;
@@ -507,6 +633,24 @@ export function createCavePlan(seed) {
      */
     resolve(p, radius) {
       if (p.y === undefined || p.y === null) return;
+      // 天坑：縦穴の中を落ちている人は、縦穴の壁の内に留める。bot は穴へ入らない（ふちの外へ押し戻す。人は落ちられる）
+      // （距離は穴の形にならした物。同じ向きのまま、ならした距離が lim になる所へ動かす）
+      const ds = skyN(p.x, p.z);
+      if (ds < SKY.r + SKY.lip + 1.6) {
+        if (p.y < sky.top - SKY.dip - 0.4 && p.y > sky.ceil - 0.3) {
+          const lim = SKY.r - radius - 0.1;
+          if (ds > lim) { p.x = SKY.x + ((p.x - SKY.x) * lim) / ds; p.z = SKY.z + ((p.z - SKY.z) * lim) / ds; }
+          return;
+        }
+        if (p.isPlayer === false && p.y > sky.top - SKY.dip - 0.4) {
+          const lim = SKY.r + SKY.lip + 0.3 + radius;
+          if (ds < lim) {
+            if (ds < 1e-3) { p.x = SKY.x + lim; return; }
+            p.x = SKY.x + ((p.x - SKY.x) * lim) / ds; p.z = SKY.z + ((p.z - SKY.z) * lim) / ds;
+          }
+          return;
+        }
+      }
       const q = at(p.x, p.z);
       if (!q || q.d > 1.2 || q.d < -radius - 0.4) return;
       if (p.y > q.ceil + 0.3 || p.y < q.floor - 2.5) return;
@@ -526,11 +670,13 @@ export function createCavePlan(seed) {
     },
     /** 地面を細かく作り直す所（口のまわり）の中か：{ mouth } か null。world/terrain.js が、ここは計算の高さを使う */
     patchAt(x, z) {
+      if (skyDist(x, z) < SKY_PATCH) return sky;   // 天坑のまわり（world/cave.js が細かい地面を作る）
       for (const m of mouths) { const [s, l] = frame(m, x, z); if (s > -m.len - PATCH.front && s < PATCH.back && Math.abs(l) < m.hw + PATCH.side) return m; }
       return null;
     },
     /** 地面の網を抜く所（口の岩の面をまたぐ所と、切り通し）：網の升の四隅のどれかがここに入れば、その升は描かない */
     holeAt(x, z) {
+      if (skyDist(x, z) < SKY_HOLE) return true;   // 天坑の穴とふち
       for (const m of mouths) {
         const [s, l] = frame(m, x, z);
         if (s > -m.len - 0.5 && s < 2.7 && Math.abs(l) < m.hw + 4.5) return true;
@@ -549,6 +695,22 @@ export function createCavePlan(seed) {
       return a;
     },
     behindMouth,
+    /** 天坑：{ x, z, r（地面の穴の半径）, low（天井の穴の半径）, lip, dip, pond（池の半径）, top（ふちの地面）, ceil（天井の穴）, surface（池の水面）, hole, patch, name } */
+    get sky() { return { ...sky, hole: SKY_HOLE, patch: SKY_PATCH }; },
+    /** 天坑の縦穴の中か（落ちている人。三人称のカメラは、ここから出ない）。margin：壁から離す分 */
+    inShaft,
+    /** 天坑の下の池の水：{ surface（水面）, depth（深さ）} か、池でなければ null（world/terrain.js の waterAt が川と合わせる） */
+    pondAt(x, z) {
+      if (skyDist(x, z) > SKY.pond + 0.6) return null;
+      const q = at(x, z);
+      if (!q) return null;
+      const depth = sky.surface - q.floor;
+      return depth > 0 ? { surface: sky.surface, depth } : null;
+    },
+    /** 天坑から入る空の光（0〜1）：穴の真下は 1、まわり 12 m で 0。洞窟の中の暗さを弱める（main.js） */
+    skyLight(x, z) { return 1 - smooth(SKY.low - 1.5, SKY.low + 12, skyDist(x, z)); },
+    /** 木・草・小物を置かない所（天坑のまわり。0〜1）。村の配置は変えないため、area とは分ける（world/zones.js が合わせる） */
+    skyArea(x, z) { return 1 - smooth(SKY_HOLE + 0.5, SKY_HOLE + 3.5, skyDist(x, z)); },   // 草は穴のふちの少し外まで生える
     /**
      * 道順（bot が洞窟の中を歩くのに使う）：通り道の点をたどって、(x, z) から行き先まで。[{ x, z }] か、たどれなければ null
      * @param {{ x: number, z: number } | { mouth: string } | { room: true, pick: number }} to
@@ -582,6 +744,8 @@ export function createCavePlan(seed) {
     get entrances() { return mouths.map((m) => ({ id: m.id, x: m.from[0] - m.in[0] * 2, z: m.from[1] - m.in[1] * 2 })); },
     /** 一番近い口の名前 */
     nearestMouth(x, z) { let b = null, bd = Infinity; for (const m of mouths) { const d = Math.hypot(m.x - x, m.z - z); if (d < bd) { bd = d; b = m.id; } } return b; },
+    /** 地下の地図に書く名前（広間）：[{ name, x, z }] */
+    get names() { return Object.values(NODES).filter((n) => n.name).map((n) => ({ name: n.name, x: n.x, z: n.z })); },
     /** 今いる所の名前（「〜に入った」の知らせ）：大空洞の中は「大空洞」、深い所は「地底洞」、北西の岩山の中は「風穴」 */
     nameAt(x, z) {
       const H = NODES.H;

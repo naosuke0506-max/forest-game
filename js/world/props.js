@@ -134,7 +134,11 @@ function createPropMaterial(type, rule, antialias) {
 /**
  * 小物を置いて描く。毎フレーム update(dt, カメラの位置) を呼ぶ
  */
-export function createProps(app, config, seed, terrain, obstacles, types, zones = null) {
+/**
+ * @param {object[]} [fixed] 決まった所に置く物（洞窟の口のまわりの岩。world/cave-plan.js の mouthRocks）：
+ *   { id, x, z, scale, yaw, pitch, roll, sink, r（当たり判定の半径。0 は無し）, vi（模型の型の番号） }
+ */
+export function createProps(app, config, seed, terrain, obstacles, types, zones = null, { fixed = [] } = {}) {
   const device = app.graphicsDevice;
   const q = config.quality;
   const rnd = createRandom(seed + 5000);
@@ -229,6 +233,21 @@ export function createProps(app, config, seed, terrain, obstacles, types, zones 
           obstacles.add(p.x, p.z, rule.collide ? p.width * rule.collide : 0.01, !!rule.collide);
         }
         n++;
+      }
+    }
+
+    // 1.5 決まった所に置く物（洞窟の口のまわりの岩。2026-11-21）：向きは 横の向き → 前後の傾き → 横の傾き の順に回す
+    for (const f of fixed) {
+      if (f.id !== id) continue;
+      const v = vnames[f.vi % vnames.length], vm = type.variants[v], sc = f.scale;
+      const g = terrain.heightAt(f.x, f.z);
+      const q = new pc.Quat().setFromEulerAngles(0, f.yaw, 0).mul(new pc.Quat().setFromEulerAngles(f.pitch, 0, 0)).mul(new pc.Quat().setFromEulerAngles(0, 0, f.roll));
+      const y = g - vm.size[1] * sc * f.sink;
+      const mat = new pc.Mat4().setTRS(new pc.Vec3(f.x, y, f.z), q, new pc.Vec3(sc, sc, sc));
+      lists[v].push({ v, x: f.x, z: f.z, mat, width: Math.max(vm.size[0], vm.size[2]) * sc, yaw: f.yaw, s: sc, size: vm.size });
+      if (f.r > 0) {
+        obstacles.add(f.x, f.z, f.r, true);
+        blockers.push({ x: f.x, z: f.z, r: f.r * 0.9, y0: g - 0.2, y1: g + Math.max(...vm.size) * sc * 0.8 });
       }
     }
 

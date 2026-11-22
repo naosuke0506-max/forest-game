@@ -3,7 +3,14 @@
 
 const CELL = 8; // m
 
-export function createObstacles() {
+// 地上の物（高さの範囲を書かずに足した木・岩・家の壁など）は、地面よりこれだけ下にいる人（地下の洞窟の中）には当てない（m）
+// 2026-11-21：洞窟の中に「謎の当たり判定」（真上の地上の木の幹などが、見えない柱として残っていた）。利用者の指摘で直した
+const UNDER = 2.5;
+
+/**
+ * @param {(x: number, z: number) => number} [groundAt] 地面の高さ（地下にいる人に地上の物を当てないために使う）
+ */
+export function createObstacles(groundAt = null) {
   const grid = new Map();
   const all = [];
   const fields = [];   // 円では書けない壁（洞窟の壁）：{ resolve(p, radius) }。円の後に呼ぶ
@@ -36,6 +43,11 @@ export function createObstacles() {
     for (const o of near(p.x, p.z)) {
       if (!o.solid || o.off) continue;
       if (p.y !== undefined && (p.y < o.y0 || p.y > o.y1)) continue;   // 別の階の物にはぶつからない
+      // 地上の物（高さの範囲なし）は、地下（洞窟の中）にいる人には当てない。物の足もとの高さは初めて要るときに測って覚えておく
+      if (p.y !== undefined && groundAt && o.y0 === -Infinity && o.y1 === Infinity) {
+        if (o.gy === undefined) o.gy = groundAt(o.x, o.z);
+        if (p.y < o.gy - UNDER) continue;
+      }
       const dx = p.x - o.x, dz = p.z - o.z;
       const min = o.r + radius;
       const d2 = dx * dx + dz * dz;

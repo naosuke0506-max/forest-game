@@ -27,7 +27,7 @@ const INK = '#3b2a17';
  * @param {HTMLCanvasElement} canvas 左上の小さな地図
  * @param {{ areaRadius: number, zones: object, buildings: object[], heightAt: Function, trees: {x, z, r}[] }} opt
  */
-export function createMinimap(canvas, { areaRadius, zones = null, buildings = [], heightAt = null, trees = [], waterAt = null }) {
+export function createMinimap(canvas, { areaRadius, zones = null, buildings = [], heightAt = null, trees = [], waterAt = null, cave = zones?.cave || null }) {
   const view = areaRadius + 8;                      // 地図に入れる範囲の半径（m）
   const toPx = (x, z) => [(x / view * 0.5 + 0.5) * RES, (z / view * 0.5 + 0.5) * RES];
   const toD = (x, z) => [(x / view * 0.5 + 0.5) * DRES, (z / view * 0.5 + 0.5) * DRES];
@@ -160,6 +160,16 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       fctx.restore();
     }
   }
+  // 天坑（2026-11-22。world/cave-plan.js の SKY）：地面に開いた穴。黒い丸と、ふちの岩の輪
+  const sky = cave?.sky || null;
+  if (sky) {
+    const [x, y] = toD(sky.x, sky.z), r = sky.r * kD;
+    fctx.fillStyle = 'rgba(120, 104, 84, .9)'; fctx.beginPath(); fctx.arc(x, y, r + (sky.lip + 0.6) * kD, 0, Math.PI * 2); fctx.fill();
+    const hg = fctx.createRadialGradient(x, y, 0, x, y, r);
+    hg.addColorStop(0, '#05080a'); hg.addColorStop(0.75, '#10161a'); hg.addColorStop(1, '#2a2620');
+    fctx.fillStyle = hg; fctx.beginPath(); fctx.arc(x, y, r, 0, Math.PI * 2); fctx.fill();
+    fctx.strokeStyle = INK; fctx.lineWidth = 1.2; fctx.stroke();
+  }
   // 歩ける範囲の縁：点線（2026-11-14：外周の柵を無くし、周りの山が端になった）
   {
     const R = (areaRadius / view) * DRES / 2;
@@ -207,6 +217,77 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     const byName = new Map();
     for (const b of buildings) if (b.type === 'cave') { const k = b.name || '風穴'; if (!byName.has(k)) byName.set(k, []); byName.get(k).push(b); }
     for (const [name, list] of byName) labels.push({ key: 'cave', name, x: list.reduce((s, b) => s + b.x, 0) / list.length + 6, z: list.reduce((s, b) => s + b.z, 0) / list.length });
+    // 天坑の名前は地上の地図には書かない（混淆林・川邑の名前と重なるため。穴の印だけ。名前は地下の地図に書く）
+  }
+
+  // ===== 地下の地図（2026-11-21。利用者の指示：洞窟に入ったら地下の地図に切り替える）=====
+  //   洞窟の形（world/cave-plan.js が 0.8 m の升目に焼いた、壁からの距離）から、通り道と広間を描く。初めて洞窟に入ったときに 1 回だけ描く。
+  //   通り道は床の高さで濃さを変える（深い所ほど暗い）。壁の縁は墨の線。口は外へ向いた印と名前。外（岩）は暗い色
+  const caveLabels = [];
+  if (cave) {
+    for (const n of cave.names || []) caveLabels.push({ name: n.name, x: n.x, z: n.z });
+    if (cave.sky) caveLabels.push({ name: cave.sky.name, x: cave.sky.x - 2, z: cave.sky.z - 13, small: true });   // 天坑（池の少し北。大空洞の名前と重ならないように）
+    const byName = new Map();
+    for (const m of cave.mouths) { if (!byName.has(m.name)) byName.set(m.name, []); byName.get(m.name).push(m); }
+    for (const [name, list] of byName) caveLabels.push({ name, x: list.reduce((a, m) => a + m.x, 0) / list.length - list[0].in[0] * 9, z: list.reduce((a, m) => a + m.z, 0) / list.length - list[0].in[1] * 9 });
+  }
+  let caveFull = null;
+  function buildCaveMap() {
+    const img = new ImageData(RES, RES);
+    let lo = Infinity, hi = -Infinity;
+    const D = new Float32Array(RES * RES).fill(9), Fl = new Float32Array(RES * RES);
+    for (let py = 0; py < RES; py++) for (let px = 0; px < RES; px++) {
+      const q = cave.at(px2w(px), px2w(py));
+      if (!q) continue;
+      const i = py * RES + px;
+      D[i] = q.d; Fl[i] = q.floor;
+      if (q.d < 0) { lo = Math.min(lo, q.floor); hi = Math.max(hi, q.floor); }
+    }
+    for (let py = 0; py < RES; py++) for (let px = 0; px < RES; px++) {
+      const i = py * RES + px, x = px2w(px), z = px2w(py);
+      const n = fbm(x * 0.08, z * 0.08, 41);
+      let c;
+      if (D[i] < -0.4) {
+        // 通り道：床が高い（浅い）所ほど明るい土色
+        const t = hi > lo ? (Fl[i] - lo) / (hi - lo) : 0.5;
+        const k = 0.72 + 0.28 * t + (n - 0.5) * 0.08;
+        c = [176 * k, 152 * k, 112 * k];
+        // 天坑の下の池：水の色（深いほど濃い）。真上の穴から光が入る所は明るく
+        const w = cave.pondAt?.(x, z);
+        if (w) { const d = Math.min(1, w.depth / 2.5); c = [96 - 40 * d, 138 - 40 * d, 150 - 26 * d]; }
+      } else if (D[i] < 0.9) c = [52, 36, 20];                 // 壁の縁（墨の線）
+      else c = [34 + n * 14, 30 + n * 12, 26 + n * 10];         // 岩
+      img.data[i * 4] = c[0]; img.data[i * 4 + 1] = c[1]; img.data[i * 4 + 2] = c[2]; img.data[i * 4 + 3] = 255;
+    }
+    const b = document.createElement('canvas'); b.width = b.height = RES; b.getContext('2d').putImageData(img, 0, 0);
+    const f = document.createElement('canvas'); f.width = f.height = DRES;
+    const g = f.getContext('2d');
+    g.imageSmoothingEnabled = true;
+    g.drawImage(b, 0, 0, DRES, DRES);
+    // 天坑：天井の穴（空が見える所）を点線の丸で
+    if (cave.sky) {
+      const [x, y] = toD(cave.sky.x, cave.sky.z);
+      g.save(); g.setLineDash([4, 3]); g.strokeStyle = 'rgba(250, 236, 190, .95)'; g.lineWidth = 1.6;
+      g.beginPath(); g.arc(x, y, cave.sky.low * kD, 0, Math.PI * 2); g.stroke(); g.restore();
+    }
+    // 柱（大空洞の岩の柱）
+    g.fillStyle = 'rgba(40, 28, 16, .95)';
+    for (const p of cave.pillars || []) { const [x, y] = toD(p.x, p.z); g.beginPath(); g.arc(x, y, p.r * kD, 0, Math.PI * 2); g.fill(); }
+    // 口：外の切り通しへ延びる明るい道と、外を向いた矢じり
+    for (const m of cave.mouths) {
+      const [x0, y0] = toD(m.x, m.z), [x1, y1] = toD(m.from[0], m.from[1]);
+      g.strokeStyle = 'rgba(214, 196, 140, .9)'; g.lineWidth = m.hw * 2 * kD; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+      g.save(); g.translate(x1, y1); g.rotate(Math.atan2(-m.in[1], -m.in[0]));
+      g.fillStyle = '#e8d38a'; g.strokeStyle = INK; g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(9, 0); g.lineTo(-5, -7); g.lineTo(-2, 0); g.lineTo(-5, 7); g.closePath(); g.fill(); g.stroke();
+      g.restore();
+    }
+    // 歩ける範囲の縁（地上と同じ点線）
+    g.save(); g.setLineDash([7, 5]);
+    g.beginPath(); g.arc(DRES / 2, DRES / 2, (areaRadius / view) * DRES / 2, 0, Math.PI * 2);
+    g.strokeStyle = 'rgba(200, 180, 140, .5)'; g.lineWidth = 2; g.stroke(); g.restore();
+    caveFull = f;
   }
 
   // ===== 小さな地図：今いるエリアの範囲を映す =====
@@ -217,6 +298,8 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
   const target = { cx: RES / 2, cy: RES / 2, half: RES / 2 };
 
   function aim(zone, px, py) {
+    // 洞窟の中：自分を真ん中に、まわり 45 m を映す（地下の地図）
+    if (underName && cave) { Object.assign(target, { cx: px, cy: py, half: (45 / view) * RES / 2 }); return; }
     // 村の中：その村のまわりだけを映す（村は 3 つに分かれているので、エリア全体の四角では広すぎる）
     if (zone === 'castle' && villageNow) {
       const [vx, vy] = toPx(villageNow.x, villageNow.z);
@@ -268,8 +351,15 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     ctx.fillStyle = '#1c2418';
     ctx.fillRect(0, 0, size, size);
     const sx = cam.cx - cam.half, sy = cam.cy - cam.half, sw = cam.half * 2;
-    ctx.drawImage(full, sx * 2, sy * 2, sw * 2, sw * 2, 0, 0, size, size);
-    if (zoneNow && masks[zoneNow]) ctx.drawImage(masks[zoneNow], sx, sy, sw, sw, 0, 0, size, size);
+    const inCave = underName && cave;
+    if (inCave) {
+      if (!caveFull) buildCaveMap();
+      ctx.fillStyle = '#221e1a'; ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(caveFull, sx * 2, sy * 2, sw * 2, sw * 2, 0, 0, size, size);
+    } else {
+      ctx.drawImage(full, sx * 2, sy * 2, sw * 2, sw * 2, 0, 0, size, size);
+      if (zoneNow && masks[zoneNow]) ctx.drawImage(masks[zoneNow], sx, sy, sw, sw, 0, 0, size, size);
+    }
     // 縁の内側を少し暗く（丸い窓から覗いた感じ）
     const v = ctx.createRadialGradient(size / 2, size / 2, size * 0.32, size / 2, size / 2, size / 2);
     v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.45)');
@@ -286,8 +376,8 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     ctx.strokeText(L.north, size / 2, size / 10);
     ctx.fillStyle = '#f3dc9a';
     ctx.fillText(L.north, size / 2, size / 10);
-    // 洞窟の中：地上の地図は暗くする（地上のどのあたりの下にいるかは分かる。中の通り道は描かない）
-    if (underName) { ctx.fillStyle = 'rgba(8, 6, 4, .55)'; ctx.fillRect(0, 0, size, size); }
+    // 洞窟の中：地下の地図（上）。洞窟の形が無いときだけ、前と同じく地上の地図を暗くする
+    if (underName && !cave) { ctx.fillStyle = 'rgba(8, 6, 4, .55)'; ctx.fillRect(0, 0, size, size); }
     if (zoneNow) {
       ctx.font = `700 ${Math.round(size / 10)}px "Hiragino Mincho ProN", serif`;
       const name = underName || villageNow?.name || ZONE_NAMES[zoneNow];
@@ -300,10 +390,11 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
   // ===== 大きな地図（羊皮紙の地図）=====
   const bigWrap = document.getElementById('mapview');
   const big = bigWrap?.querySelector('canvas');
-  let open = false, lastMe = null, paper = null, paperSize = 0;
+  let open = false, lastMe = null, paper = null, paperSize = 0, paperUnder = false;
 
   /** 羊皮紙と、地図の絵（色を少し古びさせる）・飾り（方位・縮尺・題・凡例）を 1 回だけ描く */
-  function drawPaper(s) {
+  function drawPaper(s, under = false) {
+    const src = under ? caveFull : full, list = under ? caveLabels : labels;
     const c = document.createElement('canvas');
     c.width = c.height = s;
     const g = c.getContext('2d');
@@ -327,9 +418,9 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     const R = s * 0.43, cx = s / 2, cy = s / 2 + s * 0.015;
     g.save();
     g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.clip();
-    g.drawImage(full, cx - R, cy - R, R * 2, R * 2);
+    g.drawImage(src, cx - R, cy - R, R * 2, R * 2);
     g.globalCompositeOperation = 'multiply';
-    g.fillStyle = 'rgba(236, 210, 160, .55)';
+    g.fillStyle = under ? 'rgba(236, 210, 160, .25)' : 'rgba(236, 210, 160, .55)';
     g.fillRect(cx - R, cy - R, R * 2, R * 2);
     g.globalAlpha = 0.5;
     g.drawImage(gc, 0, 0, s, s);
@@ -346,9 +437,9 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     // エリアの名前（墨の明朝体。白く縁取る）
     g.textAlign = 'center'; g.textBaseline = 'middle';
     const scale = (2 * R) / (2 * view);
-    for (const l of labels) {
+    for (const l of list) {
       const x = cx + l.x * scale, y = cy + l.z * scale;
-      g.font = `700 ${Math.round(s / 24)}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
+      g.font = `700 ${Math.round(s / (l.small ? 34 : 24))}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
       const name = l.name || ZONE_NAMES[l.key];
       g.lineWidth = s / 110; g.strokeStyle = 'rgba(240, 225, 190, .85)'; g.strokeText(name, x, y);
       g.fillStyle = '#2b1d0e'; g.fillText(name, x, y);
@@ -357,7 +448,7 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     g.font = `700 ${Math.round(s / 20)}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
     g.fillStyle = '#3b2a17';
     g.textAlign = 'left';
-    g.fillText(L.title, s * 0.04, s * 0.055);
+    g.fillText(under ? `${L.title}・${L.caveMap}` : L.title, s * 0.04, s * 0.055);
     g.font = `${Math.round(s / 42)}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
     g.fillText(L.span, s * 0.045, s * 0.1);
     // 方位（右上）
@@ -391,7 +482,10 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       const x0 = s * 0.74, y0 = s * 0.85, lh = s * 0.032;
       g.font = `${Math.round(s / 44)}px "Hiragino Mincho ProN", serif`;
       g.textAlign = 'left';
-      const items = [[L.road, (x, y) => { g.fillStyle = '#c4aa7a'; g.fillRect(x, y - 3, 20, 6); }],
+      const items = under ? [[L.cavePath, (x, y) => { g.fillStyle = '#b09670'; g.fillRect(x, y - 4, 20, 8); }],
+        [L.caveMouth, (x, y) => { g.fillStyle = '#e8d38a'; g.beginPath(); g.moveTo(x + 18, y); g.lineTo(x + 4, y - 7); g.lineTo(x + 7, y); g.lineTo(x + 4, y + 7); g.closePath(); g.fill(); }],
+        [L.you, (x, y) => drawArrow(g, x + 10, y, 0, 6, true)]]
+        : [[L.road, (x, y) => { g.fillStyle = '#c4aa7a'; g.fillRect(x, y - 3, 20, 6); }],
         [L.house, (x, y) => { g.fillStyle = '#a9543a'; g.fillRect(x + 4, y - 6, 12, 12); }],
         [L.tree, (x, y) => { g.fillStyle = '#3a5a32'; g.beginPath(); g.arc(x + 10, y, 7, 0, Math.PI * 2); g.fill(); }],
         [L.you, (x, y) => drawArrow(g, x + 10, y, 0, 6, true)]];
@@ -410,7 +504,9 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     const s = Math.min(1600, Math.round(big.clientWidth * dpr));
     if (!s) return;
     if (big.width !== s) big.width = big.height = s;
-    if (!paper || paperSize !== s) { paper = drawPaper(s); paperSize = s; }
+    const under = !!(underName && cave);
+    if (under && !caveFull) buildCaveMap();
+    if (!paper || paperSize !== s || paperUnder !== under) { paper = drawPaper(s, under); paperSize = s; paperUnder = under; }
     const c = big.getContext('2d');
     c.clearRect(0, 0, s, s);
     c.drawImage(paper.canvas, 0, 0);

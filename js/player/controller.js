@@ -3,9 +3,10 @@
 // 見回す（なぞる）と首だけが動く（首の範囲まで。体の向きは変わらない）。首が限界まで回ってから、さらに同じ向きへなぞったときだけ、
 // 体がその場で足踏みしながら、見ている向きへ回る（回る速さは鎧の重さまで。体が向き直ると首は正面に戻る）
 import * as pc from 'playcanvas';
-import { BODY_TURN, SWIM } from '../game/data.js';
+import { BODY_TURN, SWIM, FALL } from '../game/data.js';
 import { wadeScale, diveY } from '../game/swim.js';
 import { slopeSpeed, slopeAhead } from '../game/slope.js';
+import { fallStep } from '../game/fall.js';
 
 const wrapDeg = (a) => ((a + 540) % 360) - 180;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -51,6 +52,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
 
   let eyeH = p.eyeHeight, eyeWant = p.eyeHeight;   // 目の高さ（しゃがむ・伏せると低い。なめらかに変える）
   let waterDepth = 0, waterSurface = null, swimming = false;   // 川（game/swim.js）：足もとの水の深さ・水面・泳いでいるか
+  const fall = { y: 0, swimming: false, falling: false, fallV: 0, landed: 0, landedWater: false };   // 落ちる（天坑。game/fall.js）
   let eyeOff = null;                    // 一人称で自分の体を映すときの目の位置（体の向きの座標。模型の頭から決める）
   function speedFor(mag) {
     // 全速力（疾驅ボタン。match-session.js が決める）：スティックを倒していれば、倒し方によらず全速力
@@ -212,8 +214,10 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     if (mag > 0) {
       // speedScale が 0（攻撃・回避などの動きの間。game/combat.js の moveScale）なら止まる（前は || 1 で 0 が 1 になり、動きの間も歩けていた）
       // 川（game/swim.js）：深い所は泳ぐ（ゆっくり。swimSpeed は match-session.js が決める）、浅い所は遅く歩く
-      const speed = swimming ? api.swimSpeed * Math.min(1, mag / 0.75) * (api.speedScale ?? 1)
-        : speedFor(Math.min(1, mag)) * (api.speedScale ?? 1) * wadeScale(waterDepth);
+      // 落ちている間（天坑の縦穴）は、横へ少しだけ動ける（game/fall.js）
+      const speed = fall.falling ? p.walkSpeed * FALL.air * Math.min(1, mag)
+        : swimming ? api.swimSpeed * Math.min(1, mag / 0.75) * (api.speedScale ?? 1)
+          : speedFor(Math.min(1, mag)) * (api.speedScale ?? 1) * wadeScale(waterDepth);
       const rad = (yaw * Math.PI) / 180;
       // 前（-Z）と右（+X）を、その向きに合わせて回す
       const fx = -Math.sin(rad), fz = -Math.cos(rad);
@@ -222,7 +226,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       const mx = fx * input.moveY + rx * input.moveX, mz = fz * input.moveY + rz * input.moveX;
       // 坂（game/slope.js）：上りは遅く、急な下りも遅い（bot と同じ式）。泳いでいる間は関係ない
       // 洞窟の口のまわり（api.noSlope。口の後ろは岩山の崖で、地面の高さで見ると「上れない坂」に見えてしまう）では使わない
-      const sk = swimming || (api.noSlope && api.noSlope(pos.x, pos.z)) ? 1 : slopeSpeed(slopeAhead(terrain.heightAt, pos.x, pos.z, pos.y, mx / mag, mz / mag));
+      const sk = swimming || fall.falling || (api.noSlope && api.noSlope(pos.x, pos.z)) ? 1 : slopeSpeed(slopeAhead(terrain.heightAt, pos.x, pos.z, pos.y, mx / mag, mz / mag));
       k *= sk;
       pos.x += mx * k;
       pos.z += mz * k;
@@ -239,6 +243,18 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     // 地面（床）の高さへなめらかに合わせる（段差でカメラががくっとしないように）。泳いでいる間は水面に浮く
     let target = groundAt(pos.x, pos.z, pos.y);
     let w = api.water ? api.water(pos.x, pos.z) : null;
+    // 落ちる（天坑の穴へ入った）：足もとの床が急に低くなったら、重さで落ちる。床か水面に着くまでは、水にも床にも合わせない（game/fall.js）
+    fall.y = pos.y; fall.swimming = swimming;
+    const air = fallStep(fall, target, dt, w && pos.y !== undefined && w.surface < pos.y ? w.surface : null);
+    if (air !== null) {
+      pos.y = air; groundY = air;
+      waterDepth = 0; waterSurface = null; swimming = false;
+      body.setPosition(pos.x, groundY, pos.z);
+      body.setEulerAngles(0, yaw, 0);
+      placeCamera(0);
+      return;
+    }
+    if (fall.landed) { api.onLand?.(fall.landed, fall.landedWater); fall.landed = 0; }
     if (w && !swimming && target > w.surface + 0.05) w = null;   // 橋の上（水の上の床）に立っている
     if (w && target < w.surface - w.depth - 1.5) w = null;       // 川床より下（川の真下の洞窟の中）にいる
     waterDepth = w ? w.depth : 0;
@@ -269,6 +285,10 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     get waterDepth() { return waterDepth; },
     get waterSurface() { return waterSurface; },
     get swimming() { return swimming; },
+    /** 落ちているか（天坑の縦穴。game/fall.js） */
+    get falling() { return fall.falling; },
+    /** 着いたとき：(速さ m/秒, 水に落ちたか)。match-session.js が音と知らせを出す */
+    onLand: null,
     noRun: false,   // しゃがむ・伏せているときは走れない
     /** 目の高さ（m。しゃがむ・伏せると低い。なめらかに移る） */
     setEyeHeight(h) { eyeWant = h; },
@@ -312,7 +332,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     },
     /** 隠れ場所から出た：x, z, y に立ち、yaw を向く */
     leaveHide(x, z, y, faceYaw) {
-      hide = null;
+      hide = null; fall.falling = false;
       pos.x = x; pos.z = z; pos.y = y; groundY = y;
       if (faceYaw !== undefined) yaw = faceYaw;
       headYaw = 0; turn.target = null; look = yaw;
@@ -344,7 +364,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
      * 試合の計算が体を動かす間（暗殺の動きなど）：体の位置と向きを、戦う人の記録に合わせる（首の向きはそのまま）
      */
     follow(x, y, z, faceYaw) {
-      pos.x = x; pos.z = z; pos.y = y;
+      pos.x = x; pos.z = z; pos.y = y; fall.falling = false;
       yaw = faceYaw; look = yaw + headYaw; turn.target = null;
     },
     /** 動きの間に体（肩の線）が回った分（度）。一人称の目もそれに付いて回る。0 で戻す */
@@ -366,6 +386,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     /** 出現する場所と向き。y を渡すと、その高さの近くの床に立つ（地面の下の洞窟の中に出るとき） */
     spawn(x, z, faceYaw, y = null) {
       pos.x = x; pos.z = z; yaw = faceYaw; pitch = -2; headYaw = 0; turn.target = null; look = yaw;
+      fall.falling = false; fall.fallV = 0;
       pos.y = groundAt(x, z, y);
       groundY = pos.y;
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });

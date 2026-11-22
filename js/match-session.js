@@ -169,7 +169,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (arms && phase === arms.tier) { me.arms = loadout.arms; hud.addFeed(`兵器「${arms.name}」が届いた${arms.planned ? '（使う仕組みはこれから）' : ''}`); }
     if (mutation && phase === mutation.tier) { me.potion = loadout.mutation; hud.addFeed(`變異の藥「${mutation.name}」が届いた${mutation.planned ? '（飲む仕組みはこれから）' : ''}`); }
   });
-  const minimap = createMinimap(document.getElementById('minimap'), { areaRadius: AREA_RADIUS, zones, buildings, heightAt: terrain.heightAt, trees, waterAt: terrain.waterAt });
+  const minimap = createMinimap(document.getElementById('minimap'), { areaRadius: AREA_RADIUS, zones, buildings, heightAt: terrain.heightAt, trees, waterAt: terrain.riverAt || terrain.waterAt });   // 地上の地図は川だけ（天坑の池は地下）
   // 別のエリアに入ったら、左の知らせに出す
   let zoneNow = zones ? zones.zoneAt(me.x, me.z) : null, zoneTimer = 0;
   // ボタン：絵と文字。右手・左手の文字をキャラに合わせる（左手：盾持ちは防御、ほかは強攻撃・持ち替え など）
@@ -403,6 +403,13 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const underEl = document.getElementById('underwater');
   let underShown = false;
   combat.on('gasp', ({ fighter }) => { if (fighter === me) { hud.addFeed('息が続かない。水面へ浮いた'); sfx.splash?.(me); } });
+  // 天坑から落ちて、下の池（か床）に着いた（game/fall.js）：大きな水音（遠くの bot にも聞こえる）。自分なら知らせる
+  const landed = (f, speed, water) => {
+    sfx.plunge?.(f, speed, water);
+    if (water) senses.noise(f, 'plunge');
+    if (f === me) hud.addFeed(water ? '天坑から落ち、地底の池に飛び込んだ' : '高い所から落ちた');
+  };
+  player.onLand = (speed, water) => { me.y = player.position.y; landed(me, speed, water); };
   refreshStance();
   const hideView = document.getElementById('hideview');
 
@@ -720,6 +727,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // 川（game/swim.js）：足もとの水の深さ・泳いでいるか。泳ぐ速さはキャラの速さとスタミナで決まる
       if (me.alive && !me.hidden) {
         me.waterDepth = player.waterDepth; me.waterSurface = player.waterSurface; me.swimming = player.swimming;
+        me.falling = player.falling;   // 天坑の縦穴を落ちている（game/fall.js。その間は何もできない）
         if (me.waterDepth > 0.35 && me.stance && me.stance !== 'stand') resetStance(me);   // 水の中ではしゃがめない・伏せられない
       }
       player.swimSpeed = swimSpeed(me);
@@ -800,6 +808,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       }
       for (const b of bots) {
         const moving = running ? b.update(dt, world) : 0;
+        if (b.fighter.landed) { landed(b.fighter, b.fighter.landed, b.fighter.landedWater); b.fighter.landed = 0; }   // 天坑から落ちて着いた
         if (running) combat.control(b.fighter, b.combatInput);
         views.get(b.fighter).update(dt, moving);
         // 隠れている人も、タンスの中・ベッドの下にいる（render/character-view.js。扉や掛け布の隙間から見えることがある）

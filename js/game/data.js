@@ -220,7 +220,7 @@ export const SENSES = {
   lookAround: 4,
   steps: { run: 22, walk: 10 },
   weight: { light: 0.8, medium: 1, heavy: 1.3 },
-  noise: { swing: 12, hit: 25, dodge: 9, bow: 10, search: 8, hide: 4 },
+  noise: { swing: 12, hit: 25, dodge: 9, bow: 10, search: 8, hide: 4, plunge: 30 },   // plunge：天坑から池へ落ちた水音
 };
 
 /**
@@ -334,6 +334,12 @@ export const SWIM = { depth: 1.25, float: 1.28, speed: 1.7, tired: 0.55, stamina
  *   seen：潜っている人が bot に見える距離（m。それより遠いと見えない。水面の下は見えづらい）
  */
 export const DIVE = { depth: 1.5, rate: 1.6, speed: 0.85, breath: 20, recover: 2.5, min: 5, seen: 5 };
+/**
+ * 落ちる（2026-11-22。天坑：地面の穴へ入ると、縦穴を落ちて下の池に飛び込む。利用者の指示）。足もとの床が start（m）より急に低くなると落ちる。
+ *   gravity：重さで速くなる割合（m/秒²）、max：一番速い落ちる速さ（m/秒）、air：落ちている間に横へ動ける割合（歩く速さに対して）。
+ *   落ちた先は池なので、傷は負わない（陸に落ちても、今は傷を付けない）
+ */
+export const FALL = { start: 1.2, gravity: 13, max: 26, air: 0.35 };
 
 /** 戦闘の決まりごと */
 export const COMBAT = {

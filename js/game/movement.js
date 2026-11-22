@@ -4,6 +4,8 @@
 import { stanceSpeed, canRun } from './stance.js';
 import { applyWater, swimSpeed, wadeScale } from './swim.js';
 import { slopeSpeed, slopeAhead } from './slope.js';
+import { fallStep } from './fall.js';
+import { FALL } from './data.js';
 
 export const WALK_SPEED = 3.0; // m/s
 export const RUN_SPEED = 4.5;   // 歩きの 1.5 倍（利用者の指示 2026-11-16：走る速度が速い。前は 5.2）
@@ -19,7 +21,9 @@ export function moveFighter(f, input, dt, world) {
   const mag = Math.min(1, Math.hypot(input.forward, input.strafe));
   if (mag > 0) {
     // 防御中・攻撃中は遅い。川の中は遅く、深い所は泳ぐ（game/swim.js）
-    const speed = f.swimming ? swimSpeed(f) * (f.moveScale ?? 1)
+    // 落ちている間（天坑の縦穴。game/fall.js）は、横へ少しだけ
+    const speed = f.falling ? WALK_SPEED * FALL.air
+      : f.swimming ? swimSpeed(f) * (f.moveScale ?? 1)
       : (input.run && canRun(f) ? RUN_SPEED : WALK_SPEED) * f.stats.speed * (f.moveScale ?? 1) * stanceSpeed(f) * wadeScale(f.waterDepth);
     const rad = (f.yaw * Math.PI) / 180;
     const fx = -Math.sin(rad), fz = -Math.cos(rad);  // 前（-Z を向きで回したもの）
@@ -28,7 +32,7 @@ export function moveFighter(f, input, dt, world) {
     let mx = fx * input.forward + rx * input.strafe, mz = fz * input.forward + rz * input.strafe;
     // 坂（game/slope.js）：上りは遅く、急な下りも遅い。泳いでいる間は関係ない
     // 洞窟の口のまわり（口の後ろは岩山の崖。地面の高さで見ると「上れない坂」に見えてしまう）と洞窟の中では使わない
-    if (world.heightAt && !f.swimming && !(world.cave && world.cave.patchAt(f.x, f.z))) {
+    if (world.heightAt && !f.swimming && !f.falling && !(world.cave && world.cave.patchAt(f.x, f.z))) {
       const ml = Math.hypot(mx, mz) || 1;
       k *= slopeSpeed(slopeAhead(world.heightAt, f.x, f.z, f.y, mx / ml, mz / ml));
     }
@@ -37,7 +41,14 @@ export function moveFighter(f, input, dt, world) {
   }
   world.obstacles.resolve(f, BODY_RADIUS);
   keepInside(f, world.areaRadius);
-  if (world.groundAt) f.y = world.groundAt(f.x, f.z, f.y);   // 家の床・階段の高さ
+  if (world.groundAt) {
+    const g = world.groundAt(f.x, f.z, f.y);   // 家の床・階段の高さ
+    // 落ちる（天坑の穴へ入った）：床か水面に着くまでは、重さで落ちる（game/fall.js）
+    const w = world.water && f.y !== undefined && f.y !== null ? world.water(f.x, f.z) : null;
+    const air = fallStep(f, g, dt, w && w.surface < f.y ? w.surface : null);
+    if (air !== null) { f.y = air; f.swimming = false; f.waterDepth = 0; f.waterSurface = null; return mag; }
+    f.y = g;
+  }
   if (world.water) applyWater(f, world.water);               // 川の中を歩く・泳ぐ（泳いでいれば水面に浮く）
   return mag;
 }
