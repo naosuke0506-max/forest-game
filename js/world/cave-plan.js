@@ -65,6 +65,8 @@ const NODES = {
   D5b: { x: -104, z: 46, r: 4, h: 4, y: -13 },
   D6: { x: 64, z: -8, r: 5, h: 4.6, y: -16 },
   D7: { x: -58, z: 128, r: 5, h: 4.6, y: -11 },
+  // 教会の下の小さな間（2026-11-22。洞窟の仕上げ ③）：ここから縦穴の梯子で、教会の祭壇の後ろの隠し扉へ上がる（CRYPT）
+  CH: { x: -70.13, z: 46.3, r: 2.4, h: 3.4, y: -7.4 },
 };
 // 通り道：pts は通る所（広間・口の名前か [x, z]）、w は幅、h は天井の高さ、hill：上に風穴の岩山を盛る
 //   w・h は数（どこも同じ）か、並び（始めから終わりへ、道のりを等分した所の値。間はなめらかにつなぐ）。h を書かなければ幅から決める（widthToH）
@@ -99,7 +101,17 @@ const PASSAGES = [
   { id: 'dead5', pts: ['H', [-66, 18], 'D5', 'D5b'], w: [4.2, 2.6, 3.4, 2.0] },
   { id: 'dead6', pts: ['C3', [60, 12], 'D6'], w: [2.6, 1.9, 2.6] },
   { id: 'dead7', pts: ['SC', [-38, 120], 'D7'], w: [3.0, 2.0, 2.6] },
+  // 教会への地下道（2026-11-22。利用者の指示：教会の隠し扉から、地下の洞窟に繋がる通路があり、梯子で出たり入ったりできる）。
+  // 行き止まりの間 D1 から、西を回って教会の下の間 CH へ上っていく（約 29 m で 6.6 m 上る。勾配の決まりの中）。
+  // 一番最後に足す（途中の点をずらす乱数を、前からある通り道の後で使う＝前からある通り道の形が変わらない）
+  { id: 'crypt', pts: ['D1', [-75, 61], [-77.5, 52], 'CH'], w: [2.3, 2.0, 2.4], h: [3.0, 2.6, 3.2] },
 ];
+/**
+ * 教会の隠し扉の縦穴（2026-11-22）：教会の後ろの半円の張り出し（祭壇の後ろ）の床から、下の間 CH の天井まで。教会の向きにそろえた四角（半分の幅 half）。
+ * 教会の場所は村の配置（world/villages.js の specials）で決まるので、今の種（20261031）の教会の場所を書いた。
+ * 教会の側（world/crypt.js）が、教会の床の穴がここにそろっているかを確かめる（種を変えて合わないときは、隠し扉を作らない）
+ */
+export const CRYPT = { x: -70.13, z: 46.3, yaw: 110.09, half: 0.6, node: 'CH' };
 // 口：from は外から来る所（切り通しの始まり）、drop は切り通しが下る深さ、mound は口の後ろの岩山 { h 高さ, r 半径 }（風穴は大きな岩山があるので無し）
 const MOUTHS = {
   A: { from: [-98, -42], drop: 0, name: '風穴' },
@@ -373,6 +385,8 @@ export function createCavePlan(seed) {
       }
       sky.top = t / 16; sky.ceil = c / 16;
     }
+    // 教会の下の間の床と天井（縦穴の真下）
+    { const q = at(CRYPT.x, CRYPT.z); if (q) { crypt.floor = q.floor; crypt.ceil = q.ceil; } }
     return api;
   }
 
@@ -497,6 +511,19 @@ export function createCavePlan(seed) {
   const skyN = (x, z) => skyDist(x, z) / skyWarp(Math.atan2(z - SKY.z, x - SKY.x));
   /** 縦穴の、高さ y での半径（下ほど広い。地面のふちより上・天井より下は穴の半径） */
   const shaftR = (y) => lerp(SKY.low, SKY.r, smooth(sky.ceil, sky.top - SKY.lip * 0.6, y));
+  // 教会の隠し扉の縦穴（CRYPT）：教会の向きの座標（真ん中から。lx 横・lz 前）と、地面の網を抜く・作り直す半径
+  //   縦穴（1.2 m 四方）は地面の網の升（2.6 m）より小さいので、真ん中から 2.7 m の中に角がある升を抜く（縦穴に掛かる升は必ず抜ける）。
+  //   抜いた升は真ん中から 6.4 m まで広がるので、細かい地面は 7.4 m まで作る（world/crypt.js）
+  const cryptA = (CRYPT.yaw * Math.PI) / 180, cryptR = [Math.cos(cryptA), -Math.sin(cryptA)], cryptF = [Math.sin(cryptA), Math.cos(cryptA)];
+  const cryptLocal = (x, z) => { const dx = x - CRYPT.x, dz = z - CRYPT.z; return [dx * cryptR[0] + dz * cryptR[1], dx * cryptF[0] + dz * cryptF[1]]; };
+  const CRYPT_HOLE = 2.7, CRYPT_PATCH = 7.4;
+  const crypt = { ...CRYPT, floor: -7, ceil: -4, top: null, hole: CRYPT_HOLE, patch: CRYPT_PATCH, r: cryptR, f: cryptF };
+  /** 教会の縦穴の中か（教会の床より下。top は教会が決める＝world/church.js の setCryptTop。決まっていなければ縦穴は無い） */
+  const inCryptShaft = (x, z, y, m = 0) => {
+    if (crypt.top === null || y === null || y === undefined || y > crypt.top - 0.5 || y < crypt.floor - 2.5) return false;
+    const [lx, lz] = cryptLocal(x, z);
+    return Math.max(Math.abs(lx), Math.abs(lz)) < CRYPT.half - m;
+  };
   // 天坑のまわりの地面：網を抜く半径（穴のふちの下りの外まで）と、細かい地面を作る半径（抜いた網の升の対角 3.7 m より外まで）
   const SKY_HOLE = (SKY.r + SKY.lip) * 1.18 + 0.4, SKY_PATCH = SKY_HOLE + 4.1;   // 1.18：穴のゆがみの一番大きい倍率
   /** 縦穴の中か（天井より上・地面より下の、穴の中） */
@@ -623,6 +650,8 @@ export function createCavePlan(seed) {
       if (!q || q.d > 0.9) return null;
       // 天坑の穴の上（地面の穴のふちより内）と縦穴の中：足もとは下の大空洞の床（池の底）。そこへ落ちる（game/fall.js）
       if (skyN(x, z) < SKY.r - 0.05 && y < sky.top + 1.5 && y > q.floor - 2.5) return q;
+      // 教会の隠し扉の縦穴の中（梯子から手を離した人など）：足もとは下の間の床
+      if (inCryptShaft(x, z, y)) return q;
       if (y > q.ceil + 0.3 || y < q.floor - 2.5) return null;
       if (inCut(x, z)) return null;   // 口の面より前は、掘った地面の上（口の面で、同じ高さにつながる）
       return q;
@@ -671,12 +700,14 @@ export function createCavePlan(seed) {
     /** 地面を細かく作り直す所（口のまわり）の中か：{ mouth } か null。world/terrain.js が、ここは計算の高さを使う */
     patchAt(x, z) {
       if (skyDist(x, z) < SKY_PATCH) return sky;   // 天坑のまわり（world/cave.js が細かい地面を作る）
+      if (Math.hypot(x - CRYPT.x, z - CRYPT.z) < CRYPT_PATCH) return crypt;   // 教会の隠し扉の縦穴のまわり（world/crypt.js が細かい地面を作る）
       for (const m of mouths) { const [s, l] = frame(m, x, z); if (s > -m.len - PATCH.front && s < PATCH.back && Math.abs(l) < m.hw + PATCH.side) return m; }
       return null;
     },
     /** 地面の網を抜く所（口の岩の面をまたぐ所と、切り通し）：網の升の四隅のどれかがここに入れば、その升は描かない */
     holeAt(x, z) {
       if (skyDist(x, z) < SKY_HOLE) return true;   // 天坑の穴とふち
+      if (Math.hypot(x - CRYPT.x, z - CRYPT.z) < CRYPT_HOLE) return true;   // 教会の隠し扉の縦穴
       for (const m of mouths) {
         const [s, l] = frame(m, x, z);
         if (s > -m.len - 0.5 && s < 2.7 && Math.abs(l) < m.hw + 4.5) return true;
@@ -697,6 +728,17 @@ export function createCavePlan(seed) {
     behindMouth,
     /** 天坑：{ x, z, r（地面の穴の半径）, low（天井の穴の半径）, lip, dip, pond（池の半径）, top（ふちの地面）, ceil（天井の穴）, surface（池の水面）, hole, patch, name } */
     get sky() { return { ...sky, hole: SKY_HOLE, patch: SKY_PATCH }; },
+    /**
+     * 教会の隠し扉の縦穴：{ x, z, yaw, half（四角の半分の幅）, floor・ceil（下の間の床と天井）, hole・patch（地面の網を抜く・作り直す半径）,
+     *   r・f（教会の横と前の向き）}。world/crypt.js・world/cave.js が使う
+     */
+    get crypt() { return crypt; },
+    /** 教会の縦穴の上の端（教会の床の高さ）を決める（world/church.js。隠し扉を作ったときだけ） */
+    setCryptTop(y) { crypt.top = y; },
+    /** 教会の縦穴の中か（教会の床より下）。margin：壁から離す分 */
+    inCryptShaft,
+    /** 教会の隠し扉の縦穴の向きの座標（真ん中から [横, 前]） */
+    cryptLocal,
     /** 天坑の縦穴の中か（落ちている人。三人称のカメラは、ここから出ない）。margin：壁から離す分 */
     inShaft,
     /** 天坑の下の池の水：{ surface（水面）, depth（深さ）} か、池でなければ null（world/terrain.js の waterAt が川と合わせる） */

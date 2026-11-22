@@ -321,6 +321,15 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
       playSample(d, 'wood_creak', { rate: (open ? 0.82 : 0.95) * jitter(0.06), gain: 0.85 });
       if (!open) playSample(d, 'wood_close', { t: 0.3, rate: 0.9, gain: 0.8 });
     },
+    /** 教会の隠し扉の石板を開ける・閉める（2026-11-22）：重い石が床を擦る低い音（約 1.3 秒）と、止まるときの鈍い音 */
+    slab(f, open = true) {
+      const d = at(f, 0.9, { ref: 3, max: 30 });
+      if (!d) return;
+      noiseHit(d, { dur: 1.25, type: 'lowpass', freq: 520 * jitter(0.1), freqEnd: 300, q: 1.4, attack: 0.18, gain: 0.42 });
+      noiseHit(d, { t: 0.1, dur: 1.0, type: 'bandpass', freq: 1300, freqEnd: 900, q: 2.5, attack: 0.2, gain: 0.08 });
+      toneHit(d, { t: 1.3, dur: 0.22, f0: open ? 95 : 85, f1: 55, gain: 0.3 });
+      noiseHit(d, { t: 1.3, dur: 0.16, type: 'lowpass', freq: 400, q: 0.8, gain: 0.3 });
+    },
     /** 水の中へ潜る・水面へ浮く：水をかく音（川を泳ぐ音と同じ作り） */
     splash(f) { splash(f, false); },
     /**

@@ -94,12 +94,17 @@
   - 洞窟の仕上げ（2026-11-21。利用者が選んだ 4 回の 1 回目）：地上の物の当たり判定（高さの範囲なし）は、地面より 2.5 m 下にいる人に当てない（`obstacles.js` の `UNDER`）。
     口の手前 3 m は外の地面を洞窟の床まで下げる（`carve`）。口の岩の面は形から法線を計算し、ひさしとでこぼこ。口のまわりの岩は `mouthRocks`（props.js の `fixed`）。
     地下の地図は `minimap.js` の `buildCaveMap`（升目の壁からの距離から描く）。口を直したら、作業用の場所の `cavewalk_rocks.mjs`・`routetest_rocks.mjs`（岩の当たり判定を足した試験）と
-    `caveshot.js`（口・中・地図を撮る）を回す。残りの 2 回（教会と梯子・広場と道路）は `docs/DESIGN.md` の「洞窟の仕上げ」
+    `caveshot.js`（口・中・地図を撮る）を回す。残りの 1 回（広場と道路）は `docs/DESIGN.md` の「洞窟の仕上げ」
   - 天坑（2026-11-22。仕上げの 2 回目）：大空洞の天井の穴と、下の池。数と場所は `cave-plan.js` の `SKY`（穴・縦穴・池・天井の持ち上げ）。
     穴の上の足もとは大空洞の床（`layer`）、落ちるのは `js/game/fall.js`（プレイヤーと bot が同じ計算。泳いでいる人は落ちない）、池の水は `pondAt`
     （`terrain.js` の `waterAt` が川と合わせる。地上の地図は川だけの `riverAt`）。見た目（縦穴の壁・ふちの地面・池・光の筋）は `cave.js` の「天坑」。
     bot は穴に入らない（`resolve`）。木・草を避けるのは `skyArea`（村の配置を変えないよう `area` とは分けた）。
     確かめは作業用の場所の `skyfall.mjs`（落ちる・池・岸へ・bot・村の配置が前と同じか）と `skyshot.js`（地上・中から、昼と夜）
+  - 教会の中と隠し扉・梯子（2026-11-22。仕上げの 3 回目）：中は `js/world/church.js`（landmarks.js の church から呼ぶ。教会の箱の前・後ろの面は、中への開口をふさがないよう外から見える所だけ）。
+    扉は doors.js（両開きは pair・左右を映すのは flip）。隠し扉の縦穴は `cave-plan.js` の `CRYPT`（今の種の教会の場所を書いた。教会の側で、そろっているかを確かめる）、
+    下の間 `CH` と地下道 `crypt`（PASSAGES の最後に足す＝前からある通り道の形を変えない）。梯子の操作は `controller.js` の `climb`（grabLadder）、ボタンは match-session.js の `ladderEnd`。
+    梯子の動き（ladder_up・ladder_down・ladder_idle）は `body_moves.py` の `ladder_fn`。模型を作り直したら、作業用の場所の `animdiff.mjs` を tools/ の中へ写して回す
+    （@gltf-transform は tools/node_modules にある）。確かめは作業用の場所の `laddertest.js`（石板を開ける→下りる→上る）・`churchshot.js`・`cryptcheck.mjs`
 - **2026-11-14 の大きな依頼（進行中）**。利用者が選んだ順番は「マップを全部先に」：
   ① マップ：洞窟の中から外が見える不具合・坂の上り下りの不自然さ・橋の不自然さ・**橋の所は川幅を広げて橋を長く**・川の中を見えづらく
      （ここまで 2026-11-14 に済み。PR #84）・**地下の大洞窟**（2026-11-15 に済み）・

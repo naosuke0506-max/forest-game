@@ -340,6 +340,8 @@ export const DIVE = { depth: 1.5, rate: 1.6, speed: 0.85, breath: 20, recover: 2
  *   落ちた先は池なので、傷は負わない（陸に落ちても、今は傷を付けない）
  */
 export const FALL = { start: 1.2, gravity: 13, max: 26, air: 0.35 };
+/** 梯子（教会の隠し扉の縦穴。2026-11-22）：上り下りする速さ（m/秒）。動き（ladder_up・ladder_down）はこの速さに合わせて流す */
+export const LADDER = { speed: 1.25 };
 
 /** 戦闘の決まりごと */
 export const COMBAT = {

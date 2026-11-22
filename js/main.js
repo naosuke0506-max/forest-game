@@ -181,6 +181,8 @@ async function boot() {
     for (const q of pts) if (sight.blocked(p0, q, { solidsOnly: true })) return false;
     // 天坑の縦穴を落ちている間：カメラは縦穴の中だけ（壁の外へ出ると、岩の裏や地面の下が見える）
     if (player.falling && land.cave.inShaft(cp.x, cp.y, cp.z)) return land.cave.inShaft(x, y, z, 0.4);
+    // 教会の隠し扉の梯子に掴まっている間：カメラは縦穴の中か、教会の床より上（縦穴の壁の外の岩や地面の下が見えないように）
+    if (player.ladder) { const K = land.cave.crypt; return K.top === null || y > K.top - 0.3 || land.cave.inCryptShaft(x, z, y, 0.15); }
     if (land.cave.inside(cp.x, cp.z, cp.y) < 0.3) return true;
     const q = land.cave.at(x, z);
     return !!q && q.d < -0.3 && y > q.floor + 0.25 && y < q.ceil - 0.3;
@@ -323,6 +325,7 @@ async function boot() {
       groundAt: floors.groundAt, insideHouse: village?.insideHouse, hides: village?.hides || [], covers: village?.covers || [], furniture: village?.furniture || null, sight,
       houses: village?.houses || [],   // 家の一覧（鷹目の貫く矢で壁に穴を開ける。world/arrow-holes.js）
       doors: village?.doors || null,   // 家の扉（開け閉めできる。world/doors.js）
+      church: village?.landmarks?.church || null,   // 教会の隠し扉の石板と梯子（world/church.js）
       debug: CONFIG.debug,
       tutorial: loadout?.tutorial || null,   // 教練（大廳の「教練」から。game/tutorial.js）
       // フェーズの長さ：URL の ?phase= があればそれ、無ければ設定画面の「テスト用」。教練では時間で刻が進まない

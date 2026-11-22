@@ -3,7 +3,7 @@
 // 模型は tools/characters/build_character.py で作る（assets/characters/<名前>.glb と、動きの長さ・速さの .json）。
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
-import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT, WRATH, HIDE_ACTS, SLOPE, MIRACLES, REVIVE_TIME } from '../game/data.js';
+import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT, WRATH, HIDE_ACTS, SLOPE, MIRACLES, REVIVE_TIME, LADDER } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { techSetOf } from '../game/techniques.js';
 import { stanceShape } from '../game/stance.js';
@@ -663,6 +663,18 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
 
       // 泳いでいる（利用者の指示 2026-11-14：川は泳げる）：進んでいる間は這う動きを水面に浮かべて泳ぐ形に、止まっていれば待機の動きを
       // 肩まで水に沈めて立ち泳ぎ（泳ぐ専用の動きは、まだ無い）
+      // 梯子（教会の隠し扉の縦穴。world/church.js）：上る・下りる・掴まって止まっている（専用の動き。2026-11-22）。
+      // 上り下りの速さ（player/controller.js の CLIMB）に合わせて流す。動きが無い模型は待機の形
+      // 梯子の間は、手に持つ武器をしまう（両手で横木を掴むので、武器が梯子や壁から突き出る）。降りたら出す
+      { const hideW = !!fighter.ladder; if (weaponHolder && weaponHolder.enabled === hideW) { weaponHolder.enabled = !hideW; if (leftHolder) leftHolder.enabled = !hideW; } }
+      if (fighter.ladder) {
+        swimLiftWant = 0;
+        const m = fighter.ladder.move || 0, name = m > 0 ? 'ladder_up' : m < 0 ? 'ladder_down' : 'ladder_idle';
+        if (has(name)) play(name, m ? Math.min(2.5, Math.max(0.5, LADDER.speed / ((clip(name).speed || 0.6) * meta.scale))) : 1, 0.2);
+        else play(loco('idle'), 0.5, 0.2);
+        lastAction = null;
+        return;
+      }
       // 落ちている（天坑の縦穴。game/fall.js）：足を動かさず、待機の形のまま落ちる（落ちる専用の動きは、まだ無い）
       if (fighter.falling) {
         swimLiftWant = 0;

@@ -64,6 +64,7 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
     const q = C.at(x, z);
     if (!q || q.d > -0.3 || q.open > 0.5) return;
     if (Math.hypot(x - SK.x, z - SK.z) < SK.pond + 1.2) return;   // 天坑の下の池の中には置かない
+    if (C.crypt && Math.hypot(x - C.crypt.x, z - C.crypt.z) < 1.6) return;   // 教会の縦穴の梯子の足もとにも
     lights.push({ x, y: q.floor + 0.5, z, r, k, tint: TINTS[Math.floor(rnd() * TINTS.length)] });
   };
   for (const sm of C.samples) {
@@ -168,12 +169,23 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
     return vert(t, 'f' + p.key, p.x, p.F + 0.02, p.z, -gx / l, 1 / l, -gz / l, p.x / 3, p.z / 3, shadeOf(p.S) * 0.82);
   };
   /** 天坑の天井の穴の中か（縦穴の下の端の半径より内） */
-  const inHole = (p) => skyN(p.x, p.z) < SK.low;
+  const inSky = (p) => skyN(p.x, p.z) < SK.low;
+  // 教会の隠し扉の縦穴（world/cave-plan.js の CRYPT）：下の間の天井に、教会の向きの四角い穴（world/church.js が縦穴の石の壁と梯子を作る）
+  const KR = C.crypt;
+  const cryptQ = (p) => { const [lx, lz] = C.cryptLocal(p.x, p.z); return [lx, lz, Math.max(Math.abs(lx), Math.abs(lz))]; };
+  const inCrypt = (p) => !!KR && cryptQ(p)[2] < KR.half;
+  /** 天井に穴が開いている所か（天坑・教会の縦穴） */
+  const inHole = (p) => inSky(p) || inCrypt(p);
   const ceilVert = (t, p0) => {
-    // 天坑の穴の中の点は、穴のふち（半径 low）へ寄せる（穴の形を、升目のぎざぎざでなく丸くする。縦穴の壁がそこから立ち上がる）
+    // 穴の中の点は、穴のふちへ寄せる（穴の形を、升目のぎざぎざでなく丸く・四角くする。縦穴の壁がそこから立ち上がる）
+    //   天坑：真ん中から外へ、半径 low（ゆがみを掛けた）の所へ。教会の縦穴：真ん中から外へ、四角の縁へ
     let p = p0;
-    if (inHole(p0)) {
+    if (inSky(p0)) {
       const dx = p0.x - SK.x, dz = p0.z - SK.z, k = (SK.low * skyWarp(Math.atan2(dz, dx))) / Math.max(1e-4, Math.hypot(dx, dz)), x = SK.x + dx * k, z = SK.z + dz * k;
+      p = { ...p0, x, z, C: sample(B.C, x, z) };
+    } else if (inCrypt(p0)) {
+      const [lx, lz, m] = cryptQ(p0), k = KR.half / Math.max(1e-4, m), sx = lx * k, sz = lz * k;
+      const x = KR.x + KR.r[0] * sx + KR.f[0] * sz, z = KR.z + KR.r[1] * sx + KR.f[1] * sz;
       p = { ...p0, x, z, C: sample(B.C, x, z) };
     }
     const [gx, gz] = gradOf(B.C, p.x, p.z), l = Math.hypot(gx, 1, gz);
@@ -209,7 +221,9 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
     const fv = poly.map((p) => floorVert(t, p)), cv = poly.map((p) => ceilVert(t, p));
     for (let i = 1; i < poly.length - 1; i++) {
       tri(t, fv[0], fv[i], fv[i + 1], 0, 1, 0);
-      if (!(inHole(poly[0]) && inHole(poly[i]) && inHole(poly[i + 1]))) tri(t, cv[0], cv[i], cv[i + 1], 0, -1, 0);   // 天坑の穴の所は天井を作らない
+      // 穴の所は天井を作らない（3 つの点が同じ穴の中）
+      const allSky = inSky(poly[0]) && inSky(poly[i]) && inSky(poly[i + 1]), allCrypt = inCrypt(poly[0]) && inCrypt(poly[i]) && inCrypt(poly[i + 1]);
+      if (!allSky && !allCrypt) tri(t, cv[0], cv[i], cv[i + 1], 0, -1, 0);
     }
     // 壁：境目の点が 2 つ続く所（その間が外）。口の面の上は開けておく
     for (let i = 0; i < poly.length; i++) {
@@ -246,6 +260,7 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
       const q = C.at(x, z);
       if (!q || q.d > -1.2 || q.open > 0.5) continue;
       if (Math.hypot(x - SK.x, z - SK.z) < SK.low + 1.5) continue;   // 天坑の穴のまわりには下げない
+      if (KR && Math.hypot(x - KR.x, z - KR.z) < 2.2) continue;     // 教会の縦穴（梯子）のまわりにも
       const room = q.ceil - q.floor, len = Math.min(room - 2.6, (0.4 + rnd() * rnd() * 3.2) * Math.min(1, room / 7));
       if (len < 0.35) continue;
       cone(tileAt(x, z), x, q.ceil, z, len, 0.14 + len * 0.11, shadeOf(q.dist) * 0.9);
@@ -604,6 +619,7 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
       // 天坑：地上で穴の近くにいれば、穴から下の大空洞が見えるので描く
       const nearSky = Math.hypot(cam.x - SK.x, cam.z - SK.z) < (inside > 0.05 ? SHOW : MOUTH_NEAR);
       if (nearSky) near = true;
+      if (KR && Math.hypot(cam.x - KR.x, cam.z - KR.z) < 30) near = true;   // 教会の中：隠し扉の縦穴から下の間が見える
       for (const e of skyParts) if (e.enabled !== nearSky) e.enabled = nearSky;
       let n = 0;
       for (const c of chunks) {

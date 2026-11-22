@@ -863,8 +863,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (LOCKED.has(f.action?.kind)) { f.guarding = false; return; }
       // 泳いでいる間は、攻撃・防禦・回避・技能はできない（利用者の指示 2026-11-14：川は泳げる。game/swim.js）。していたことも止まる
       if (f.swimming) { f.guarding = false; if (f.action && f.action.kind !== 'dodge') f.action = null; return; }
-      // 落ちている間（天坑の縦穴。game/fall.js）も、何もできない
-      if (f.falling) { f.guarding = false; if (f.action && f.action.kind !== 'dodge') f.action = null; return; }
+      // 落ちている間（天坑の縦穴。game/fall.js）と、梯子に掴まっている間（教会の隠し扉。world/church.js）も、何もできない
+      if (f.falling || f.ladder) { f.guarding = false; if (f.action && f.action.kind !== 'dodge') f.action = null; return; }   // 梯子に掴まっている間も
       if (f.stun > 0) { f.guarding = false; if (f.action?.kind === 'draw') f.action = null; return; }
       // 技能：隠れている間・ひるんでいる間・暗殺などの間は使えない。使っても、していることは続ける（効き目が付くだけ）。
       // 劍騎士の奧義（一撃の技）は、何もしていないときだけ出せる（持っている武器の動き。data.js の SWORD_ULT）

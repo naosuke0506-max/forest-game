@@ -122,7 +122,7 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
     usedList.push(houseProps(h.x, y0, h.z, h.yaw, h.w, h.d));
   }
   /** 家の中か（家の中の音の響き・bot の判断に使う） */
-  const insideHouse = (x, z) => houses.some((hh) => {
+  const insideHouse = (x, z) => !!landmarks?.church?.inside(x, z) || houses.some((hh) => {   // 教会の中も（world/church.js）
     const a = (hh.yaw * Math.PI) / 180, dx = x - hh.x, dz = z - hh.z;
     const lx = dx * Math.cos(a) - dz * Math.sin(a), lz = dx * Math.sin(a) + dz * Math.cos(a);
     return Math.abs(lx) < hh.w / 2 + 0.5 && Math.abs(lz) < hh.d / 2 + 0.5;
@@ -175,7 +175,7 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
 
   // 現代の村の暮らしの物（2026-11-21。利用者が選んだ ② 村の暮らしの物）：教会・ガソリンスタンド（world/landmarks.js）と、
   //   家のまわりの小物・車・自転車・畑のトラクター（world/village-life.js）。模型は world/village-items.js が裏で読み込んで描く
-  const landmarks = plan ? buildLandmarks(B, { app, plan, terrain, items, solid, solidLine, sight, covers }) : null;
+  const landmarks = plan ? buildLandmarks(B, { app, plan, terrain, items, solid, solidLine, sight, covers, floors, doorList, houseLife, cave: land?.cave || null }) : null;
   if (landmarks) footprints.push(...landmarks.footprints);
   const life = plan ? placeVillageLife({ plan, terrain, land, obstacles, sight, items, solid, seed: config.seed, used: usedList, avoid: plan.specials || [] }) : null;
 
@@ -208,6 +208,7 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
   const furniture = createFurnitureMotion(app, hides, materials);
   // 家の扉（開け閉めできる。どの家にも 1 枚）
   const doors = createDoors(app, doorList, { material: materials.gate });
+  landmarks?.finish(materials);   // 教会の石板・ステンドグラス（world/church.js）
 
   // 小物と車の模型は裏で読み込む（届くまでは当たり判定だけ）
   items.load();

@@ -13,6 +13,7 @@ export const L = {
   dive: '潛水', surface: '浮上',   // 泳いでいる間の姿勢ボタン：水の中へ潜る・水面へ浮く（game/swim.js）
   exit: '出', hide: '潛伏', wall: '壁潛', leave: '離壁',
   doorOpen: '開扉', doorClose: '閉扉',   // 家の扉を開ける・閉める
+  ladder: '攀梯',   // 梯子をつかむ（教会の隠し扉の縦穴。上り下りはスティック。2026-11-22）
   lanternOn: '點燈', lanternOff: '消燈',   // 角燈（ランタン）を灯す・外す（腰に下げる。render/lantern.js）
   // 題の画面
   loading: '讀込中', start: '出陣', startFail: '起動失敗', practice: '修練之陣　對傀儡 3 騎', enter: '入',

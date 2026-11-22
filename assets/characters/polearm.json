@@ -216,6 +216,21 @@
    "loop": false,
    "speed": 0.0
   },
+  "ladder_up": {
+   "duration": 0.7,
+   "loop": true,
+   "speed": 0.476
+  },
+  "ladder_down": {
+   "duration": 0.7,
+   "loop": true,
+   "speed": 0.476
+  },
+  "ladder_idle": {
+   "duration": 1.0,
+   "loop": true,
+   "speed": 0.0
+  },
   "turn_r": {
    "duration": 0.8,
    "loop": true,

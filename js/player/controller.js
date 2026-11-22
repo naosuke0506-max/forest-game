@@ -3,7 +3,7 @@
 // 見回す（なぞる）と首だけが動く（首の範囲まで。体の向きは変わらない）。首が限界まで回ってから、さらに同じ向きへなぞったときだけ、
 // 体がその場で足踏みしながら、見ている向きへ回る（回る速さは鎧の重さまで。体が向き直ると首は正面に戻る）
 import * as pc from 'playcanvas';
-import { BODY_TURN, SWIM, FALL } from '../game/data.js';
+import { BODY_TURN, SWIM, FALL, LADDER } from '../game/data.js';
 import { wadeScale, diveY } from '../game/swim.js';
 import { slopeSpeed, slopeAhead } from '../game/slope.js';
 import { fallStep } from '../game/fall.js';
@@ -53,6 +53,9 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
   let eyeH = p.eyeHeight, eyeWant = p.eyeHeight;   // 目の高さ（しゃがむ・伏せると低い。なめらかに変える）
   let waterDepth = 0, waterSurface = null, swimming = false;   // 川（game/swim.js）：足もとの水の深さ・水面・泳いでいるか
   const fall = { y: 0, swimming: false, falling: false, fallV: 0, landed: 0, landedWater: false };   // 落ちる（天坑。game/fall.js）
+  // 梯子（教会の隠し扉の縦穴。world/church.js の ladder）：{ L, phase（mount 掴まる・on 上り下り・offTop 上で降りる・offBottom 下で降りる）, t, dur, from, to, y, move }
+  let ladder = null;
+  const CLIMB = LADDER.speed;           // 梯子を上り下りする速さ（m/秒。game/data.js）
   let eyeOff = null;                    // 一人称で自分の体を映すときの目の位置（体の向きの座標。模型の頭から決める）
   function speedFor(mag) {
     // 全速力（疾驅ボタン。match-session.js が決める）：スティックを倒していれば、倒し方によらず全速力
@@ -189,6 +192,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     }
     // 上下：首と上体で（首の範囲まで）
     pitch = clamp(pitch - input.lookY, -BODY_TURN.neckDown, BODY_TURN.neckUp);
+    if (ladder) { climb(dt, input); return; }
     if (cover) {
       // 壁裏隠れ（一人称）：体は壁から外を向いて動かさない（壁に沿った横歩きは試合の計算が動かす）。
       // 首は覗く向きへ 62 度（壁に背を付けた動きと同じ）を元に、なぞった分だけ首の範囲で動く
@@ -269,6 +273,53 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     placeCamera(mag);
   }
 
+  /**
+   * 梯子の上り下り（2026-11-22。利用者が選んだ：ボタンで掴み、スティックで上下）。体はいつも梯子を向き、首だけ見回せる。
+   * 前に倒すと上り、後ろに倒すと下りる。上の端でさらに上ると床へ上がり、下の端でさらに下りると床に降りる
+   */
+  function climb(dt, input) {
+    const L = ladder.L;
+    headYaw = clamp(headYaw - input.lookX, -BODY_TURN.neckYaw, BODY_TURN.neckYaw);
+    yaw = L.yaw; look = yaw + headYaw; turn.target = null;
+    const sm = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
+    ladder.move = 0;
+    if (ladder.phase === 'on') {
+      const v = frozen ? 0 : Math.abs(input.moveY) > 0.3 ? Math.sign(input.moveY) : 0;
+      ladder.move = v;
+      ladder.y += v * CLIMB * dt;
+      // 上の端（床へ上がる所）。石板が閉じていれば、頭が石板に当たる所（cap）で止まる（match-session.js が、そこで石板を押し開ける）
+      const hi = L.top - 0.95, cap = L.open === false ? L.top - 1.35 : hi;
+      if (v > 0 && ladder.y >= hi && cap >= hi) {
+        ladder.y = hi;
+        ladder.phase = 'offTop'; ladder.t = 0; ladder.dur = 0.75;
+        ladder.from = { x: L.x, y: hi, z: L.z }; ladder.to = { x: L.topStand.x, y: L.top, z: L.topStand.z };
+      } else if (v < 0 && ladder.y <= L.bottom) {
+        ladder.y = L.bottom;
+        ladder.phase = 'offBottom'; ladder.t = 0; ladder.dur = 0.4;
+        ladder.from = { x: L.x, y: L.bottom, z: L.z }; ladder.to = { x: L.botStand.x, y: L.bottom, z: L.botStand.z };
+      }
+      ladder.y = Math.min(cap, Math.max(L.bottom, ladder.y));
+      pos.x = L.x; pos.z = L.z; pos.y = ladder.y;
+    } else {
+      ladder.t = Math.min(1, ladder.t + dt / ladder.dur);
+      const t = ladder.t, a = ladder.from, b = ladder.to;
+      // 掴まる（上から）：先に後ろへ下がり、それから下りる。上で降りる：先に上がり、それから前へ。下：まっすぐ
+      const kxz = ladder.phase === 'mount' && ladder.top ? sm(0, 0.55, t) : ladder.phase === 'offTop' ? sm(0.4, 1, t) : sm(0, 1, t);
+      const ky = ladder.phase === 'mount' && ladder.top ? sm(0.25, 1, t) : ladder.phase === 'offTop' ? sm(0, 0.6, t) : sm(0, 1, t);
+      pos.x = a.x + (b.x - a.x) * kxz; pos.z = a.z + (b.z - a.z) * kxz; pos.y = a.y + (b.y - a.y) * ky;
+      ladder.move = ladder.phase === 'offTop' ? 1 : ladder.phase === 'mount' && ladder.top ? -1 : 0;   // 動きの選び方（render/character-view.js）
+      if (t >= 1) {
+        if (ladder.phase === 'mount') { ladder.phase = 'on'; ladder.y = b.y; }
+        else { const done = ladder.phase; ladder = null; api.onLadderOff?.(done); }
+      }
+    }
+    groundY = pos.y;
+    waterDepth = 0; waterSurface = null; swimming = false; fall.falling = false;
+    body.setPosition(pos.x, groundY, pos.z);
+    body.setEulerAngles(0, yaw, 0);
+    placeCamera(0);
+  }
+
   const api = {
     /** 三人称のカメラを置ける所か（main.js が洞窟の中の岩を確かめる関数を入れる）。(x, y, z) → true / false */
     cameraClear: null,
@@ -289,6 +340,21 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     get falling() { return fall.falling; },
     /** 着いたとき：(速さ m/秒, 水に落ちたか)。match-session.js が音と知らせを出す */
     onLand: null,
+    /**
+     * 梯子を掴む（world/church.js の ladder。fromTop：上の床から下りるか）。上からは、梯子の方を向いて後ろへ下がりながら下りる
+     */
+    grabLadder(L, fromTop) {
+      ladder = { L, phase: 'mount', t: 0, dur: fromTop ? 0.7 : 0.4, top: !!fromTop, move: 0,
+        from: { x: pos.x, y: pos.y ?? L.bottom, z: pos.z }, to: { x: L.x, y: fromTop ? L.top - 0.95 : L.bottom, z: L.z }, y: fromTop ? L.top - 0.95 : L.bottom };
+      yaw = L.yaw; headYaw = 0; look = yaw; turn.target = null;
+      fall.falling = false;
+    },
+    /** 梯子から手を離す（倒れたときなど）。そのまま落ちる（game/fall.js） */
+    leaveLadder() { ladder = null; },
+    /** 梯子に掴まっているか：{ phase, move（1 上る・-1 下りる・0 止まっている）, y } か null */
+    get ladder() { return ladder ? { phase: ladder.phase, move: ladder.move, y: pos.y } : null; },
+    /** 梯子から降りたとき（'offTop'・'offBottom'）。match-session.js が使う */
+    onLadderOff: null,
     noRun: false,   // しゃがむ・伏せているときは走れない
     /** 目の高さ（m。しゃがむ・伏せると低い。なめらかに移る） */
     setEyeHeight(h) { eyeWant = h; },
@@ -386,7 +452,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     /** 出現する場所と向き。y を渡すと、その高さの近くの床に立つ（地面の下の洞窟の中に出るとき） */
     spawn(x, z, faceYaw, y = null) {
       pos.x = x; pos.z = z; yaw = faceYaw; pitch = -2; headYaw = 0; turn.target = null; look = yaw;
-      fall.falling = false; fall.fallV = 0;
+      fall.falling = false; fall.fallV = 0; ladder = null;
       pos.y = groundAt(x, z, y);
       groundY = pos.y;
       update(0, { moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
