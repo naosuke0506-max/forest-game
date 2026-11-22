@@ -1,5 +1,7 @@
 // 空の光：太陽と月の円盤、木漏れ日の光の筋（光芒）。
 //   太陽・月：光の来る向きの遠く（空の手前）に、カメラを向いた板を置く。木に隠れると見えなくなる（深さで判定）。
+//     建物・岩・山などにさえぎられたら、暈（かさ）ごと消す（2026-11-22。深さで隠れるのは板より手前＝約 131 m までの物だけで、
+//     家の陰でも暈が家のまわりに光って見え、遠くの物の向こうにも見えていた。判定は render/sun-glare.js の createSkyOcclusion）
 //     太陽は白く輝く円と、周りの柔らかい光の暈（かさ）。月は模様のある円と、小さな淡い暈
 //   光の筋：森の中で、木の葉の間から地面へ差す細長い光の帯。葉の近くを通る所にだけ出る（空が開けた所には出ない）。
 //     太陽の方を向くほど濃く見える（光は前へ散るため）。ゆっくり明滅し、しばらくすると別の場所へ移る
@@ -95,7 +97,7 @@ function quadMesh(device) {
  * @param {object} timeOfDay world/time-of-day.js（fx：飾りの強さ）
  * @param {{ canopies: {x,y,z,r}[], heightAt: Function, zones: object }} world
  */
-export function createSkyLights(app, camera, sun, timeOfDay, { canopies = [], heightAt, zones = null, farClip = 160 }) {
+export function createSkyLights(app, camera, sun, timeOfDay, { canopies = [], heightAt, zones = null, farClip = 160, occlusion = null }) {
   const device = app.graphicsDevice;
   const D = farClip * 0.82;                 // 円盤を置く遠さ（空のドームより手前、描く木より奥）
 
@@ -176,6 +178,7 @@ export function createSkyLights(app, camera, sun, timeOfDay, { canopies = [], he
   }
   for (let i = 0; i < N; i++) shafts.push({ active: false, timer: 0 });
   let t = 0, inited = false;
+  let occTimer = 0, occOpen = 1, occVis = 1;   // 円盤がさえぎられていないか（1 秒に 10 回調べ、なめらかに追う。さえぎられたらすぐ消える）
 
   return {
     /** 確認用：今出ている光の筋の数と、いちばん濃い筋の濃さ */
@@ -192,21 +195,28 @@ export function createSkyLights(app, camera, sun, timeOfDay, { canopies = [], he
       // 円盤：空の写真の中の太陽（月）の向きの遠くに、カメラを向けて置く（写真の光の暈と重なるように）
       discDir.copy(timeOfDay.skyDir ?? sunDir);
       const above = Math.min(1, Math.max(0, (discDir.y + 0.03) / 0.06));
-      sunDisc.enabled = fx.sun > 0.01 && above > 0;
+      // 建物・岩・山などにさえぎられていないか（木の葉は深さで隠れるので見ない＝葉の間から日が覗く）
+      if (occlusion && (fx.sun > 0.01 || fx.moon > 0.01) && above > 0) {
+        occTimer -= dt;
+        if (occTimer <= 0) { occTimer = 0.1; occOpen = occlusion(cam, discDir, { leaves: false }); }
+        occVis += (occOpen - occVis) * Math.min(1, dt * (occOpen < occVis ? 20 : 6));
+      } else occVis = occlusion ? 0 : 1;
+      const seen = above * occVis;
+      sunDisc.enabled = fx.sun > 0.01 && seen > 0.01;
       if (sunDisc.enabled) {
         tmp.copy(discDir).mulScalar(D).add(cam);
         sunDisc.setPosition(tmp); sunDisc.lookAt(cam); sunDisc.setLocalScale(sunSize, sunSize, 1);
         const g = timeOfDay.glare.color;
         sunMat.emissive.set(g[0], g[1], g[2]);
-        sunMat.emissiveIntensity = 3.2 * fx.sun * above;
+        sunMat.emissiveIntensity = 3.2 * fx.sun * seen;
         sunMat.update();
       }
-      moonDisc.enabled = fx.moon > 0.01 && above > 0;
+      moonDisc.enabled = fx.moon > 0.01 && seen > 0.01;
       if (moonDisc.enabled) {
         tmp.copy(discDir).mulScalar(D).add(cam);
         moonDisc.setPosition(tmp); moonDisc.lookAt(cam); moonDisc.setLocalScale(moonSize, moonSize, 1);
         moonMat.emissive.set(0.86, 0.9, 1.0);
-        moonMat.emissiveIntensity = 1.6 * fx.moon;
+        moonMat.emissiveIntensity = 1.6 * fx.moon * occVis;
         moonMat.update();
       }
 

@@ -96,6 +96,12 @@ export function buildLandmarks(B, ctx) {
     { const a = at(0, RH - 0.05, rz0), b = at(0, RH - 0.05, rz1); B.slope('tiles', a, b, [b[0], b[1] + 0.18, b[2]], [a[0], a[1] + 0.18, a[2]], [0, 1, 0], 0.7); }
     B.tri('plaster', at(NX, WH, Z0), at(-NX, WH, Z0), at(0, RH - 0.3, Z0), dir(0, 0, -1), WHITE);
     B.tri('plaster', at(-NX, WH, Z1), at(NX, WH, Z1), at(0, RH - 0.3, Z1), dir(0, 0, 1), WHITE);
+    // 視線をさえぎる物：三角屋根と妻壁（太陽・月が屋根越しに見えないように。2026-11-22。前は軒の高さの板だけで、屋根の上の三角が抜けていた）
+    if (sight) {
+      for (const s of [-1, 1]) { const p0 = at(s * eave, ey, rz0), p1 = at(s * eave, ey, rz1), p2 = at(0, RH, rz1), p3 = at(0, RH, rz0); sight.addTri(p0, p1, p2); sight.addTri(p0, p2, p3); }
+      sight.addTri(at(NX, WH, Z0), at(-NX, WH, Z0), at(0, RH - 0.3, Z0));
+      sight.addTri(at(-NX, WH, Z1), at(NX, WH, Z1), at(0, RH - 0.3, Z1));
+    }
     // 横の窓（細長い窓 3 つずつ。上は尖り。暗いガラスと石の縁）
     for (const sx of [-1, 1]) for (const wz of [-6.6, -2.4, 1.8]) {
       const x = sx * (NX + 0.015), y0 = 2.5, y1 = 5.6, w = 1.1;
@@ -117,6 +123,7 @@ export function buildLandmarks(B, ctx) {
       // 屋根：軒から真ん中の上へ
       const e0 = at(x0 * 1.12, AH - 0.25, Z0 + (z0 - Z0) * 1.12), e1 = at(x1 * 1.12, AH - 0.25, Z0 + (z1 - Z0) * 1.12), top = at(0, AH + 2.6, Z0 + 0.05);
       B.tri('tiles', e0, e1, top, v3.norm(v3.add(nn, [0, 1, 0])), 0.8);
+      sight?.addTri(e0, e1, top);   // 後陣の屋根も視線をさえぎる
       wallLine(x0, z0, x1, z1, 0.3);
     }
     // 塔：石の台・しっくいの壁・角の石・軒
@@ -167,6 +174,7 @@ export function buildLandmarks(B, ctx) {
       const a = sp[k], b = sp[(k + 1) % 4];
       const n = v3.norm(v3.cross(v3.sub(apex, a), v3.sub(b, a)));
       B.tri('steel', b, a, apex, v3.dot(n, v3.sub(a, at(0, TH, tm))) < 0 ? v3.mul(n, -1) : n, VERDIGRIS);
+      sight?.addTri(b, a, apex);   // 尖り屋根も視線をさえぎる
     }
     prism(B, 'steel', at(0, SH + 0.15, tm), [0, 1, 0], 0.3, 0.18, 8, GOLD);
     bx('steel', 0, SH + 0.3, tm, 0.09, 0.09, 1.5, { shade: GOLD });
@@ -209,6 +217,7 @@ export function buildLandmarks(B, ctx) {
       const p = at(x, 0, z); solid(p[0], p[2], 0.25); sight?.addCyl(p[0], p[2], 0.2, o.y, o.y + CH);
     }
     bx('steel', CX, CH, CZ, CW, CD, 0.7, { shade: [0.9, 0.9, 0.9], bottom: true });
+    sightBox(CX, CH, CZ, CW, CD, 0.7);   // 屋根も視線をさえぎる（屋根の下から屋根越しに太陽が見えないように。2026-11-22）
     bx('steel', CX, CH + 0.12, CZ, CW + 0.08, CD + 0.08, 0.36, { shade: BRAND, top: false });
     bx('steel', CX, CH + 0.48, CZ, CW + 0.06, CD + 0.06, 0.1, { shade: BRAND2, top: false });
     // 屋根の下の灯（白い板 8 枚と、夜の光）
