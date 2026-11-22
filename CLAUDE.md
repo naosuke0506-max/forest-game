@@ -70,7 +70,8 @@
     `js/world/house-life.js`（光の板と、カメラに近い 3 つだけ本物の光）。家の中の Poly Haven の模型は `PROP_INFO` の `inside`（近くだけ描く）。
     撮るときは作業用の場所の `intshot.js`（撮るカメラの近くで本物の光を選ぶよう、`interior.update` を差し替えている）
 - 大廳の背景は時代ごとにランダムで替わる予定（今は中世の城だけ）。時代を足すときは、広間の形・小物（`hall-room.js`・`hall-props.js`）を時代ごとに作り、
-  曲は `music.js` の `HALL_MUSIC` に足す（曲は 8 小節を切り出して継ぎ目なく繰り返す。切り方は `assets/music/CREDITS.md` の大廳の行）
+  曲は `music.js` の `HALL_MUSIC` に足す（曲は 8 小節を切り出して継ぎ目なく繰り返す。切り方は `assets/music/CREDITS.md` の大廳の行。切り出しは `tools/music/cut_hall_loop.py`＝
+  速さが少しずつ変わる曲でも、測った小節の頭から切る）。中世の大廳の曲は、2026-11-22 に利用者の指示で、時代の曲の中世（題の曲と同じ曲）のサビ後半 8 小節に替えた
 - 技能（スキル）：技能ボタン（PC は G）と專用技能の反擊・強靱・剛力・鷹目は 2026-11-10 に作った（`js/game/skills.js`）。
   劍騎士の奧義（雙劍の交差滑斬・長劍の地穿昇斬）・劍騎士の片手劍の二刀流（雙劍）・祓魔僧の神怒・鷹目の矢の穴（`js/world/arrow-holes.js`）も 2026-11-10 に作った。
   神怒で家・樽が壊れる仕組み（前の `js/world/destruction.js`）は、2026-11-13 に利用者の指示で消した（神怒は大きな効果音を足した）。
@@ -93,7 +94,7 @@
   口のまわりは、地面の網を抜いて細かい地面を作る（`cave-plan.js` の `holeAt`・`patchAt`。`terrain.js` はそこだけ計算の高さを使う）
   - 洞窟の仕上げ（2026-11-21。利用者が選んだ 4 回の 1 回目）：地上の物の当たり判定（高さの範囲なし）は、地面より 2.5 m 下にいる人に当てない（`obstacles.js` の `UNDER`）。
     口の手前 3 m は外の地面を洞窟の床まで下げる（`carve`）。口の岩の面は形から法線を計算し、ひさしとでこぼこ。口のまわりの岩は `mouthRocks`（props.js の `fixed`）。
-    地下の地図は `minimap.js` の `buildCaveMap`（升目の壁からの距離から描く）。口を直したら、作業用の場所の `cavewalk_rocks.mjs`・`routetest_rocks.mjs`（岩の当たり判定を足した試験）と
+    地下の地図は `minimap.js` の `buildCaveMap`（升目の壁からの距離から描く）。地上の地図の口の印は `drawMouth`（いつも同じ大きさ。2026-11-22。確かめは作業用の場所の `mouthmap.js`）。口を直したら、作業用の場所の `cavewalk_rocks.mjs`・`routetest_rocks.mjs`（岩の当たり判定を足した試験）と
     `caveshot.js`（口・中・地図を撮る）を回す。4 回とも済み（2026-11-22）
   - 天坑（2026-11-22。仕上げの 2 回目）：大空洞の天井の穴と、下の池。数と場所は `cave-plan.js` の `SKY`（穴・縦穴・池・天井の持ち上げ）。
     穴の上の足もとは大空洞の床（`layer`）、落ちるのは `js/game/fall.js`（プレイヤーと bot が同じ計算。泳いでいる人は落ちない）、池の水は `pondAt`

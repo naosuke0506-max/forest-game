@@ -128,10 +128,8 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       fctx.stroke();
       fctx.setLineDash([]);
     } else if (b.type === 'cave') {
-      // 洞窟の口：黒い半円（中の通り道は描かない。中は自分で確かめる）
-      fctx.fillStyle = '#1c140c';
-      fctx.beginPath(); fctx.arc(bx, by, 2.4 * kD, Math.PI, 0); fctx.closePath(); fctx.fill();
-      fctx.strokeStyle = 'rgba(150, 130, 100, .9)'; fctx.lineWidth = 1.2; fctx.stroke();
+      // 洞窟の口：印（drawMouth）は、地図を映すたびに、いつも同じ大きさで上に重ねる（2026-11-22。前はここに半径 2.4 m の黒い半円を描いていて、
+      // 地図の上では 2〜3 画素しかなく、木に隠れて見えなかった）。中の通り道は描かない（中は自分で確かめる）
     } else if (b.type === 'bridge') {
       // 橋：板の色の細長い四角
       fctx.save(); fctx.translate(bx, by); fctx.rotate((-b.yaw * Math.PI) / 180);
@@ -212,12 +210,36 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       : [{ key: 'castle', x: zones.castle.x, z: zones.castle.z - 40 }]),
   ] : [];
 
-  // 洞窟の口の名前：同じ名前の口（風穴は 2 つ）は、その真ん中の少し東に 1 つだけ書く
-  {
-    const byName = new Map();
-    for (const b of buildings) if (b.type === 'cave') { const k = b.name || '風穴'; if (!byName.has(k)) byName.set(k, []); byName.get(k).push(b); }
-    for (const [name, list] of byName) labels.push({ key: 'cave', name, x: list.reduce((s, b) => s + b.x, 0) / list.length + 6, z: list.reduce((s, b) => s + b.z, 0) / list.length });
-    // 天坑の名前は地上の地図には書かない（混淆林・川邑の名前と重なるため。穴の印だけ。名前は地下の地図に書く）
+  // 洞窟の口（2026-11-22。利用者の指示：「洞窟の入り口は地上の地図から見ても分かるようにしてください」）：
+  //   口の場所に「洞口」の印（暗い岩のアーチ）を、地図の縮みに関係なくいつも同じ大きさで描き、名前は印のすぐ横に書く（drawMouth）。
+  //   小さな地図でも、映している範囲に口があれば印を出す。前は、名前を口の 6 m 東に書くだけで、印は小さすぎて見えなかった
+  //   天坑の名前は地上の地図には書かない（混淆林・川邑の名前と重なるため。穴の印だけ。名前は地下の地図に書く）
+  const mouths = buildings.filter((b) => b.type === 'cave').map((b) => ({ x: b.x, z: b.z, name: b.name || '風穴', dx: b.dx ?? 0, dz: b.dz ?? 1 }));
+  /**
+   * 洞窟の口の印：明るい丸に墨の輪、中に暗い岩のアーチ（入り口）。r は画素。name があれば印の横（外側）に名前
+   * side：名前を書く向き（1 = 右、-1 = 左、0 = 上）
+   */
+  function drawMouth(c, x, y, r, name = null, font = 0, side = 1) {
+    c.save();
+    c.fillStyle = 'rgba(0, 0, 0, .35)'; c.beginPath(); c.arc(x + r * 0.12, y + r * 0.16, r, 0, Math.PI * 2); c.fill();   // 影
+    c.fillStyle = '#efe2bc'; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+    c.lineWidth = Math.max(1.2, r * 0.16); c.strokeStyle = INK; c.stroke();
+    // 岩山：灰茶の山形
+    c.fillStyle = '#8b7a62';
+    c.beginPath(); c.moveTo(x - r * 0.78, y + r * 0.5); c.lineTo(x - r * 0.42, y - r * 0.42); c.lineTo(x - r * 0.08, y - r * 0.62); c.lineTo(x + r * 0.36, y - r * 0.46); c.lineTo(x + r * 0.78, y + r * 0.5); c.closePath(); c.fill();
+    // 入り口：暗いアーチ
+    c.fillStyle = '#140d07';
+    c.beginPath(); c.moveTo(x - r * 0.4, y + r * 0.5); c.lineTo(x - r * 0.4, y + r * 0.02); c.arc(x, y + r * 0.02, r * 0.4, Math.PI, 0); c.lineTo(x + r * 0.4, y + r * 0.5); c.closePath(); c.fill();
+    c.restore();
+    if (name && font) {
+      c.save();
+      c.font = `700 ${font}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
+      c.textAlign = side > 0 ? 'left' : side < 0 ? 'right' : 'center'; c.textBaseline = 'middle';
+      const tx = x + side * (r + font * 0.25), ty = side ? y : y - r - font * 0.62;
+      c.lineWidth = Math.max(2, font / 4); c.strokeStyle = 'rgba(240, 225, 190, .92)'; c.strokeText(name, tx, ty);
+      c.fillStyle = '#2b1d0e'; c.fillText(name, tx, ty);
+      c.restore();
+    }
   }
 
   // ===== 地下の地図（2026-11-21。利用者の指示：洞窟に入ったら地下の地図に切り替える）=====
@@ -373,9 +395,36 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.45)');
     ctx.fillStyle = v; ctx.fillRect(0, 0, size, size);
     const [px, py] = toPx(me.x, me.z);
+    // エリアの名前（下）。洞窟の口の印と自分の矢印より先に描く（前は最後に描いていて、下の方の口の印が名前の文字に隠れた）
+    if (zoneNow) {
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `700 ${Math.round(size / 10)}px "Hiragino Mincho ProN", serif`;
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)';
+      const name = underName || villageNow?.name || ZONE_NAMES[zoneNow];
+      ctx.strokeText(name, size / 2, size - size / 9);
+      ctx.fillStyle = '#fff3cf';
+      ctx.fillText(name, size / 2, size - size / 9);
+    }
+    // 洞窟の口（地上の地図のときだけ。洞窟の中の地図は、口を外向きの矢じりで描いてある）
+    if (!inCave) {
+      const r = size / 17;
+      for (const m of mouths) {
+        const [mx, my] = toPx(m.x, m.z), x = ((mx - sx) / sw) * size, y = ((my - sy) / sw) * size;
+        const d = Math.hypot(x - size / 2, y - size / 2), rim = size / 2 - r * 1.05;
+        if (d <= rim) {
+          // 名前：ふつうは右。右の端に近いときは左。下の方（エリアの名前の段）にあるときは、エリアの名前と重ならないよう上
+          const side = y > size * 0.74 ? 0 : x > size * 0.62 ? -1 : 1;
+          drawMouth(ctx, x, y, r, m.name, Math.round(size / 13), side);
+        } else if (d < size * 0.85) {
+          // 映している範囲のすぐ外：縁に小さく（そちらの向きに口がある）
+          const k = rim / d;
+          drawMouth(ctx, size / 2 + (x - size / 2) * k, size / 2 + (y - size / 2) * k, r * 0.7);
+        }
+      }
+    }
     drawArrow(ctx, ((px - sx) / sw) * size, ((py - sy) / sw) * size, me.yaw, size / 18, me.alive, size * 0.3);
     ctx.restore();
-    // 北の印・エリアの名前
+    // 北の印
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `700 ${Math.round(size / 11)}px "Hiragino Mincho ProN", serif`;
@@ -386,13 +435,6 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     ctx.fillText(L.north, size / 2, size / 10);
     // 洞窟の中：地下の地図（上）。洞窟の形が無いときだけ、前と同じく地上の地図を暗くする
     if (underName && !cave) { ctx.fillStyle = 'rgba(8, 6, 4, .55)'; ctx.fillRect(0, 0, size, size); }
-    if (zoneNow) {
-      ctx.font = `700 ${Math.round(size / 10)}px "Hiragino Mincho ProN", serif`;
-      const name = underName || villageNow?.name || ZONE_NAMES[zoneNow];
-      ctx.strokeText(name, size / 2, size - size / 9);
-      ctx.fillStyle = '#fff3cf';
-      ctx.fillText(name, size / 2, size - size / 9);
-    }
   }
 
   // ===== 大きな地図（羊皮紙の地図）=====
@@ -442,9 +484,21 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     g.strokeStyle = INK;
     g.lineWidth = s / 260; g.beginPath(); g.arc(cx, cy, R + s * 0.006, 0, Math.PI * 2); g.stroke();
     g.lineWidth = s / 520; g.beginPath(); g.arc(cx, cy, R + s * 0.016, 0, Math.PI * 2); g.stroke();
+    const scale = (2 * R) / (2 * view);
+    // 洞窟の口の印と名前（地上の地図だけ）。名前は、地図の真ん中から外へ向かう側に書く（地図の内側の村や森の名前と重ならないように）
+    if (!under) for (const m of mouths) {
+      const x = cx + m.x * scale, y = cy + m.z * scale, r = s / 62, f = Math.round(s / 34);
+      // 名前を書く側：まず外向き。ほかの名前（村・森）の近くに重なるなら、反対側へ
+      const near = (side) => list.some((l) => {
+        const lx = cx + l.x * scale, ly = cy + l.z * scale, tx = x + side * (r + f * 1.3);
+        return Math.abs(lx - tx) < f * 2.6 && Math.abs(ly - y) < f * 1.1;
+      });
+      let side = m.x < 0 ? -1 : 1;
+      if (near(side) && !near(-side)) side = -side;
+      drawMouth(g, x, y, r, m.name, f, side);
+    }
     // エリアの名前（墨の明朝体。白く縁取る）
     g.textAlign = 'center'; g.textBaseline = 'middle';
-    const scale = (2 * R) / (2 * view);
     for (const l of list) {
       const x = cx + l.x * scale, y = cy + l.z * scale;
       g.font = `700 ${Math.round(s / (l.small ? 34 : 24))}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
@@ -487,7 +541,7 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     }
     // 凡例（右下）
     {
-      const x0 = s * 0.74, y0 = s * 0.85, lh = s * 0.032;
+      const x0 = s * 0.74, lh = s * 0.032;
       g.font = `${Math.round(s / 44)}px "Hiragino Mincho ProN", serif`;
       g.textAlign = 'left';
       const items = under ? [[L.cavePath, (x, y) => { g.fillStyle = '#b09670'; g.fillRect(x, y - 4, 20, 8); }],
@@ -496,7 +550,9 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
         : [[L.road, (x, y) => { g.fillStyle = '#c4aa7a'; g.fillRect(x, y - 3, 20, 6); }],
         [L.house, (x, y) => { g.fillStyle = '#a9543a'; g.fillRect(x + 4, y - 6, 12, 12); }],
         [L.tree, (x, y) => { g.fillStyle = '#3a5a32'; g.beginPath(); g.arc(x + 10, y, 7, 0, Math.PI * 2); g.fill(); }],
+        [L.caveMouth, (x, y) => drawMouth(g, x + 10, y, 9)],
         [L.you, (x, y) => drawArrow(g, x + 10, y, 0, 6, true)]];
+      const y0 = s * 0.85 - Math.max(0, items.length - 4) * lh;   // 段が増えたら上へずらす（下の縁に掛けない）
       items.forEach(([name, mark], k) => {
         const y = y0 + k * lh;
         mark(x0, y);
