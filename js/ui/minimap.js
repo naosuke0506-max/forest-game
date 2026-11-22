@@ -160,6 +160,16 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
       fctx.restore();
     }
   }
+  // 天坑（2026-11-22。world/cave-plan.js の SKY）：地面に開いた穴。黒い丸と、ふちの岩の輪
+  const sky = cave?.sky || null;
+  if (sky) {
+    const [x, y] = toD(sky.x, sky.z), r = sky.r * kD;
+    fctx.fillStyle = 'rgba(120, 104, 84, .9)'; fctx.beginPath(); fctx.arc(x, y, r + (sky.lip + 0.6) * kD, 0, Math.PI * 2); fctx.fill();
+    const hg = fctx.createRadialGradient(x, y, 0, x, y, r);
+    hg.addColorStop(0, '#05080a'); hg.addColorStop(0.75, '#10161a'); hg.addColorStop(1, '#2a2620');
+    fctx.fillStyle = hg; fctx.beginPath(); fctx.arc(x, y, r, 0, Math.PI * 2); fctx.fill();
+    fctx.strokeStyle = INK; fctx.lineWidth = 1.2; fctx.stroke();
+  }
   // 歩ける範囲の縁：点線（2026-11-14：外周の柵を無くし、周りの山が端になった）
   {
     const R = (areaRadius / view) * DRES / 2;
@@ -207,6 +217,7 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     const byName = new Map();
     for (const b of buildings) if (b.type === 'cave') { const k = b.name || '風穴'; if (!byName.has(k)) byName.set(k, []); byName.get(k).push(b); }
     for (const [name, list] of byName) labels.push({ key: 'cave', name, x: list.reduce((s, b) => s + b.x, 0) / list.length + 6, z: list.reduce((s, b) => s + b.z, 0) / list.length });
+    // 天坑の名前は地上の地図には書かない（混淆林・川邑の名前と重なるため。穴の印だけ。名前は地下の地図に書く）
   }
 
   // ===== 地下の地図（2026-11-21。利用者の指示：洞窟に入ったら地下の地図に切り替える）=====
@@ -215,6 +226,7 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
   const caveLabels = [];
   if (cave) {
     for (const n of cave.names || []) caveLabels.push({ name: n.name, x: n.x, z: n.z });
+    if (cave.sky) caveLabels.push({ name: cave.sky.name, x: cave.sky.x - 2, z: cave.sky.z - 13, small: true });   // 天坑（池の少し北。大空洞の名前と重ならないように）
     const byName = new Map();
     for (const m of cave.mouths) { if (!byName.has(m.name)) byName.set(m.name, []); byName.get(m.name).push(m); }
     for (const [name, list] of byName) caveLabels.push({ name, x: list.reduce((a, m) => a + m.x, 0) / list.length - list[0].in[0] * 9, z: list.reduce((a, m) => a + m.z, 0) / list.length - list[0].in[1] * 9 });
@@ -240,6 +252,9 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
         const t = hi > lo ? (Fl[i] - lo) / (hi - lo) : 0.5;
         const k = 0.72 + 0.28 * t + (n - 0.5) * 0.08;
         c = [176 * k, 152 * k, 112 * k];
+        // 天坑の下の池：水の色（深いほど濃い）。真上の穴から光が入る所は明るく
+        const w = cave.pondAt?.(x, z);
+        if (w) { const d = Math.min(1, w.depth / 2.5); c = [96 - 40 * d, 138 - 40 * d, 150 - 26 * d]; }
       } else if (D[i] < 0.9) c = [52, 36, 20];                 // 壁の縁（墨の線）
       else c = [34 + n * 14, 30 + n * 12, 26 + n * 10];         // 岩
       img.data[i * 4] = c[0]; img.data[i * 4 + 1] = c[1]; img.data[i * 4 + 2] = c[2]; img.data[i * 4 + 3] = 255;
@@ -249,6 +264,12 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     const g = f.getContext('2d');
     g.imageSmoothingEnabled = true;
     g.drawImage(b, 0, 0, DRES, DRES);
+    // 天坑：天井の穴（空が見える所）を点線の丸で
+    if (cave.sky) {
+      const [x, y] = toD(cave.sky.x, cave.sky.z);
+      g.save(); g.setLineDash([4, 3]); g.strokeStyle = 'rgba(250, 236, 190, .95)'; g.lineWidth = 1.6;
+      g.beginPath(); g.arc(x, y, cave.sky.low * kD, 0, Math.PI * 2); g.stroke(); g.restore();
+    }
     // 柱（大空洞の岩の柱）
     g.fillStyle = 'rgba(40, 28, 16, .95)';
     for (const p of cave.pillars || []) { const [x, y] = toD(p.x, p.z); g.beginPath(); g.arc(x, y, p.r * kD, 0, Math.PI * 2); g.fill(); }
@@ -418,7 +439,7 @@ export function createMinimap(canvas, { areaRadius, zones = null, buildings = []
     const scale = (2 * R) / (2 * view);
     for (const l of list) {
       const x = cx + l.x * scale, y = cy + l.z * scale;
-      g.font = `700 ${Math.round(s / 24)}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
+      g.font = `700 ${Math.round(s / (l.small ? 34 : 24))}px "Hiragino Mincho ProN", "Yu Mincho", serif`;
       const name = l.name || ZONE_NAMES[l.key];
       g.lineWidth = s / 110; g.strokeStyle = 'rgba(240, 225, 190, .85)'; g.strokeText(name, x, y);
       g.fillStyle = '#2b1d0e'; g.fillText(name, x, y);

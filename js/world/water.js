@@ -142,6 +142,14 @@ export function createWater(app, land) {
   mat.depthWrite = false;
   mat.cull = pc.CULLFACE_NONE;
   mat.update();
+  // 天坑の下の池（地下。world/cave.js）：同じさざ波で、暗く・空を映さない（洞窟の中で空の明るさを映すと、明るい水色の板に見えたため。2026-11-22）。
+  // 日の光（太陽の向きの光）のてかりだけが残る
+  const pondMat = mat.clone();
+  pondMat.diffuse = new pc.Color(0.09, 0.14, 0.15);
+  pondMat.emissive = new pc.Color(0.02, 0.034, 0.04);   // 真っ黒な穴に見えないよう、ごく弱く
+  pondMat.useSkybox = false;
+  pondMat.opacity = 0.95;
+  pondMat.update();
   const surf = new pc.Entity('river');
   surf.addComponent('render', { meshInstances: [new pc.MeshInstance(meshOf(device, pos, nor, uv, idx), mat)], castShadows: false, receiveShadows: true });
   app.root.addChild(surf);
@@ -214,6 +222,9 @@ export function createWater(app, land) {
       mat.normalMapOffset.set(0, -t * 0.16);
       mat.normalDetailMapOffset.set(t * 0.02, -t * 0.26);
       mat.update();
+      pondMat.normalMapOffset.set(t * 0.03, t * 0.02);   // 池はほとんど流れない
+      pondMat.normalDetailMapOffset.set(-t * 0.02, t * 0.03);
+      pondMat.update();
       fallMat.diffuseMapOffset.set(0, -t * 1.1);
       fallMat.opacityMapOffset.set(0, -t * 1.1);
       fallMat.update();
@@ -221,5 +232,7 @@ export function createWater(app, land) {
       foam.setLocalEulerAngles(0, foamYaw, 0);
     },
     triangles: tris,
+    /** 天坑の下の池の水面の材質（world/cave.js） */
+    pondMaterial: pondMat,
   };
 }

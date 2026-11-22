@@ -323,6 +323,26 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
     },
     /** 水の中へ潜る・水面へ浮く：水をかく音（川を泳ぐ音と同じ作り） */
     splash(f) { splash(f, false); },
+    /**
+     * 高い所から落ちて着いた（天坑から地底の池へ。game/fall.js）：水なら、どぼんという低い音と、しぶきと、洞窟の中に響く余韻。
+     * 床なら、どさっという音。速いほど大きい
+     */
+    plunge(f, speed = 15, water = true) {
+      const k = Math.min(1, speed / 20);
+      const d = at(f, (f.isPlayer ? 0.9 : 1) * (0.6 + 0.4 * k), { ref: 6, max: 60 });
+      if (!d) return;
+      if (water) {
+        toneHit(d, { dur: 0.35, f0: 150, f1: 55, gain: 0.35 * (0.6 + 0.4 * k) });
+        noiseHit(d, { dur: 0.6, type: 'bandpass', freq: 700, freqEnd: 260, q: 0.7, attack: 0.01, gain: 0.5 * (0.6 + 0.4 * k) });
+        noiseHit(d, { t: 0.04, dur: 0.5, type: 'highpass', freq: 2200, q: 0.4, gain: 0.22 });
+        // しぶきが落ちる音（遅れて、細かく）と、洞窟に響く低い余韻
+        noiseHit(d, { t: 0.45, dur: 0.9, type: 'bandpass', freq: 1500, freqEnd: 900, q: 0.6, attack: 0.15, gain: 0.12 });
+        toneHit(d, { t: 0.1, dur: 1.4, f0: 70, f1: 48, gain: 0.12 });
+      } else {
+        noiseHit(d, { dur: 0.22, type: 'lowpass', freq: 600, freqEnd: 200, q: 0.8, gain: 0.45 * (0.6 + 0.4 * k) });
+        toneHit(d, { dur: 0.14, f0: 110, f1: 60, gain: 0.25 });
+      }
+    },
     /** 角燈（ランタン）を灯す・外す：金具の小さな音 */
     lantern(f, on) {
       const d = at(f, 0.7, { ref: 1.5, max: 14 });

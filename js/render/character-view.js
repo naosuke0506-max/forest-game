@@ -663,6 +663,13 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
 
       // 泳いでいる（利用者の指示 2026-11-14：川は泳げる）：進んでいる間は這う動きを水面に浮かべて泳ぐ形に、止まっていれば待機の動きを
       // 肩まで水に沈めて立ち泳ぎ（泳ぐ専用の動きは、まだ無い）
+      // 落ちている（天坑の縦穴。game/fall.js）：足を動かさず、待機の形のまま落ちる（落ちる専用の動きは、まだ無い）
+      if (fighter.falling) {
+        swimLiftWant = 0;
+        play(loco('idle'), 0.5, 0.2);
+        lastAction = null;
+        return;
+      }
       if (fighter.swimming) {
         const moving = vel > 0.25 && has('crawl');
         swimLiftWant = moving ? SWIM_LIFT : 0;

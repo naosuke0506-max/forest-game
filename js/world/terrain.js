@@ -37,12 +37,14 @@ export function createTerrain(app, config, seed, textures = null, zones = null, 
    */
   const heightAt = (x, z) => (land.cave && land.cave.patchAt(x, z) ? analyticAt(x, z) : meshAt(x, z));
   /** 地点 (x, z) の川の水：{ surface（水面の高さ）, depth（水の深さ）} か、水が無ければ null */
-  const waterAt = (x, z) => {
+  const riverAt = (x, z) => {
     const w = land.waterLevel(x, z);
     if (!w) return null;
     const depth = w.surface - heightAt(x, z);
     return depth > 0 ? { surface: w.surface, depth } : null;
   };
+  /** 地点 (x, z) の水（泳ぐ・水を歩く）：川と、天坑の下の池（地下。world/cave-plan.js の pondAt） */
+  const waterAt = (x, z) => riverAt(x, z) ?? land.cave?.pondAt?.(x, z) ?? null;
 
   /** 地点 (x, z) の地面の向き（法線） */
   const normalAt = (x, z) => {
@@ -172,7 +174,7 @@ export function createTerrain(app, config, seed, textures = null, zones = null, 
   };
 
   return {
-    entity, heightAt, normalAt, waterAt, land,
+    entity, heightAt, normalAt, waterAt, riverAt, land,
     /** 地面と同じ見た目の物を作るとき用：マテリアル・頂点色・質感画像 1 枚の大きさ（m）・計算の高さ */
     material, colorAt, uvTile: tile, analyticAt,
     /** 草地と落ち葉の画像を貼る（起動の後に裏で読んだ物） */

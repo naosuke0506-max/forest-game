@@ -14,7 +14,7 @@
 import * as pc from 'playcanvas';
 import { createMesh, sceneBudget } from '../core/mesh-utils.js';
 import { fbm } from '../core/random.js';
-import { PATCH } from './cave-plan.js';
+import { PATCH, skyWarp } from './cave-plan.js';
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const TILE = 40;        // 殻を分ける大きさ（m）
@@ -25,9 +25,14 @@ const MOUTH_NEAR = 60;  // 地上にいるとき、口からこの距離より�
  * @param {object} land world/landform.js（cave と uncarved）
  * @param {{ obstacles, floors, rockTex, seed, terrain }} o terrain：world/terrain.js（地面の質感・色・計算の高さ）
  */
-export function createCave(app, land, { obstacles, floors, rockTex = null, seed = 1, terrain = null }) {
+export function createCave(app, land, { obstacles, floors, rockTex = null, seed = 1, terrain = null, waterMat = null }) {
   const C = land.cave, B = C.baked, G = B.G, nx = B.nx, nz = B.nz;
   const device = app.graphicsDevice;
+  const SK = C.sky;   // 天坑（world/cave-plan.js の SKY と、決めた高さ）
+  /** 天坑から入る空の光の当たり具合（0〜1。穴の真下が 1）：岩の色に焼き込む */
+  const sunAt = (x, z) => 1 - smooth(SK.low - 2, SK.low + 10, Math.hypot(x - SK.x, z - SK.z));
+  /** 天坑の穴の形にならした距離（world/cave-plan.js の skyWarp） */
+  const skyN = (x, z) => Math.hypot(x - SK.x, z - SK.z) / skyWarp(Math.atan2(z - SK.z, x - SK.x));
 
   // ---- 殻に使う「壁からの距離」：口の面より前（切り通し）は外にする。口の面でちょうど 0 になる ----
   const D = new Float32Array(nx * nz);
@@ -58,6 +63,7 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
   const addLight = (x, z, r, k) => {
     const q = C.at(x, z);
     if (!q || q.d > -0.3 || q.open > 0.5) return;
+    if (Math.hypot(x - SK.x, z - SK.z) < SK.pond + 1.2) return;   // 天坑の下の池の中には置かない
     lights.push({ x, y: q.floor + 0.5, z, r, k, tint: TINTS[Math.floor(rnd() * TINTS.length)] });
   };
   for (const sm of C.samples) {
@@ -117,7 +123,14 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
   const pushVert = (t, x, y, z, nxn, nyn, nzn, u, v, c) => {
     const g = glowAt(x, y, z);
     t.positions.push(x, y, z); t.normals.push(nxn, nyn, nzn); t.uvs.push(u, v);
-    t.colors.push(Math.min(1, c + g[0]), Math.min(1, c * 0.97 + g[1]), Math.min(1, c * 0.93 + g[2]), 1);
+    // 天坑の下：空の光が当たる所は明るく、上を向いた床は苔で緑がかる（2026-11-22）
+    const sl = sunAt(x, z);
+    let cr = c, cg = c * 0.97, cb = c * 0.93;
+    if (sl > 0) {
+      const b = c + (0.72 - c) * sl * 0.6, moss = sl * Math.max(0, nyn) * 0.5;
+      cr = b * (1 - 0.3 * moss); cg = b * 0.97 * (1 + 0.05 * moss); cb = b * 0.93 * (1 - 0.4 * moss);
+    }
+    t.colors.push(Math.min(1, cr + g[0]), Math.min(1, cg + g[1]), Math.min(1, cb + g[2]), 1);
     return t.positions.length / 3 - 1;
   };
   const vert = (t, key, x, y, z, nxn, nyn, nzn, u, v, c) => {
@@ -154,7 +167,15 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
     const [gx, gz] = gradOf(B.F, p.x, p.z), l = Math.hypot(gx, 1, gz);
     return vert(t, 'f' + p.key, p.x, p.F + 0.02, p.z, -gx / l, 1 / l, -gz / l, p.x / 3, p.z / 3, shadeOf(p.S) * 0.82);
   };
-  const ceilVert = (t, p) => {
+  /** 天坑の天井の穴の中か（縦穴の下の端の半径より内） */
+  const inHole = (p) => skyN(p.x, p.z) < SK.low;
+  const ceilVert = (t, p0) => {
+    // 天坑の穴の中の点は、穴のふち（半径 low）へ寄せる（穴の形を、升目のぎざぎざでなく丸くする。縦穴の壁がそこから立ち上がる）
+    let p = p0;
+    if (inHole(p0)) {
+      const dx = p0.x - SK.x, dz = p0.z - SK.z, k = (SK.low * skyWarp(Math.atan2(dz, dx))) / Math.max(1e-4, Math.hypot(dx, dz)), x = SK.x + dx * k, z = SK.z + dz * k;
+      p = { ...p0, x, z, C: sample(B.C, x, z) };
+    }
     const [gx, gz] = gradOf(B.C, p.x, p.z), l = Math.hypot(gx, 1, gz);
     return vert(t, 'c' + p.key, p.x, p.C, p.z, gx / l, -1 / l, gz / l, p.x / 3.4, p.z / 3.4, shadeOf(p.S) * 0.92);
   };
@@ -186,7 +207,10 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
     }
     if (poly.length < 3) continue;
     const fv = poly.map((p) => floorVert(t, p)), cv = poly.map((p) => ceilVert(t, p));
-    for (let i = 1; i < poly.length - 1; i++) { tri(t, fv[0], fv[i], fv[i + 1], 0, 1, 0); tri(t, cv[0], cv[i], cv[i + 1], 0, -1, 0); }
+    for (let i = 1; i < poly.length - 1; i++) {
+      tri(t, fv[0], fv[i], fv[i + 1], 0, 1, 0);
+      if (!(inHole(poly[0]) && inHole(poly[i]) && inHole(poly[i + 1]))) tri(t, cv[0], cv[i], cv[i + 1], 0, -1, 0);   // 天坑の穴の所は天井を作らない
+    }
     // 壁：境目の点が 2 つ続く所（その間が外）。口の面の上は開けておく
     for (let i = 0; i < poly.length; i++) {
       const p = poly[i], q = poly[(i + 1) % poly.length];
@@ -221,6 +245,7 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
       const a = rnd() * 6.28, r = Math.sqrt(rnd()) * sm.room.r * 0.95, x = sm.x + Math.cos(a) * r, z = sm.z + Math.sin(a) * r;
       const q = C.at(x, z);
       if (!q || q.d > -1.2 || q.open > 0.5) continue;
+      if (Math.hypot(x - SK.x, z - SK.z) < SK.low + 1.5) continue;   // 天坑の穴のまわりには下げない
       const room = q.ceil - q.floor, len = Math.min(room - 2.6, (0.4 + rnd() * rnd() * 3.2) * Math.min(1, room / 7));
       if (len < 0.35) continue;
       cone(tileAt(x, z), x, q.ceil, z, len, 0.14 + len * 0.11, shadeOf(q.dist) * 0.9);
@@ -403,6 +428,152 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
     }
     footprints.push({ type: 'cave', x: m.x, z: m.z, name: m.name, dx: m.in[0], dz: m.in[1] });
   }
+
+  // ---- 天坑（2026-11-22）：縦穴の岩の壁・穴のまわりの細かい地面・池の水面・空から差し込む光の筋 ----
+  const skyParts = [];   // 近くにいるときだけ描く物（水面と光の筋）
+  let skyTris = 0, beamMat = null, beamEnt = null, glintMat = null;
+  {
+    const groundH = terrain ? terrain.analyticAt : land.heightAt;
+    // 縦穴の壁：下（天井の穴のふち。少し外から始めて、天井の切り口のすき間を隠す）から、上（地面の穴のふち）まで。
+    // 下ほど広いベル形。岩のでこぼこ（横のうねり・縦の割れ目）と、上の方の苔。形から向き（法線）を計算する
+    const NA = 64, NR = 16, wall = { positions: [], uvs: [], colors: [], indices: [] };
+    for (let j = 0; j <= NR; j++) {
+      const t = j / NR;
+      for (let i = 0; i <= NA; i++) {
+        const a = ((i % NA) / NA) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a), w = skyWarp(a);   // w：穴の形のゆがみ
+        const top = groundH(SK.x + ca * (SK.r - 0.05) * w, SK.z + sa * (SK.r - 0.05) * w) - 0.04;
+        const bottom = sample(B.C, SK.x + ca * SK.low * w, SK.z + sa * SK.low * w) - 0.08;   // 天井の切り口のすぐ下から（下へ垂らすと、下から見て縁が二重に見えた）
+        const y = bottom + (top - bottom) * t;
+        const edge = smooth(0, 0.14, t) * (1 - smooth(0.86, 1, t));
+        const big = fbm(ca * 1.6 + y * 0.2 + 5, sa * 1.6 - y * 0.16, seed + 151), crack = Math.abs(Math.sin(a * 11 + big * 5));
+        const rr = (SK.low + 0.12 + (SK.r - 0.05 - SK.low - 0.12) * smooth(0, 0.4, t)) * w + ((big - 0.42) * 1.5 + (crack - 0.5) * 0.15) * edge;
+        wall.positions.push(SK.x + ca * rr, y, SK.z + sa * rr);
+        wall.uvs.push((a * SK.r) / 3, y / 3);
+        // 色：下は暗く、上ほど明るい。上の 1/4 は苔で緑がかる。割れ目は暗い
+        const sh = (0.42 + 0.3 * t) * (0.82 + 0.3 * fbm(ca * 4 + y * 0.6, sa * 4, seed + 153)) * (1 - 0.1 * (1 - crack) * edge);
+        const moss = smooth(0.7, 0.95, t) * (0.6 + 0.4 * big);
+        wall.colors.push(sh * (1 - 0.35 * moss), sh * (0.97 + 0.05 * moss), sh * (0.93 - 0.4 * moss), 1);
+      }
+    }
+    for (let j = 0; j < NR; j++) for (let i = 0; i < NA; i++) {
+      const a = j * (NA + 1) + i, b = a + 1, c = a + NA + 1, d = c + 1;
+      wall.indices.push(a, b, c, b, d, c);   // 内（穴の真ん中）から見て表（下の確かめで向きをそろえる）
+    }
+    {
+      // 向きの確かめ：最初の三角形の表が、穴の真ん中を向いているか。違えば全部裏返す
+      const P = wall.positions, [a, b, c] = wall.indices;
+      const ux = P[b * 3] - P[a * 3], uy = P[b * 3 + 1] - P[a * 3 + 1], uz = P[b * 3 + 2] - P[a * 3 + 2];
+      const vx = P[c * 3] - P[a * 3], vy = P[c * 3 + 1] - P[a * 3 + 1], vz = P[c * 3 + 2] - P[a * 3 + 2];
+      const nxn = uy * vz - uz * vy, nzn = ux * vy - uy * vx;
+      if (nxn * (SK.x - P[a * 3]) + nzn * (SK.z - P[a * 3 + 2]) < 0) for (let k = 0; k < wall.indices.length; k += 3) { const q = wall.indices[k + 1]; wall.indices[k + 1] = wall.indices[k + 2]; wall.indices[k + 2] = q; }
+    }
+    const wallEnt = new pc.Entity('sky-shaft');
+    wallEnt.addComponent('render', { meshInstances: [new pc.MeshInstance(createMesh(device, wall), faceMat)], castShadows: false, receiveShadows: true });
+    app.root.addChild(wallEnt);
+    skyTris += wall.indices.length / 3;
+
+    // 穴のまわりの細かい地面：地面の網（2.6 m ごと）では丸い穴の形が出ないので、輪の形に細かく作る（地面と同じ質感と色）。
+    // 内のふちは縦穴の壁の上の端に少しかぶせ、外のふちは地面の網に重ねる（地面の網は、穴のふちの下りの外まで抜いてある）
+    if (terrain) {
+      const ring = { positions: [], uvs: [], colors: [], indices: [] };
+      const radii = [SK.r - 0.22];
+      for (let r = SK.r + 0.05; r < SK.patch - 0.01; r += 0.25 + (r - SK.r) * 0.22) radii.push(r);
+      radii.push(SK.patch);
+      const NB = 72;
+      const DIRT = [0.46, 0.42, 0.34, 0.5], ROCK = [0.42, 0.42, 0.38, 0.5];
+      for (const r of radii) for (let i = 0; i <= NB; i++) {
+        const a = ((i % NB) / NB) * Math.PI * 2, w = skyWarp(a), rw = r * (w + (1 - w) * smooth(SK.r + SK.lip, SK.patch, r));   // 内は穴の形、外の端は丸
+        const x = SK.x + Math.cos(a) * rw, z = SK.z + Math.sin(a) * rw;
+        ring.positions.push(x, groundH(x, z) + (r < SK.r ? 0.02 : 0.05), z);
+        ring.uvs.push(x / (terrain.uvTile || 2), z / (terrain.uvTile || 2));
+        // 穴のふち（下り）は草の無い土と岩肌、その外 2 m で元の地面の色へ
+        // 土の帯の幅も向きで変える（輪の形に見えないように）。ふちの下りは岩肌と苔
+        const nz = fbm(Math.cos(a) * 2 + 3, Math.sin(a) * 2, seed + 155), soilW = 0.3 + 1.6 * nz;
+        const base = terrain.colorAt(x, z), k = 1 - smooth(SK.r + SK.lip - 0.3, SK.r + SK.lip + soilW, r), rock = (1 - smooth(SK.r, SK.r + SK.lip * 0.9, r)) * (0.45 + 0.55 * fbm(x * 0.5, z * 0.5, seed + 157));
+        ring.colors.push(...base.map((v, c) => { const w = v + (DIRT[c] - v) * k; return w + (ROCK[c] - w) * rock; }));
+      }
+      for (let j = 0; j < radii.length - 1; j++) for (let i = 0; i < NB; i++) {
+        const a = j * (NB + 1) + i, b = a + 1, c = a + NB + 1, d = c + 1;
+        const q = ring.positions, ux = q[c * 3] - q[a * 3], uz = q[c * 3 + 2] - q[a * 3 + 2], vx = q[b * 3] - q[a * 3], vz = q[b * 3 + 2] - q[a * 3 + 2];
+        if (uz * vx - ux * vz > 0) ring.indices.push(a, c, b, b, c, d); else ring.indices.push(a, b, c, b, d, c);   // 上から見て表
+      }
+      const ent = new pc.Entity('sky-rim-ground');
+      ent.addComponent('render', { meshInstances: [new pc.MeshInstance(createMesh(device, ring), terrain.material)], castShadows: false, receiveShadows: true });
+      app.root.addChild(ent);
+      patchTris += ring.indices.length / 3;
+    }
+
+    // 池の水面：川と同じ材質（さざ波が流れる）。岸の線は、床が水面より上に出る所（床のでこぼこに沿ってくねる）
+    if (waterMat) {
+      const N = 48, R = SK.pond + 0.5, wp = [SK.x, SK.surface, SK.z], wn = [0, 1, 0], wu = [SK.x / 3, SK.z / 3], wi = [];
+      for (let i = 0; i < N; i++) {
+        const a = (i / N) * Math.PI * 2, x = SK.x + Math.cos(a) * R, z = SK.z + Math.sin(a) * R;
+        wp.push(x, SK.surface, z); wn.push(0, 1, 0); wu.push(x / 3, z / 3);
+        wi.push(0, 1 + ((i + 1) % N), 1 + i);
+      }
+      const ent = new pc.Entity('sky-pond');
+      ent.addComponent('render', { meshInstances: [new pc.MeshInstance(createMesh(device, { positions: wp, normals: wn, uvs: wu, indices: wi }), waterMat)], castShadows: false, receiveShadows: false });
+      ent.enabled = false;
+      app.root.addChild(ent);
+      skyParts.push(ent);
+      skyTris += N;
+    }
+
+    // 空から差し込む光の筋：天井の穴から池へ下りる、ぼんやりした光の幕（足し合わせて光る。昼は明るく、夜はほとんど見えない）。
+    // 1 枚の板をいつもカメラへ向ける（横から見ると、真ん中が明るく両端へ消える）。上から・真下から見ると板の縁しか見えないので、穴を白く覆わない。
+    // 前は円筒にしていて、白い幕の筒に見え、地上から覗くと穴の中が白くかすんでいた（2026-11-22 に撮って直した）
+    {
+      const COLS = 12, ROWS = 8, bp = [], bc = [], bi = [];
+      const yTop = SK.ceil + 1.2, yBot = SK.surface + 0.05;
+      for (let j = 0; j <= ROWS; j++) {
+        const t = j / ROWS, y = yTop + (yBot - yTop) * t, half = SK.r * 0.85 + (SK.low * 1.0 - SK.r * 0.85) * t;
+        // 上の端と下の端は消える。上の方ほど濃い
+        const kv = smooth(0, 0.2, t) * (1 - smooth(0.6, 1, t)) * (1 - 0.4 * t);
+        for (let i = 0; i <= COLS; i++) {
+          const u = i / COLS, across = Math.pow(Math.sin(Math.PI * u), 1.6);   // 真ん中が明るく、両端で 0
+          const streak = 0.55 + 0.45 * fbm(u * 6 + 11, t * 0.6, seed + 159);
+          bp.push((u - 0.5) * 2 * half, y, 0);
+          const v = kv * across * streak;
+          bc.push(v, v * 0.95, v * 0.8, 1);
+        }
+      }
+      for (let j = 0; j < ROWS; j++) for (let i = 0; i < COLS; i++) { const a = j * (COLS + 1) + i, b = a + 1, c = a + COLS + 1, d = c + 1; bi.push(a, b, c, b, d, c); }
+      beamMat = new pc.StandardMaterial();
+      beamMat.useLighting = false; beamMat.useSkybox = false; beamMat.useFog = false;
+      beamMat.diffuse = new pc.Color(0, 0, 0);
+      beamMat.emissive = new pc.Color(1, 1, 1); beamMat.emissiveVertexColor = true; beamMat.emissiveIntensity = 0.1;
+      beamMat.blendType = pc.BLEND_ADDITIVE; beamMat.depthWrite = false; beamMat.cull = pc.CULLFACE_NONE;
+      beamMat.update();
+      const nrm = [];
+      for (let i = 0; i < bp.length; i += 3) nrm.push(0, 0, 1);
+      beamEnt = new pc.Entity('sky-beam');
+      beamEnt.addComponent('render', { meshInstances: [new pc.MeshInstance(createMesh(device, { positions: bp, normals: nrm, colors: bc, indices: bi }), beamMat)], castShadows: false, receiveShadows: false });
+      beamEnt.setPosition(SK.x, 0, SK.z);
+      beamEnt.enabled = false;
+      app.root.addChild(beamEnt);
+      skyParts.push(beamEnt);
+      skyTris += bi.length / 3;
+      // 池の水面の、光が当たって光る所（穴の真下。足し合わせて光る丸。真ん中が明るく、ふちへ消える）：暗い池が黒い穴に見えないように
+      const N = 32, gp = [SK.x, SK.surface + 0.03, SK.z], gc = [1, 0.97, 0.88, 1], gi = [], gn = [0, 1, 0];
+      for (const [ring, v] of [[0.55, 0.45], [1, 0]]) for (let i = 0; i < N; i++) {
+        const a = (i / N) * Math.PI * 2, w = skyWarp(a) * SK.r * 1.05 * ring;
+        gp.push(SK.x + Math.cos(a) * w, SK.surface + 0.03, SK.z + Math.sin(a) * w); gc.push(v, v * 0.97, v * 0.88, 1); gn.push(0, 1, 0);
+      }
+      for (let i = 0; i < N; i++) {
+        const j = (i + 1) % N;
+        gi.push(0, 1 + j, 1 + i, 1 + i, 1 + j, 1 + N + j, 1 + i, 1 + N + j, 1 + N + i);
+      }
+      glintMat = beamMat.clone();
+      glintMat.update();
+      const glint = new pc.Entity('sky-glint');
+      glint.addComponent('render', { meshInstances: [new pc.MeshInstance(createMesh(device, { positions: gp, normals: gn, colors: gc, indices: gi }), glintMat)], castShadows: false, receiveShadows: false });
+      glint.enabled = false;
+      app.root.addChild(glint);
+      skyParts.push(glint);
+      skyTris += gi.length / 3;
+    }
+  }
+  tris += skyTris;
   sceneBudget.triangles += tris + patchTris;
 
   // ---- 歩く・ぶつかる ----
@@ -414,14 +585,26 @@ export function createCave(app, land, { obstacles, floors, rockTex = null, seed 
     triangles: tris + patchTris, shellTriangles: tris, patchTriangles: patchTris, footprints, chunks,
     /**
      * 毎フレーム：近くの殻だけ描く。地上にいて口から遠いときは、どれも描かない
-     * @param {{x: number, z: number}} cam カメラの位置、inside：洞窟の中にいる度合い（0〜1）
+     * @param {{x: number, z: number}} cam カメラの位置、inside：洞窟の中にいる度合い（0〜1）、day：昼の明るさ（0〜1。天坑の光の筋の濃さ）
      */
-    update(dt, cam, inside) {
+    update(dt, cam, inside, day = 1) {
+      // 天坑の光の幕は、いつもカメラの方を向ける（縦の軸のまわりだけ回す）
+      if (beamEnt?.enabled) beamEnt.setEulerAngles(0, (Math.atan2(cam.x - SK.x, cam.z - SK.z) * 180) / Math.PI, 0);
       timer -= dt;
       if (timer > 0) return;
       timer = 0.25;
+      // 光の幕は、カメラが大空洞の天井より上（縦穴の中・地上）にあるときは消す（上から見ると、池の上に光の帯が横たわって見えるため）
+      // 夕方・夜はほとんど消える（昼の明るさの 2 乗）
+      const beam = (0.006 + 0.1 * day * day) * (1 - smooth(SK.ceil - 2.5, SK.ceil + 1, cam.y ?? -99));
+      if (beamMat && Math.abs(beamMat.emissiveIntensity - beam) > 0.004) { beamMat.emissiveIntensity = beam; beamMat.update(); }
+      const glint = 0.012 + 0.14 * day * day;
+      if (glintMat && Math.abs(glintMat.emissiveIntensity - glint) > 0.004) { glintMat.emissiveIntensity = glint; glintMat.update(); }
       let near = inside > 0.05;
       if (!near) for (const m of C.mouths) if (Math.hypot(cam.x - m.x, cam.z - m.z) < MOUTH_NEAR) { near = true; break; }
+      // 天坑：地上で穴の近くにいれば、穴から下の大空洞が見えるので描く
+      const nearSky = Math.hypot(cam.x - SK.x, cam.z - SK.z) < (inside > 0.05 ? SHOW : MOUTH_NEAR);
+      if (nearSky) near = true;
+      for (const e of skyParts) if (e.enabled !== nearSky) e.enabled = nearSky;
       let n = 0;
       for (const c of chunks) {
         const on = near && Math.hypot(cam.x - c.x, cam.z - c.z) < SHOW;
