@@ -847,6 +847,23 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .act-btn.lantern { right: calc(382px + var(--safe-r)); bottom: calc(86px + var(--safe-b)); width: 60px; height: 60px; --ring: 4px; --lb: 12px;
   --c1: #8e8474; --c2: #443b2e; --c3: #17130d; }
 .act-btn.lantern.on { --c1: #ffc266; --c2: #b3661a; --c3: #3c1f06; color: #fff1d0; animation: none; --sh-glow: 0 0 20px calc(var(--ring) + 4px) rgba(255, 176, 84, .55); }
+/* 捕捉（ロックオン。2026-11-24）：攻擊の外の弧のいちばん上（開扉の右・疾驅の上）。捕まえられる相手がいない間は暗く、
+   捕まえている間は「解除」になって金に光る。照準の色（鋼の青）*/
+.act-btn.lock { right: calc(95px + var(--safe-r)); bottom: calc(420px + var(--safe-b)); width: 64px; height: 64px; --lb: 12px;
+  --c1: #8fb4c8; --c2: #3a5a6e; --c3: #101c24; }
+.act-btn.lock.idle { filter: saturate(.35) brightness(.62); }
+.act-btn.lock.on { --c1: #ffd98a; --c2: #b07a2a; --c3: #3a2308; color: #fff3d0; animation: none; --sh-glow: 0 0 18px calc(var(--ring) + 4px) rgba(255, 210, 120, .55); }
+/* 捕捉している敵の照準：金の輪と四方の刻み。ゆっくり回る。見えていない間（物陰）は薄い */
+.lockmark { position: absolute; left: 0; top: 0; width: 46px; height: 46px; margin: -23px 0 0 -23px; pointer-events: none; z-index: 6; transition: opacity .2s; }
+.lockmark i { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(255, 214, 130, .95);
+  box-shadow: 0 0 6px rgba(0, 0, 0, .7), inset 0 0 6px rgba(0, 0, 0, .5); animation: lockSpin 3.2s linear infinite; }
+.lockmark i::before, .lockmark i::after { content: ''; position: absolute; background: rgba(255, 214, 130, .95); box-shadow: 0 0 3px rgba(0, 0, 0, .8); }
+.lockmark i::before { left: 50%; top: -9px; width: 2px; height: calc(100% + 18px); margin-left: -1px;
+  -webkit-mask: linear-gradient(#000 0 9px, transparent 9px calc(100% - 9px), #000 calc(100% - 9px)); mask: linear-gradient(#000 0 9px, transparent 9px calc(100% - 9px), #000 calc(100% - 9px)); }
+.lockmark i::after { top: 50%; left: -9px; height: 2px; width: calc(100% + 18px); margin-top: -1px;
+  -webkit-mask: linear-gradient(90deg, #000 0 9px, transparent 9px calc(100% - 9px), #000 calc(100% - 9px)); mask: linear-gradient(90deg, #000 0 9px, transparent 9px calc(100% - 9px), #000 calc(100% - 9px)); }
+.lockmark.dim { opacity: .35; }
+@keyframes lockSpin { to { transform: rotate(360deg); } }
 /* 鷹目（弓兵の技能）：目に映る物を白黒に。敵の体温は、上の重ねた絵（render/heat-vision.js）に色で描く */
 body.hawk canvas#app { filter: grayscale(1) contrast(1.12) brightness(.85); }
 canvas.heat { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 12; pointer-events: none; }
