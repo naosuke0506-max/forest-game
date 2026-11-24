@@ -154,6 +154,21 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
    * 左右の首は使わない（一人称の目は体の正面）。上下はなぞった分だけ（pitch）。PC の Z・C は、体が左・右へ 90 度回る（鎧の重さの速さで）
    */
   function updateLook(dt, input) {
+    // 捕捉（ロックオン。match-session.js が lockAim に相手の胸の位置を入れる。2026-11-24）：スティックを動かさなくても、体が相手へ向く
+    // （回る速さは鎧の重さ。turnSpeed）。左右になぞっても向きは変わらない（上下は首。update の pitch）
+    const L = api.lockAim;
+    if (L) {
+      const dx = L.x - pos.x, dz = L.z - pos.z;
+      if (Math.hypot(dx, dz) > 0.25) {
+        const want = (Math.atan2(-dx, -dz) * 180) / Math.PI, rem = wrapDeg(want - yaw);
+        const sp = (api.turnSpeed || BODY_TURN.turn.medium) * (api.turnScale ?? 1) * dt;
+        yaw += Math.sign(rem) * Math.min(Math.abs(rem), sp);
+      }
+      turn.target = null; turn.keyHeld = !!input.turnX;
+      headYaw = 0;
+      look = yaw;
+      return;
+    }
     const key = input.turnX || 0;
     if (key && !turn.keyHeld) turn.target = (turn.target ?? yaw) - key * 90;
     turn.keyHeld = !!key;
@@ -190,8 +205,12 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
       placeCamera(0);
       return;
     }
-    // 上下：首と上体で（首の範囲まで）
-    pitch = clamp(pitch - input.lookY, -BODY_TURN.neckDown, BODY_TURN.neckUp);
+    // 上下：首と上体で（首の範囲まで）。捕捉している間は、相手の胸の高さへ自動で向く
+    if (api.lockAim && !frozen) {
+      const L = api.lockAim, d = Math.hypot(L.x - pos.x, L.z - pos.z);
+      const want = (Math.atan2(L.y - (pos.y + eyeH), Math.max(0.5, d)) * 180) / Math.PI;
+      pitch += (clamp(want, -BODY_TURN.neckDown, BODY_TURN.neckUp) - pitch) * Math.min(1, dt * 6);
+    } else pitch = clamp(pitch - input.lookY, -BODY_TURN.neckDown, BODY_TURN.neckUp);
     if (ladder) { climb(dt, input); return; }
     if (cover) {
       // 壁裏隠れ（一人称）：体は壁から外を向いて動かさない（壁に沿った横歩きは試合の計算が動かす）。
@@ -330,6 +349,7 @@ export function createPlayer(app, config, terrain, obstacles, fogColor) {
     update,
     position: pos,
     speedScale: 1,
+    lockAim: null,           // 捕捉している相手の胸の位置 { x, y, z }（match-session.js が毎回入れる。null なら捕捉していない）
     diveK: 0,                // 潜っている割合（0〜1。match-session.js が戦う人の記録から写す）
     swimSpeed: SWIM.speed,   // 泳ぐ速さ（match-session.js がキャラの速さとスタミナで決める。game/swim.js の swimSpeed）
     water: null,             // 川の水（world/terrain.js の waterAt）。main.js が付ける

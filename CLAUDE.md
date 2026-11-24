@@ -126,6 +126,9 @@
   棺桶（`js/render/coffin.js`）→ `session.begin()` で試合が動き出す。それまで `session.update` は呼ばない（staged）。教練と `?intro=0` はすぐ始まる。
   試合・教練から大廳へ戻るのは `js/core/resume.js` の `returnToHall()`（印を付けて読み込み直す。試合の後片付けの仕組みはまだ無い）。
   `player.update` に渡す入力は必ず `input.read()` の形にする（足りない項目があると向きが NaN になり、音の計算でエラーが出る。2026-11-15 に一度起きた）
+- **捕捉（ロックオン）**（2026-11-24。利用者の指示）：右の「捕捉」ボタン（PC は Tab）。選ぶ・続ける・狙う所は `js/game/lockon.js`（数は `data.js` の `LOCK`）、
+  体を向けるのは `controller.js` の `lockAim`（`updateLook` と `pitch`）、ボタン・照準（`#lockmark`）・外れる訳は `match-session.js` の「捕捉」。
+  確かめは作業用の場所の `locktest.js`（教練・基本の案山子で、捕まえる・向き直る・付いていく・解除・遠い・家の壁越し・見失う）
 - **太陽・月のさえぎり**（2026-11-22。利用者の指示：全ての時間帯で、建物や障害物越しに太陽が見えないように）：まぶしさ（`sun-glare.js`）と太陽・月の円盤（`sky-lights.js`）は、
   `sun-glare.js` の `createSkyOcclusion`（地面の起伏・`game/sight.js` の視線をさえぎる物・木の葉）で隠す。新しい建物や大きな物を足すときは、`sight` にも登録する
   （bot の目・三人称のカメラ・太陽が同じ形を使う）。確かめは作業用の場所の `sunshot.js`（朝・昼・夕暮れ・夜に、家の中・家の陰・教会の塔の陰から太陽の方を撮る）

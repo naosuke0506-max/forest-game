@@ -358,6 +358,14 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
       const d = at(f, 0.7, { ref: 1.5, max: 14 });
       if (d) playSample(d, 'pick_metal', { rate: (on ? 1.5 : 1.2) * jitter(0.05), gain: 0.4 });
     },
+    /** 捕捉（ロックオン）・解除（2026-11-24）：自分だけに聞こえる、金具が噛み合う小さな「カチッ」（解除は低く短い） */
+    lock(on) {
+      if (!audio.ready) return;
+      const d = outlet({ gain: 0.55, cutoff: 11000 });
+      noiseHit(d, { t: 0, dur: 0.018, type: 'highpass', freq: on ? 3200 : 2200, gain: 0.5, attack: 0.001 });
+      toneHit(d, { t: 0, dur: on ? 0.09 : 0.05, f0: on ? 1760 : 990, f1: on ? 1980 : 880, gain: 0.08, attack: 0.001 });
+      if (on) toneHit(d, { t: 0.045, dur: 0.08, f0: 2640, gain: 0.05, attack: 0.001 });
+    },
     /** 棺桶の蓋を押し開ける（render/coffin.js）：木のきしみ → 蓋が地面に落ちる音 */
     coffin(f) {
       const d = at(f, 1, { ref: 2, max: 30 });

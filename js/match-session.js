@@ -1,4 +1,5 @@
 // 練習モードの試合：あなた＋bot 3 体。試合の計算（game/）と、見た目・画面（render/・ui/）をつなぐ
+import * as pc from 'playcanvas';
 import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS, SHIELD_SKILLS, SHIELD_MOVES, SPRINT, DASH, MIRACLES, ELEMENTS } from './game/data.js';
 import { selectedMiracle, miraclesOf, miracleCool } from './game/miracles.js';
 import { createMinimap } from './ui/minimap.js';
@@ -34,6 +35,7 @@ import { createTutorPanel } from './ui/tutor-panel.js';
 import { returnToHall } from './core/resume.js';
 import { createLanterns } from './render/lantern.js';
 import { createTimeGate } from './ui/time-gate.js';
+import { createLockOn } from './game/lockon.js';
 
 const PLAYER_COLOR = '#ffd75e';
 const BOT_COLORS = ['#e0574a', '#5aa6e0', '#7cc070'];
@@ -354,7 +356,33 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   // 右のボタン（出る・隠れる・壁に背を付ける・壁から離れる）
   const useBtn = document.getElementById('btn-use');
   let nearSpot = null, nearWall = null, useTimer = 0;
-  const held = { use: false, sprint: false, door: false, lantern: false };   // 前のフレームにボタンを押していたか
+  const held = { use: false, sprint: false, door: false, lantern: false, lock: false };   // 前のフレームにボタンを押していたか
+  // 捕捉（ロックオン。2026-11-24。利用者の指示。game/lockon.js・数は data.js の LOCK）：「捕捉」ボタン（PC は Tab）で、
+  // 近くの直接見える敵を捕まえる。捕まえている間は体が自動でその敵へ向き（player/controller.js の lockAim）、胸に照準の印が出る。
+  // もう一度押す（「解除」）か、相手が倒れる・隠れる・遠ざかる・見えなくなる、自分が倒れる・隠れる・壁に背を付ける・梯子を掴むと外れる
+  const lockon = createLockOn({ senses, sight, heightAt: terrain.heightAt });
+  const lockBtn = document.getElementById('btn-lock') || document.createElement('button');
+  const lockMark = document.getElementById('lockmark');
+  let lock = null, lockShown = null, lockCheck = 0, lockFind = 0, lockReady = false;
+  const lockScreen = new pc.Vec3(), lockFwd = new pc.Vec3();
+  const LOCK_WHY = { dead: (n) => `${n}が倒れた`, hidden: (n) => `${n}が隠れた`, far: (n) => `${n}が遠ざかった`, lost: (n) => `${n}を見失った` };
+  let lockWhy = null;   // 確認用：最後に外れた訳
+  const releaseLock = (why = null) => {
+    if (!lock) return;
+    lockWhy = why || 'other';
+    if (why && LOCK_WHY[why]) hud.addFeed(`捕捉が外れた（${LOCK_WHY[why](lock.target.name)}）`);
+    else if (why === 'manual') sfx.lock?.(false);
+    lock = null; player.lockAim = null;
+  };
+  const showLock = () => {
+    const want = lock ? 'on' : lockReady ? 'ready' : 'idle';
+    if (want === lockShown) return;
+    lockShown = want;
+    setBtn(lockBtn, ICONS.lock, lock ? L.lockOff : L.lockOn);
+    lockBtn.classList.toggle('on', !!lock);
+    lockBtn.classList.toggle('idle', want === 'idle');
+  };
+  showLock();
   // 角燈（ランタン）のボタン：いつでも、腰の角燈を灯す・外す（PC は N。render/lantern.js）。相手（bot）は洞窟の中で灯す
   const lanternBtn = document.getElementById('btn-lantern') || document.createElement('button');
   const lanterns = createLanterns(app, fighters, views, { cave: terrain.land?.cave || null });
@@ -677,8 +705,30 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       player.noRun = !canRun(me);
       // ボタンは押した瞬間だけ働かせる（押している間ずっと働くと、指を離すまでの数フレームで入って出てしまう：壁裏隠れ・疾驅）
       const usePressed = input.use && !held.use, sprintPressed = input.sprint && !held.sprint, doorPressed = input.door && !held.door;
-      const lanternPressed = input.lantern && !held.lantern;
-      held.use = !!input.use; held.sprint = !!input.sprint; held.door = !!input.door; held.lantern = !!input.lantern;
+      const lanternPressed = input.lantern && !held.lantern, lockPressed = input.lock && !held.lock;
+      held.use = !!input.use; held.sprint = !!input.sprint; held.door = !!input.door; held.lantern = !!input.lantern; held.lock = !!input.lock;
+      // 捕捉（ロックオン）：押すと、近くの直接見える敵を捕まえる。捕まえていれば外す
+      const lockFree = running && me.alive && !me.hidden && !me.cover && !player.ladder && !spectating;
+      if (lockPressed && lockFree) {
+        if (lock) releaseLock('manual');
+        else {
+          const t = lockon.pick(me, fighters, player.viewYaw);
+          if (t) { lock = { target: t, lostFor: 0, seen: true }; lockCheck = 0; sfx.lock?.(true); hud.addFeed(`${t.name}を捕捉した`); }
+          else hud.addFeed('捕捉できる敵がいない（近くに、直接見える敵がいない）');
+        }
+      }
+      if (lock && !lockFree && match.state !== 'running') releaseLock();
+      else if (lock && (!me.alive || me.hidden || me.cover || player.ladder || spectating)) releaseLock();
+      if (lock && (lockCheck -= dt) <= 0) {   // 続けられるか（1 秒に 10 回）
+        const why = lockon.keep(me, lock, 0.1 - lockCheck);
+        lockCheck = 0.1;
+        if (why) releaseLock(why);
+      }
+      player.lockAim = lock ? lockon.aimAt(lock.target) : null;
+      // ボタン：捕まえられる相手がいない間は暗く（1 秒に 4 回調べる）
+      if (!lock && lockFree && (lockFind -= dt) <= 0) { lockFind = 0.25; lockReady = !!lockon.pick(me, fighters, player.viewYaw); }
+      lockBtn.hidden = !lockFree;
+      showLock();
       // 角燈：灯す・外す（いつでも。隠れている間は灯せない）
       if (lanternPressed && running && me.alive && !me.hidden) {
         const on = lanterns.toggle(me);
@@ -904,6 +954,21 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
         const under = !!wq && cp.y < wq.surface - 0.03 && cp.y > wq.surface - wq.depth - 0.8;
         if (under !== underShown) { underShown = under; if (underEl) underEl.hidden = !under; }
       }
+      // 捕捉の照準：相手の胸の画面の位置に置く（カメラの後ろなら隠す。見えていない間は薄く）
+      if (lockMark) {
+        let on = false;
+        if (lock) {
+          const a = lockon.aimAt(lock.target), cam = player.camera;
+          lockFwd.set(a.x, a.y, a.z).sub(cam.getPosition());
+          if (lockFwd.dot(cam.forward) > 0.2) {
+            cam.camera.worldToScreen(lockFwd.set(a.x, a.y, a.z), lockScreen);
+            lockMark.style.transform = `translate(${lockScreen.x.toFixed(1)}px, ${lockScreen.y.toFixed(1)}px)`;
+            lockMark.classList.toggle('dim', !lock.seen);
+            on = true;
+          }
+        }
+        if (lockMark.hidden === on) lockMark.hidden = !on;
+      }
       hud.update(dt);
       hud.updateVitals(me);
       minimap.update(dt, spectating || me);
@@ -930,5 +995,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     cover,
     holes,   // 確認用（矢の穴）
     lanterns,   // 確認用（角燈）
+    /** 確認用：捕捉している相手（無ければ null）と、捕まえられる相手がいるか */
+    get lock() { return lock ? { name: lock.target.name, seen: lock.seen, lostFor: lock.lostFor } : null; },
+    get lockReady() { return lockReady; },
+    get lockWhy() { return lockWhy; },
   };
 }

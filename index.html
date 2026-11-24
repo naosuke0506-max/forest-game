@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-22.5';</script>
+<script>window.__BUILD = '2026-11-24.1';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -58,6 +58,7 @@
 <link rel="modulepreload" href="./js/world/castle.js">
 <link rel="modulepreload" href="./js/world/roadside.js">
 <link rel="modulepreload" href="./js/world/plaza.js">
+<link rel="modulepreload" href="./js/game/lockon.js">
 <link rel="modulepreload" href="./js/world/landmarks.js">
 <link rel="modulepreload" href="./js/world/church.js">
 <link rel="modulepreload" href="./js/world/village-life.js">
@@ -261,9 +262,13 @@
   <button id="btn-shield" class="act-btn shield" type="button" hidden>楯擊</button>
   <!-- 暗殺できる相手が近くにいると出る：暗殺（攻撃ボタンとは別） -->
   <button id="btn-assassinate" class="act-btn assassinate" type="button" hidden>暗殺</button>
+  <!-- 捕捉（ロックオン）：近くの直接見える敵を捕まえる（体が自動で向く）。捕まえている間は「解除」。捕まえられる相手がいない間は暗い（PC は Tab） -->
+  <button id="btn-lock" class="act-btn lock" type="button" hidden>捕捉</button>
 
   <!-- 敵の頭上の体力・与えたダメージの数字 -->
   <div id="tags" class="tags"></div>
+  <!-- 捕捉している敵の胸の照準（見えていない間は薄い） -->
+  <div id="lockmark" class="lockmark" hidden><i></i></div>
   <!-- ぴったり回避：画面が一瞬白く光る -->
   <div id="perfect" class="perfect"></div>
   <!-- 攻撃を受けたときに画面の縁が赤くなる -->

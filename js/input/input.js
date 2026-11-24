@@ -20,11 +20,11 @@ export function createInput(layer, stickEl, config) {
 
   // 右手（攻撃）・左手（防御・強攻撃・持ち替え）・回避・拾う：画面右側のボタン（押している間 true）と、
   // PC の J（右手）・K（左手）・L かスペース（回避）・E（拾う・開ける）
-  const held = { attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false, lantern: false, swap: false };
-  const keys = { attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false, lantern: false, swap: false };
+  const held = { attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false, lantern: false, swap: false, lock: false };
+  const keys = { attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false, lantern: false, swap: false, lock: false };
   // 押した瞬間を覚えておく：フレームの間隔より短い押下（素早いタップ）でも、必ず 1 回は攻撃として伝える
-  const latched = { attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false, lantern: false, swap: false };
-  for (const [id, key] of [['btn-attack', 'attack'], ['btn-left', 'left'], ['btn-dodge', 'dodge'], ['btn-use', 'use'], ['btn-search', 'search'], ['btn-assassinate', 'assassinate'], ['btn-shield', 'shield'], ['btn-sprint', 'sprint'], ['btn-skill', 'skill'], ['btn-door', 'door'], ['btn-lantern', 'lantern'], ['btn-swap', 'swap']]) {
+  const latched = { attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false, lantern: false, swap: false, lock: false };
+  for (const [id, key] of [['btn-attack', 'attack'], ['btn-left', 'left'], ['btn-dodge', 'dodge'], ['btn-use', 'use'], ['btn-search', 'search'], ['btn-assassinate', 'assassinate'], ['btn-shield', 'shield'], ['btn-sprint', 'sprint'], ['btn-skill', 'skill'], ['btn-door', 'door'], ['btn-lantern', 'lantern'], ['btn-swap', 'swap'], ['btn-lock', 'lock']]) {
     const el = document.getElementById(id);
     if (!el) continue;
     const down = (e) => { e.preventDefault(); held[key] = true; latched[key] = true; el.classList.add('down'); try { el.setPointerCapture?.(e.pointerId); } catch { /* 指がもう離れていたら何もしない */ } };
@@ -63,13 +63,17 @@ export function createInput(layer, stickEl, config) {
     window.addEventListener('keydown', (e) => { if (e.code === 'KeyX' && !e.repeat) stanceDown(); });
     window.addEventListener('keyup', (e) => { if (e.code === 'KeyX') stanceUp(); });
   }
-  const keyOf = { KeyJ: 'attack', KeyK: 'left', KeyL: 'dodge', Space: 'dodge', KeyE: 'use', KeyF: 'search', KeyR: 'assassinate', KeyU: 'shield', KeyQ: 'sprint', KeyG: 'skill', KeyT: 'door', KeyN: 'lantern', KeyH: 'swap' };
-  window.addEventListener('keydown', (e) => { if (keyOf[e.code] && !e.repeat) { keys[keyOf[e.code]] = true; latched[keyOf[e.code]] = true; } });
+  // Tab：捕捉（ロックオン）・解除（2026-11-24。ブラウザの「次の部品へ移る」は止める）
+  const keyOf = { KeyJ: 'attack', KeyK: 'left', KeyL: 'dodge', Space: 'dodge', KeyE: 'use', KeyF: 'search', KeyR: 'assassinate', KeyU: 'shield', KeyQ: 'sprint', KeyG: 'skill', KeyT: 'door', KeyN: 'lantern', KeyH: 'swap', Tab: 'lock' };
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Tab' && !e.target?.closest?.('input, textarea, select')) e.preventDefault();
+    if (keyOf[e.code] && !e.repeat) { keys[keyOf[e.code]] = true; latched[keyOf[e.code]] = true; }
+  });
   window.addEventListener('keyup', (e) => { if (keyOf[e.code]) keys[keyOf[e.code]] = false; });
-  const resetButtons = () => { for (const o of [held, keys]) o.attack = o.left = o.dodge = o.use = o.search = o.assassinate = o.shield = o.sprint = o.skill = o.door = o.lantern = o.swap = false; stance.held = false; stance.tap = stance.hold = false; };
+  const resetButtons = () => { for (const o of [held, keys]) o.attack = o.left = o.dodge = o.use = o.search = o.assassinate = o.shield = o.sprint = o.skill = o.door = o.lantern = o.swap = o.lock = false; stance.held = false; stance.tap = stance.hold = false; };
   document.addEventListener('visibilitychange', resetButtons);
 
-  const frame = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, turnX: 0, turnY: 0, attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false, lantern: false, swap: false, stance: null };
+  const frame = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, turnX: 0, turnY: 0, attack: false, left: false, dodge: false, use: false, search: false, assassinate: false, shield: false, sprint: false, skill: false, door: false, lantern: false, swap: false, lock: false, stance: null };
 
   /** 1 フレーム分の入力を取り出す（向きの変化量はここで 0 に戻す） */
   function read() {
@@ -99,7 +103,8 @@ export function createInput(layer, stickEl, config) {
     frame.door = held.door || keys.door || latched.door;           // 扉のボタン（家の扉を開ける・閉める。PC は T）
     frame.lantern = held.lantern || keys.lantern || latched.lantern;   // 角燈のボタン（腰の角燈を灯す・外す。PC は N）
     frame.swap = held.swap || keys.swap || latched.swap;           // 替ボタン（祓魔僧の奇跡を替える。PC は H）
-    latched.attack = latched.left = latched.dodge = latched.use = latched.search = latched.assassinate = latched.shield = latched.sprint = latched.skill = latched.door = latched.lantern = latched.swap = false;
+    frame.lock = held.lock || keys.lock || latched.lock;           // 捕捉ボタン（ロックオン・解除。PC は Tab）
+    latched.attack = latched.left = latched.dodge = latched.use = latched.search = latched.assassinate = latched.shield = latched.sprint = latched.skill = latched.door = latched.lantern = latched.swap = latched.lock = false;
     // しゃがむボタン：'tap'（押して離した）・'hold'（長押しになった）・null
     if (stance.held && !stance.fired && performance.now() - stance.downAt >= HOLD * 1000) { stance.fired = true; stance.hold = true; }
     frame.stance = stance.hold ? 'hold' : stance.tap ? 'tap' : null;
