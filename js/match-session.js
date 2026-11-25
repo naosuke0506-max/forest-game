@@ -29,6 +29,7 @@ import { createHeatVision } from './render/heat-vision.js';
 import { createUltDust } from './render/ult-dust.js';
 import { createUltFx } from './render/ult-fx.js';
 import { createUltShow, mixColor } from './render/ult-show.js';
+import { createUltHeroFx } from './render/ult-hero-fx.js';
 import { crestSvg } from './ui/crests.js';
 import { createMiracleFx } from './render/miracle-fx.js';
 import { createArrowHoles } from './world/arrow-holes.js';
@@ -66,7 +67,7 @@ export function planRoster(myChar, count = 3) {
  *   staged：試合を作っても、すぐには始めない（マップ紹介 → 棺桶から出る、の後で begin() を呼ぶ。それまで update は呼ばれない）
  *   loadout：試合の前に選んだ武器 { main, side, shield }（game/data.js の LOADOUTS から。無ければキャラの最初の物）
  */
-export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null, houses = [], tutorial = null, doors = null, church = null, roster = null, staged = false, trunks = [] }) {
+export async function startPracticeMatch({ app, config, terrain, obstacles, player, myChar, loadout = null, timeOfDay = null, zones = null, buildings = [], trees = [], groundAt = null, insideHouse = null, hides = [], covers = [], furniture = null, sight = null, debug = false, phaseDuration = null, houses = [], tutorial = null, doors = null, church = null, roster = null, staged = false, trunks = [], villageMaterials = null }) {
   const rng = createRandom(config.seed + 9000);
 
   // 戦う人：あなた（0 番）と bot 3 体。bot は、あなたと違うキャラから選ぶ（毎回入れ替わる。planRoster）。bot の武器は、選べる物から乱数で選ぶ
@@ -124,7 +125,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (zones && zones.weights(x, z).prairie > 0.35) return { kind: 'grass', x: Math.round(x / 1.2) * 1.2, z: Math.round(z / 1.2) * 1.2 };
     return null;
   };
-  const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt, hiding, cover, senses, flammable });
+  const combat = createCombat({ match, heightAt: terrain.heightAt, obstacles, groundAt, hiding, cover, senses, flammable, sight });
   // 教練では、決まった所に置き（自分の近く・家の中・壁の前など）、動きの決まった相手にする（game/tutorial.js）
   const lessonCtx = () => ({
     me, bots: fighters.filter((f) => !f.isPlayer), hides, hiding, coverSegs: covers, houses, isFree: (x, z, r) => obstacles.isFree(x, z, r, true),
@@ -236,6 +237,12 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     const d = Math.hypot(fighter.x - me.x, fighter.z - me.z);
     if (d < 120) hud.addFeed(`${fighter.name}の必殺技「${ult.name}」！`);
   });
+  combat.on('auraStart', ({ fighter, aura }) => {
+    if (fighter !== me) return;
+    hud.addFeed(aura.kind === 'water' ? `水の衣を纏った（${Math.round(aura.time)} 秒。傷が半分・ひるまない・矢を弾く）`
+      : aura.kind === 'thunder' ? `雷の衣を纏った（${Math.round(aura.time)} 秒。回避と疾驅で稲妻になる）` : `鷹の目が続く（${Math.round(aura.time)} 秒。建物越しに敵が見える）`);
+  });
+  combat.on('auraEnd', ({ fighter, aura }) => { if (fighter === me) hud.addFeed(aura.kind === 'water' ? '水の衣が消えた' : '雷の衣が消えた'); });
   // 延長戰（第 6 刻から）：必殺技がもう 1 回使える。刻の門が開いてから知らせる
   let overtimeNote = false;
   match.on('overtime', () => { overtimeNote = true; showUlt(); });
@@ -287,6 +294,10 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       if (me.paralyzed > 0) list.push(['para', ICONS.m_thunder, '雷痺', me.paralyzed]);
       else if (me.shock > 0) list.push(['shock', ICONS.m_thunder, '痺', me.shock]);
       if (me.blind > 0) list.push(['', ICONS.m_pillar, '眩', me.blind]);
+      // 必殺技の後に纏う物（2026-11-25）：水の衣・雷の衣・鷹の目
+      if (me.aura?.kind === 'water') list.push(['', crestSvg('wave', { ring: false }), '水衣', me.aura.left]);
+      if (me.aura?.kind === 'thunder') list.push(['', ICONS.m_thunder, '雷衣', me.aura.left]);
+      if (me.hawkEye > 0) list.push(['', ICONS.eye, '鷹目', me.hawkEye]);
       const ail = me.ail;
       if (ail && ail.fire >= 1 && !me.blaze) list.push(['gauge fire', ICONS.m_flame, '炎', ail.fire, true]);
       if (ail && ail.thunder >= 1 && !(me.paralyzed > 0)) list.push(['gauge thunder', ICONS.m_thunder, '雷', ail.thunder, true]);
@@ -536,13 +547,19 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const heat = createHeatVision(player.camera);
   const dust = createUltDust(app, player.camera);  // 砂煙（必殺技の地の属性）
   combat.on('dust', (e) => dust.burst(e));
-  // 貫く矢は壁に穴を開ける（2 回目で弓兵の必殺技に使う）
-  const holes = createArrowHoles(app, houses);
+  // 貫く矢は壁に小さな穴、嵐の大矢（颶風一矢）は人が通れる大きな穴を開ける（world/arrow-holes.js）。破片は render/ult-hero-fx.js
+  let heroFx = null;
+  const holes = createArrowHoles(app, houses, { materials: villageMaterials, obstacles, sight, onBreak: (e) => { heroFx?.wallBreak(e); sfx.ultHero?.('wallBreak', null, e); } });
   // 必殺技（2026-11-25）：光・衝撃波・粒（みんなの画面。render/ult-fx.js）と、自分の画面だけの演出（render/ult-show.js）
   const ultFx = createUltFx(app, { combat, fighters, camera: player.camera, dust });
   const ultShow = createUltShow({ camera: player.camera, player, views, me, heightAt: terrain.heightAt });
+  // 英雄ごとの必殺技の見た目（水の竜巻と波・稲妻・嵐の大矢など。render/ult-hero-fx.js）
+  heroFx = createUltHeroFx(app, { combat, fighters, views, camera: player.camera, fx: ultFx, me, firstPerson: () => !thirdPerson && !ultShow.active && !spectating });
   combat.on('ult', ({ fighter, ult, time, at }) => { if (fighter === me && ult) ultShow.play(me, ult, { time, at }); });
   combat.on('ultBurst', (e) => ultShow.burst(e));
+  combat.on('ultPierce', ({ fighter, slash }) => { if (fighter === me) ultShow.kick(slash ? 0.09 : 0.04, slash ? 0.14 : 0.06); });   // 自分の稲妻・斬撃の手ごたえ
+  combat.on('ultWind', ({ fighter, phase }) => { if (phase === 'release' && Math.hypot(fighter.x - me.x, fighter.z - me.z) < 30) ultShow.kick(fighter === me ? 0.08 : 0, fighter === me ? 0.2 : 0.08); });
+  combat.on('auraStrike', ({ x, z }) => { const d = Math.hypot(x - me.x, z - me.z); if (d < 18) ultShow.kick(0, 0.08 * (1 - d / 18)); });
   match.on('eliminated', ({ victim }) => { if (victim === me) ultShow.cancel(); });
   const arrows = createProjectileViews(app, combat);
   let thirdPerson = false;
@@ -937,11 +954,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       }
       refreshMyView();
       lanterns.update(dt, player.camera.getPosition());   // 角燈を腰に付け、光を置く（体の姿が決まった後）
-      if (me.hawkEye > 0) me.hawkEye = Math.max(0, me.hawkEye - (frozenTime ? 0 : dt));
       heat.update(dt, me.hawkEye > 0 && me.alive && !spectating, fighters, me, views);   // 鷹の目：白黒にして、敵の体温を壁越しに描く
       if (!frozenTime) { dust.update(dt); holes.update(combat.projectiles); }
       ultShow.update(frozenTime ? 0 : dt); // 必殺技の寄るカメラ・揺れ（プレイヤーの操作がカメラを置いた後。時間が止まっている間は、技と一緒に止まる）
       ultFx.update(frozenTime ? 0 : dt);   // 必殺技の光・衝撃波・粒（板は、動かした後のカメラへ向ける）
+      heroFx.update(frozenTime ? 0 : dt);  // 英雄ごとの必殺技の見た目
       miracleFx.update(frozenTime ? 0 : dt);   // 時間が止まっている間は、光も炎も止まる
       if (tutor && tutor.update(dt, { insideHouse })) {
         tutorPanel.show(tutor.step);
@@ -1023,6 +1040,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     holes,   // 確認用（矢の穴）
     ultFx,   // 確認用（必殺技の見た目の数）
     ultShow, // 確認用（必殺技の寄るカメラ）
+    get heroFx() { return heroFx; },   // 確認用（英雄ごとの必殺技の見た目）
     lanterns,   // 確認用（角燈）
     /** 確認用：捕捉している相手（無ければ null）と、捕まえられる相手がいるか */
     get lock() { return lock ? { name: lock.target.name, seen: lock.seen, lostFor: lock.lostFor } : null; },

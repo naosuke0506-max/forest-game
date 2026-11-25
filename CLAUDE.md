@@ -81,6 +81,12 @@
   音は `sfx.js` の `ultCharge`・`ultBurst`。2 回目は、英雄ごとの技を `startUlt` から分け、`ultFx`・`ultShow` に英雄ごとの見た目を足す。技の姿は `ULTIMATES` の `desc`（長柄騎士・打擊騎士・祓魔僧は Claude の案。作る前に見てもらう）。
   確かめは作業用の場所の `ulttest.mjs`（計算だけ：回数・無敵・衝撃波・延長戰）と `ultshot.js`（教練「必殺」で撮る。CHAR・TOD・VIEW=third で替える。時間を 1/4 にして撮る）。
   一人称の寄るカメラは、閃光の裏で一度に切り替える（滑らせると兜の中が映る）
+  - 2 回目の前半（2026-11-25）：楯劍騎士「大海嘯」・劍騎士「雷霆一閃」・弓兵「颶風一矢」を作った（利用者が決めた姿）。数は `data.js` の `ULT_SPECS`、
+    中身は `js/game/ult-moves.js`（技の流れ）と `combat.js` の纏う物（`f.aura`：水の衣＝傷半分・ひるまない・矢と奇跡を弾く／雷の衣＝回避が遠く無敵・ときどき自分へ落雷。`updateAura`）。
+    見た目は `js/render/ult-hero-fx.js`（水の竜巻・波・稲妻の姿と道・斬撃・落雷・大弓の風・嵐の大矢・壁の破片）、構図の並びは `ult-show.js` の英雄ごとの shots。
+    嵐の大矢が家の壁に開ける大きな穴は `arrow-holes.js` の `bigHole`（壁の材質のシェーダーでその所を描かない `applyHoleClip`・縁の絵・`sight.addHole`・その階の当たり判定の円を off）。
+    専用の動き（sh_ult・ls_flash・bw_ult）は `tools/characters/ult_moves.py`（build_character.py から呼ぶ）。雙劍は前の dw_ult を使う。
+    確かめは作業用の場所の `ulttest2.mjs`（計算だけ 24 項目）と `ultshot.js`（TIMES=撮る時刻の並び・HOUSE=1 で弓兵の前に家を置く）
 - 技能（スキル）：前の專用技能（反擊・奧義・強靱・剛力・鷹目・神怒。2026-11-10 に作った）は、2026-11-25 に利用者の指示（「今ある技は残しません」）で無くした（`skills.js`・`wrath-wave.js` を消した）。
   残した物：鷹の目の見え方（`heat-vision.js`。`f.hawkEye`）・貫く矢と矢の穴（`arrow-holes.js`・`PIERCE_ARROW`）・大技の動き（`ls_ult`・`dw_ult`・`cl_ult`）・砂煙（`ult-dust.js`）は 2 回目で使う。
   神怒で家・樽が壊れる仕組み（前の `js/world/destruction.js`）は、2026-11-13 に利用者の指示で消した。

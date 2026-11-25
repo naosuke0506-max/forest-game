@@ -324,7 +324,8 @@ async function boot() {
       trees: trees?.canopies || [],
       trunks: trees?.trunks || [],   // 木の幹（火炎の人が触れると火が移る。game/combat.js）
       groundAt: floors.groundAt, insideHouse: village?.insideHouse, hides: village?.hides || [], covers: village?.covers || [], furniture: village?.furniture || null, sight,
-      houses: village?.houses || [],   // 家の一覧（鷹目の貫く矢で壁に穴を開ける。world/arrow-holes.js）
+      houses: village?.houses || [],   // 家の一覧（貫く矢・嵐の大矢で壁に穴を開ける。world/arrow-holes.js）
+      villageMaterials: village?.materials || null,   // 村の質感（嵐の大矢の大きな穴を描かない。world/arrow-holes.js）
       doors: village?.doors || null,   // 家の扉（開け閉めできる。world/doors.js）
       church: village?.landmarks?.church || null,   // 教会の隠し扉の石板と梯子（world/church.js）
       debug: CONFIG.debug,

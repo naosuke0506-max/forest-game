@@ -14,7 +14,7 @@
 // 後で、逃走・アイテムの使用を足す
 import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
-import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY, ULT_BURST } from './data.js';
+import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY, ULT_BURST, ULT_SPECS, HAWK_EYE } from './data.js';
 import { canUlt } from './ultimate.js';
 import { canMiracle, miracleReady } from './miracles.js';
 import { techSetOf } from './techniques.js';
@@ -87,6 +87,7 @@ export function createBot(fighter, rng, fighters) {
   function perceive(world, dt) {
     const S = world.senses;
     for (const [t, k] of b.known) { k.age += dt; k.track = (k.track || 0) - dt; if (!t.alive || k.age > SENSES.memory) b.known.delete(t); }
+    const hawk = f.hawkEye > 0;   // 鷹の目（颶風一矢）：80 m 以内の敵が建物越しに分かる。隠れ場所の中の人は、その隠れ場所を探しに行く
     for (const t of fighters) {
       if (t === f || !t.alive) continue;
       // 天光柱で目がくらんでいる間は、何も見えず、見失った相手を追うこともできない（耳は聞こえる）
@@ -94,6 +95,10 @@ export function createBot(fighter, rng, fighters) {
       const see = !blind && (S ? S.canSee(f, t) : !t.hidden && Math.hypot(t.x - f.x, t.z - f.z) <= 40);
       const k = b.known.get(t);
       if (blind && k) k.track = 0;
+      if (hawk && !see && Math.hypot(t.x - f.x, t.z - f.z) <= HAWK_EYE.range) {
+        if (t.hidden) { if (!f.hidden) b.knownSpot = t.hidden; }
+        else { b.known.set(t, { x: t.x, y: t.y, z: t.z, age: 0, seen: false, track: Math.max(k?.track ?? 0, 0.5), tracked: true }); continue; }
+      }
       // 見つけた相手は、見失っても SENSES.track 秒の間は居場所が分かる（利用者の指示 2026-11-10）。隠れ場所に入った相手は分からない
       if (see) b.known.set(t, { x: t.x, y: t.y, z: t.z, age: 0, seen: true, track: SENSES.track, tracked: false });
       else if (k) {
@@ -333,12 +338,20 @@ export function createBot(fighter, rng, fighters) {
     if (b.target) b.look = null;
     // 必殺技（game/ultimate.js。1 つの試合で 1 回）：もしもの時にだけ使う（利用者の指示 2026-11-25）。
     //   体力が 3 割を切って、衝撃波の届く所に見えている敵がいる・体力 6 割未満で 2 人に迫られた・3 人に囲まれた
+    //   弓兵（颶風一矢は遠くへ放つ大矢）：体力が 4 割5分を切って、70 m 以内に分かっている敵がいる（建物越しでも大矢は届く）
     if (canUlt(f) && b.target) {
-      const R = ULT_BURST.radius * 0.8, fy = f.y ?? 0;
-      const near = fighters.filter((t) => t !== f && t.alive && !t.hidden && b.known.get(t)?.seen
-        && Math.hypot(t.x - f.x, t.z - f.z) < R && Math.abs((t.y ?? fy) - fy) < 3).length;
       const hp = f.stats.hp / f.stats.maxHp;
-      const chance = near && hp < 0.3 ? 0.6 : near >= 2 && hp < 0.6 ? 0.35 : near >= 3 ? 0.3 : 0;
+      let chance = 0;
+      if (f.char === 'archer') {
+        const d = Math.hypot(b.target.x - f.x, b.target.z - f.z);
+        chance = hp < 0.45 && d < 70 ? 0.4 : 0;
+      } else {
+        const reach = f.char === 'sword' ? ULT_SPECS.sword.bolt.range : f.char === 'shield' ? ULT_SPECS.shield.radius : ULT_BURST.radius;
+        const R = reach * 0.8, fy = f.y ?? 0;
+        const near = fighters.filter((t) => t !== f && t.alive && !t.hidden && b.known.get(t)?.seen
+          && Math.hypot(t.x - f.x, t.z - f.z) < R && Math.abs((t.y ?? fy) - fy) < 3).length;
+        chance = near && hp < 0.3 ? 0.6 : near >= 2 && hp < 0.6 ? 0.35 : near >= 3 ? 0.3 : 0;
+      }
       if (chance && rng.next() < chance) b.ultTap = true;
     }
     // 奇跡（祓魔僧。game/miracles.js）：使いどころで唱える（唱える奇跡の名前を 1 フレームだけ渡す）

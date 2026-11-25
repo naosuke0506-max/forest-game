@@ -79,5 +79,15 @@ export function createObstacles(groundAt = null) {
   /** 円では書けない壁を足す（洞窟の壁。world/cave-plan.js）：{ resolve(p, radius) } */
   function addField(f) { fields.push(f); }
 
-  return { add, addField, resolve, isFree, all };
+  /** 点 (x, z) の近く（r m 以内）の円の一覧（嵐の大矢が家の壁に穴を開けるとき、壁の円を外す。world/arrow-holes.js） */
+  function circlesNear(x, z, r) {
+    const out = new Set();
+    for (let gx = Math.floor((x - r) / CELL); gx <= Math.floor((x + r) / CELL); gx++) {
+      for (let gz = Math.floor((z - r) / CELL); gz <= Math.floor((z + r) / CELL); gz++) {
+        for (const o of grid.get(key(gx, gz)) || []) if (Math.hypot(o.x - x, o.z - z) <= r + o.r) out.add(o);
+      }
+    }
+    return [...out];
+  }
+  return { add, addField, resolve, isFree, all, circlesNear };
 }

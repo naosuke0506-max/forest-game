@@ -649,6 +649,65 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
       }
     },
     /**
+     * 英雄ごとの必殺技の音（2 回目。2026-11-25）。kind：
+     *   flash（雷霆一閃の閃光：裂ける音と高い電気の音）・bolt（稲妻で走る：dur 秒、ぱちぱちと折れるたびの雷鳴）・pierce（貫いた）・stance（構え：刃の鳴る音）・
+     *   dash（踏み込み：風を切る音と雷の斬撃）・auraStrike（雷の衣の自分への落雷）・draw（颶風一矢：大弓のきしみと、ふくらむ風。dur 秒）・
+     *   release（嵐の大矢を放つ：大きな風の唸りと爆音）・wallBreak（家の壁が破れる）・deflect（水の衣が弾いた）
+     */
+    ultHero(kind, f, { dur = 1, x, y, z } = {}) {
+      const src = x !== undefined ? { x, y, z, isPlayer: false } : f;
+      const loud = { flash: 1.6, bolt: 1.4, pierce: 0.9, stance: 0.9, dash: 1.5, auraStrike: 1.0, draw: 1.2, release: 1.9, wallBreak: 1.5, deflect: 0.8 }[kind] ?? 1;
+      const d = at(src, loud, { ref: 25, max: 200 });
+      if (!d) return;
+      const c = audio.ctx;
+      const verb = (g) => { if (audio.reverb) { const send = c.createGain(); send.gain.value = g; d.connect(send); send.connect(audio.reverb); } };
+      if (kind === 'flash') {
+        verb(0.6);
+        noiseHit(d, { t: 0, dur: 0.12, type: 'highpass', freq: 1800, attack: 0.0005, gain: 0.9 });
+        toneHit(d, { t: 0, dur: 0.9, f0: 2600, f1: 900, type: 'sawtooth', attack: 0.005, gain: 0.08 });
+        noiseHit(d, { t: 0.05, dur: 1.2, type: 'lowpass', freq: 380, freqEnd: 90, attack: 0.05, gain: 0.5 });
+      } else if (kind === 'bolt') {
+        verb(0.5);
+        const n = 12;
+        for (let i = 0; i < n; i++) {
+          const t = (i / n) * dur;
+          noiseHit(d, { t, dur: 0.05, type: 'highpass', freq: 2200 + R() * 1500, attack: 0.001, gain: 0.35 });
+          toneHit(d, { t, dur: 0.12, f0: 900 + R() * 600, f1: 200, type: 'sawtooth', attack: 0.002, gain: 0.05 });
+        }
+        noiseHit(d, { t: 0, dur: dur + 0.3, type: 'bandpass', freq: 1200, freqEnd: 3000, q: 1.5, attack: 0.05, gain: 0.25 });
+      } else if (kind === 'pierce') {
+        noiseHit(d, { t: 0, dur: 0.06, type: 'highpass', freq: 3000, attack: 0.001, gain: 0.5 });
+        toneHit(d, { t: 0, dur: 0.18, f0: 700, f1: 160, type: 'square', attack: 0.002, gain: 0.07 });
+      } else if (kind === 'stance') {
+        metal(d, { t: 0, base: 1900, ratios: [1, 1.5, 2.4], dur: 0.9, gain: 0.09 });
+        noiseHit(d, { t: 0, dur: 0.25, type: 'bandpass', freq: 5000, freqEnd: 2500, q: 2, attack: 0.01, gain: 0.15 });
+      } else if (kind === 'dash') {
+        verb(0.7);
+        noiseHit(d, { t: 0, dur: 0.35, type: 'bandpass', freq: 600, freqEnd: 3500, q: 0.8, attack: 0.01, gain: 0.7 });
+        noiseHit(d, { t: 0.08, dur: 0.1, type: 'highpass', freq: 2500, attack: 0.001, gain: 0.8 });
+        metal(d, { t: 0.08, base: 1400, ratios: [1, 1.7, 2.9], dur: 0.7, gain: 0.08 });
+      } else if (kind === 'auraStrike') {
+        verb(0.5);
+        noiseHit(d, { t: 0, dur: 0.06, type: 'highpass', freq: 2000, attack: 0.0005, gain: 0.7 });
+        noiseHit(d, { t: 0.03, dur: 0.9, type: 'lowpass', freq: 500, freqEnd: 100, attack: 0.02, gain: 0.45 });
+      } else if (kind === 'draw') {
+        for (let i = 0; i < 5; i++) noiseHit(d, { t: (i / 5) * dur, dur: 0.18, type: 'bandpass', freq: 380 + i * 40, q: 6, attack: 0.03, gain: 0.12 });   // 大弓のきしみ
+        noiseHit(d, { t: 0, dur: dur + 0.1, type: 'bandpass', freq: 400, freqEnd: 2200, q: 2.5, attack: dur * 0.8, gain: 0.45 });   // ふくらむ風
+      } else if (kind === 'release') {
+        verb(0.8);
+        toneHit(d, { t: 0, dur: 0.25, f0: 140, f1: 60, type: 'triangle', attack: 0.002, gain: 0.5 });       // 弦の鳴る音
+        noiseHit(d, { t: 0, dur: 1.6, type: 'bandpass', freq: 2600, freqEnd: 250, q: 1.1, attack: 0.005, gain: 0.85 });   // 大きな風の唸り
+        noiseHit(d, { t: 0, dur: 0.5, type: 'lowpass', freq: 900, freqEnd: 120, attack: 0.002, gain: 0.6 });
+      } else if (kind === 'wallBreak') {
+        verb(0.6);
+        noiseHit(d, { t: 0, dur: 0.6, type: 'lowpass', freq: 1400, freqEnd: 200, attack: 0.001, gain: 0.8 });
+        for (let i = 0; i < 12; i++) noiseHit(d, { t: 0.05 + R() * 0.6, dur: 0.05, type: 'bandpass', freq: 700 + R() * 1500, q: 2, attack: 0.002, gain: 0.15 });
+      } else if (kind === 'deflect') {
+        noiseHit(d, { t: 0, dur: 0.4, type: 'bandpass', freq: 1400, freqEnd: 600, q: 1, attack: 0.005, gain: 0.5 });
+        toneHit(d, { t: 0, dur: 0.15, f0: 500, f1: 900, type: 'sine', attack: 0.01, gain: 0.08 });
+      }
+    },
+    /**
      * 必殺技を放つ：地を揺らす大きな爆音・吹き飛ばす風圧・はじける音・長い響き。属性ごとに重ねる
      * （水＝大きなしぶき・雷＝雷鳴・地＝岩が砕けて礫が降る・炎＝爆炎・風＝突風・聖＝鐘と聖歌）
      */
@@ -696,7 +755,18 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   combat.on('shieldStrike', ({ fighter, skill, hits }) => { if (hits) sfx.shieldHit(fighter, !!skill.push); });
   combat.on('fire', ({ fighter }) => sfx.bowRelease(fighter));
   // 必殺技（2026-11-25）：溜めの音と、放つ大きな音（属性ごとに重ねる）
-  combat.on('ult', ({ fighter, ult, at }) => sfx.ultCharge(fighter, ult?.element, at));
+  // 溜めの音は、力が放たれるまで（劍騎士は最後の落雷・弓兵は放つまで）
+  combat.on('ult', ({ fighter, ult, at, spec }) => sfx.ultCharge(fighter, ult?.element, spec ? (spec.at ?? spec.release ?? spec.strike?.at ?? at) : at));
+  combat.on('ultThunder', ({ fighter, phase }) => {
+    if (phase === 'flashed') sfx.ultHero('flash', fighter);
+    else if (phase === 'bolt') sfx.ultHero('bolt', fighter, { dur: 1.1 });
+    else if (phase === 'stance') sfx.ultHero('stance', fighter);
+    else if (phase === 'dashed') sfx.ultHero('dash', fighter);
+  });
+  combat.on('ultPierce', ({ fighter, x, y, z }) => sfx.ultHero('pierce', fighter, { x, y, z }));
+  combat.on('auraStrike', ({ fighter }) => sfx.ultHero('auraStrike', fighter));
+  combat.on('ultWind', ({ fighter, phase }) => sfx.ultHero(phase === 'release' ? 'release' : 'draw', fighter, { dur: 1.4 }));
+  combat.on('deflect', ({ target, x, y, z }) => sfx.ultHero('deflect', target, { x, y, z }));
   combat.on('ultBurst', ({ fighter, ult }) => sfx.ultBurst(fighter, ult?.element));
   // 祓魔僧の奇跡（game/miracles.js）：唱え始め・効き目・蘇る・光壁・炎・途切れる
   combat.on('miracleCast', ({ fighter, id }) => sfx.miracle('cast', fighter, { dur: MIRACLES[id].at }));

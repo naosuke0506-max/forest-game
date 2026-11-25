@@ -489,6 +489,31 @@ export const ULTIMATES = {
  */
 export const ULT_BURST = { time: 2.2, at: 1.25, radius: 8, damage: 40, minK: 0.4, push: 6.5, pushMin: 2, stun: 1.3 };
 /**
+ * 英雄ごとの必殺技の数（2 回目。2026-11-25。利用者が決めた技の姿は ULTIMATES の desc。数は Claude の案。ここに無い英雄は、まだ仮の ULT_BURST）。
+ *   time：動きの長さ（秒。この間は無敵）、aura：技の後に纏う物（time 秒）
+ *   楯劍騎士（大海嘯）：at 秒に水があふれる。radius m に傷 damage（端で minK 倍。水は物理ではない＝楯でも半分通る）と、強い吹き飛ばし（push〜pushMin m）。
+ *     水の衣：受ける傷が cut の割合だけ減る（半分）・ひるまない・矢と飛ぶ奇跡を弾く
+ *   劍騎士（雷霆一閃）：flash＝閃光（range m 以内で見えている敵が blind 秒目くらみ）。bolt＝稲妻の姿で turns 回折れて走る（from〜to 秒・range m の中の敵を貫く。
+ *     道の幅 width m の中の敵に傷 damage（1 人 maxHits 回まで。その後はしびれだけ）・しびれは技が終わるまで＋para 秒）。stance＝体に戻って構える時刻。dash＝カメラの向き（bot は相手の向き）へ dist m を一瞬で踏み込み、
+ *     幅 width m の中の敵を斬る（傷 damage）。strike＝最後の落雷（radius m に傷 damage・雷痺を buildup 溜める）。
+ *     雷の衣：回避の距離が dodge 倍で、回避の間はずっと無敵。回避・疾驅の間は稲妻の姿になり、every 秒ごとに自分へ落雷（周り radius m の敵に傷 damage）
+ *   弓兵（颶風一矢）：release 秒に嵐の大矢を放つ（speed m/秒・range m までまっすぐ。幅 width m の中の人・木・壁を貫く。傷 damage は楯でも防げない・横へ push m 吹き飛ばす）。
+ *     家の壁に通れる穴（幅 hole.w m・高さ hole.h m）。始めから鷹の目（建物越しに敵が見える）で、技の後も hawk 秒続く。大弓は長弓を bow 倍の大きさで持つ
+ */
+export const ULT_SPECS = {
+  shield: { time: 2.2, at: 1.25, radius: 8.5, damage: 46, minK: 0.4, push: 9, pushMin: 3, stun: 1.5,
+            aura: { kind: 'water', time: 10, cut: 0.5 } },
+  sword:  { time: 3.0, flash: { at: 0.06, range: 18, blind: 1.3 },
+            bolt: { from: 0.38, to: 1.5, turns: 12, range: 16, width: 1.4, damage: 9, maxHits: 3, para: 2.0 },
+            stance: 1.5, dash: { at: 1.92, time: 0.12, dist: 11, width: 1.8, damage: 32 },
+            strike: { at: 2.3, radius: 3.6, damage: 26, buildup: 60 },
+            aura: { kind: 'thunder', time: 10, dodge: 1.7, every: 1.1, radius: 2.6, damage: 12 } },
+  archer: { time: 2.4, release: 1.45, bow: 1.8, hawk: 12,
+            arrow: { speed: 85, range: 160, width: 1.1, damage: 72, push: 3.5 },
+            hole: { w: 1.7, h: 2.15 } },
+};
+
+/**
  * 仮の必殺技の動き（2 回目で、英雄ごとの専用の動きを Blender で作る）：今ある大きな技の動きを、衝撃波の時刻に合わせて流す。
  *   持っている武器ごと（祓魔僧は人物で cl_ult）。pre：溜めの間に流す動き（無ければ clip をゆっくり流す）、clip：放つ動き、hit：clip の中の、放つ時刻（秒）
  */

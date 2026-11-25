@@ -2,9 +2,10 @@
 // 人間も bot も、同じ形の入力 { attack: 押している, guard: 押している } で動かす。
 // PlayCanvas に依存しない（後でオンライン化するとき、サーバーにそのまま移せるように）
 import { updateDive } from './swim.js';
-import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SWIM, MIRACLES, REVIVE_TIME, ELEMENTS, ASSASSIN, ULT_BURST, ULTIMATE, PIERCE_ARROW } from './data.js';
+import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIELDS, DASH_ATTACKS, DASH, SWIM, MIRACLES, REVIVE_TIME, ELEMENTS, ASSASSIN, ULT_BURST, ULTIMATE, PIERCE_ARROW, ULT_SPECS } from './data.js';
 import { selectedMiracle, selectMiracle, cycleMiracle, miracleReady, startCool, updateMiracles } from './miracles.js';
 import { canUlt, spendUlt, ultOf } from './ultimate.js';
+import { createUltMoves } from './ult-moves.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 import { setStance, updateStance, stanceShape, resetStance } from './stance.js';
 import { techSetOf, controlTech, updateTech, interruptTech } from './techniques.js';
@@ -55,7 +56,7 @@ export function attackStats(weaponId, heavy = false) {
  * @param {object} [opt.senses] 目（game/senses.js）
  * @param {(x: number, z: number) => ({ kind: 'grass'|'tree', x: number, z: number }|null)} [opt.flammable] 燃える物（草・木）。火炎の人が触れると火が移る
  */
-export function createCombat({ match, heightAt, obstacles, groundAt = null, hiding = null, cover = null, senses = null, flammable = null }) {
+export function createCombat({ match, heightAt, obstacles, groundAt = null, hiding = null, cover = null, senses = null, flammable = null, sight = null }) {
   const floorAt = groundAt || ((x, z) => heightAt(x, z));
   const yOf = (f) => f.y ?? heightAt(f.x, f.z);   // 足の高さ（家の二階にいれば高い）
   const projectiles = [];
@@ -84,10 +85,12 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     const a = target.action;
     if (a?.kind === 'dodge') {
       const d = DODGE[target.weight];
-      if (a.t >= d.invuln[0] && a.t <= d.invuln[1]) { emit('dodged', { attacker, target }); return; }
+      // 雷の衣（雷霆一閃の後）：稲妻の姿で回避している間は、ずっと当たらない
+      if ((a.t >= d.invuln[0] && a.t <= d.invuln[1]) || target.aura?.kind === 'thunder') { emit('dodged', { attacker, target }); return; }
     }
-    if (target.invuln > 0) return;   // 蘇ったばかり（蘇生の奇跡）：傷を受けない
+    if (target.invuln > 0) return;   // 蘇ったばかり（蘇生の奇跡）・必殺技の間：傷を受けない
     let amount = (raw * (attacker ? attacker.stats.attack : 1) * target.armor) / target.stats.defense;
+    if (target.aura?.kind === 'water') amount *= 1 - target.aura.cut;   // 水の衣（大海嘯の後）：受ける傷が半分
     // 淨炎（奇跡）：鎚矛が炎をまとっている間の近接の当たりは、炎の傷を足す（あとで elementHit。楯でも半分通る）
     const flaming = physical && kind === 'melee' && attacker?.flame > 0;
     // 光壁（奇跡）：攻めた所と受ける人の間に光の壁があれば、壁が受け止める（壁を張った人の攻撃は通る。必殺技の衝撃波は通る）
@@ -99,7 +102,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     // 楯を通る割合：pierce は武器の「防禦の上から響く」分、skillPierce は楯の上からでも通ると決めた物の分（貫く矢 through）
     const skillPierce = through ? 1 : 0;
     const crush = false;   // 楯の上からでも重い一撃でよろめかせる（前は打擊騎士の剛力。2 回目の必殺技で使うかもしれない）
-    const steady = target.action?.kind === 'ult';   // ひるまない（必殺技の間。傷も受けない）
+    const steady = target.action?.kind === 'ult' || target.aura?.kind === 'water';   // ひるまない（必殺技の間・水の衣）
     // 防御：前から来た物理の攻撃だけ。楯ごとに減らせる割合が違う（data.js の SHIELDS の cut：鳶形楯・大楯 100%・小楯 70%）。
     // 減らした分だけスタミナを使う。防禦の上から響く武器（pierce）は、その割合だけ通る。
     // ただし鳶形楯・大楯（100%）は、物理の攻撃を全部止める（鈍器の響く分も止める。利用者の指示 2026-11-13）。
@@ -182,7 +185,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   }
   /** 雷：少ししびれる（動けない。振り・唱えるのも止まる。楯で受けたらしびれない） */
   function jolt(t, by, guarded) {
-    if (guarded || t.paralyzed > 0) return;
+    if (guarded || t.paralyzed > 0 || t.aura?.kind === 'water') return;   // 水の衣はひるまない
     const ta = t.action;
     if (ta && !LOCKED.has(ta.kind) && ta.kind !== 'dodge') { if (ta.kind === 'miracle' && !ta.done) emit('miracleBroken', { fighter: t, id: ta.id }); t.action = null; }
     t.guarding = false;
@@ -216,18 +219,19 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     t.blaze = null;
     emit('blazeEnd', { fighter: t, how, by });   // how：dodge（回避で消した）・water（水）・heal（治癒）・burnt（焦げて倒れた）・gone（倒れた）
   }
-  /** 雷痺：しびれ続けて無防備（致命の一撃を受ける） */
-  function startParalysis(t, by) {
+  /** 雷痺：しびれ続けて無防備（致命の一撃を受ける）。secs：しびれる秒（雷霆一閃は技が終わるまで続ける） */
+  function startParalysis(t, by, secs = ET.paralysis) {
     const ta = t.action;
     if (ta && !LOCKED.has(ta.kind)) { if (ta.kind === 'miracle' && !ta.done) emit('miracleBroken', { fighter: t, id: ta.id }); t.action = null; }
     if (t.cover) cover?.exit(t);
     t.guarding = false;
     interruptTech(t);
-    t.paralyzed = ET.paralysis;
-    t.helpless = Math.max(t.helpless || 0, ET.paralysis);
-    t.stun = Math.max(t.stun, ET.paralysis);
-    t.shock = Math.max(t.shock || 0, ET.paralysis);
-    emit('paralyzed', { fighter: t, by, time: ET.paralysis });
+    const fresh = !(t.paralyzed > 0);
+    t.paralyzed = Math.max(t.paralyzed || 0, secs);
+    t.helpless = Math.max(t.helpless || 0, secs);
+    t.stun = Math.max(t.stun, secs);
+    t.shock = Math.max(t.shock || 0, secs);
+    if (fresh) emit('paralyzed', { fighter: t, by, time: secs });
   }
   /** 地面の火を起こす（火炎の人が草・木に触れた）。近くに同じ火があれば起こさない */
   function kindle(spot, y, owner) {
@@ -301,16 +305,21 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
    * 必殺技の間は無敵（f.invuln。終わった後も ULTIMATE.guardAfter 秒）。見た目と音は 'ult' の知らせで出す（自分なら寄るカメラと名前）
    */
   function startUlt(f) {
-    const U = ultOf(f), B = ULT_BURST;
+    const U = ultOf(f), B = ULT_BURST, hero = moves.has(f), S = ULT_SPECS[f.char];
     spendUlt(f);
     if (f.cover) cover?.exit(f);
     f.guarding = false;
     interruptTech(f);
-    f.action = { kind: 'ult', t: 0, fired: false };
-    f.invuln = Math.max(f.invuln || 0, B.time + ULTIMATE.guardAfter);
+    f.ultInfo = U;
+    const time = hero ? moves.time(f) : B.time;
+    f.action = { kind: 'ult', t: 0, fired: false, hero };
+    f.invuln = Math.max(f.invuln || 0, time + ULTIMATE.guardAfter);
     f._press = { at: clock, follow: false, used: true };   // この押下で通常攻撃を出さない
     f._queued = false;
-    emit('ult', { fighter: f, ult: U, time: B.time, at: B.at });
+    if (hero) moves.start(f, f.action);
+    // at：力が放たれる時刻（溜めの音・寄るカメラの切り替え）。英雄ごとの技は ULT_SPECS
+    const at = hero ? (S.at ?? S.release ?? S.flash?.at ?? B.at) : B.at;
+    emit('ult', { fighter: f, ult: U, time, at, hero, spec: hero ? S : null });
   }
 
   /**
@@ -330,15 +339,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       damage(t, B.damage * (B.minK + (1 - B.minK) * k), f, { fromX: f.x, fromZ: f.z, kind: 'ult', power: 'h', physical: false });
       if (!t.alive) continue;
       hits++;
-      // 吹き飛ぶ：していたことは取りやめ、よろめいて遠くへ下がる
-      const ta = t.action;
-      if (ta && !LOCKED.has(ta.kind)) t.action = null;
-      t.guarding = false;
-      interruptTech(t);
-      startReact(t, 'stagger', f.x, f.z);
-      t.react.push = B.pushMin + (B.push - B.pushMin) * k;
-      t.react.time = 0.9 + 0.4 * k;
-      t.stun = Math.max(t.stun, B.stun * (0.6 + 0.4 * k));
+      knock(t, f.x, f.z, B.pushMin + (B.push - B.pushMin) * k, B.stun * (0.6 + 0.4 * k), 0.9 + 0.4 * k);   // 吹き飛ぶ
     }
     emit('ultBurst', { fighter: f, ult: U, x: f.x, y: fy, z: f.z, radius: B.radius, hits });
   }
@@ -370,6 +371,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (a.t >= d.invuln[0] && a.t <= d.invuln[1]) { emit('dodged', { attacker: f, target: t }); return; }
     }
     if (t.invuln > 0) return;   // 必殺技の間・蘇ったばかり：押されない
+    if (t.aura?.kind === 'water') { t.lastHitBy = f; emit('shieldPushed', { attacker: f, target: t }); return; }   // 水の衣：崩れない
     if (t.cover) cover?.exit(t);
     t.guarding = false;
     if (a && ['attack', 'charge', 'charge2', 'shield', 'draw', 'release', 'finisher', 'hideIn', 'hideOut', 'search'].includes(a.kind)) t.action = null;
@@ -535,8 +537,10 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   }
 
   /** 吹き飛ばす（聖火彈の爆発）：していたことを取りやめ、よろめいて外へ下がる。必殺技の間・蘇ったばかりの人は動かない */
-  function blowAway(t, fromX, fromZ, push, stun) {
-    if (!t.alive || t.invuln > 0) return;
+  function blowAway(t, fromX, fromZ, push, stun) { knock(t, fromX, fromZ, push, stun, 0.9); }
+  /** 吹き飛ばす（必殺技・聖火彈）：push m 外へ、time 秒かけて下がり、stun 秒ひるむ。水の衣はひるまない（吹き飛ばない） */
+  function knock(t, fromX, fromZ, push, stun, time = 0.9) {
+    if (!t.alive || t.invuln > 0 || t.aura?.kind === 'water') return;
     if (t.cover) cover?.exit(t);
     const ta = t.action;
     if (ta && !LOCKED.has(ta.kind)) t.action = null;
@@ -544,7 +548,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     interruptTech(t);
     startReact(t, 'stagger', fromX, fromZ);
     t.react.push = push;
-    t.react.time = 0.9;
+    t.react.time = time;
     t.stun = Math.max(t.stun, stun);
   }
 
@@ -601,6 +605,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       const sx = sp.x - ox, sz = sp.z - oz, len2 = sx * sx + sz * sz || 1e-6;
       const kk = Math.max(0, Math.min(1, ((v.x - ox) * sx + (v.z - oz) * sz) / len2));
       if (Math.hypot(ox + sx * kk - v.x, oz + sz * kk - v.z) > R) continue;
+      // 水の衣（大海嘯の後）：飛ぶ奇跡（聖火彈・神罰雷）も弾く（水に呑まれて消える）
+      if (v.aura?.kind === 'water') { emit('deflect', { target: v, x: sp.x, y: sp.y, z: sp.z, spell: sp }); return false; }
       if (sp.kind === 'fireball') { fireballBoom(sp); return false; }
       // 神罰雷：雷の傷・少ししびれる・雷痺を溜める（楯で前から受けると、傷も溜まりも半分で、しびれない）
       elementHit(v, owner, 'thunder', M.damage, M.buildup, { fromX: ox, fromZ: oz, kind: 'thunder', power: 'h' });
@@ -700,6 +706,41 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     return [f.x - ox, f.z - oz];
   };
 
+  /**
+   * 必殺技の後に纏う物（f.aura：{ kind, left, time }）を進める。雷の衣は、回避・疾驅の間に every 秒ごとに自分へ落雷（周りの敵に傷）。
+   * 鷹の目（f.hawkEye：残りの秒）もここで減らす
+   */
+  function updateAura(f, dt) {
+    if (f.hawkEye > 0) f.hawkEye = Math.max(0, f.hawkEye - dt);
+    const A = f.aura;
+    if (!A) return;
+    A.left -= dt;
+    if (A.left <= 0) { f.aura = null; emit('auraEnd', { fighter: f, aura: A }); return; }
+    if (A.kind === 'thunder' && (f.action?.kind === 'dodge' || f.sprinting)) {
+      A.tick -= dt;
+      if (A.tick <= 0) { A.tick = ULT_SPECS.sword.aura.every; auraStrike(f); }
+    }
+  }
+  /** 雷の衣：自分へ落雷。周りの敵に雷の傷と、雷痺を少し溜める（自分には効かない） */
+  function auraStrike(f) {
+    const R = ULT_SPECS.sword.aura, fy = yOf(f);
+    let hits = 0;
+    for (const t of fighters) {
+      if (t === f || !t.alive || t.hidden || t.invuln > 0) continue;
+      if (Math.hypot(t.x - f.x, t.z - f.z) > R.radius || Math.abs(yOf(t) - fy) > 2.5) continue;
+      if (elementHit(t, f, 'thunder', R.damage, 25, { fromX: f.x, fromZ: f.z, kind: 'ult', power: 'l' })) hits++;
+    }
+    emit('auraStrike', { fighter: f, x: f.x, y: fy, z: f.z, radius: R.radius, hits });
+  }
+
+  // 英雄ごとの必殺技（game/ult-moves.js。2 回目。まだ無い英雄は仮の ultBurst）
+  const moves = createUltMoves({
+    fighters, match, yOf, floorAt, obstacles, sight, keepInside, shove,
+    damage, afflict, knock, emit,
+    paralyze: (t, by, secs) => startParalysis(t, by, secs),
+    addProjectile: (p) => projectiles.push(p),
+  });
+
   /** 近接の当たり判定：間合いと角度に入っている、ほかの全員に当たる */
   function meleeHit(f, w) {
     const fy = yOf(f);
@@ -754,7 +795,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     p.life -= dt;
     if (p.life <= 0) return false;
     const ox = p.x, oz = p.z;
-    p.vy -= COMBAT.gravity * dt;
+    if (!p.straight) p.vy -= COMBAT.gravity * dt;   // 嵐の大矢（颶風一矢）はまっすぐ飛ぶ
     p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
     // 光壁（奇跡）に当たると、壁が受け止める（貫く矢は通り抜ける）
     if (!p.pierce && walls.length) {
@@ -767,16 +808,27 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     }
     // 人に当たる：線分（前の位置 → 今の位置）と、体の円柱
     for (const t of fighters) {
+      if (p.deflected) break;   // 水の衣に弾かれた矢は、もう誰にも当たらない
       if (t === p.owner || !t.alive || (t.hidden && !p.pierce)) continue;   // 隠れている人には当たらない（貫く矢は、隠れ場所ごと貫く）
-      const g = yOf(t);
-      if (p.y < g || p.y > g + stanceShape(t).height) continue;   // しゃがむ・伏せると体が低い
+      const g = yOf(t), wide = p.width || 0;
+      if (p.y < g - wide * 0.5 || p.y > g + stanceShape(t).height + wide * 0.5) continue;   // しゃがむ・伏せると体が低い（嵐の大矢は太い）
       const sx = p.x - ox, sz = p.z - oz, len2 = sx * sx + sz * sz || 1e-6;
       const k = Math.max(0, Math.min(1, ((t.x - ox) * sx + (t.z - oz) * sz) / len2));
-      if (Math.hypot(ox + sx * k - t.x, oz + sz * k - t.z) <= COMBAT.bodyRadius) {
+      const lx = ox + sx * k - t.x, lz = oz + sz * k - t.z;
+      if (Math.hypot(lx, lz) <= COMBAT.bodyRadius + wide) {
+        // 水の衣（大海嘯の後）：ふつうの矢は弾く（跳ね返って落ちる。誰にも当たらない）。貫く矢・嵐の大矢は弾けない（傷は半分）
+        if (!p.pierce && t.aura?.kind === 'water') {
+          p.deflected = true;
+          p.vx = -p.vx * 0.25 + (Math.random() - 0.5) * 6; p.vz = -p.vz * 0.25 + (Math.random() - 0.5) * 6; p.vy = 3 + Math.random() * 2;
+          emit('deflect', { target: t, x: p.x, y: p.y, z: p.z, projectile: p });
+          return true;
+        }
         if (p.pierce) {   // 貫く矢：当たっても止まらず、次の人へ
           if (p.struck.has(t)) continue;
           p.struck.add(t);
-          damage(t, p.damage, p.owner, { fromX: ox, fromZ: oz, kind: 'arrow', power: p.power, pierce: 1, through: true });
+          damage(t, p.damage, p.owner, { fromX: ox, fromZ: oz, kind: p.storm ? 'ult' : 'arrow', power: p.power, pierce: 1, through: true, physical: !p.storm });
+          // 嵐の大矢：矢の道から横へ吹き飛ばす
+          if (p.storm && t.alive && p.push) { const ll = Math.hypot(lx, lz) || 1; knock(t, t.x + (lx / ll) * 2, t.z + (lz / ll) * 2, p.push, 1.0, 0.8); }
           emit('projectileHit', { projectile: p, target: t, through: true });
           continue;
         }
@@ -842,6 +894,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       f._swapHeld = !!input.swap;
       if (f.left === 'miracle' && swapPressed && cycleMiracle(f)) emit('miracleSelect', { fighter: f, id: selectedMiracle(f) });
       const castWant = f.left === 'miracle' && (leftPressed || !!input.miracle);
+      if (input.viewYaw != null) f._viewYaw = input.viewYaw;   // 見ている向き（雷霆一閃は、体に戻った時のカメラの向きへ踏み込む）
       // 暗殺している・されている・隠れる・出る・探す・引きずり出す間は、ほかのことはできない
       if (LOCKED.has(f.action?.kind)) { f.guarding = false; return; }
       // 泳いでいる間は、攻撃・防禦・回避・技能はできない（利用者の指示 2026-11-14：川は泳げる。game/swim.js）。していたことも止まる
@@ -923,7 +976,9 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         const len = Math.hypot(mx, my);
         const rad = ((input.viewYaw ?? f.yaw) * Math.PI) / 180;   // プレイヤーは見ている向きから（スティックの向き）。bot は体の向きから
         const fx = -Math.sin(rad), fz = -Math.cos(rad), rx = Math.cos(rad), rz = -Math.sin(rad);
-        f.action = { kind: 'dodge', t: 0, dirX: (fx * my + rx * mx) / len, dirZ: (fz * my + rz * mx) / len, moved: 0 };
+        // 雷の衣（雷霆一閃の後）：稲妻の姿で、遠くまで回避する
+        const far = f.aura?.kind === 'thunder' ? ULT_SPECS.sword.aura.dodge : 1;
+        f.action = { kind: 'dodge', t: 0, dirX: (fx * my + rx * mx) / len, dirZ: (fz * my + rz * mx) / len, moved: 0, dist: d.distance * far, bolt: far > 1 };
         f.guarding = false;
         spendStamina(f, d.stamina);
         emit('dodge', { fighter: f });
@@ -1002,7 +1057,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     update(dt) {
       clock += dt;
       for (const f of fighters) {
-        if (!f.alive) continue;
+        if (!f.alive) { if (f.boltForm || f.greatBow) moves.cancel(f); f.aura = null; continue; }   // 倒れた：稲妻の姿・大弓・纏う物を外す
+        updateAura(f, dt);   // 必殺技の後に纏う物（水の衣・雷の衣）と鷹の目
         updateStance(f, dt);
         updateReact(f, dt, shove);   // 重い被弾・よろめきで押されて下がる
         f.stun = Math.max(0, f.stun - dt);
@@ -1058,9 +1114,12 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
           } else if (a.kind === 'release' && a.t >= 0.25) {
             f.action = null;
           } else if (a.kind === 'ult') {
-            // 必殺技（1 回目は仮の属性の衝撃波）：at 秒に放つ。動きの間は無敵で、何もできない
-            if (!a.fired && a.t >= ULT_BURST.at) { a.fired = true; ultBurst(f); }
-            if (a.t >= ULT_BURST.time) f.action = null;
+            // 必殺技：英雄ごとの技（game/ult-moves.js）か、まだ無い英雄は仮の属性の衝撃波（at 秒に放つ）。動きの間は無敵で、何もできない
+            if (a.hero) { if (moves.update(f, a, dt)) { f.action = null; moves.end(f); } }
+            else {
+              if (!a.fired && a.t >= ULT_BURST.at) { a.fired = true; ultBurst(f); }
+              if (a.t >= ULT_BURST.time) f.action = null;
+            }
           } else if (a.kind === 'miracle') {
             // 奇跡を唱える：動きの at 秒に効き目が出る（data.js の MIRACLES）
             const M = MIRACLES[a.id];
@@ -1095,7 +1154,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
             // 始めに速く、終わりにゆっくり進む
             const d = DODGE[f.weight] || DODGE.medium;
             const u = Math.min(1, a.t / d.duration);
-            const goal = d.distance * (1 - (1 - u) * (1 - u));
+            const goal = (a.dist ?? d.distance) * (1 - (1 - u) * (1 - u));
             const step = goal - a.moved;
             a.moved = goal;
             f.x += a.dirX * step; f.z += a.dirZ * step;
