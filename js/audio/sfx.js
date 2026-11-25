@@ -473,30 +473,52 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
       }
     },
     /**
-     * 祓魔僧の神怒（利用者の指示 2026-11-13：大きめの音）。溜め：宙に浮く間、低いうなりが上がっていき、聖歌のような和音と風が膨らむ。
-     * 遠くまで聞こえる（ほかの人の神怒も 150 m ほど先まで）
+     * 必殺技の溜め（利用者の指示 2026-11-25：音を大きく）：低いうなりが上がっていき、吹き上がる風がふくらむ。属性ごとに音を重ねる
+     * （水＝渦巻く水の音・雷＝はじける火花と電気のうなり・地＝地鳴りと岩のきしみ・炎＝炎のうなり・風＝風の鳴き声・聖＝聖歌の和音と鈴）。
+     * 遠くまで聞こえる（ほかの人の必殺技も 200 m ほど先まで）。dur：放つまでの秒
      */
-    wrathCharge(f, dur = 1.4) {
-      const d = at(f, 1.3, { ref: 20, max: 160 });
+    ultCharge(f, element, dur = 1.2) {
+      const d = at(f, 1.6, { ref: 25, max: 200 });
       if (!d) return;
       const c = audio.ctx, t0 = c.currentTime;
       if (audio.reverb) { const send = c.createGain(); send.gain.value = 0.6; d.connect(send); send.connect(audio.reverb); }
       // 低いうなり（上がっていく）
-      const hum = c.createOscillator(), hg = c.createGain();
-      hum.type = 'sawtooth'; hum.frequency.setValueAtTime(70, t0); hum.frequency.exponentialRampToValueAtTime(150, t0 + dur);
-      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
-      hg.gain.setValueAtTime(0.0001, t0); hg.gain.exponentialRampToValueAtTime(0.22, t0 + dur * 0.9); hg.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 0.15);
+      const hum = c.createOscillator(), hg = c.createGain(), lp = c.createBiquadFilter();
+      hum.type = 'sawtooth'; hum.frequency.setValueAtTime(62, t0); hum.frequency.exponentialRampToValueAtTime(170, t0 + dur);
+      lp.type = 'lowpass'; lp.frequency.setValueAtTime(300, t0); lp.frequency.exponentialRampToValueAtTime(900, t0 + dur);
+      hg.gain.setValueAtTime(0.0001, t0); hg.gain.exponentialRampToValueAtTime(0.26, t0 + dur * 0.9); hg.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 0.12);
       hum.connect(lp); lp.connect(hg); hg.connect(d); hum.start(t0); hum.stop(t0 + dur + 0.2);
-      // 聖歌のような和音（ゆっくり揺れる。だんだん大きく）
-      for (const [fr, g] of [[220, 0.06], [277.2, 0.05], [329.6, 0.05], [440, 0.035]]) {
-        const o = c.createOscillator(), og = c.createGain(), vib = c.createOscillator(), vg = c.createGain();
-        o.type = 'triangle'; o.frequency.value = fr;
-        vib.frequency.value = 5.2; vg.gain.value = fr * 0.006; vib.connect(vg); vg.connect(o.frequency);
-        og.gain.setValueAtTime(0.0001, t0); og.gain.exponentialRampToValueAtTime(g, t0 + dur); og.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 0.25);
-        o.connect(og); og.connect(d); o.start(t0); vib.start(t0); o.stop(t0 + dur + 0.3); vib.stop(t0 + dur + 0.3);
+      noiseHit(d, { t: 0, dur: dur + 0.05, type: 'bandpass', freq: 300, freqEnd: 2200, q: 0.8, attack: dur * 0.85, gain: 0.4 });   // 吹き上がる風
+      if (element === 'water') {
+        noiseHit(d, { t: 0, dur: dur, type: 'bandpass', freq: 500, freqEnd: 1400, q: 1.6, attack: dur * 0.6, gain: 0.45 });
+        for (let i = 0; i < 10; i++) toneHit(d, { t: R() * dur, dur: 0.09, f0: 300 + R() * 500, f1: 900 + R() * 700, type: 'sine', attack: 0.01, gain: 0.05 });   // 泡の音
+      } else if (element === 'thunder') {
+        const o = c.createOscillator(), og = c.createGain(), bp = c.createBiquadFilter();
+        o.type = 'sawtooth'; o.frequency.setValueAtTime(110, t0);
+        bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 2;
+        og.gain.setValueAtTime(0.0001, t0); og.gain.exponentialRampToValueAtTime(0.12, t0 + dur); og.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 0.05);
+        o.connect(bp); bp.connect(og); og.connect(d); o.start(t0); o.stop(t0 + dur + 0.1);
+        for (let i = 0; i < 26; i++) { const u = Math.sqrt(R()); noiseHit(d, { t: u * dur, dur: 0.012, type: 'highpass', freq: 3000, attack: 0.001, gain: 0.08 + u * 0.14 }); }   // だんだん多く
+      } else if (element === 'earth') {
+        noiseHit(d, { t: 0, dur: dur + 0.1, type: 'lowpass', freq: 140, attack: dur * 0.7, gain: 0.8 });   // 地鳴り
+        for (let i = 0; i < 8; i++) noiseHit(d, { t: R() * dur, dur: 0.12, type: 'bandpass', freq: 400 + R() * 400, q: 3, attack: 0.01, gain: 0.12 });   // 岩のきしみ
+      } else if (element === 'fire') {
+        noiseHit(d, { t: 0, dur: dur + 0.05, type: 'lowpass', freq: 500, freqEnd: 1600, attack: dur * 0.6, gain: 0.55 });   // 炎のうなり
+        for (let i = 0; i < 14; i++) noiseHit(d, { t: R() * dur, dur: 0.02, type: 'highpass', freq: 2000, attack: 0.001, gain: 0.09 });   // はぜる音
+      } else if (element === 'wind') {
+        noiseHit(d, { t: 0, dur: dur + 0.05, type: 'bandpass', freq: 700, freqEnd: 2600, q: 9, attack: dur * 0.5, gain: 0.5 });   // 風の鳴き声
+        noiseHit(d, { t: dur * 0.3, dur: dur * 0.75, type: 'bandpass', freq: 1200, freqEnd: 600, q: 7, attack: dur * 0.3, gain: 0.3 });
+      } else {
+        // 聖：聖歌のような和音（ゆっくり揺れる。だんだん大きく）と鈴
+        for (const [fr, g] of [[220, 0.07], [277.2, 0.06], [329.6, 0.06], [440, 0.04]]) {
+          const o = c.createOscillator(), og = c.createGain(), vib = c.createOscillator(), vg = c.createGain();
+          o.type = 'triangle'; o.frequency.value = fr;
+          vib.frequency.value = 5.2; vg.gain.value = fr * 0.006; vib.connect(vg); vg.connect(o.frequency);
+          og.gain.setValueAtTime(0.0001, t0); og.gain.exponentialRampToValueAtTime(g, t0 + dur); og.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 0.25);
+          o.connect(og); og.connect(d); o.start(t0); vib.start(t0); o.stop(t0 + dur + 0.3); vib.stop(t0 + dur + 0.3);
+        }
+        for (let i = 0; i < 6; i++) metal(d, { t: (i / 6) * dur, base: 1760 * (1 + (i % 3) * 0.25), dur: 0.5, gain: 0.04 });
       }
-      // 吹き上がる風
-      noiseHit(d, { t: 0, dur: dur + 0.1, type: 'bandpass', freq: 400, freqEnd: 1800, q: 0.8, attack: dur * 0.8, gain: 0.35 });
     },
     /**
      * 祓魔僧の奇跡の音（2026-11-17）。kind：
@@ -626,17 +648,39 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
         for (let i = 0; i < 12; i++) noiseHit(d, { t: R() * dur, dur: 0.01, type: 'highpass', freq: 3500, attack: 0.001, gain: 0.12 });
       }
     },
-    /** 神怒の衝撃波：地を揺らす大きな爆音と、光のきらめき、長い響き */
-    wrathBlast(f) {
-      const d = at(f, 1.7, { ref: 25, max: 180 });
+    /**
+     * 必殺技を放つ：地を揺らす大きな爆音・吹き飛ばす風圧・はじける音・長い響き。属性ごとに重ねる
+     * （水＝大きなしぶき・雷＝雷鳴・地＝岩が砕けて礫が降る・炎＝爆炎・風＝突風・聖＝鐘と聖歌）
+     */
+    ultBurst(f, element) {
+      const d = at(f, 2.0, { ref: 28, max: 220 });
       if (!d) return;
-      const c = audio.ctx, t0 = c.currentTime;
+      const c = audio.ctx;
       if (audio.reverb) { const send = c.createGain(); send.gain.value = 0.9; d.connect(send); send.connect(audio.reverb); }
-      toneHit(d, { t: 0, dur: 1.6, f0: 95, f1: 28, type: 'sine', attack: 0.004, gain: 0.9 });          // 地を揺らす低い爆音
-      toneHit(d, { t: 0, dur: 0.9, f0: 180, f1: 45, type: 'triangle', attack: 0.003, gain: 0.35 });
-      noiseHit(d, { t: 0, dur: 1.2, type: 'lowpass', freq: 2600, freqEnd: 180, q: 0.7, attack: 0.002, gain: 0.85 });   // 吹き飛ばす風圧
-      noiseHit(d, { t: 0, dur: 0.18, type: 'highpass', freq: 2500, attack: 0.001, gain: 0.5 });                         // はじける音
-      metal(d, { t: 0.02, base: 1320, ratios: [1, 1.5, 2.01, 2.76, 3.4], dur: 2.2, gain: 0.16, decay: 0.8 });       // 光のきらめき（鐘のような長い響き）
+      toneHit(d, { t: 0, dur: 1.7, f0: 92, f1: 26, type: 'sine', attack: 0.004, gain: 0.95 });          // 地を揺らす低い爆音
+      toneHit(d, { t: 0, dur: 0.9, f0: 190, f1: 42, type: 'triangle', attack: 0.003, gain: 0.36 });
+      noiseHit(d, { t: 0, dur: 1.2, type: 'lowpass', freq: 2800, freqEnd: 170, q: 0.7, attack: 0.002, gain: 0.85 });   // 吹き飛ばす風圧
+      noiseHit(d, { t: 0, dur: 0.16, type: 'highpass', freq: 2400, attack: 0.001, gain: 0.55 });                       // はじける音
+      if (element === 'water') {
+        noiseHit(d, { t: 0.02, dur: 1.4, type: 'bandpass', freq: 1400, freqEnd: 500, q: 0.9, attack: 0.02, gain: 0.7 });   // 大きなしぶき
+        for (let i = 0; i < 16; i++) noiseHit(d, { t: 0.35 + R() * 1.1, dur: 0.05, type: 'bandpass', freq: 1800 + R() * 1500, q: 2, attack: 0.003, gain: 0.08 });   // 落ちる水滴
+      } else if (element === 'thunder') {
+        noiseHit(d, { t: 0, dur: 0.08, type: 'highpass', freq: 1800, attack: 0.0005, gain: 0.9 });   // 雷の裂ける音
+        noiseHit(d, { t: 0.06, dur: 2.4, type: 'lowpass', freq: 420, freqEnd: 90, attack: 0.05, gain: 0.8 });   // 長い雷鳴
+        for (let i = 0; i < 18; i++) noiseHit(d, { t: R() * 0.6, dur: 0.015, type: 'highpass', freq: 3500, attack: 0.001, gain: 0.14 });
+      } else if (element === 'earth') {
+        noiseHit(d, { t: 0, dur: 0.9, type: 'lowpass', freq: 700, freqEnd: 120, attack: 0.002, gain: 0.8 });   // 岩が砕ける
+        for (let i = 0; i < 14; i++) noiseHit(d, { t: 0.25 + R() * 1.0, dur: 0.07, type: 'bandpass', freq: 500 + R() * 900, q: 1.5, attack: 0.002, gain: 0.12 });   // 礫が降る
+      } else if (element === 'fire') {
+        noiseHit(d, { t: 0, dur: 1.8, type: 'lowpass', freq: 1200, freqEnd: 220, attack: 0.01, gain: 0.75 });   // 爆炎
+        for (let i = 0; i < 22; i++) noiseHit(d, { t: R() * 1.5, dur: 0.02, type: 'highpass', freq: 2200, attack: 0.001, gain: 0.1 });   // 火の粉がはぜる
+      } else if (element === 'wind') {
+        noiseHit(d, { t: 0, dur: 1.5, type: 'bandpass', freq: 2400, freqEnd: 300, q: 1.2, attack: 0.01, gain: 0.7 });   // 突風
+        noiseHit(d, { t: 0.1, dur: 1.2, type: 'bandpass', freq: 1600, freqEnd: 900, q: 10, attack: 0.05, gain: 0.35 });   // 風の鳴き声
+      } else {
+        metal(d, { t: 0.02, base: 1320, ratios: [1, 1.5, 2.01, 2.76, 3.4], dur: 2.4, gain: 0.18, decay: 0.85 });   // 光のきらめき（鐘のような長い響き）
+        metal(d, { t: 0.05, base: 660, ratios: [1, 2, 2.76], dur: 2.2, gain: 0.14 });
+      }
     },
   };
   return api;
@@ -651,8 +695,9 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   combat.on('shieldSkill', ({ fighter }) => sfx.shieldSwing(fighter));
   combat.on('shieldStrike', ({ fighter, skill, hits }) => { if (hits) sfx.shieldHit(fighter, !!skill.push); });
   combat.on('fire', ({ fighter }) => sfx.bowRelease(fighter));
-  combat.on('skill', ({ fighter, skill }) => { if (skill?.effect === 'wrath') sfx.wrathCharge(fighter); });   // 神怒：溜めの音
-  combat.on('wrath', ({ fighter }) => sfx.wrathBlast(fighter));                                              // 神怒：衝撃波の大きな音
+  // 必殺技（2026-11-25）：溜めの音と、放つ大きな音（属性ごとに重ねる）
+  combat.on('ult', ({ fighter, ult, at }) => sfx.ultCharge(fighter, ult?.element, at));
+  combat.on('ultBurst', ({ fighter, ult }) => sfx.ultBurst(fighter, ult?.element));
   // 祓魔僧の奇跡（game/miracles.js）：唱え始め・効き目・蘇る・光壁・炎・途切れる
   combat.on('miracleCast', ({ fighter, id }) => sfx.miracle('cast', fighter, { dur: MIRACLES[id].at }));
   combat.on('miracle', ({ fighter, id }) => sfx.miracle({ heal: 'heal', revive: 'revive', wall: 'wall', flame: 'flame', pillar: 'pillarCall', fireball: 'fireball', thunder: 'thunder' }[id] || 'cast', fighter));

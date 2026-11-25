@@ -14,15 +14,15 @@
 // 後で、逃走・アイテムの使用を足す
 import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
-import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY, SKILL_FX, SWORD_ULT, WRATH } from './data.js';
-import { skillOf, skillOn, skillReady } from './skills.js';
+import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY, ULT_BURST } from './data.js';
+import { canUlt } from './ultimate.js';
 import { canMiracle, miracleReady } from './miracles.js';
 import { techSetOf } from './techniques.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
 
 const DEG = Math.PI / 180;
 /** 試合の計算が体の位置と向きを決める行動（その間、bot は体を動かさない・向きを変えない） */
-const SCRIPTED_ACTS = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged', 'wrath']);
+const SCRIPTED_ACTS = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged', 'ult']);
 const wrap = (a) => ((a + 540) % 360) - 180;
 const yawTo = (f, x, z) => Math.atan2(-(x - f.x), -(z - f.z)) / DEG;
 
@@ -57,7 +57,7 @@ export function createBot(fighter, rng, fighters) {
     // wantC2＝溜攻撃 1 の後に溜攻撃 2 も出す、chained＝この攻撃の次の段をもう押した
     tap: false, hold: 0, wantC2: false, chained: false,
     assassin: false,     // 次のフレームに 1 回だけ暗殺ボタンを押す
-    skillTap: false,     // 次のフレームに 1 回だけ技能ボタンを押す
+    ultTap: false,       // 次のフレームに 1 回だけ必殺ボタンを押す
     miracleTap: null,    // 次のフレームに唱える奇跡の名前（祓魔僧）
     input: { forward: 0, strafe: 0, run: false, yaw: fighter.yaw, pitch: 0, attack: false, guard: false, left: false, dodge: false, dodgeX: 0, dodgeY: 0, search: false },
   };
@@ -87,7 +87,6 @@ export function createBot(fighter, rng, fighters) {
   function perceive(world, dt) {
     const S = world.senses;
     for (const [t, k] of b.known) { k.age += dt; k.track = (k.track || 0) - dt; if (!t.alive || k.age > SENSES.memory) b.known.delete(t); }
-    const hawk = skillOn(f, 'hawk');   // 鷹目（弓兵の技能）：80 m 以内の敵が壁越しに分かる。隠れ場所の中の人は、その隠れ場所を探しに行く
     for (const t of fighters) {
       if (t === f || !t.alive) continue;
       // 天光柱で目がくらんでいる間は、何も見えず、見失った相手を追うこともできない（耳は聞こえる）
@@ -95,10 +94,6 @@ export function createBot(fighter, rng, fighters) {
       const see = !blind && (S ? S.canSee(f, t) : !t.hidden && Math.hypot(t.x - f.x, t.z - f.z) <= 40);
       const k = b.known.get(t);
       if (blind && k) k.track = 0;
-      if (hawk && !see && Math.hypot(t.x - f.x, t.z - f.z) <= SKILL_FX.hawk.range) {
-        if (t.hidden) { if (!f.hidden) b.knownSpot = t.hidden; }
-        else { b.known.set(t, { x: t.x, y: t.y, z: t.z, age: 0, seen: false, track: Math.max(k?.track ?? 0, 0.5), tracked: true }); continue; }
-      }
       // 見つけた相手は、見失っても SENSES.track 秒の間は居場所が分かる（利用者の指示 2026-11-10）。隠れ場所に入った相手は分からない
       if (see) b.known.set(t, { x: t.x, y: t.y, z: t.z, age: 0, seen: true, track: SENSES.track, tracked: false });
       else if (k) {
@@ -336,18 +331,15 @@ export function createBot(fighter, rng, fighters) {
     perceive(world, b.lastThink || 0.2);
     b.target = pickTarget();
     if (b.target) b.look = null;
-    // 技能（專用技能。game/skills.js）：使いどころで、ときどき使う（技能ボタンを 1 フレームだけ押す）
-    if (skillReady(f) && !f.hidden && rng.next() < 0.35) {
-      const fx = skillOf(f).effect, t = b.target, d = t ? Math.hypot(t.x - f.x, t.z - f.z) : Infinity;
-      const use = fx === 'counter' ? d < 3.5 && ['attack', 'charge', 'charge2'].includes(t.action?.kind)   // 反擊：相手が振る・溜めるとき
-        : fx === 'tough' || fx === 'might' ? d < 4.5                                                    // 強靱・剛力：打ち合う間合いで
-        : fx === 'hawk' ? (t ? !b.known.get(t)?.seen : !!b.look)                                        // 鷹目：狙う相手が見えないとき・探しているとき
-        : fx === 'wrath' ? !f.action && t && d < WRATH.radius * 0.7                                       // 神怒：相手が衝撃波の届く所に入ったとき
-        : fx === 'ultimate' ? !!SWORD_ULT[f.weapon] && !f.action && t && b.known.get(t)?.seen               // 奧義：見えている相手が届く所にいるとき
-          && d < (SWORD_ULT[f.weapon].slide ? SWORD_ULT[f.weapon].slide.dist - 0.5 : 2.8)
-          && Math.abs(((yawTo(f, t.x, t.z) - f.yaw + 540) % 360) - 180) < 20
-        : false;
-      if (use) b.skillTap = true;
+    // 必殺技（game/ultimate.js。1 つの試合で 1 回）：もしもの時にだけ使う（利用者の指示 2026-11-25）。
+    //   体力が 3 割を切って、衝撃波の届く所に見えている敵がいる・体力 6 割未満で 2 人に迫られた・3 人に囲まれた
+    if (canUlt(f) && b.target) {
+      const R = ULT_BURST.radius * 0.8, fy = f.y ?? 0;
+      const near = fighters.filter((t) => t !== f && t.alive && !t.hidden && b.known.get(t)?.seen
+        && Math.hypot(t.x - f.x, t.z - f.z) < R && Math.abs((t.y ?? fy) - fy) < 3).length;
+      const hp = f.stats.hp / f.stats.maxHp;
+      const chance = near && hp < 0.3 ? 0.6 : near >= 2 && hp < 0.6 ? 0.35 : near >= 3 ? 0.3 : 0;
+      if (chance && rng.next() < chance) b.ultTap = true;
     }
     // 奇跡（祓魔僧。game/miracles.js）：使いどころで唱える（唱える奇跡の名前を 1 フレームだけ渡す）
     //   治癒：体力が半分を切り、近くに敵がいないとき／蘇生：敵が近くにいるとき（先に加護を受けておく）／
@@ -403,6 +395,15 @@ export function createBot(fighter, rng, fighters) {
     b.ambush = null;
     const t = b.target, d = Math.hypot(t.x - f.x, t.z - f.z), weapon = w();
     const lowHp = f.stats.hp < f.stats.maxHp * 0.35;
+    // 相手が必殺技を出している（無敵で、すぐ衝撃波が来る）：攻めずに離れる。届く所の中なら、ときどき後ろへ回避
+    if (t.action?.kind === 'ult' && d < ULT_BURST.radius + 2) {
+      b.input.attack = false; b.input.guard = false; b.input.left = false; b.hold = 0;
+      b.input.forward = -1; b.input.strafe = 0; b.input.run = true; b.input.dodge = false;
+      if (!f.action && b.dodgeCooldown <= 0 && f.stamina > 20 && d < ULT_BURST.radius && rng.next() < 0.5) {
+        b.input.dodge = true; b.dodgeCooldown = 1.2; b.input.dodgeX = 0; b.input.dodgeY = -1;
+      }
+      return;
+    }
     b.input.run = d > 9;
     b.input.left = false;
     // 弓兵：近づかれたらダガーに持ち替え、離れたら弓に戻す（押して離す 1 回で持ち替え）
@@ -575,11 +576,11 @@ export function createBot(fighter, rng, fighters) {
       // 左手ボタン：盾持ちは防御（楯押は 1 フレームだけ押す）、ほかは強攻撃・持ち替え
       const leftTap = b.leftTap;
       b.leftTap = false;
-      const skill = b.skillTap;
-      b.skillTap = false;
+      const ult = b.ultTap;
+      b.ultTap = false;
       const miracle = b.miracleTap;
       b.miracleTap = null;
-      return { attack, assassinate, skill, miracle, left: f.left === 'guard' ? i.guard || leftTap : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
+      return { attack, assassinate, ult, miracle, left: f.left === 'guard' ? i.guard || leftTap : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
     },
   };
 }

@@ -3,7 +3,7 @@
 // 模型は tools/characters/build_character.py で作る（assets/characters/<名前>.glb と、動きの長さ・速さの .json）。
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
-import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, SWORD_ULT, WRATH, HIDE_ACTS, SLOPE, MIRACLES, REVIVE_TIME, LADDER } from '../game/data.js';
+import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, ULT_POSE, ULT_BURST, HIDE_ACTS, SLOPE, MIRACLES, REVIVE_TIME, LADDER } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { techSetOf } from '../game/techniques.js';
 import { stanceShape } from '../game/stance.js';
@@ -212,6 +212,8 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   // 姿勢の動き（tools/characters/make_motions.py）：しゃがみ（その場）・しゃがみ歩き・伏せる・伏せ・這う・起き上がる
   const stanceClips = ['crouch', 'crouch_walk', 'prone_down', 'prone', 'crawl', 'prone_up'].every(has);
   let current = '', lastAction = null, lastPhase = '', swingIndex = 0, deathStarted = false;
+  let stopLeft = 0;                    // ヒットストップの残り（秒）
+  let ultPose = null, ultPhase = '';   // 必殺技の仮の動き（data.js の ULT_POSE）と、溜め（pre）・放つ（go）のどちらか
   let charred = false, charK = 0, paraHeld = false;   // 火炎で焦げて倒れた（黒くなっていく割合）・雷痺で止めている
   const VICTIM = /^(as_back_v|as_slide_v|drag_wd_v|drag_bed_v)$/;   // される側の動き（倒れても最後の姿のまま）
   // 攻撃を受けた動き（game/reactions.js の fighter.react）：流している受けた動きの番号と残りの時間。
@@ -329,7 +331,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   let firstPerson = false, eyeReady = false, eyeHold = false, headHidden = false, fpLeftHidden = false;
   let paused = false, pausedSpeed = 1;   // 時間が止まっている（刻が変わった直後）
   const headBone = body.findByName('Head');
-  // 鷹目の体温の形に使う骨（render/heat-vision.js）
+  // 鷹の目の体温の形に使う骨（render/heat-vision.js）
   const heatBones = ['Head', 'Spine02', 'Pelvis', 'L_Upperarm', 'L_Forearm', 'L_Hand', 'R_Upperarm', 'R_Forearm', 'R_Hand',
     'L_Thigh', 'L_Calf', 'L_Foot', 'R_Thigh', 'R_Calf', 'R_Foot'].map((n) => [n, body.findByName(n)]).filter(([, b]) => b);
   const heatOut = {};
@@ -405,7 +407,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     for (const [id, set] of Object.entries(TECHNIQUES)) {
       for (const t of [...set.combo, set.charge, set.charge2]) if (t.clip === name || t.in === name || t.hold === name) return id;
     }
-    for (const [id, U] of Object.entries(SWORD_ULT)) if (U.clip === name) return id;   // 劍騎士の奧義（雙劍・長劍）
+    if (name.endsWith('_ult')) for (const [id, P] of Object.entries(ULT_POSE)) if (P.clip === name && WEAPONS[id]) return id;   // 長劍・雙劍の大技（前の奧義の動き）
     for (const [id, m] of Object.entries(ASSASSIN.byWeapon)) {   // 暗殺の動き（片手劍の背刺・滑斬、鈍器・短劍の背後から）
       if (Object.values(m).some((k) => ASSASSIN.moves[k].clip === name)) return id;
     }
@@ -418,8 +420,12 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     doorPush() { if (upper && has('door')) upperOnce = { name: 'door', t: 0, dur: clip('door').duration }; },
     /** 確認用（自動テストから、今の動き・上半身に重ねている動き・腰のひねり・速さを読む） */
     get moveState() { return { clip: current, upper: upperName, upperW, legTwist, vel, fwd, side }; },
+    /** ヒットストップ（必殺技が放たれた瞬間。自分の画面だけの見た目。render/ult-show.js）：sec 秒、動きを止める（試合の時間は止めない） */
+    hitstop(sec) { stopLeft = Math.max(stopLeft, sec); },
     update(dt) {
       placeTalisman(paused || directed ? 0 : dt);   // 祓魔僧の護符（時間が止まっている間・圖鑑では揺らさない）
+      if (stopLeft > 0) stopLeft = Math.max(0, stopLeft - dt);
+      if (body.anim && body.anim.playing !== !(stopLeft > 0)) body.anim.playing = !(stopLeft > 0);
       if (paused) return;   // 時間が止まっている（刻が変わった直後）：姿もそのまま
       if (directed) return;  // 圖鑑：選んだ動きをそのまま流す（時刻は圖鑑が動かす）
       upperWant = 0;
@@ -486,7 +492,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     get eyeOffset() { return firstPerson && eyeReady ? eyeLocal : null; },
     setVisible(v) { root.enabled = v; if (!v && nocked) nocked.enabled = false; },
     /**
-     * 鷹目（弓兵の技能）の体温の形に使う、骨の世界の位置（頭・胸・腰・肩・肘・手・腿・膝・足）。名前 → {x, y, z}。
+     * 鷹の目の体温の形に使う、骨の世界の位置（頭・胸・腰・肩・肘・手・腿・膝・足）。名前 → {x, y, z}。
      * 模型が映っていない（隠れている）・骨が無いときは null（render/heat-vision.js が体の位置から形を作る）
      */
     heatJoints() {
@@ -746,6 +752,16 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       }
       // 溜め：溜めに入る動きの後は、溜めている動きを繰り返す
       if (a?.kind === 'charge' && a === lastAction && a.t >= (clip(a.tech.in)?.duration ?? 0)) play(a.tech.hold, 1, 0.1);
+      // 必殺技：溜めの動き（pre）の後、放つ時刻（ULT_BURST.at）に技の当たる所（hit）が来るように、放つ動きを流す
+      if (a?.kind === 'ult' && a === lastAction && ultPose && ultPhase === 'pre') {
+        const B = ULT_BURST, P = ultPose;
+        if (P.pre && a.t >= B.at - P.hit) { ultPhase = 'go'; if (has(P.clip)) restart(P.clip, 1); }
+        else if (!P.pre && a.t >= B.at) {
+          ultPhase = 'go';
+          const L = clip(P.clip)?.duration ?? 1;
+          body.anim.speed = Math.max(0.8, Math.min(1.6, (L - P.hit) / Math.max(0.2, B.time - B.at)));   // 放った後は、残りの時間に合わせる
+        }
+      }
       if (a && a !== lastAction) {
         lastAction = a;
         if (a.kind === 'attack' && a.tech) {
@@ -783,9 +799,13 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
           restart('draw', clip('draw').duration / WEAPONS[fighter.weapon].drawTime);
         } else if (a.kind === 'release') {
           restart('shoot', 1);
-        } else if (a.kind === 'wrath') {
-          // 祓魔僧の神怒：宙に浮いて衝撃波を放つ動き（data.js の WRATH.time に合わせる）
-          if (has(WRATH.clip)) restart(WRATH.clip, clip(WRATH.clip).duration / WRATH.time);
+        } else if (a.kind === 'ult') {
+          // 必殺技（2026-11-25 の 1 回目は仮の動き：今ある大きな技。data.js の ULT_POSE。2 回目で英雄ごとの動きに替える）。
+          // 溜めの動き（pre）があれば溜めの間それを流し、無ければ放つ動きをゆっくり流して、放つ時刻に当たる所が来るようにする
+          const P = ULT_POSE[fighter.char] || ULT_POSE[fighter.weapon] || { clip: has('heavy') ? 'heavy' : 'a1', hit: 0.5 };
+          ultPose = P; ultPhase = 'pre';
+          if (P.pre && has(P.pre)) play(P.pre, 1, 0.15);
+          else if (has(P.clip)) restart(P.clip, P.hit / Math.max(0.2, ULT_BURST.at));
         } else if (a.kind === 'miracle') {
           // 祓魔僧の奇跡を唱える：奇跡ごとの動き（data.js の MIRACLES の clip・time。tools/characters/cleric_moves.py）
           const M = MIRACLES[a.id];

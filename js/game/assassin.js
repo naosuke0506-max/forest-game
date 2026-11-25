@@ -31,6 +31,7 @@ export function createAssassin({ fighters, senses, yOf, move, lethal, wound = nu
   function check(f, t) {
     if (!f.alive || !t.alive || t === f || t.hidden) return null;
     if (t.action?.kind === 'assassinated') return null;   // ほかの人に暗殺されている
+    if (t.invuln > 0) return null;   // 必殺技の最中・蘇ったばかり（無敵）
     if (f.action?.kind === 'assassinate' || f.action?.kind === 'assassinated') return null;
     const ox = f.hidden ? f.hidden.outX : f.x, oz = f.hidden ? f.hidden.outZ : f.z, oy = f.hidden ? f.hidden.y : yOf(f);
     if (Math.hypot(t.x - ox, t.z - oz) > ASSASSIN.reach) return null;

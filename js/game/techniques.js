@@ -18,7 +18,7 @@ export const techSetOf = (weaponId) => TECHNIQUES[weaponId] || null;
 export function techStrike(weaponId, tech, i, charge = 0) {
   const w = WEAPONS[weaponId];
   const mul = tech.full ? lerp(tech.damage[0], tech.damage[1], charge) : nth(tech.damage, i);
-  // 防禦の上から通る割合：武器の分か、技の分（奧義など）の大きい方
+  // 防禦の上から通る割合：武器の分か、技の分の大きい方
   return { damage: w.damage * mul, reach: nth(tech.reach, i), arc: nth(tech.arc, i), guardPierce: Math.max(w.guardPierce || 0, tech.pierce || 0), power: nth(tech.power, i) };
 }
 
@@ -97,7 +97,7 @@ export function updateTech(f, a, now, ctx) {
   }
   // 動きの後に隙がある技（疾驅攻撃）：動きが終わったら recover 秒動けない
   const finish = () => { f.action = T.recover ? { kind: 'recover', t: 0, time: T.recover } : null; };
-  if (!set || T.single) { if (a.t >= T.time) { finish(); f._queued = false; } return; }   // 1 回だけの技（疾驅攻撃・反擊）：次の段へつながない
+  if (!set || T.single) { if (a.t >= T.time) { finish(); f._queued = false; } return; }   // 1 回だけの技（疾驅攻撃）：次の段へつながない
   // 先に押しておいた次の段へ（溜攻撃の後は通常攻撃の 1 段目）
   if (f._queued && a.hit && a.t >= T.chain) {
     const step = a.name === 'combo' ? (a.step + 1) % set.combo.length : 0;

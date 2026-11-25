@@ -438,45 +438,73 @@ export function phaseAt(i) {
 }
 
 /**
- * 技能（スキル。docs/DESIGN.md「技能」）：技能ボタンを押して使う。使うと効き目が time 秒続き、使った後は cd 秒待つとまた使える
- *   專用技能：キャラ 1 人に 1 つ（最初から使える）。共通技能：全キャラ共通で、刻を越えるたびの報酬で 3 つから 1 つ選ぶ（最大 4 つ）
- *   type：SKILL_TYPES。planned：まだゲームの中で使えない（今は圖鑑に載せるだけ。数字は案）
+ * 技能（スキル。docs/DESIGN.md「技能」）：共通技能は、刻を越えるたびの報酬で 3 つから 1 つ選ぶ（最大 4 つ。まだ作っていない）。
+ *   type：SKILL_TYPES。planned：まだゲームの中で使えない（今は圖鑑に載せるだけ。数字は案）。
+ *   人物ごとの專用技能（反擊・奧義・強靱・剛力・鷹目・神怒）は、利用者の指示（2026-11-25「今ある技は残しません」）で無くし、必殺技に替えた（ULTIMATES）
  */
 export const SKILL_TYPES = { finisher: '必殺', buff: '強化', hinder: '妨害', heal: '回復', stealth: '隱密', sense: '探知' };
-export const EXCLUSIVE_SKILLS = {
-  // 利用者の指示（2026-11-10）の專用技能。名前・効き目の秒・待ち時間（cd）の数字は Claude の案。effect は game/skills.js と combat.js が見る
-  shield:  { name: '反擊', type: 'buff', effect: 'counter', time: 8, cd: 45,
-             desc: '8 秒、楯で受けると、すぐに自動で強い反撃を返す（その武器の溜攻撃 1 を、速く・強く）。反撃を受けた相手は大きくひるむ' },
-  sword:   { name: '奧義', type: 'finisher', effect: 'ultimate', time: 0, cd: 60,
-             desc: '雙劍：2 本を交差させて低く構え、前へ 7 m を高速で滑りながら、通り抜けざまに左右へ切り裂く（3 回当たる）。長劍・大劍：頭上から振り下ろして切っ先を地面にめり込ませ（周りの敵に当たる）、引き抜きざまに砂煙ごと斬り上げる（2 回当たる）' },
-  polearm: { name: '強靱', type: 'buff', effect: 'tough', time: 10, cd: 50,
-             desc: '10 秒、体幹と防禦力が上がる（受ける傷が 3 分の 2 になる）。どんな攻撃を受けてもひるまず、振り・溜めも止まらない（楯押でも崩れない）' },
-  blunt:   { name: '剛力', type: 'buff', effect: 'might', time: 10, cd: 50,
-             desc: '10 秒、一撃の衝撃が大きく上がる（傷が 1.5 倍）。楯の上からでも傷の半分が通り、当たった相手は大きくひるむ（重い一撃はよろめかせる）' },
-  archer:  { name: '鷹目', type: 'sense', effect: 'hawk', time: 12, cd: 60,
-             desc: '12 秒、目に映る物が白黒になり、80 m 以内の敵が体温で壁越しに見える（隠れ場所の中も）。その間に放つ最初の 1 本は、人も木も壁も貫く矢になる（傷 2 倍・防禦できない）' },
-  cleric:  { name: '神怒', type: 'finisher', effect: 'wrath', time: 0, cd: 90,
-             desc: '胸の前で腕を交差して宙に浮き、腕を広げて神の衝撃波を広く放つ（周り 9 m。楯で受けても半分は通る）。周りの人に傷を与えて吹き飛ばす' },
-};
-/**
- * 劍騎士の奧義（必殺技。技能ボタン）：持っている武器ごとの動き（利用者の指示 2026-11-10。数字は Claude の案）。
- *   clip・time：動きと長さ、hits：当たる時刻、damage・reach・arc：当たるごとの倍率・間合い（m）・角度、power：当たりの重さ、
- *   slide：前へ滑る（from〜to 秒の間に dist m。雙劍）、dust：砂煙を立てる時刻と、立つ所（体の前 m。長劍・大劍）、pierce：防禦の上から通る割合
- */
-export const SWORD_ULT = {
-  dualsword: { name: '奧義・交差滑斬', clip: 'dw_ult', time: 1.47, hits: [0.48, 0.62, 0.74], damage: [1.3, 1.3, 2.0], reach: 2.0, arc: [150, 150, 200],
-    power: ['l', 'l', 'h'], slide: { from: 0.30, to: 0.76, dist: 7 }, pierce: 0.3 },
-  longsword: { name: '奧義・地穿昇斬', clip: 'ls_ult', time: 1.87, hits: [0.42, 1.16], damage: [2.6, 2.4], reach: [3.0, 2.8], arc: [80, 100],
-    power: ['h', 'h'], dust: { at: 0.42, ahead: 1.6, lift: 1.16 }, pierce: 0.5 },
-};
-SWORD_ULT.greatsword = SWORD_ULT.longsword;   // 兩手大劍ができたら、同じ奧義を使う
 
 /**
- * 祓魔僧の神怒（必殺。技能ボタン）：動き cl_ult（time 秒）の at 秒で衝撃波を放つ（tools/characters/cleric_moves.py の RELEASE と同じ）。
- *   radius：届く所（m）、damage：傷（近いほど大きい。端で minK 倍）、push：吹き飛ぶ距離（m。近いほど遠く）、stun：ひるむ秒、
- *   数字は Claude の案。家が壊れる仕組みは、利用者の指示（2026-11-13）で消した
+ * 属性（利用者の指示 2026-11-25：英雄ごとに 1 つ。時代に合う属性）。name：一文字、color・deep：画面の色（明るい色と濃い色）、rgb：3D の光の色（0〜1）。
+ *   色は利用者が選んだ（水＝蒼・雷＝白金と紫・地＝琥珀・炎＝紅と橙・風＝翠・聖＝金）
  */
-export const WRATH = { clip: 'cl_ult', time: 2.7, at: 1.4, radius: 9, damage: 34, minK: 0.4, push: 7, pushMin: 2.5, stun: 1.6 };
+export const ELEMENT_KINDS = {
+  water:   { name: '水', color: '#58b4ff', deep: '#0a3470', rgb: [0.32, 0.68, 1.0] },
+  thunder: { name: '雷', color: '#e2d4ff', deep: '#3c1c78', rgb: [0.62, 0.5, 1.0] },   // 3D の光は紫を濃く（白金のままだと、光が白く飛ぶ）
+  earth:   { name: '地', color: '#f2ae48', deep: '#5c3208', rgb: [0.98, 0.68, 0.26] },
+  fire:    { name: '炎', color: '#ff6a2c', deep: '#701004', rgb: [1.0, 0.38, 0.12] },
+  wind:    { name: '風', color: '#62e8a2', deep: '#0c4a2c', rgb: [0.42, 0.94, 0.64] },
+  holy:    { name: '聖', color: '#ffdc6e', deep: '#6a4606', rgb: [1.0, 0.86, 0.46] },
+};
+
+/**
+ * 必殺技（利用者の指示 2026-11-25：各時代の英雄なので、ド派手に。docs/DESIGN.md「必殺技」）。
+ *   1 つの試合で uses 回だけ。延長戰（overtime 番目の刻から＝第 6 刻。はじめの長い夜の後）に入ると、もう overtimeUses 回使える。
+ *   必殺技の間は無敵（利用者の指示）。終わった後も guardAfter 秒は傷を受けない（Claude の案）
+ */
+export const ULTIMATE = { uses: 1, overtime: 5, overtimeUses: 1, guardAfter: 0.4 };
+/**
+ * 英雄ごとの必殺技。element：属性（ELEMENT_KINDS）、crest：紋（ui/crests.js）、name：技の名前、desc：利用者が決めた技の姿（2 回目で作る）。
+ *   2026-11-25 の 1 回目は、仕組みと演出の共通部品だけ。技そのものは、どの英雄も仮の「属性の衝撃波」（ULT_BURST）。
+ *   長柄騎士・打擊騎士・祓魔僧の技の姿は、利用者の「その他を参考に」で Claude が考えた案（2 回目の前に見てもらう）。秒の数は Claude の案
+ */
+export const ULTIMATES = {
+  shield:  { name: '大海嘯', element: 'water', crest: 'wave',
+             desc: '楯を頭上に掲げると、足もとから竜巻のように渦を巻く水が湧き上がって大きくあふれ出し、周りに傷と強い吹き飛ばしを与えて、楯劍騎士を覆い隠す。その後 10 秒、渦巻く水をまとい、受ける傷が半分になり、ひるまず、矢などの遠くからの攻撃を弾く' },
+  sword:   { name: '雷霆一閃', element: 'thunder', crest: 'swords',
+             desc: '閃光で目をくらませて稲妻になり、稲妻の姿のまま超高速で 12 回ほど折れ曲がって敵を貫く（貫かれた敵はしびれ続ける）。体に戻ると同時に構え、カメラの向きへ一瞬で踏み込んで間の敵を斬り裂き、最後に落雷が落ちる。その後 10 秒、雷をまとい、回避と疾驅で稲妻になる（回避は遠くまで動けて、その間は無敵。どちらも時々自分に落雷が落ちる）' },
+  polearm: { name: '千岩槍獄', element: 'earth', crest: 'mountain',
+             desc: '（Claude の案）槍を地面へ突き立てると、地が割れて周りから岩の槍が次々に突き上がり、敵を打ち上げて閉じ込める。最後に大きな岩の槍が真下から突き上がる。その後 10 秒、岩の鎧をまとい、受ける傷が半分になり、ひるまず、楯で受けられても崩れない' },
+  blunt:   { name: '紅蓮崩天', element: 'fire', crest: 'hammer',
+             desc: '（Claude の案）武器を振りかぶって炎の柱の中へ跳び上がり、落ちながら地面へ叩きつける。地が裂けて溶けた岩と炎が噴き上がり、周りを焼き払う（当たった敵は火炎になる）。その後 10 秒、紅蓮の炎をまとい、一撃ごとに炎が爆ぜ、楯の上からでも傷が通る' },
+  archer:  { name: '颶風一矢', element: 'wind', crest: 'wing',
+             desc: '鷹の目で、建物を全部通して敵の姿を捉え、同時に大きな大弓を取り出して、嵐をまとうほど速い大きな矢を放つ。家さえ貫いて、通り抜けられるほどの穴が開く。その後 12 秒、鷹の目で建物越しに敵の姿が見え続ける' },
+  cleric:  { name: '天門開闢', element: 'holy', crest: 'halo',
+             desc: '（Claude の案）宙に浮いて天を仰ぐと、頭上の空に光の門が開き、無数の光の槍が周りへ降りそそぐ（当たった敵は目がくらむ）。最後に門から太い光の柱が落ちる。その後 10 秒、光輪をまとい、傷が少しずつ癒え、受けた攻撃の一部を光で返す' },
+};
+/**
+ * 1 回目の仮の必殺技：属性の衝撃波（どの英雄も同じ。2 回目で英雄ごとの技に替える）。
+ *   time 秒の動きの at 秒に、周り radius m へ衝撃波を放つ。damage：傷（端で minK 倍）、物理ではない（楯で受けても半分は通る）、
+ *   push・pushMin：吹き飛ぶ距離（m。近いほど遠く）、stun：ひるむ秒。数は Claude の案
+ */
+export const ULT_BURST = { time: 2.2, at: 1.25, radius: 8, damage: 40, minK: 0.4, push: 6.5, pushMin: 2, stun: 1.3 };
+/**
+ * 仮の必殺技の動き（2 回目で、英雄ごとの専用の動きを Blender で作る）：今ある大きな技の動きを、衝撃波の時刻に合わせて流す。
+ *   持っている武器ごと（祓魔僧は人物で cl_ult）。pre：溜めの間に流す動き（無ければ clip をゆっくり流す）、clip：放つ動き、hit：clip の中の、放つ時刻（秒）
+ */
+export const ULT_POSE = {
+  armingsword: { clip: 'oh_c2', hit: 1.2 },
+  mace:        { pre: 'mc_c2_hold', clip: 'mc_c2', hit: 0.32 },
+  dualsword:   { clip: 'dw_c2', hit: 0.58 },
+  longsword:   { clip: 'ls_ult', hit: 0.42 },
+  greatsword:  { clip: 'ls_ult', hit: 0.42 },
+  spear:       { clip: 'heavy', hit: 0.62 },
+  warhammer:   { pre: 'wh_c2_hold', clip: 'wh_c2', hit: 0.72 },
+  lucerne:     { pre: 'lc_c2_hold', clip: 'lc_c2', hit: 0.79 },
+  dagger:      { pre: 'dg_c2_hold', clip: 'dg_c2', hit: 0.34 },
+  longbow:     { pre: 'draw', clip: 'shoot', hit: 0.04 },
+  cleric:      { clip: 'cl_ult', hit: 1.4 },
+};
 
 /**
  * 祓魔僧の奇跡（利用者の指示 2026-11-17：刻の報酬で 3 つから 1 つ選んで覚える。持てるのは最大 4 つ。左手の奇跡ボタンで唱え、替ボタンで選ぶ）。
@@ -510,7 +538,7 @@ export const MIRACLES = {
               desc: '左手を振りかぶり、雷の槍を投げる（まっすぐ速く、45 m まで。上下の向きも狙える）。当たると雷の傷 28・少ししびれ、雷痺を 100% 溜める（そのまま雷痺して無防備になる。楯で受けると傷も溜まりも半分）' },
 };
 /**
- * 属性と状態異常（利用者の指示 2026-11-18）。炎・雷・聖（神怒・天光柱）は物理ではない：
+ * 属性と状態異常（利用者の指示 2026-11-18）。炎・雷・聖（天光柱・必殺技の衝撃波）は物理ではない：
  *   楯で前から受けても、guardPass の割合は通る（鳶形楯・大楯でも半分）。
  *   炎・雷は当たるたびに状態異常が溜まり（蓄積。0〜100%。溜まる量は攻撃ごとに違う）、100% で発動する。
  *   溜まりは decayDelay 秒の間、新しく溜まらないと、1 秒に decay % ずつ減る（Claude の案）
@@ -531,13 +559,13 @@ export const MIRACLE_SLOTS = 4;
 /** 蘇る動きの長さ（秒。cl_rise。この間と、その後 MIRACLES.revive.invuln 秒は傷を受けない） */
 export const REVIVE_TIME = 1.9;
 
-/** 專用技能の効き目の数字（game/combat.js・game/bot.js・render/heat-vision.js が使う） */
-export const SKILL_FX = {
-  counter: { damage: 2.4, speed: 1.35, arc: 150, reachAdd: 0.3, reach: 4.0 },   // 反擊：溜攻撃 1 を 1.35 倍の速さで。傷は武器の 2.4 倍。受けた相手が reach m 以内なら返す
-  tough:   { defense: 1.5 },                                                     // 強靱：受ける傷を 1.5 で割る。ひるまない
-  might:   { damage: 1.5, pierce: 0.5 },                                         // 剛力：傷 1.5 倍、楯の上から半分通る、当たりは重く（重い一撃はよろめき）
-  hawk:    { range: 80, arrowDamage: 2.0, arrowSpeed: 1.3, arrowLife: 3 },      // 鷹目：見える距離（m）、貫く矢の傷・速さの倍率と飛ぶ秒
-};
+/**
+ * 貫く矢（f.pierceArrow が付いている人が次に放つ 1 本。人も木も壁も貫く）：傷・速さの倍率と飛ぶ秒。
+ *   前は弓兵の鷹目で使った（2026-11-25 に無くした）。2 回目で、弓兵の必殺技「颶風一矢」の大きな矢に使う
+ */
+export const PIERCE_ARROW = { damage: 2.0, speed: 1.3, life: 3 };
+/** 鷹の目（白黒にして、range m 以内の敵の体温を壁越しに描く。render/heat-vision.js）。前は弓兵の鷹目。2 回目で「颶風一矢」の後に使う（f.hawkEye：残りの秒） */
+export const HAWK_EYE = { range: 80 };
 export const SHARED_SKILLS = {
   imbue:   { name: '屬性付與', type: 'buff', time: 15, cd: 60, planned: true,
              desc: '15 秒、武器にマップの屬性を宿す（森は火。当たった相手は燃えて少しずつ傷が増え、草や木に燃え移る）' },

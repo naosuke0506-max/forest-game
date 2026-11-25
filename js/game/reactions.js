@@ -19,7 +19,7 @@ export function hitDir(f, fromX, fromZ) {
 /**
  * 受けた動きを決める
  * @param {object} o { guarded（楯で受けた）, broke（防禦が崩れた）, power（l 軽い / h 重い）, pierce（防禦の上から響く割合）, impact（受けた一撃の強さ）,
- *   crush（剛力の重い一撃：まともに受けるとよろめく） }
+ *   crush（楯の上からでもよろめく重い一撃。前は剛力。今は使っていない） }
  */
 export function reactKind(target, { guarded, broke, power, pierce, impact = 0, crush = false }) {
   if (broke) return 'stagger';   // 防禦が崩れた（スタミナ切れ）：よろめく
