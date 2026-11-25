@@ -937,7 +937,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // 回避・暗殺の飛びかかり・押されて下がる（重い被弾・よろめき）は試合の計算が体を動かすので、その位置をプレイヤーの操作へ戻す
       const pushed = me.react && me.react.push > 0 && me.react.t <= me.react.time;
       const lunging = me.action?.kind === 'attack' && ((me.action.tech?.dash && me.action.t <= DASH.lungeTime + 0.05) || me.action.tech?.slide);   // 疾驅攻撃の踏み込み・奧義の滑り
-      if (me.alive && (me.action?.kind === 'dodge' || pushed || lunging)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
+      // 必殺技（雷霆一閃の稲妻・踏み込み）も、試合の計算が体を動かす。前は写さなかったので、毎フレーム操作の位置へ戻され、踏み込んでも進まなかった（2026-11-25）
+      if (me.alive && (me.action?.kind === 'dodge' || me.action?.kind === 'ult' || pushed || lunging)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
       // 暗殺の動きなど：体の位置と向きを、プレイヤーの操作へ合わせる（動きが終わった時の、体の移った所と向きも）
       const scriptedNow = SCRIPTED.has(me.action?.kind);
       const viewBefore = player.viewYaw;

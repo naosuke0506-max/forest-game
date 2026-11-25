@@ -367,8 +367,8 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
         if (!(f === me && firstPerson())) {
           for (let j = 0; j < 2; j++) {
             let px = 0, py = 0, pz = 0;
-            for (let n = 0; n <= 14; n++) {
-              const v = n / 14, th = time * 9 + v * 8 + j * Math.PI, r = 0.8 + v * 0.5;
+            for (let n = 0; n <= 20; n++) {
+              const v = n / 20, th = time * 9 + v * 8 + j * Math.PI, r = 0.8 + v * 0.5;
               const x = f.x + Math.cos(th) * r, yy = y + v * 2.6, z = f.z + Math.sin(th) * r;
               if (n) { const k = Math.sin(v * Math.PI) * 0.9; segment(px, py, pz, x, yy, z, 0.07, WIND[0] * k, WIND[1] * k, WIND[2] * k); }
               px = x; py = yy; pz = z;
@@ -394,11 +394,11 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
         fx.glow(p.x, p.y, p.z, 1.6, 1e-3, [0.8, 1, 0.85]);
         for (let j = 0; j < 3; j++) {
           let qx = 0, qy = 0, qz = 0;
-          for (let n = 0; n <= 16; n++) {
-            const s = (n / 16) * back, th = time * 30 + s * 1.4 + j * 2.094, r = 0.3 + s * 0.06;
+          for (let n = 0; n <= 28; n++) {   // 細かく刻む（前は 16 で、写すとカクカクの線に見えた）
+            const s = (n / 28) * back, th = time * 30 + s * 1.0 + j * 2.094, r = 0.3 + s * 0.06;
             const c = Math.cos(th) * r, d = Math.sin(th) * r;
             const x = p.x - dx * s + ux * c + vx * d, y = p.y - dy * s + uy * c + vy * d, z = p.z - dz * s + uz * c + vz * d;
-            if (n) { const k = (1 - n / 16) * 0.9; segment(qx, qy, qz, x, y, z, 0.09, WIND[0] * k + 0.2 * k, WIND[1] * k + 0.1 * k, WIND[2] * k + 0.2 * k); }
+            if (n) { const k = (1 - n / 28) * 0.9; segment(qx, qy, qz, x, y, z, 0.09, WIND[0] * k + 0.2 * k, WIND[1] * k + 0.1 * k, WIND[2] * k + 0.2 * k); }
             qx = x; qy = y; qz = z;
           }
         }
