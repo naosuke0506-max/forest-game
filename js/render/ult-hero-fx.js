@@ -355,7 +355,7 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
           bolt(B.x + ox, B.y + top, B.z + oz, B.x, B.y, B.z, B.big ? 14 : 9, B.big ? 1.6 : 0.9, w * k, TH[0] * k, TH[1] * k, TH[2] * k);
           bolt(B.x + ox, B.y + top, B.z + oz, B.x, B.y, B.z, B.big ? 14 : 9, B.big ? 1.4 : 0.8, w * 0.35 * k, k, k, k);
         }
-        if (B.t < 0.05) fx.glow(B.x, B.y + 1, B.z, B.big ? 9 : 4, 0.2, [1, 1, 1]);
+        if (B.t < 0.05) fx.glow(B.x, B.y + 1, B.z, B.big ? 6 : 3.5, 0.2, [0.85, 0.75, 1]);   // 大きく白い光は画面が白く飛んだ（写して小さく・紫寄りに）
         if (B.t >= B.life) skyBolts.splice(i, 1);
       }
 

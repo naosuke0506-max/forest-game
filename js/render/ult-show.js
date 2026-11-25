@@ -86,17 +86,19 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
     return null;
   }
 
-  // 構図の種類：close 前から顔（寄り）・wide 斜め上から引き・high 後ろの高い所から前を見下ろす（稲妻の道）・behind 肩越しに前を見る（踏み込み・大矢）
+  // 構図の種類：close 前から顔（寄り）・wide 斜め上から引き・high 後ろの高い所から前を見下ろす（稲妻の道）・behind 肩越しに前を見る（大矢）・
+  //   cross 踏み込む道の真ん中の横から（雷霆一閃の踏み込みが画面を横切る。後ろからだと、体がすぐ遠ざかって小さく映った）
   const SHOTS = {
     close: (f) => shot(f, 2.3, 0.8, 1.45, 1.38, 0.4),
     wide: (f) => shot(f, 5.6, 3.2, 3.5, 0.7, 1.3),
     high: (f) => shot(f, -8.5, 2.5, 8.5, 0.3, 1.0, 5),
     behind: (f) => shot(f, -3.2, 0.95, 1.85, 1.35, 0.5, 9),
+    cross: (f) => { const d = (ULT_SPECS.sword.dash.dist || 11) / 2; return shot(f, d, 8.5, 1.7, 1.0, 0.8, d); },
   };
   /** 英雄ごとの構図の並び：[始まる秒, 種類]。まだ英雄ごとの技が無い人は、寄り → 放つ少し前に引き */
   function timeline(f, time, at) {
     const S = ULT_SPECS[f.char];
-    if (f.char === 'sword' && S) return [[0, 'close'], [S.bolt.from - 0.05, 'high'], [S.stance, 'close'], [S.dash.at - 0.1, 'behind'], [S.strike.at - 0.06, 'wide']];
+    if (f.char === 'sword' && S) return [[0, 'close'], [S.bolt.from - 0.05, 'high'], [S.stance, 'close'], [S.dash.at - 0.2, 'cross'], [S.strike.at - 0.06, 'wide']];
     if (f.char === 'archer' && S) return [[0, 'close'], [0.95, 'behind']];
     return [[0, 'close'], [at - 0.12, 'wide']];
   }
