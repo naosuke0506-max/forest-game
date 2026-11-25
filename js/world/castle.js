@@ -118,7 +118,7 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
     const roof = rnd.next() < 0.55 ? 'thatch' : 'tiles';
     const y0 = h.y0;
     buildHouse(B, { cx: h.x, cz: h.z, y0, yaw: h.yaw, w: h.w, d: h.d, stories: h.stories, roof, wall: walls[i++ % walls.length], rnd, deco: createRandom(config.seed + 1000 + houses.length) }, reg);
-    houses.push({ x: h.x, z: h.z, w: h.w, d: h.d, yaw: h.yaw, y0, stories: h.stories });   // y0：地面の高さ（鷹目の矢の穴。world/arrow-holes.js）
+    houses.push({ x: h.x, z: h.z, w: h.w, d: h.d, yaw: h.yaw, y0, stories: h.stories });   // y0：地面の高さ（貫く矢の穴。world/arrow-holes.js）
     footprints.push({ type: 'rect', x: h.x, z: h.z, w: h.w, d: h.d, yaw: h.yaw, roof });
     usedList.push(houseProps(h.x, y0, h.z, h.yaw, h.w, h.d));
   }

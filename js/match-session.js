@@ -24,10 +24,12 @@ import { createSenses } from './game/senses.js';
 import { stanceButton, stanceSpeed, canRun, stanceShape, resetStance } from './game/stance.js';
 import { swimSpeed, toggleDive } from './game/swim.js';
 import { STANCES, BODY_TURN } from './game/data.js';
-import { skillOf, skillOn } from './game/skills.js';
+import { ultOf, elementOf, ultLeft } from './game/ultimate.js';
 import { createHeatVision } from './render/heat-vision.js';
 import { createUltDust } from './render/ult-dust.js';
-import { createWrathWave } from './render/wrath-wave.js';
+import { createUltFx } from './render/ult-fx.js';
+import { createUltShow, mixColor } from './render/ult-show.js';
+import { crestSvg } from './ui/crests.js';
 import { createMiracleFx } from './render/miracle-fx.js';
 import { createArrowHoles } from './world/arrow-holes.js';
 import { LESSONS, createTutorBot, createTutorState } from './game/tutorial.js';
@@ -202,25 +204,46 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const endSprint = () => { if (sprint.state === 'on' || sprint.state === 'armed') { sprint.state = 'cool'; sprint.left = SPRINT.cooldown; } };
   combat.on('dashAttack', ({ fighter }) => { if (fighter === me) endSprint(); });
   showSprint();
-  // 技能ボタン（專用技能。game/skills.js）：名前は人物ごと。効き目の間は紅く光って残りの秒、待ち時間は暗く残りの秒。
-  // まだ作っていない技能の人物（劍騎士・祓魔僧）には出さない
-  const skillBtn = document.getElementById('btn-skill') || document.createElement('button');
-  const mySkill = skillOf(me);
-  let skillShown = '';
-  const showSkill = () => {
-    if (!mySkill) return;
-    const on = me.skillLeft > 0, cool = me.skillCool > 0;
-    const sec = on ? Math.ceil(me.skillLeft) : cool ? Math.ceil(me.skillCool) : 0;
-    setCd(skillBtn, cool && !on && mySkill.cd ? me.skillCool / mySkill.cd : 0);
-    const key = `${on}${cool}${sec}`;
-    if (key === skillShown) return;
-    skillShown = key;
-    setBtn(skillBtn, ICONS.skill, mySkill.name, sec || '');
-    skillBtn.classList.toggle('on', on);
-    skillBtn.classList.toggle('cool', cool);
+  // 必殺ボタン（利用者の指示 2026-11-25。game/ultimate.js。PC は G）：英雄の紋と属性の色。使える間は英雄の色に脈打ち、右上に残りの回数。
+  // 使い切ると暗くなる（延長戰＝第 6 刻から、もう 1 回使える）。必殺技の間は明るく光る
+  const ultBtn = document.getElementById('btn-ult') || document.createElement('button');
+  const myUlt = ultOf(me), myEl = elementOf(me);
+  if (myEl) {
+    ultBtn.style.setProperty('--c1', myEl.color); ultBtn.style.setProperty('--c2', mixColor(myEl.color, myEl.deep, 0.55));
+    ultBtn.style.setProperty('--c3', myEl.deep); ultBtn.style.setProperty('--uc', myEl.color);
+  }
+  let ultShown = '';
+  const showUlt = () => {
+    if (!myUlt) return;
+    const n = ultLeft(me), on = me.action?.kind === 'ult';
+    const key = `${n}|${on}`;
+    if (key === ultShown) return;
+    ultShown = key;
+    setBtn(ultBtn, crestSvg(myUlt.crest, { ring: false }), L.ult);
+    if (n !== Infinity) ultBtn.insertAdjacentHTML('beforeend', `<span class="ab-count">${n}</span>`);   // 教練では回数を出さない（何度でも使える）
+    ultBtn.classList.toggle('ready', n > 0 && !on);
+    ultBtn.classList.toggle('spent', !(n > 0) && !on);
+    ultBtn.classList.toggle('on', on);
   };
-  showSkill();
-  combat.on('skill', ({ fighter, skill }) => { if (fighter === me) hud.addFeed(skill.time ? `${skill.name}を使った（${skill.time} 秒）` : `${skill.name}を放った`); });
+  showUlt();
+  combat.on('ultDenied', ({ fighter }) => {
+    if (fighter !== me) return;
+    if (!(ultLeft(me) > 0)) hud.addFeed(match.overtime ? '必殺技は使い切った' : '必殺技は使い切った（延長戰で、もう一度だけ使える）');
+    else hud.addFeed('今は必殺技を出せない');
+  });
+  combat.on('ult', ({ fighter, ult }) => {
+    if (fighter === me || !ult) return;
+    const d = Math.hypot(fighter.x - me.x, fighter.z - me.z);
+    if (d < 120) hud.addFeed(`${fighter.name}の必殺技「${ult.name}」！`);
+  });
+  // 延長戰（第 6 刻から）：必殺技がもう 1 回使える。刻の門が開いてから知らせる
+  let overtimeNote = false;
+  match.on('overtime', () => { overtimeNote = true; showUlt(); });
+  match.on('thaw', () => {
+    if (!overtimeNote) return;
+    overtimeNote = false;
+    if (me.alive && !lesson) { hud.centerMsg(L.overtime, '必殺技を、もう一度だけ使える', 3.4); hud.addFeed('延長戰：必殺技がもう一度使える'); }
+  });
   // 奇跡（祓魔僧。game/miracles.js）：左手の奇跡ボタンで、選んでいる奇跡を唱える。替ボタン（楯擊の所。PC は H）で次の奇跡へ。
   // 1 つも覚えていない間は出さない。待ち時間の間は暗い影と残りの秒、唱えている間と蘇生の加護の間は金に脈打つ。替ボタンの上に次の奇跡の名前
   const isCleric = me.left === 'miracle';
@@ -329,10 +352,6 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   combat.on('ignite', ({ fighter, by }) => {
     if (fighter === me) hud.addFeed('燃えている！（水に入ると消える）');
     else if (by === me) hud.addFeed(`${fighter.name}が燃えた`);
-  });
-  combat.on('counter', ({ fighter, target }) => {
-    if (fighter === me) hud.addFeed(`${target.name}に反擊した`);
-    else if (target === me) hud.addFeed(`${fighter.name}の反擊を受けた`);
   });
   // 楯攻撃ボタン：楯の技があるキャラ（楯劍騎士）だけ。名前は楯の技（鳶形楯は楯擊）
   // （ボタンが画面に無いときは、楯擊ボタンを出さないだけにする。無いまま進めると試合が始まらない：2026-11-10 に一度起きた）
@@ -513,13 +532,18 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     retryWait = !!lesson?.retry;
   });
   const viewModel = createViewModel(player.camera, me);
-  const heat = createHeatVision(player.camera);   // 鷹目（弓兵の技能）の見え方
-  const dust = createUltDust(app, player.camera);  // 劍騎士の奧義（長劍・大劍）の砂煙
+  // 鷹の目の見え方（白黒にして、敵の体温を壁越しに描く）：前は弓兵の鷹目。2 回目で弓兵の必殺技「颶風一矢」に使う（me.hawkEye：残りの秒）
+  const heat = createHeatVision(player.camera);
+  const dust = createUltDust(app, player.camera);  // 砂煙（必殺技の地の属性）
   combat.on('dust', (e) => dust.burst(e));
-  // 祓魔僧の神怒：金色の光の輪が広がる（家が壊れる仕組みは利用者の指示 2026-11-13 で消した）。鷹目の貫く矢は壁に穴を開ける
-  const wave = createWrathWave(app);
+  // 貫く矢は壁に穴を開ける（2 回目で弓兵の必殺技に使う）
   const holes = createArrowHoles(app, houses);
-  combat.on('wrath', (e) => wave.burst(e));
+  // 必殺技（2026-11-25）：光・衝撃波・粒（みんなの画面。render/ult-fx.js）と、自分の画面だけの演出（render/ult-show.js）
+  const ultFx = createUltFx(app, { combat, fighters, camera: player.camera, dust });
+  const ultShow = createUltShow({ camera: player.camera, player, views, me, heightAt: terrain.heightAt });
+  combat.on('ult', ({ fighter, ult, time, at }) => { if (fighter === me && ult) ultShow.play(me, ult, { time, at }); });
+  combat.on('ultBurst', (e) => ultShow.burst(e));
+  match.on('eliminated', ({ victim }) => { if (victim === me) ultShow.cancel(); });
   const arrows = createProjectileViews(app, combat);
   let thirdPerson = false;
   // 祓魔僧の奇跡の見た目（護符に集まる光・光の柱・加護の輪・光壁・清めの炎・燃える人。render/miracle-fx.js）
@@ -530,7 +554,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   /** 自分の見え方を、今の状態（一人称・三人称・壁裏・隠れている・観戦）に合わせる（毎フレーム） */
   function refreshMyView() {
     const v = views.get(me);
-    const third = thirdPerson;                           // 三人称（確認用）。壁裏隠れも一人称
+    const third = thirdPerson || ultShow.active;         // 三人称（確認用）。壁裏隠れも一人称。必殺技の寄るカメラの間は体を全部映す
     // 隠れている・観戦している・一人称で泳いでいる（体が水平になり、目の前をふさぐ）：自分の体は出さない
     const gone = !!me.hidden || !!spectating || (!!me.swimming && !third);
     const body = !gone && (third || (fpBody && me.alive));   // 倒れた後は（観戦に移るまで）一人称で自分の体を出さない
@@ -778,8 +802,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       me.sprinting = sprintOn && player.moving > 0.12;   // 全速力で走っている（攻擊ボタンが疾驅攻撃になる。game/combat.js）
       sprintBtn.hidden = !running || !me.alive || !!me.hidden || !!me.cover;
       showSprint();
-      skillBtn.hidden = !mySkill || !running || !me.alive || !!me.hidden;
-      showSkill();
+      ultBtn.hidden = !myUlt || !running || !me.alive || !!me.hidden;
+      showUlt();
       showMiracle(running && me.alive && !me.hidden && !spectating);
       showBuffs();
       showBlind();
@@ -913,8 +937,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       }
       refreshMyView();
       lanterns.update(dt, player.camera.getPosition());   // 角燈を腰に付け、光を置く（体の姿が決まった後）
-      heat.update(dt, skillOn(me, 'hawk') && me.alive && !spectating, fighters, me, views);   // 鷹目：白黒にして、敵の体温を壁越しに描く
-      if (!frozenTime) { dust.update(dt); wave.update(dt); holes.update(combat.projectiles); }
+      if (me.hawkEye > 0) me.hawkEye = Math.max(0, me.hawkEye - (frozenTime ? 0 : dt));
+      heat.update(dt, me.hawkEye > 0 && me.alive && !spectating, fighters, me, views);   // 鷹の目：白黒にして、敵の体温を壁越しに描く
+      if (!frozenTime) { dust.update(dt); holes.update(combat.projectiles); }
+      ultShow.update(frozenTime ? 0 : dt); // 必殺技の寄るカメラ・揺れ（プレイヤーの操作がカメラを置いた後。時間が止まっている間は、技と一緒に止まる）
+      ultFx.update(frozenTime ? 0 : dt);   // 必殺技の光・衝撃波・粒（板は、動かした後のカメラへ向ける）
       miracleFx.update(frozenTime ? 0 : dt);   // 時間が止まっている間は、光も炎も止まる
       if (tutor && tutor.update(dt, { insideHouse })) {
         tutorPanel.show(tutor.step);
@@ -994,6 +1021,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     senses,
     cover,
     holes,   // 確認用（矢の穴）
+    ultFx,   // 確認用（必殺技の見た目の数）
+    ultShow, // 確認用（必殺技の寄るカメラ）
     lanterns,   // 確認用（角燈）
     /** 確認用：捕捉している相手（無ければ null）と、捕まえられる相手がいるか */
     get lock() { return lock ? { name: lock.target.name, seen: lock.seen, lostFor: lock.lostFor } : null; },

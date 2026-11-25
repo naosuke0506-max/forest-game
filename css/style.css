@@ -386,6 +386,13 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .sk-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
 .sk-head b { font-family: var(--serif); font-weight: 600; font-size: 17px; letter-spacing: .2em; color: var(--ink); }
 .skill-card.main .sk-head b { font-size: clamp(22px, 3.4vmin, 28px); color: var(--gold-hi); }
+/* 必殺技の札（圖鑑。2026-11-25）：英雄の紋と属性の色 */
+.ult-card { border-left-color: var(--uc); }
+.ult-card .sk-head { align-items: center; }
+.ult-card .uc-crest { display: inline-block; flex: none; width: 44px; height: 44px; margin-right: 10px; color: var(--uc); filter: drop-shadow(0 0 6px var(--ud)); vertical-align: middle; }
+.ult-card .uc-crest svg { display: block; width: 100%; height: 100%; }
+.ult-card .sk-head b { color: #fff; text-shadow: 0 0 10px var(--uc), 0 2px 0 var(--ud); }
+.ult-card.main .uc-crest { width: 58px; height: 58px; }
 .sk-head small { font-size: 11px; color: var(--dim); }
 .sk-meta { margin-left: auto; color: var(--gold); font-size: 12px; letter-spacing: .05em; }
 .sk-desc { margin: 6px 0 0; color: var(--ink); opacity: .85; font-size: clamp(12px, 1.8vmin, 14px); line-height: 1.6; }
@@ -819,9 +826,24 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
   font: 600 11px/1 var(--serif); letter-spacing: .08em; color: #f3dc9a; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
 .act-btn.dodge { right: calc(37px + var(--safe-r)); bottom: calc(205px + var(--safe-b)); width: 80px; height: 80px; --lb: 14px;
   --c1: #74c48c; --c2: #2c7646; --c3: #0d2c18; }
-/* 技能（專用技能）：攻擊の左上（内の弧）。効き目の間は金に脈打って残りの秒、使った後の待ち時間は暗い影と残りの秒 */
-.act-btn.skill { right: calc(151px + var(--safe-r)); bottom: calc(172px + var(--safe-b)); width: 76px; height: 76px;
-  --c1: #cf6fa2; --c2: #7c2452; --c3: #2c0b1c; }
+/* 必殺（必殺技。2026-11-25）：攻擊の左上（内の弧。前の技能ボタンの所）。英雄の属性の色（--c1〜--c3・--uc は match-session.js が入れる）と紋。
+   使える間は英雄の色にゆっくり脈打ち、輪の上を光が回る。右上に残りの回数。使い切ると暗い。必殺技の間は明るく光る */
+.act-btn.ult { right: calc(151px + var(--safe-r)); bottom: calc(172px + var(--safe-b)); width: 76px; height: 76px; --lb: 13px;
+  --c1: #e0c070; --c2: #8a6a26; --c3: #2a1e08; --uc: #ffd970; color: #fff; }
+.act-btn.ult .ab-icon { width: 60%; height: 60%; filter: drop-shadow(0 0 4px var(--c3)) drop-shadow(0 2px 2px rgba(0, 0, 0, .8)); }
+.act-btn.ult .ab-count { position: absolute; right: -6px; top: -6px; z-index: 3; min-width: 22px; height: 22px; padding: 0 5px; box-sizing: border-box;
+  border-radius: 11px; font: 700 13px/20px var(--mono); text-align: center; color: #fff; background: radial-gradient(circle at 35% 30%, var(--c1), var(--c3));
+  border: 1.5px solid var(--gold); box-shadow: 0 2px 4px rgba(0, 0, 0, .7); text-shadow: 0 1px 2px #000; }
+.act-btn.ult.ready { animation: ultReady 1.8s ease-in-out infinite; }
+.act-btn.ult.ready .ab-icon { animation: ultIcon 1.8s ease-in-out infinite; }
+@keyframes ultReady {
+  0%, 100% { box-shadow: 0 0 10px calc(var(--ring) + 2px) color-mix(in srgb, var(--uc) 30%, transparent), var(--sh-base), var(--halo), 0 8px 16px 3px rgba(0, 0, 0, .5); }
+  50% { box-shadow: 0 0 28px calc(var(--ring) + 7px) color-mix(in srgb, var(--uc) 75%, transparent), var(--sh-base), var(--halo), 0 8px 16px 3px rgba(0, 0, 0, .5); }
+}
+@keyframes ultIcon { 0%, 100% { transform: translateY(-5%) scale(1); } 50% { transform: translateY(-5%) scale(1.08); } }
+.act-btn.ult.spent { filter: saturate(.15) brightness(.55); }
+.act-btn.ult.spent .ab-count { background: #2a2620; }
+.act-btn.ult.on { filter: brightness(1.35); animation: none; box-shadow: 0 0 30px calc(var(--ring) + 8px) var(--uc), var(--sh-base), var(--halo); }
 /* 全速力（疾驅）：迴避の上（外の弧）。押すと輪が明るくなり（動き出すのを待つ）、走っている間は金に脈打って残りの秒。終わった後の待ち時間は暗い影 */
 .act-btn.sprint { right: calc(25px + var(--safe-r)); bottom: calc(323px + var(--safe-b)); width: 68px; height: 68px;
   --c1: #dcba60; --c2: #8a661f; --c3: #2e2008; }
@@ -864,7 +886,69 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
   -webkit-mask: linear-gradient(90deg, #000 0 9px, transparent 9px calc(100% - 9px), #000 calc(100% - 9px)); mask: linear-gradient(90deg, #000 0 9px, transparent 9px calc(100% - 9px), #000 calc(100% - 9px)); }
 .lockmark.dim { opacity: .35; }
 @keyframes lockSpin { to { transform: rotate(360deg); } }
-/* 鷹目（弓兵の技能）：目に映る物を白黒に。敵の体温は、上の重ねた絵（render/heat-vision.js）に色で描く */
+/* 必殺技の演出（自分の画面だけ。render/ult-show.js）：上下の黒い帯・集中線・筆の帯と紋と技の名前・属性の大きな字・閃光。
+   --uc（属性の色）・--ud（濃い色）・--uc2（間の色）は js が入れる。寄るカメラの間は、ほかの画面の部品を隠す（body.ult-cine） */
+body.ult-cine #hud { opacity: 0; transition: opacity .18s; }
+#hud { transition: opacity .35s; }
+.ultshow { position: fixed; inset: 0; z-index: 22; pointer-events: none; overflow: hidden; font-family: var(--serif); }
+.ultshow[hidden] { display: none; }
+.us-bar { position: absolute; left: 0; right: 0; height: 11vh; background: #000; transform: scaleY(0); transition: transform .3s cubic-bezier(.6, 0, .3, 1); }
+.us-bar.top { top: 0; transform-origin: top; }
+.us-bar.bot { bottom: 0; transform-origin: bottom; }
+.ultshow.on .us-bar { transform: scaleY(1); }
+.ultshow.out .us-bar { transform: scaleY(0); }
+/* 集中線：真ん中を空けた細い光の筋。ちらつきながら少しずつ回る。放つと消える */
+.us-lines { position: absolute; inset: -20%; opacity: 0;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0) 0deg 2.6deg, rgba(255, 255, 255, .42) 2.75deg 2.9deg, rgba(255, 255, 255, 0) 3.05deg 5.9deg, rgba(255, 255, 255, .22) 6deg 6.1deg, rgba(255, 255, 255, 0) 6.2deg 9.4deg);
+  -webkit-mask: radial-gradient(circle at 50% 46%, transparent 30%, rgba(0, 0, 0, .45) 42%, #000 64%); mask: radial-gradient(circle at 50% 46%, transparent 30%, rgba(0, 0, 0, .45) 42%, #000 64%); }
+.ultshow.on .us-lines { animation: usLines .12s steps(2) infinite, usLinesIn .3s ease-out forwards; }
+.ultshow.boom .us-lines { animation: usLinesOut .35s ease-out forwards; }
+@keyframes usLines { 0% { transform: rotate(0deg); } 100% { transform: rotate(3deg); } }
+@keyframes usLinesIn { from { opacity: 0; } to { opacity: .7; } }
+@keyframes usLinesOut { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.3); } }
+/* 属性の大きな字（右） */
+.us-el { position: absolute; right: 2vw; top: 46%; font-size: 56vh; line-height: 1; font-weight: 900; color: var(--uc); opacity: 0;
+  transform: translateY(-50%) scale(1.4); text-shadow: 0 0 24px var(--uc), 0 0 70px var(--uc); }
+.ultshow.on .us-el { animation: usEl .5s .12s ease-out forwards; }
+@keyframes usEl { to { opacity: .2; transform: translateY(-50%) scale(1); } }
+/* 筆の帯：左から右へ引かれる */
+.us-band { position: absolute; left: -2vw; bottom: 13.5vh; width: 84vw; height: 19vh; clip-path: inset(0 100% 0 0);
+  filter: drop-shadow(0 0 14px var(--ud)) drop-shadow(0 6px 10px rgba(0, 0, 0, .55)); }
+.us-band svg { width: 100%; height: 100%; display: block; }
+.us-band .us-shine { opacity: .85; mix-blend-mode: screen; }
+.ultshow.on .us-band { animation: usBand .32s .1s cubic-bezier(.2, .7, .2, 1) forwards; }
+.ultshow.boom .us-band { animation: usBand .01s forwards, usBoom .45s ease-out; }
+@keyframes usBand { to { clip-path: inset(0 0 0 0); } }
+@keyframes usBoom { 0% { filter: brightness(2.6) drop-shadow(0 0 30px var(--uc)); } 100% { filter: brightness(1) drop-shadow(0 0 14px var(--ud)) drop-shadow(0 6px 10px rgba(0, 0, 0, .55)); } }
+/* 紋：大きく回りながら押される（判のように） */
+.us-crest { position: absolute; left: 4vw; bottom: 12vh; width: 22vh; height: 22vh; color: #fff; opacity: 0; transform: scale(2.6) rotate(-35deg);
+  filter: drop-shadow(0 0 10px var(--uc)) drop-shadow(0 0 26px var(--uc)) drop-shadow(0 3px 2px var(--ud)); }
+.us-crest svg { width: 100%; height: 100%; display: block; }
+.ultshow.on .us-crest { animation: usCrest .32s .2s cubic-bezier(.3, 1.5, .5, 1) forwards, usCrestSpin 6s .5s linear infinite; }
+@keyframes usCrest { to { opacity: 1; transform: scale(1) rotate(0deg); } }
+@keyframes usCrestSpin { from { rotate: 0deg; } to { rotate: 40deg; } }
+/* 技の名前：1 字ずつ右から滑り込む。放つと一度ふくらむ */
+.us-name { position: absolute; left: calc(5vw + 23vh); bottom: 17.5vh; font-size: 12.5vh; line-height: 1; font-weight: 900; letter-spacing: .04em; color: #fff; white-space: nowrap;
+  text-shadow: 2px 2px 0 var(--ud), -2px 2px 0 var(--ud), 2px -2px 0 var(--ud), -2px -2px 0 var(--ud), 0 3px 0 var(--ud), 0 -3px 0 var(--ud), 3px 0 0 var(--ud), -3px 0 0 var(--ud),
+    0 6px 0 var(--ud), 0 0 18px var(--uc), 0 0 42px var(--uc), 0 10px 16px rgba(0, 0, 0, .55); }
+.us-name span { display: inline-block; opacity: 0; transform: translateX(14vh) skewX(-18deg); filter: blur(6px); }
+.ultshow.on .us-name span { animation: usChar .22s cubic-bezier(.2, .8, .2, 1) forwards; }
+.ultshow.boom .us-name { animation: usNameBoom .4s ease-out; }
+@keyframes usChar { to { opacity: 1; transform: none; filter: none; } }
+@keyframes usNameBoom { 0% { transform: scale(1.12); filter: brightness(1.8); } 100% { transform: none; filter: none; } }
+.us-who { position: absolute; left: calc(5vw + 23.5vh); bottom: 12.6vh; font-size: 3vh; font-weight: 700; letter-spacing: .6em; color: var(--uc); opacity: 0;
+  text-shadow: 0 0 8px var(--ud), 0 2px 2px #000; }
+.ultshow.on .us-who { animation: usWho .3s .55s ease-out forwards; }
+@keyframes usWho { from { opacity: 0; transform: translateX(-3vh); } to { opacity: 1; transform: none; } }
+.ultshow.out .us-band, .ultshow.out .us-crest, .ultshow.out .us-name, .ultshow.out .us-who, .ultshow.out .us-el { transition: opacity .3s; opacity: 0 !important; }
+/* 閃光：始まりは小さく、放つ瞬間は大きく（属性の色） */
+.ultflash { position: fixed; inset: 0; z-index: 23; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 52%, #fff 0%, #fff 12%, var(--uc, #fff) 38%, rgba(0, 0, 0, 0) 78%); mix-blend-mode: screen; }
+.ultflash.on { animation: ultFlash .4s ease-out; }
+.ultflash.big { animation: ultFlashBig .7s ease-out; }
+@keyframes ultFlash { 0% { opacity: .55; } 100% { opacity: 0; } }
+@keyframes ultFlashBig { 0% { opacity: 1; } 18% { opacity: .9; } 100% { opacity: 0; } }
+/* 鷹の目（前は弓兵の鷹目。2 回目で弓兵の必殺技に使う）：目に映る物を白黒に。敵の体温は、上の重ねた絵（render/heat-vision.js）に色で描く */
 body.hawk canvas#app { filter: grayscale(1) contrast(1.12) brightness(.85); }
 canvas.heat { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 12; pointer-events: none; }
 /* 隠れている間の見た目：タンスは扉の隙間（縦の細い光）、ベッドの下は上が板で塞がれ、床すれすれから外を見る */

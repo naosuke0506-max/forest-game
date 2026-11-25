@@ -188,22 +188,20 @@ export function createHud(match, me, { label = null, trial = null } = {}) {
     },
     update(dt) {
       // 左上：フェーズと残り時間
-      phaseName.textContent = label ? label[0] : `${match.phaseInfo.name}・${TIMES[match.phaseInfo.time]?.name ?? ''}`;
+      // 延長戰（第 6 刻から。必殺技がもう 1 回使える。2026-11-25）：見出しの頭に「延長戰」。刻の残り時間はそのまま出し、色だけ変える
+      phaseName.textContent = label ? label[0] : `${match.overtime ? `${L.overtime}・` : ''}${match.phaseInfo.name}・${TIMES[match.phaseInfo.time]?.name ?? ''}`;
       if (shownTime !== match.phaseInfo.time) { shownTime = match.phaseInfo.time; phaseIcon.innerHTML = timeIcon(shownTime); }
       if (label) {
         phaseTime.textContent = label[1];
         phaseTime.classList.remove('overtime');
-      } else if (match.overtime) {
-        phaseTime.textContent = L.overtime;
-        phaseTime.classList.add('overtime');
       } else {
         phaseTime.textContent = formatTime(match.timeLeft);
-        phaseTime.classList.remove('overtime');
+        phaseTime.classList.toggle('overtime', !!match.overtime);
       }
       // 刻の残りの線（その刻で初めに見た残り時間を満タンとする）と、生き残りの人数
       if (!label) {
         if (match.phase !== phaseOf) { phaseOf = match.phase; phaseMax = Math.max(1, match.timeLeft); }
-        const fill = match.overtime ? 100 : Math.max(0, Math.min(100, Math.round((100 * match.timeLeft) / phaseMax)));
+        const fill = Math.max(0, Math.min(100, Math.round((100 * match.timeLeft) / phaseMax)));
         if (fill !== fillShown && phaseFill) { fillShown = fill; phaseFill.style.width = `${fill}%`; }
         const alive = match.fighters.reduce((n, f) => n + (f.alive ? 1 : 0), 0);
         if (alive !== aliveShown && aliveEl) { aliveShown = alive; aliveEl.textContent = alive; }

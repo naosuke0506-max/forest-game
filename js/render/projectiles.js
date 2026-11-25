@@ -6,7 +6,7 @@ export function createProjectileViews(app, combat) {
   const views = new Map(); // projectile → entity
   const pool = [];
   const dir = new pc.Vec3();
-  // 鷹目の貫く矢：後ろに金色の光の筋を引く（その矢が飛んでいる間だけ。描画命令 1 つ）
+  // 貫く矢（前は鷹目。2 回目で弓兵の必殺技）：後ろに金色の光の筋を引く（その矢が飛んでいる間だけ。描画命令 1 つ）
   let streakMat = null;
   function streakOf(e) {
     if (e._streak) return e._streak;

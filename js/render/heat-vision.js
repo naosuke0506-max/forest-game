@@ -1,9 +1,9 @@
-// 鷹目（弓兵の專用技能。docs/DESIGN.md「技能」）の見え方：目に映る物を白黒にし（css の body.hawk）、
+// 鷹の目の見え方（前は弓兵の專用技能「鷹目」。2026-11-25 に技能は無くし、2 回目で弓兵の必殺技「颶風一矢」に使う）：目に映る物を白黒にし（css の body.hawk）、
 // 80 m 以内の敵を体温の色で壁越しに描く。体温の形は、模型の骨（頭・胸・腰・腕・脚）の位置を画面へ写し、
 // 太さの違う線を重ねて描く 2D の絵（3D の描画命令・三角形は増えない）。
 // 隠れ場所の中の人（模型が映っていない）と骨の無い仮の人形は、体の位置から作った形で描く
 import * as pc from 'playcanvas';
-import { SKILL_FX } from '../game/data.js';
+import { HAWK_EYE } from '../game/data.js';
 
 // 体の線：骨 → 骨、太さ（m）
 const LIMBS = [
@@ -75,7 +75,7 @@ export function createHeatVision(cameraEntity) {
       // 1 m が奥行き 1 m で何ピクセルになるか（縦の視野角から）
       const fov = (cameraEntity.camera.fov * Math.PI) / 180;
       const pxPerM = h / (2 * Math.tan(fov / 2));
-      const range = SKILL_FX.hawk.range;
+      const range = HAWK_EYE.range;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       for (const f of fighters) {

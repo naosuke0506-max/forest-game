@@ -1,6 +1,6 @@
 // 試合の流れ：フェーズ・残り時間・延長・歩ける範囲・ポイント・脱落・終了。
 // PlayCanvas に依存しない「計算だけ」の部分（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { phaseAt, POINTS, REWARDS, REWARD_PICK_TIME, PHASE_FREEZE, PHASE_TICKS, CHARACTERS, COMBAT, LOADOUTS, WEAPONS, SHIELDS, MIRACLES } from './data.js';
+import { phaseAt, POINTS, REWARDS, REWARD_PICK_TIME, PHASE_FREEZE, PHASE_TICKS, CHARACTERS, COMBAT, LOADOUTS, WEAPONS, SHIELDS, MIRACLES, ULTIMATE } from './data.js';
 import { initStance, resetStance } from './stance.js';
 import { miracleOffers, learnMiracle } from './miracles.js';
 
@@ -63,6 +63,8 @@ export function createFighter({ id, name, char, isPlayer, color, loadout = null 
     hitFlash: 0,             // 見た目用：攻撃を受けた直後
     pendingReward: null,     // 選んでいる途中のフェーズ報酬 { phase, options, timeLeft }
     rewards: [],             // 選んだ報酬
+    ultLeft: ULTIMATE.uses,  // 必殺技の残りの回数（1 つの試合で 1 回。延長戰でもう 1 回。game/ultimate.js）
+    ultUsed: 0,
   };
   initStance(f);             // 立つ・しゃがむ・伏せる（game/stance.js）
   return f;
@@ -177,6 +179,12 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
       m.timeLeft = durationOf(m.phase);
       m.targetRadius = phaseAt(m.phase).radius;
       emit('phaseStart', { phase: m.phase, info: phaseAt(m.phase) });
+      // 延長戰（第 6 刻から。はじめの長い夜の後）：生き残っている人は、必殺技をもう 1 回使える（利用者の指示 2026-11-25）
+      if (m.phase === ULTIMATE.overtime) {
+        m.overtime = true;
+        for (const f of m.alive) f.ultLeft = (f.ultLeft ?? 0) + ULTIMATE.overtimeUses;
+        emit('overtime', { phase: m.phase });
+      }
       // 刻を越えたら、時間が止まる（その間に報酬を選ぶ）
       m.freeze = PHASE_FREEZE;
       emit('freeze', { time: PHASE_FREEZE });

@@ -3,7 +3,8 @@
 //   動きの再生は、動作監督の画面と同じ作り：動きの一覧（見出しごと）・流す／止める・繰り返す・速さ・時刻のつまみ
 import { L } from './labels.js';
 import { ruby, rubyIn } from './ruby.js';
-import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, EXCLUSIVE_SKILLS, SHARED_SKILLS, TECHNIQUES, SHIELD_SKILLS, MIRACLES, MIRACLE_SLOTS } from '../game/data.js';
+import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, SHARED_SKILLS, TECHNIQUES, SHIELD_SKILLS, MIRACLES, MIRACLE_SLOTS, ULTIMATES, ULTIMATE, ULT_BURST, ELEMENT_KINDS } from '../game/data.js';
+import { crestSvg } from './crests.js';
 import { attackStats } from '../game/combat.js';
 import { resolveLoadout } from '../game/match.js';
 import { CLIP_NAMES, CLIP_DESC, CLIP_GROUPS, WEAPON_KIND, WEAPON_ARTS, COMMON_ARTS, CREATURE_KINDS, CHAR_GUIDE } from '../game/codex.js';
@@ -89,6 +90,14 @@ function miracleCard(m) {
   return `<div class="skill-card"><div class="sk-head"><b>${ruby(m.name)}</b>${m.planned ? `<small>${L.planned}</small>` : ''}<span class="sk-meta">${meta.map(esc).join('・')}</span></div>
     <p class="sk-desc">${esc(m.desc)}</p></div>`;
 }
+/** 必殺技の札（英雄の紋・属性・名前・技の姿。2026-11-25） */
+function ultCard(U, main = false) {
+  const E = ELEMENT_KINDS[U.element];
+  return `<div class="skill-card ult-card${main ? ' main' : ''}" style="--uc:${E.color};--ud:${E.deep}"><div class="sk-head"><span class="uc-crest">${crestSvg(U.crest)}</span>
+    <b>${ruby(U.name)}</b><span class="sk-meta">${esc(`${E.name}の属性・1 試合 ${ULTIMATE.uses} 回（延長戰でもう ${ULTIMATE.overtimeUses} 回）`)}</span></div>
+    <p class="sk-desc">${esc(U.desc)}</p></div>`;
+}
+const ULT_NOTE = `必殺ボタン（PC は G）で放つ。1 つの試合で ${ULTIMATE.uses} 回だけ（延長戰＝第 ${ULTIMATE.overtime + 1} 刻から、もう ${ULTIMATE.overtimeUses} 回）。強いが、もしもの時のために取っておく技。必殺技の間は無敵。今は仕組みと演出だけ作った（どの英雄も仮の「属性の衝撃波」：周り ${ULT_BURST.radius} m に傷と吹き飛ばし）。英雄ごとの技はこれから作る`;
 const MIRACLE_NOTE = `刻を越えるたびの褒美で、奇跡が 3 つ出て 1 つ覚える（最大 ${MIRACLE_SLOTS} つ。そろった後の褒美は能力値）。左手の奇跡ボタン（PC は K）で唱え、替ボタン（PC は H）で唱える奇跡を替える。唱える途中で攻撃を受けてひるむと途切れる`;
 
 /**
@@ -152,12 +161,12 @@ export function createCodex({ hall }) {
     const c = CHARACTERS[char], lo = LOADOUTS[char];
     const gear = (slot) => (lo[slot] || []).map((id) => `${esc(weaponName(id))}${isPlanned(id) ? `<small>${L.planned}</small>` : ''}`).join('・');
     const skills = [...new Set([...(lo.main || []), ...(lo.shield || []), ...(lo.side || [])])].filter((id) => WEAPON_ARTS[id]);
-    const g = CHAR_GUIDE[char], ex = EXCLUSIVE_SKILLS[char];
+    const g = CHAR_GUIDE[char], ex = ULTIMATES[char];
     return `<div class="char-select codex-chars">${Object.entries(CHARACTERS).map(([id, ch]) => `<button type="button" class="char-btn${id === char ? ' sel' : ''}" data-char="${id}">${esc(ch.name)}</button>`).join('')}</div>
       <p class="codex-desc">${esc(c.desc)}</p>
-      <h4 class="codex-head">專用技能</h4>
-      ${ex ? skillCard(ex, true) : ''}
-      <p class="codex-note">技能ボタンで使う（PC は G）。専用技能はキャラ 1 人に 1 つで、最初から使える。共通技能は刻を越えるたびの報酬で 3 つから 1 つ選ぶ（まだ使えない。技能の札）</p>
+      <h4 class="codex-head">${ruby('必殺技')}</h4>
+      ${ex ? ultCard(ex, true) : ''}
+      <p class="codex-note">${esc(ULT_NOTE)}</p>
       ${c.left === 'miracle' ? `<h4 class="codex-head">奇跡</h4><p class="codex-note">${esc(MIRACLE_NOTE)}</p>${Object.values(MIRACLES).map(miracleCard).join('')}` : ''}
       <h4 class="codex-head">性能</h4>
       ${gauges(char)}
@@ -242,13 +251,12 @@ export function createCodex({ hall }) {
         <span class="pick-when">${esc(PHASES[a.tier - 1]?.name ?? '')}を越えると届く</span><span class="pick-desc">${esc(a.desc)}</span></div>`).join('')}</div>`;
   }
   function renderSkill() {
-    return `<p class="codex-note">技能ボタンを押して使う（PC は G）。使うと効き目がしばらく続き、効き目が切れてから待ち時間が過ぎるとまた使える。專用技能は反擊・強靱・剛力・鷹目が使える。共通技能と、${L.planned}の印の付いた技能は、まだゲームでは使えない</p>
+    return `<h4 class="codex-head">${ruby('必殺技')}</h4>
+      <p class="codex-note">${esc(ULT_NOTE)}</p>
+      ${Object.entries(ULTIMATES).map(([id, U]) => `<p class="skill-of">${esc(CHARACTERS[id].name)}</p>${ultCard(U)}`).join('')}
       <h4 class="codex-head">共通技能</h4>
       <p class="codex-note">全キャラ共通。刻（試合の区切り）を越えるたびの褒美で、ここから 3 つ出て 1 つ選ぶ（最大 4 つ）</p>
       ${Object.values(SHARED_SKILLS).map((s) => skillCard(s)).join('')}
-      <h4 class="codex-head">專用技能</h4>
-      <p class="codex-note">キャラ 1 人に 1 つ。最初から使える</p>
-      ${Object.entries(EXCLUSIVE_SKILLS).map(([id, s]) => `<p class="skill-of">${esc(CHARACTERS[id].name)}</p>${skillCard(s)}`).join('')}
       <h4 class="codex-head">奇跡</h4>
       <p class="codex-note">祓魔僧だけ。${esc(MIRACLE_NOTE)}</p>
       ${Object.values(MIRACLES).map(miracleCard).join('')}`;

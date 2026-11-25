@@ -22,7 +22,7 @@ export const ICONS = {
   m_flame: svg(`<path fill="currentColor" d="M12 1.8c1.2 4.2 6.6 6.4 6.6 12.4a6.6 6.6 0 0 1-13.2 0c0-3.4 1.7-5.6 3.4-6.8 0 2.3 1 3.9 2.6 4.6-.6-3.6-.4-6.6.6-10.2z"/><path fill="#000" opacity=".35" d="M12 13c.8 1.6 2.6 2.4 2.6 4.4a2.6 2.6 0 0 1-5.2 0c0-1.6.9-2.6 1.8-3.2-.1 1 .3 1.6.8 1.8z"/>`),
   // 視點の切り替え：目
   eye: svg(`<path fill="none" stroke="currentColor" stroke-width="2" d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/>`),
-  // 技能（專用技能）：八方へ光を放つ星
+  // 星（奇跡の絵が無いときの代わり。前は技能ボタン）：八方へ光を放つ星
   skill: svg(`<path fill="currentColor" d="M12 1.5l2.1 6.2 6.4-2.2-3.9 5.5 5.9 3.1-6.6.6.9 6.6L12 16.6l-4.8 4.7.9-6.6-6.6-.6 5.9-3.1-3.9-5.5 6.4 2.2z"/>`),
   sprint: svg(`<circle cx="15.5" cy="4" r="2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 21l3-6 3 2.5V22M8.5 10.5l3.5-3 3.5 3 3 1M12 7.5l-.8 5.5M2.5 9h4M1.5 13h4M3 17h3"/>`),
   dodge: svg(`<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4.5 16.5a7.5 7.5 0 0 1 13.4-6.6M18.5 4.8l-.6 5.1-5-.9"/><circle cx="7" cy="19" r="1.4" fill="currentColor"/>`),
