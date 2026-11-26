@@ -190,7 +190,8 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
   spikeMesh.setIndices(Array.from({ length: SV }, (_, i) => i));
   spikeMesh.update(pc.PRIMITIVE_TRIANGLES);
   const rockMat = new pc.StandardMaterial();
-  rockMat.diffuse = new pc.Color(1, 1, 1); rockMat.diffuseVertexColor = true; rockMat.useMetalness = true; rockMat.metalness = 0; rockMat.gloss = 0.22;
+  // 岩の色は材質で決める（頂点の色だけでは効かず、昼の光で白く氷のように見えた）。頂点の色は明るさの揺らぎだけ
+  rockMat.diffuse = new pc.Color(0.36, 0.31, 0.26); rockMat.diffuseVertexColor = true; rockMat.useMetalness = true; rockMat.metalness = 0; rockMat.gloss = 0.12;
   rockMat.update();
   const spikeMi = new pc.MeshInstance(spikeMesh, rockMat);
   spikeMi.cull = false;
@@ -292,7 +293,7 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
       for (let k = 0; k < n; k++) {
         const th = (k / n) * Math.PI * 2 + (i % 2) * 0.3 + (rnd() - 0.5) * 0.25, rr = rm + (rnd() - 0.5) * (r1 - r0) * 0.6;
         const px = x + Math.cos(th) * rr, pz = z + Math.sin(th) * rr;
-        spike(px, y, pz, 0.32 + rnd() * 0.16, 1.3 + i * 0.25 + rnd() * 0.6, 0.12 + rnd() * 0.18, th, life, rnd() * 0.08);
+        spike(px, y, pz, 0.40 + rnd() * 0.2, 1.3 + i * 0.25 + rnd() * 0.6, 0.12 + rnd() * 0.18, th, life, rnd() * 0.08);
         if (rnd() < 0.5) for (let c = 0; c < 3; c++) chip(px, y + 0.2, pz, Math.cos(th) * (1 + rnd() * 2), 2 + rnd() * 4, Math.sin(th) * (1 + rnd() * 2), 0.8 + rnd() * 0.6, 0.04 + rnd() * 0.06, rockCol(), y);
       }
       dust?.burst({ x, y, z, lift: 0.3 });
@@ -582,8 +583,8 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
             if (sv >= SV) break;
             spikePos[sv * 3] = px; spikePos[sv * 3 + 1] = py; spikePos[sv * 3 + 2] = pz;
             spikeNor[sv * 3] = nx; spikeNor[sv * 3 + 1] = ny; spikeNor[sv * 3 + 2] = nz;
-            const c = top ? 0.62 * sh : 0.36 * sh;   // 根もとは暗く、先は明るい岩の色
-            spikeCol[sv * 4] = c * 1.05; spikeCol[sv * 4 + 1] = c * 0.94; spikeCol[sv * 4 + 2] = c * 0.8; spikeCol[sv * 4 + 3] = 1;
+            const c = top ? 1.0 * sh : 0.62 * sh;   // 根もとは暗く、先は明るい（岩の色は材質）
+            spikeCol[sv * 4] = c; spikeCol[sv * 4 + 1] = c * 0.97; spikeCol[sv * 4 + 2] = c * 0.92; spikeCol[sv * 4 + 3] = 1;
             sv++;
           }
         }

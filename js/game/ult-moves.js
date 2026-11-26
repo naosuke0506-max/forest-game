@@ -248,7 +248,7 @@ export function createUltMoves(ctx) {
         const [fx, fz] = fwdOf(f.yaw);
         a.cx = f.x; a.cz = f.z;
         emit('ultEarth', { fighter: f, phase: 'slam', x: f.x + fx * 0.9, y: fy, z: f.z + fz * 0.9 });
-        emit('ultBurst', { fighter: f, ult: f.ultInfo, x: f.x, y: fy, z: f.z, radius: S.rings[S.rings.length - 1].r1, hits: 0 });
+        emit('ultBurst', { fighter: f, ult: f.ultInfo, x: f.x, y: fy, z: f.z, radius: S.rings[S.rings.length - 1].r1, hits: 0, ground: true });
       }
       // 岩の槍が輪になって次々に突き上がる：帯の中の敵に傷・打ち上げる・閉じ込める
       S.rings.forEach((R, i) => {

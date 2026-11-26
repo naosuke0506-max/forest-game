@@ -64,7 +64,7 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
    * 置けなければ近づけ・反対の横・低くも試す。margin：カメラのまわり（左右・上・後ろ）にも、これだけ空きが要る
    * （壁や屋根にぴったり寄った所に置くと、画面の半分が壁や屋根になる）。カメラから英雄の腰が見えることも確かめる
    */
-  function shot(f, fwd, side, up, look, margin, lookFwd = 0) {
+  function shot(f, fwd, side, up, look, margin, lookFwd = 0, span = 0) {
     const y = f.y ?? heightAt(f.x, f.z), a = (f.yaw * Math.PI) / 180;
     const Fx = -Math.sin(a), Fz = -Math.cos(a), Rx = Math.cos(a), Rz = -Math.sin(a);
     const head = [f.x, y + 1.5, f.z];
@@ -81,6 +81,11 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
           if (!around.every(([ox, oy, oz]) => ok(px + ox, py + oy, pz + oz, head))) continue;
           const L = [f.x + Rx * sd * 0.12 + Fx * lookFwd, y + look, f.z + Rz * sd * 0.12 + Fz * lookFwd];   // lookFwd：英雄の前のこれだけ先を見る（肩越し・見下ろし）
           if (player.cameraClear && !player.cameraClear(f.x, y + 0.9, f.z, [px, py, pz])) continue;   // カメラから腰が見える
+          // span：見る所の左右 span m まで見通せる（広く撮る構図で、手前の屋根や壁が画面の半分をふさがないように）
+          if (span && player.cameraClear) {
+            const vx = L[0] - px, vz = L[2] - pz, vl = Math.hypot(vx, vz) || 1, sx = -vz / vl, sz = vx / vl;
+            if (![-1, 1].every((g) => player.cameraClear(L[0] + sx * span * g, y + 1.2, L[2] + sz * span * g, [px, py, pz]))) continue;
+          }
           return { p: [px, py, pz], l: L };
         }
       }
@@ -98,7 +103,7 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
     cross: (f) => { const d = (ULT_SPECS.sword.dash.dist || 11) / 2; return shot(f, d, 9.5, 2.6, 1.0, 0.8, d); },   // 少し高く遠く（低いと、手前の背の高い草で体が隠れた）
     // （後半 2026-11-26）vast 高く広く（千岩槍獄の岩の槍の輪・天門開闢の光の槍の雨）・jump 跳ぶ道の横の低い所から見上げる（紅蓮崩天）・
     //   under 前の低い所から見上げる（天門開闢の浮いた体と門）
-    vast: (f) => shot(f, 8.5, 5, 7.5, 0.4, 1.3),
+    vast: (f) => shot(f, 8.5, 5, 7.5, 0.4, 1.3, 0, 4.5),
     jump: (f) => { const d = (ULT_SPECS.blunt?.jump.dist || 5) / 2; return shot(f, d, 7, 0.9, 2.4, 0.8, d); },
     under: (f) => shot(f, 4.2, 1.6, 0.6, 3.6, 0.5),
   };

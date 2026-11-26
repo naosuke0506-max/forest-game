@@ -182,7 +182,7 @@ export function createUltFx(app, { combat, fighters, camera, dust = null }) {
     charging.delete(c.f);
   }
 
-  combat.on('ultBurst', ({ fighter, ult, x, y, z, radius }) => {
+  combat.on('ultBurst', ({ fighter, ult, x, y, z, radius, ground }) => {
     const c = charging.get(fighter);
     if (c) endCharge(c);
     const el = ult?.element || 'holy', E = ELEMENT_KINDS[el] || ELEMENT_KINDS.holy, St = STYLE[el] || STYLE.holy, rgb = E.rgb;
@@ -192,13 +192,14 @@ export function createUltFx(app, { combat, fighters, camera, dust = null }) {
       const it = take(p);
       if (it) bursts.push({ kind: 'ring', it, x, y: y + 0.12, z, t: -delay, life, r0: 0.6, r1: radius * (p === waves2 ? 0.85 : 1.08), k, color: col });
     }
-    const dm = take(domes);
+    // ground：地面を走る技（千岩槍獄）。光の半球と柱は出さない（岩の槍が隠れた）
+    const dm = ground ? null : take(domes);
     if (dm) bursts.push({ kind: 'dome', it: dm, x, y, z, t: 0, life: 0.55, r0: 0.8, r1: radius * 0.72, k: 0.45, color: rgb });
-    const pl = take(pillars);
+    const pl = ground ? null : take(pillars);
     if (pl) bursts.push({ kind: 'pillar', it: pl, x, y, z, t: 0, life: 0.95, k: 1.7, color: rgb });
     // 光の玉：真ん中は小さく白く、まわりは属性の色（昼の明るい所で白く飛ばないように、大きさと明るさを抑える）
     glows.push({ x, y: y + 1.1, z, size: 2.8, life: 0.3, max: 0.3, color: white.map((c) => c * 0.6) });
-    glows.push({ x, y: y + 0.6, z, size: 6.5, life: 0.6, max: 0.6, color: rgb.map((c) => c * 0.55) });
+    glows.push({ x, y: y + 0.6, z, size: ground ? 3.5 : 6.5, life: 0.6, max: 0.6, color: rgb.map((c) => c * (ground ? 0.35 : 0.55)) });
     // 本物の光：強く光ってすぐ消える
     const L = lights.find((l) => !l.busy);
     if (L) {
