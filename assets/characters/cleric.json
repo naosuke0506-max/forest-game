@@ -158,6 +158,11 @@
    "loop": false,
    "speed": 0.0
   },
+  "cl_gate": {
+   "duration": 3.0,
+   "loop": false,
+   "speed": 0.0
+  },
   "mc_cut1": {
    "duration": 0.8667,
    "loop": false,

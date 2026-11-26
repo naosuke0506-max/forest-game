@@ -5,12 +5,18 @@
 //     雷の衣：体のまわりでぱちぱち。回避・疾驅の間は稲妻の姿。自分への落雷
 //   弓兵「颶風一矢」：大弓に巻く風（体のまわりの螺旋の筋と、弓へ吸い込まれる風の粒）→ 放つ閃光 → 嵐の大矢（光の芯・3 本の螺旋の風・後ろへ散る風の粒）→
 //     家の壁を破る所の木と漆喰の破片（world/arrow-holes.js の 'wallHole'）
-//   描画命令：線（稲妻・筋）1・破片 1（どれも出ている間だけ）、水の筒・波は 1 つずつ（出ている間だけ）
+//   長柄騎士「千岩槍獄」（2026-11-26）：突き立てた所から地が割れる（琥珀に光る割れ目）→ 岩の槍（五角の錐）が輪になって次々に突き上がる・岩の破片と砂煙 →
+//     閉じ込めた敵のまわりに岩の檻 → 最後に大きな岩の槍。岩の鎧：足もとから琥珀の粒が昇る
+//   打擊騎士「紅蓮崩天」：足もとから炎の柱（2 枚の筒が逆に回る）が昇り、跳び上がる体を包む・火の粉の尾 → 叩きつけると、まわりへ走る溶けた割れ目と
+//     噴き上がる炎（地面の火は game/combat.js の地面の火）。紅蓮の衣：体から火の粉。一撃ごとに炎が爆ぜる
+//   祓魔僧「天門開闢」：昇る光の粒 → 頭上の光の門（金の二重の輪と回る光の筋）→ 門から降る光の槍（落ちた所に光の輪）→ 門から太い光の柱。
+//     光輪：頭の上の金の輪・時々光の粒。返した光は、攻めた人へ走る光の筋
+//   描画命令：線（稲妻・筋・割れ目・門）1・破片 1・岩の槍 1（どれも出ている間だけ）、水の筒・波・炎の筒は 1 つずつ（出ている間だけ）
 import * as pc from 'playcanvas';
 import { canvasTexture, addMat, quads, billboard } from './hall-fire.js';
 import { ELEMENT_KINDS, ULT_SPECS } from '../game/data.js';
 
-const LINES = 360, DEBRIS = 160;
+const LINES = 420, DEBRIS = 160, SPIKES = 72;
 const rnd = Math.random;
 const lerp = (a, b, k) => a + (b - a) * k;
 const ease = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
@@ -86,7 +92,7 @@ function waveMesh(device) {
  * @param {pc.AppBase} app
  * @param {{ combat, fighters, views: Map, camera: pc.Entity, fx: object, me?: object, firstPerson?: () => boolean }} o fx：render/ult-fx.js
  */
-export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me = null, firstPerson = () => false }) {
+export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me = null, firstPerson = () => false, dust = null }) {
   const device = app.graphicsDevice;
   const yOf = (f) => f.y ?? 0;
   const right = new pc.Vec3(), up = new pc.Vec3(), tmp = new pc.Vec3();
@@ -176,6 +182,64 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
   const active = [];   // { kind: 'tornado'|'wave', ... }
   const veilOf = new Map();
 
+  // ---- 岩の槍（千岩槍獄）：地面から突き上がる五角の錐。全部で 1 つの形（光を受ける） ----
+  const SV = SPIKES * 15;
+  const spikePos = new Float32Array(SV * 3), spikeNor = new Float32Array(SV * 3), spikeCol = new Float32Array(SV * 4);
+  const spikeMesh = new pc.Mesh(device);
+  spikeMesh.setPositions(spikePos); spikeMesh.setNormals(spikeNor); spikeMesh.setColors(spikeCol);
+  spikeMesh.setIndices(Array.from({ length: SV }, (_, i) => i));
+  spikeMesh.update(pc.PRIMITIVE_TRIANGLES);
+  const rockMat = new pc.StandardMaterial();
+  rockMat.diffuse = new pc.Color(1, 1, 1); rockMat.diffuseVertexColor = true; rockMat.useMetalness = true; rockMat.metalness = 0; rockMat.gloss = 0.22;
+  rockMat.update();
+  const spikeMi = new pc.MeshInstance(spikeMesh, rockMat);
+  spikeMi.cull = false;
+  const spikeE = new pc.Entity('ult-rock-spikes');
+  spikeE.addComponent('render', { meshInstances: [spikeMi], castShadows: false, receiveShadows: true });
+  spikeE.enabled = false;
+  app.root.addChild(spikeE);
+  const spikes = [];   // { x, y, z, r, h, tx, tz, b: [5], a0, t, life, rise, sink, shade }
+  /** 岩の槍を 1 本出す（delay 秒後に突き上がる。tilt：傾き（外向き＋）、dir：傾ける向き（ラジアン）） */
+  function spike(x, y, z, r, h, tilt, dir, life, delay = 0) {
+    if (spikes.length >= SPIKES) spikes.shift();
+    spikes.push({ x, y, z, r, h, tx: Math.cos(dir) * tilt, tz: Math.sin(dir) * tilt, b: Array.from({ length: 5 }, () => 0.78 + rnd() * 0.4),
+      a0: rnd() * Math.PI, t: -delay, life, rise: 0.11, sink: 0.45, shade: 0.75 + rnd() * 0.3 });
+  }
+  const cracks = [];    // { pts, t, life, c }：地の割れ目・溶けた割れ目（光る線）
+  /** 地の割れ目：中心からまわりへ n 本、len m ほど（折れながら） */
+  function crack(x, y, z, n, len, c, life, to = null) {
+    for (let k = 0; k < n; k++) {
+      const th = to ? to[k].th : (k / n) * Math.PI * 2 + rnd() * 0.5, L = to ? Math.hypot(to[k].x - x, to[k].z - z) + 0.6 : len * (0.7 + rnd() * 0.4);
+      const pts = [];
+      for (let j = 0; j <= 6; j++) {
+        const u = j / 6, side = j === 0 ? 0 : (rnd() - 0.5) * 0.7;
+        pts.push({ x: x + Math.cos(th) * L * u - Math.sin(th) * side, y: y + 0.06, z: z + Math.sin(th) * L * u + Math.cos(th) * side });
+      }
+      cracks.push({ pts, t: 0, life, c, grow: 0.25 });
+    }
+  }
+  const EARTH = ELEMENT_KINDS.earth.rgb, FIRE = ELEMENT_KINDS.fire.rgb, HOLY = ELEMENT_KINDS.holy.rgb;
+
+  // ---- 炎の柱（紅蓮崩天）：水の竜巻と同じ筒を、炎の色で（加算） ----
+  const fireMat = (color, opacity) => {
+    const m = new pc.StandardMaterial();
+    m.useLighting = false; m.useSkybox = false; m.useFog = false;
+    m.diffuse = new pc.Color(0, 0, 0); m.emissive = new pc.Color(...color); m.emissiveMap = wTex; m.emissiveIntensity = 1.6;
+    m.opacityMap = wTex; m.opacityMapChannel = 'a'; m.opacityVertexColor = true; m.opacityVertexColorChannel = 'a'; m.opacity = opacity;
+    m.blendType = pc.BLEND_ADDITIVEALPHA; m.depthWrite = false; m.cull = pc.CULLFACE_NONE;
+    m.update();
+    return m;
+  };
+  const pillarMesh = twisterMesh(device, (v) => 0.75 + 0.55 * v, 36, 10, 1.8);
+  const firePillars = Array.from({ length: 2 }, () => ({ a: makeEnt(pillarMesh, fireMat([1.0, 0.42, 0.08], 0.95), 'ult-fire-a'),
+    b: makeEnt(pillarMesh, fireMat([1.0, 0.78, 0.25], 0.8), 'ult-fire-b'), busy: false }));
+  const fireActs = [];   // { p, f, t, life, landed }
+
+  // ---- 光の門（天門開闢） ----
+  const gates = [];      // { x, y, z, t, life }
+  const spears = [];     // { x, y, z, from, t, fall }
+  const beams = [];      // { a, b, t, life }：光輪が返した光
+
   // ---- 雷（雷霆一閃） ----
   const trails = new Map();   // fighter → [{x, y, z, t}]
   const paths = [];           // { pts, t, life }
@@ -215,6 +279,87 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
     fx.ring(fighter.x, yOf(fighter), fighter.z, 6, 0.55, WIND, 2.2);
     for (let i = 0; i < 40; i++) burstSpark(p.x, p.y, p.z, i % 2 ? WIND : [1, 1, 1], 8);
   });
+  // ---- 千岩槍獄 ----
+  combat.on('ultEarth', ({ fighter, phase, x, y, z, r0, r1, i, target }) => {
+    const S = ULT_SPECS.polearm;
+    if (phase === 'slam') {
+      crack(x, y, z, 9, S.rings[S.rings.length - 1].r1 + 0.8, EARTH, S.time - S.at + 0.8);
+      fx.glow(x, y + 0.3, z, 3.2, 0.35, EARTH.map((c) => c * 0.9));
+      for (let n = 0; n < 26; n++) chip(x, y + 0.1, z, (rnd() - 0.5) * 6, 2 + rnd() * 5, (rnd() - 0.5) * 6, 1 + rnd() * 0.8, 0.05 + rnd() * 0.08, rockCol(), y);
+    }
+    if (phase === 'ring') {
+      const rm = (r0 + r1) / 2, n = Math.max(6, Math.round((2 * Math.PI * rm) / 1.7)), life = S.time - S.rings[i].at + 1.0;
+      for (let k = 0; k < n; k++) {
+        const th = (k / n) * Math.PI * 2 + (i % 2) * 0.3 + (rnd() - 0.5) * 0.25, rr = rm + (rnd() - 0.5) * (r1 - r0) * 0.6;
+        const px = x + Math.cos(th) * rr, pz = z + Math.sin(th) * rr;
+        spike(px, y, pz, 0.32 + rnd() * 0.16, 1.3 + i * 0.25 + rnd() * 0.6, 0.12 + rnd() * 0.18, th, life, rnd() * 0.08);
+        if (rnd() < 0.5) for (let c = 0; c < 3; c++) chip(px, y + 0.2, pz, Math.cos(th) * (1 + rnd() * 2), 2 + rnd() * 4, Math.sin(th) * (1 + rnd() * 2), 0.8 + rnd() * 0.6, 0.04 + rnd() * 0.06, rockCol(), y);
+      }
+      dust?.burst({ x, y, z, lift: 0.3 });
+    }
+    if (phase === 'hit' && target) {
+      // 岩の檻：閉じ込めた敵のまわりに、内へ傾いた 3 本
+      for (let k = 0; k < 3; k++) {
+        const th = (k / 3) * Math.PI * 2 + rnd() * 0.5;
+        spike(x + Math.cos(th) * 0.62, y, z + Math.sin(th) * 0.62, 0.2, 1.7 + rnd() * 0.3, -0.32, th, Math.max(0.6, target.pinned || 1.5) + 0.2, 0.05);
+      }
+      fx.glow(x, y + 1, z, 1.4, 0.2, EARTH);
+    }
+    if (phase === 'big') {
+      spike(x, y, z, 1.05, 6.2, 0.04, rnd() * 6.28, 1.5);
+      for (let k = 0; k < 5; k++) { const th = rnd() * 6.28; spike(x + Math.cos(th) * 1.3, y, z + Math.sin(th) * 1.3, 0.35, 2 + rnd(), 0.35, th, 1.4, 0.04); }
+      crack(x, y, z, 6, 3.5, EARTH, 1.4);
+      fx.glow(x, y + 1, z, 4, 0.3, EARTH);
+      fx.ring(x, y, z, 4.5, 0.5, EARTH, 2.2);
+      for (let n = 0; n < 40; n++) chip(x, y + 0.5, z, (rnd() - 0.5) * 8, 3 + rnd() * 8, (rnd() - 0.5) * 8, 1.2 + rnd(), 0.06 + rnd() * 0.1, rockCol(), y);
+      dust?.burst({ x, y, z, lift: 0.2 });
+    }
+  });
+  const rockCol = () => { const k = 0.32 + rnd() * 0.25; return [k * 1.05, k * 0.95, k * 0.82]; };
+
+  // ---- 紅蓮崩天 ----
+  combat.on('ultFire', ({ fighter, phase, x, y, z, fissures }) => {
+    if (phase === 'pillar') {
+      const p = firePillars.find((it) => !it.busy);
+      if (p) { p.busy = true; p.a.e.enabled = true; p.b.e.enabled = true; fireActs.push({ p, f: fighter, t: 0, x, y, z }); }
+    }
+    if (phase === 'jump') { fx.ring(x, y, z, 3.5, 0.45, FIRE, 2.2); fx.glow(x, y + 0.5, z, 3, 0.3, FIRE); }
+    if (phase === 'slam') {
+      crack(x, y, z, fissures?.length || 7, 5, [1, 0.45, 0.1], 2.4, fissures?.length ? fissures : null);
+      crack(x, y, z, 6, 3, [1, 0.7, 0.25], 1.6);
+      for (const q of fissures || []) for (let n = 0; n < 14; n++) {
+        fx.spark(q.x + (rnd() - 0.5) * 0.6, q.y + 0.1, q.z + (rnd() - 0.5) * 0.6, (rnd() - 0.5) * 1.5, 5 + rnd() * 7, (rnd() - 0.5) * 1.5, 0.6 + rnd() * 0.5, 0.08 + rnd() * 0.08,
+          rnd() < 0.5 ? [1, 0.45, 0.08] : [1, 0.8, 0.3], { grav: 6, drag: 0.4 });
+      }
+      for (let n = 0; n < 30; n++) chip(x, y + 0.2, z, (rnd() - 0.5) * 9, 3 + rnd() * 6, (rnd() - 0.5) * 9, 1 + rnd() * 0.8, 0.05 + rnd() * 0.08, rnd() < 0.5 ? [0.25, 0.12, 0.08] : [1, 0.45, 0.1], y);
+      fx.glow(x, y + 0.5, z, 5, 0.4, FIRE);
+    }
+  });
+  combat.on('auraBurst', ({ x, y, z, radius }) => {
+    fx.glow(x, y, z, 2.6, 0.25, [1, 0.55, 0.15]);
+    fx.ring(x, y - 0.9, z, radius, 0.35, FIRE, 2.4);
+    for (let n = 0; n < 22; n++) burstSpark(x, y, z, rnd() < 0.5 ? [1, 0.5, 0.1] : [1, 0.85, 0.35], 6);
+  });
+
+  // ---- 天門開闢 ----
+  combat.on('ultHoly', ({ fighter, phase, x, y, z, from, fall }) => {
+    if (phase === 'gate') { gates.push({ x, y, z, t: 0, life: ULT_SPECS.cleric.time - ULT_SPECS.cleric.at + 0.4 }); fx.glow(x, y, z, 9, 0.5, HOLY); }
+    if (phase === 'spear' && from) spears.push({ x, y, z, from, t: 0, fall: fall || 0.18 });
+    if (phase === 'impact') {
+      fx.glow(x, y + 0.4, z, 2.2, 0.25, [1, 0.92, 0.6]);
+      fx.ring(x, y, z, 1.8, 0.35, HOLY, 2.4);
+      for (let n = 0; n < 12; n++) burstSpark(x, y + 0.2, z, rnd() < 0.5 ? HOLY : [1, 1, 0.9], 5);
+    }
+    if (phase === 'pillar') {
+      const g = gates[gates.length - 1];
+      if (g) { g.pillar = 0; g.px = x; g.pz = z; g.py = y; }
+    }
+  });
+  combat.on('auraReflect', ({ fighter, target }) => {
+    beams.push({ a: { x: fighter.x, y: yOf(fighter) + 1.3, z: fighter.z }, b: { x: target.x, y: yOf(target) + 1.2, z: target.z }, t: 0, life: 0.3 });
+    fx.glow(target.x, yOf(target) + 1.2, target.z, 1.6, 0.2, HOLY);
+  });
+
   combat.on('deflect', ({ x, y, z }) => {
     fx.glow(x, y, z, 1.6, 0.25, [0.6, 0.85, 1]);
     for (let i = 0; i < 22; i++) { const a = rnd() * Math.PI * 2, sp = 2 + rnd() * 3; fx.spark(x, y, z, Math.cos(a) * sp, 1 + rnd() * 3, Math.sin(a) * sp, 0.5 + rnd() * 0.4, 0.05 + rnd() * 0.04, [0.6, 0.85, 1], { grav: 9, drag: 0.6 }); }
@@ -409,6 +554,166 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
         }
       }
 
+      // ---- 岩の槍（千岩槍獄）：突き上がる（少し行き過ぎて戻る）→ 立つ → 沈む ----
+      let sv = 0;
+      for (let i = spikes.length - 1; i >= 0; i--) {
+        const K = spikes[i];
+        K.t += dt;
+        if (K.t >= K.life) { spikes.splice(i, 1); continue; }
+      }
+      for (const K of spikes) {
+        if (K.t < 0) continue;
+        const u = Math.min(1, K.t / K.rise), over = u < 1 ? u * (1 + 0.25 * Math.sin(u * Math.PI)) : 1;
+        const sink = K.t > K.life - K.sink ? (K.life - K.t) / K.sink : 1;
+        const k = Math.max(0, Math.min(over, 1.1) * sink), yo = -(1 - k) * K.h * 1.05;
+        const ax = K.x + K.tx * K.h, ay = K.y + K.h + yo, az = K.z + K.tz * K.h;
+        for (let j = 0; j < 5; j++) {
+          const t0 = K.a0 + (j / 5) * Math.PI * 2, t1 = K.a0 + ((j + 1) / 5) * Math.PI * 2;
+          const bx0 = K.x + Math.cos(t0) * K.r * K.b[j], bz0 = K.z + Math.sin(t0) * K.r * K.b[j];
+          const bx1 = K.x + Math.cos(t1) * K.r * K.b[(j + 1) % 5], bz1 = K.z + Math.sin(t1) * K.r * K.b[(j + 1) % 5];
+          const by = K.y + yo - 0.25;
+          // 面の向き（外向き）
+          const ex = bx1 - bx0, ey = 0, ez = bz1 - bz0, fx2 = ax - bx0, fy2 = ay - by, fz2 = az - bz0;
+          let nx = ey * fz2 - ez * fy2, ny = ez * fx2 - ex * fz2, nz = ex * fy2 - ey * fx2;
+          const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+          if (nx * (bx0 + bx1 - 2 * K.x) + nz * (bz0 + bz1 - 2 * K.z) < 0) { nx = -nx; ny = -ny; nz = -nz; }
+          const sh = K.shade * (0.85 + 0.15 * ((j * 7) % 3) / 2);
+          for (const [px, py, pz, top] of [[bx0, by, bz0, 0], [bx1, by, bz1, 0], [ax, ay, az, 1]]) {
+            if (sv >= SV) break;
+            spikePos[sv * 3] = px; spikePos[sv * 3 + 1] = py; spikePos[sv * 3 + 2] = pz;
+            spikeNor[sv * 3] = nx; spikeNor[sv * 3 + 1] = ny; spikeNor[sv * 3 + 2] = nz;
+            const c = top ? 0.62 * sh : 0.36 * sh;   // 根もとは暗く、先は明るい岩の色
+            spikeCol[sv * 4] = c * 1.05; spikeCol[sv * 4 + 1] = c * 0.94; spikeCol[sv * 4 + 2] = c * 0.8; spikeCol[sv * 4 + 3] = 1;
+            sv++;
+          }
+        }
+      }
+      for (let v = sv; v < SV; v++) { spikePos[v * 3 + 1] = -9999; }
+      spikeE.enabled = sv > 0;
+      if (sv) { spikeMesh.setPositions(spikePos); spikeMesh.setNormals(spikeNor); spikeMesh.setColors(spikeCol); spikeMesh.update(pc.PRIMITIVE_TRIANGLES); }
+      // 割れ目（地の割れ目は琥珀、溶けた割れ目は橙）：中から外へ走り、光りながら消える
+      for (let i = cracks.length - 1; i >= 0; i--) {
+        const C = cracks[i];
+        C.t += dt;
+        if (C.t >= C.life) { cracks.splice(i, 1); continue; }
+        const grow = Math.min(1, C.t / C.grow), k = Math.min(1, (C.life - C.t) / 0.6) * (0.75 + 0.25 * Math.sin(time * 9 + i));
+        const n = C.pts.length - 1, upto = grow * n;
+        for (let j = 1; j <= n; j++) {
+          if (j - 1 > upto) break;
+          const a = C.pts[j - 1], b0 = C.pts[j], m = Math.min(1, upto - (j - 1));
+          const bx = a.x + (b0.x - a.x) * m, bz = a.z + (b0.z - a.z) * m;
+          const w = 0.22 * (1 - (j / n) * 0.6);
+          segment(a.x, a.y, a.z, bx, b0.y, bz, w, C.c[0] * k, C.c[1] * k, C.c[2] * k);
+        }
+      }
+      // 岩の鎧：足もとから琥珀の粒が昇る
+      for (const f of fighters) {
+        if (!f.alive || f.hidden || f.aura?.kind !== 'rock' || (f === me && firstPerson())) continue;
+        if (rnd() < dt * 14) { const th = rnd() * 6.28; fx.spark(f.x + Math.cos(th) * 0.5, yOf(f) + 0.1, f.z + Math.sin(th) * 0.5, 0, 0.8 + rnd(), 0, 0.8, 0.04, EARTH, { drag: 0.5 }); }
+        if (rnd() < dt * 3) chip(f.x + (rnd() - 0.5) * 0.6, yOf(f) + 0.3 + rnd() * 1.2, f.z + (rnd() - 0.5) * 0.6, 0, 0.5, 0, 0.6, 0.04, rockCol(), yOf(f));
+      }
+
+      // ---- 炎の柱（紅蓮崩天）：跳ぶ体を包んで昇り、叩きつけた後に消える ----
+      for (let i = fireActs.length - 1; i >= 0; i--) {
+        const A = fireActs[i], f = A.f, S = ULT_SPECS.blunt;
+        A.t += dt;
+        const up = Math.min(1, A.t / S.jump.from), after = Math.max(0, (A.t - S.at) / 0.5);
+        const lift = f.lift || 0, H = lerp(1.0, 6.5, ease(up)) + lift * 1.1, sc = lerp(0.6, 1.0, up) * (1 + after * 1.6);
+        const fade = 1 - ease(after);
+        for (const [it, dir, sp] of [[A.p.a, 1, 460], [A.p.b, -1, 340]]) {
+          it.e.setPosition(f.x, yOf(f) - 0.05, f.z);
+          it.e.setLocalScale(sc * (dir > 0 ? 1 : 0.78), H * (dir > 0 ? 1 : 0.92), sc * (dir > 0 ? 1 : 0.78));
+          it.e.setEulerAngles(0, time * sp * dir, 0);
+          it.mat.emissiveMapOffset.set(0, -time * 2.4); it.mat.opacityMapOffset.set(0, -time * 2.4);
+          it.mat.opacity = (dir > 0 ? 0.95 : 0.8) * fade * Math.min(1, A.t / 0.15);
+          it.mat.update();
+        }
+        // 火の粉（跳んでいる間は体から尾を引く）
+        if (fade > 0.05) for (let n = 0; n < 3; n++) {
+          const th = rnd() * 6.28, r = sc * (0.5 + rnd() * 0.6);
+          fx.spark(f.x + Math.cos(th) * r, yOf(f) + lift + rnd() * 1.6, f.z + Math.sin(th) * r, (rnd() - 0.5) * 1.5, 2 + rnd() * 3, (rnd() - 0.5) * 1.5, 0.5 + rnd() * 0.4, 0.05 + rnd() * 0.05,
+            rnd() < 0.5 ? [1, 0.45, 0.08] : [1, 0.82, 0.35], { grav: -1, drag: 0.6 });
+        }
+        if (after >= 1 || !f.alive) { A.p.a.e.enabled = false; A.p.b.e.enabled = false; A.p.busy = false; fireActs.splice(i, 1); }
+      }
+      // 紅蓮の衣：体から火の粉と小さな炎
+      for (const f of fighters) {
+        if (!f.alive || f.hidden || f.aura?.kind !== 'fire' || (f === me && firstPerson())) continue;
+        if (rnd() < dt * 22) {
+          const th = rnd() * 6.28, r = 0.25 + rnd() * 0.25;
+          fx.spark(f.x + Math.cos(th) * r, yOf(f) + 0.3 + rnd() * 1.4, f.z + Math.sin(th) * r, 0, 1.2 + rnd() * 1.5, 0, 0.45 + rnd() * 0.3, 0.05 + rnd() * 0.04,
+            rnd() < 0.6 ? [1, 0.42, 0.08] : [1, 0.75, 0.3], { grav: -1, drag: 0.8 });
+        }
+      }
+
+      // ---- 光の門（天門開闢）：金の二重の輪・回る光の筋・最後に太い光の柱 ----
+      for (let i = gates.length - 1; i >= 0; i--) {
+        const G = gates[i];
+        G.t += dt;
+        if (G.t >= G.life) { gates.splice(i, 1); continue; }
+        const open = ease(G.t / 0.45), k = open * Math.min(1, (G.life - G.t) / 0.4) * (0.85 + 0.15 * Math.sin(time * 6));
+        const R1 = 5.2 * open, R2 = 3.4 * open, N = 28;
+        for (const [R, w, c, spin] of [[R1, 0.32, HOLY, 0.25], [R2, 0.2, [1, 0.95, 0.75], -0.4]]) {
+          for (let j = 0; j < N; j++) {
+            const a0 = (j / N) * Math.PI * 2 + time * spin, a1 = ((j + 1) / N) * Math.PI * 2 + time * spin;
+            segment(G.x + Math.cos(a0) * R, G.y, G.z + Math.sin(a0) * R, G.x + Math.cos(a1) * R, G.y, G.z + Math.sin(a1) * R, w, c[0] * k, c[1] * k, c[2] * k);
+          }
+        }
+        for (let j = 0; j < 12; j++) {   // 回る光の筋（門の中）
+          const a = (j / 12) * Math.PI * 2 - time * 0.6;
+          segment(G.x + Math.cos(a) * R2 * 0.2, G.y, G.z + Math.sin(a) * R2 * 0.2, G.x + Math.cos(a) * R1 * 0.95, G.y, G.z + Math.sin(a) * R1 * 0.95, 0.16, HOLY[0] * k * 0.7, HOLY[1] * k * 0.7, HOLY[2] * k * 0.7);
+        }
+        if (rnd() < 0.5) fx.glow(G.x, G.y, G.z, 6 * open, 0.12, HOLY.map((c) => c * 0.5 * k));
+        // 光の柱：門から地面へ（太い筋を重ねる）
+        if (G.pillar !== undefined) {
+          G.pillar += dt;
+          const pk = Math.max(0, 1 - G.pillar / 0.8) * Math.min(1, G.pillar / 0.06);
+          if (pk > 0) {
+            segment(G.px, G.py, G.pz, G.x, G.y, G.z, 3.6 * pk, HOLY[0] * pk * 0.8, HOLY[1] * pk * 0.8, HOLY[2] * pk * 0.8);
+            segment(G.px, G.py, G.pz, G.x, G.y, G.z, 1.4 * pk, pk, pk, pk * 0.9);
+          }
+        }
+      }
+      // 光の槍：門から落ちる（光の芯と、金の尾）
+      for (let i = spears.length - 1; i >= 0; i--) {
+        const P = spears[i];
+        P.t += dt;
+        const u = Math.min(1, P.t / P.fall);
+        const hx = lerp(P.from.x, P.x, u), hy = lerp(P.from.y, P.y, u), hz = lerp(P.from.z, P.z, u);
+        const dx = P.x - P.from.x, dy = P.y - P.from.y, dz = P.z - P.from.z, dl = Math.hypot(dx, dy, dz) || 1, L = Math.min(4, dl * u);
+        segment(hx - (dx / dl) * L, hy - (dy / dl) * L, hz - (dz / dl) * L, hx, hy, hz, 0.34, HOLY[0], HOLY[1], HOLY[2]);
+        segment(hx - (dx / dl) * L * 0.6, hy - (dy / dl) * L * 0.6, hz - (dz / dl) * L * 0.6, hx, hy, hz, 0.1, 1, 1, 0.95);
+        if (P.t >= P.fall + 0.05) spears.splice(i, 1);
+      }
+      // 光輪：頭の上の金の輪（宙に浮いている間も）・時々光の粒
+      for (const f of fighters) {
+        if (!f.alive || f.hidden || f.aura?.kind !== 'holy' || (f === me && firstPerson())) continue;
+        const k = Math.min(1, (f.aura.time - f.aura.left) / 0.4) * Math.min(1, f.aura.left / 0.6);
+        const hy = yOf(f) + (f.lift || 0) + 2.0, N = 14, R = 0.3;
+        for (let j = 0; j < N; j++) {
+          const a0 = (j / N) * Math.PI * 2, a1 = ((j + 1) / N) * Math.PI * 2;
+          segment(f.x + Math.cos(a0) * R, hy, f.z + Math.sin(a0) * R, f.x + Math.cos(a1) * R, hy, f.z + Math.sin(a1) * R, 0.07, HOLY[0] * k, HOLY[1] * k, HOLY[2] * k);
+        }
+        if (rnd() < dt * 8) { const th = rnd() * 6.28; fx.spark(f.x + Math.cos(th) * 0.5, yOf(f) + 0.3 + rnd() * 1.4, f.z + Math.sin(th) * 0.5, 0, 0.6, 0, 0.7, 0.035, HOLY, { drag: 0.5 }); }
+      }
+      // 祓魔僧が浮いて昇る間：まわりを昇る光の粒
+      for (const f of fighters) {
+        if (!f.alive || f.char !== 'cleric' || f.action?.kind !== 'ult' || !(f.lift > 0.05)) continue;
+        for (let n = 0; n < 2; n++) {
+          const th = time * 4 + n * Math.PI + rnd() * 0.4, r = 0.9;
+          fx.spark(f.x + Math.cos(th) * r, yOf(f) + rnd() * (f.lift + 1.8), f.z + Math.sin(th) * r, -Math.sin(th) * 1.5, 2 + rnd() * 2, Math.cos(th) * 1.5, 0.6, 0.045, rnd() < 0.5 ? HOLY : [1, 1, 0.9], { drag: 0.6 });
+        }
+      }
+      // 返した光：光輪の人から、攻めた人へ走る
+      for (let i = beams.length - 1; i >= 0; i--) {
+        const B = beams[i];
+        B.t += dt;
+        const k = Math.max(0, 1 - B.t / B.life);
+        segment(B.a.x, B.a.y, B.a.z, B.b.x, B.b.y, B.b.z, 0.22 * k, HOLY[0] * k, HOLY[1] * k, HOLY[2] * k);
+        segment(B.a.x, B.a.y, B.a.z, B.b.x, B.b.y, B.b.z, 0.07 * k, k, k, k);
+        if (B.t >= B.life) beams.splice(i, 1);
+      }
+
       // ---- 線を描く ----
       for (let i = lineUsed; i < LINES; i++) { const o = i * 12; for (let k = 0; k < 12; k++) lq.pos[o + k] = k % 3 === 1 ? -9999 : 0; }
       lineE.enabled = lineUsed > 0;
@@ -439,6 +744,6 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
       }
       fx.glow(x, y, z, 2.5, 0.3, [0.85, 1, 0.9]);
     },
-    get stats() { return { lines: lineUsed, chips: chips.filter((c) => c.life > 0).length, active: active.length, veils: veilOf.size }; },
+    get stats() { return { lines: lineUsed, chips: chips.filter((c) => c.life > 0).length, active: active.length, veils: veilOf.size, spikes: spikes.length, fire: fireActs.length, gates: gates.length }; },
   };
 }

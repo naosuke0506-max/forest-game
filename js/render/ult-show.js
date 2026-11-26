@@ -96,12 +96,20 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
     high: (f) => shot(f, -8.5, 2.5, 8.5, 0.3, 1.0, 5),
     behind: (f) => shot(f, -3.2, 0.95, 1.85, 1.35, 0.5, 9),
     cross: (f) => { const d = (ULT_SPECS.sword.dash.dist || 11) / 2; return shot(f, d, 9.5, 2.6, 1.0, 0.8, d); },   // 少し高く遠く（低いと、手前の背の高い草で体が隠れた）
+    // （後半 2026-11-26）vast 高く広く（千岩槍獄の岩の槍の輪・天門開闢の光の槍の雨）・jump 跳ぶ道の横の低い所から見上げる（紅蓮崩天）・
+    //   under 前の低い所から見上げる（天門開闢の浮いた体と門）
+    vast: (f) => shot(f, 8.5, 5, 7.5, 0.4, 1.3),
+    jump: (f) => { const d = (ULT_SPECS.blunt?.jump.dist || 5) / 2; return shot(f, d, 7, 0.9, 2.4, 0.8, d); },
+    under: (f) => shot(f, 4.2, 1.6, 0.6, 3.6, 0.5),
   };
   /** 英雄ごとの構図の並び：[始まる秒, 種類]。まだ英雄ごとの技が無い人は、寄り → 放つ少し前に引き */
   function timeline(f, time, at) {
     const S = ULT_SPECS[f.char];
     if (f.char === 'sword' && S) return [[0, 'close'], [S.bolt.from - 0.05, 'high'], [S.stance, 'close'], [S.dash.at - 0.2, 'cross'], [S.strike.at - 0.06, 'wide']];
     if (f.char === 'archer' && S) return [[0, 'close'], [0.95, 'behind']];
+    if (f.char === 'polearm' && S) return [[0, 'close'], [S.at - 0.14, 'wide'], [S.rings[1].at + 0.1, 'vast']];
+    if (f.char === 'blunt' && S) return [[0, 'close'], [S.jump.from - 0.08, 'jump'], [S.at - 0.06, 'wide']];
+    if (f.char === 'cleric' && S) return [[0, 'close'], [S.rise[1] - 0.2, 'under'], [S.rain.from + 0.15, 'vast'], [S.pillar.at - 0.12, 'wide']];
     return [[0, 'close'], [at - 0.12, 'wide']];
   }
 
@@ -199,7 +207,9 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
             // 寄りの間は少しずつ前へ寄る
             const push = P.kind === 'close' ? Math.min(1, (t - P.t0) / 1.2) * 0.09 : 0;
             const C = P.pose;
-            return [C.p[0] + (C.l[0] - C.p[0]) * push, C.p[1] + (C.l[1] - C.p[1]) * push, C.p[2] + (C.l[2] - C.p[2]) * push, C.l];
+            // 跳ぶ・浮く体（見た目の高さ lift）を追って見上げる。寄りはカメラも一緒に上がる
+            const lift = S.f.lift || 0, up = P.kind === 'close' ? lift : 0;
+            return [C.p[0] + (C.l[0] - C.p[0]) * push, C.p[1] + up + (C.l[1] - C.p[1]) * push, C.p[2] + (C.l[2] - C.p[2]) * push, [C.l[0], C.l[1] + lift, C.l[2]]];
           };
           if (Pc) {
             let [qx, qy, qz, L] = at2(Pc);

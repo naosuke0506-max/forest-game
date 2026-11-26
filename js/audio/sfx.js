@@ -656,7 +656,8 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
      */
     ultHero(kind, f, { dur = 1, x, y, z } = {}) {
       const src = x !== undefined ? { x, y, z, isPlayer: false } : f;
-      const loud = { flash: 1.6, bolt: 1.4, pierce: 0.9, stance: 0.9, dash: 1.5, auraStrike: 1.0, draw: 1.2, release: 1.9, wallBreak: 1.5, deflect: 0.8 }[kind] ?? 1;
+      const loud = { flash: 1.6, bolt: 1.4, pierce: 0.9, stance: 0.9, dash: 1.5, auraStrike: 1.0, draw: 1.2, release: 1.9, wallBreak: 1.5, deflect: 0.8,
+        rockRing: 1.4, bigSpike: 1.8, fireRise: 1.3, fireJump: 1.3, auraBurst: 0.9, gate: 1.6, spear: 0.8, holyImpact: 0.7, reflect: 0.8 }[kind] ?? 1;
       const d = at(src, loud, { ref: 25, max: 200 });
       if (!d) return;
       const c = audio.ctx;
@@ -705,6 +706,45 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
       } else if (kind === 'deflect') {
         noiseHit(d, { t: 0, dur: 0.4, type: 'bandpass', freq: 1400, freqEnd: 600, q: 1, attack: 0.005, gain: 0.5 });
         toneHit(d, { t: 0, dur: 0.15, f0: 500, f1: 900, type: 'sine', attack: 0.01, gain: 0.08 });
+      } else if (kind === 'rockRing') {
+        // 千岩槍獄：岩の槍の輪が突き上がる（地鳴りと、岩の割れる音がばらばらに）
+        verb(0.5);
+        toneHit(d, { t: 0, dur: 0.6, f0: 70, f1: 38, type: 'sine', attack: 0.005, gain: 0.55 });
+        noiseHit(d, { t: 0, dur: 0.45, type: 'lowpass', freq: 900, freqEnd: 160, attack: 0.002, gain: 0.55 });
+        for (let i = 0; i < 9; i++) noiseHit(d, { t: R() * 0.12, dur: 0.06, type: 'bandpass', freq: 400 + R() * 900, q: 1.2, attack: 0.001, gain: 0.18 });
+      } else if (kind === 'bigSpike') {
+        verb(0.8);
+        toneHit(d, { t: 0, dur: 1.2, f0: 85, f1: 28, type: 'sine', attack: 0.003, gain: 0.85 });
+        noiseHit(d, { t: 0, dur: 0.9, type: 'lowpass', freq: 1200, freqEnd: 140, attack: 0.001, gain: 0.85 });
+        noiseHit(d, { t: 0, dur: 0.12, type: 'highpass', freq: 1600, attack: 0.001, gain: 0.5 });
+        for (let i = 0; i < 14; i++) noiseHit(d, { t: 0.2 + R() * 1.0, dur: 0.07, type: 'bandpass', freq: 500 + R() * 900, q: 1.5, attack: 0.002, gain: 0.1 });   // 礫が降る
+      } else if (kind === 'fireRise') {
+        // 紅蓮崩天：足もとから炎の柱が昇る（ごうっと唸る）
+        verb(0.4);
+        noiseHit(d, { t: 0, dur: dur + 0.3, type: 'bandpass', freq: 250, freqEnd: 900, q: 0.8, attack: dur * 0.6, gain: 0.65 });
+        noiseHit(d, { t: 0, dur: dur + 0.3, type: 'lowpass', freq: 300, attack: 0.1, gain: 0.4 });
+        for (let i = 0; i < 10; i++) noiseHit(d, { t: R() * dur, dur: 0.02, type: 'highpass', freq: 2400, attack: 0.001, gain: 0.08 });
+      } else if (kind === 'fireJump') {
+        verb(0.5);
+        noiseHit(d, { t: 0, dur: 0.7, type: 'bandpass', freq: 300, freqEnd: 1800, q: 0.9, attack: 0.02, gain: 0.7 });   // 跳び上がる炎の風
+        toneHit(d, { t: 0, dur: 0.3, f0: 120, f1: 60, type: 'triangle', attack: 0.003, gain: 0.35 });                     // 踏み切り
+      } else if (kind === 'auraBurst') {
+        noiseHit(d, { t: 0, dur: 0.35, type: 'lowpass', freq: 1400, freqEnd: 200, attack: 0.002, gain: 0.55 });   // 炎が爆ぜる
+        for (let i = 0; i < 6; i++) noiseHit(d, { t: R() * 0.25, dur: 0.02, type: 'highpass', freq: 2400, attack: 0.001, gain: 0.1 });
+      } else if (kind === 'gate') {
+        // 天門開闢：光の門が開く（鐘の和音と、聖歌のような長い響き）
+        verb(1.0);
+        metal(d, { t: 0, base: 880, ratios: [1, 1.25, 1.5, 2.0, 2.5], dur: 2.6, gain: 0.16, decay: 0.85 });
+        for (const [fq, g] of [[220, 0.06], [277, 0.05], [330, 0.05], [440, 0.04]]) toneHit(d, { t: 0, dur: 2.2, f0: fq, f1: fq, type: 'sine', attack: 0.5, gain: g });
+        noiseHit(d, { t: 0, dur: 2.0, type: 'bandpass', freq: 3000, freqEnd: 5000, q: 4, attack: 0.6, gain: 0.08 });
+      } else if (kind === 'spear') {
+        noiseHit(d, { t: 0, dur: 0.18, type: 'bandpass', freq: 5000, freqEnd: 1500, q: 2, attack: 0.01, gain: 0.25 });   // 光の槍が落ちてくる
+      } else if (kind === 'holyImpact') {
+        metal(d, { t: 0, base: 1760 + R() * 300, ratios: [1, 2.01, 2.76], dur: 0.5, gain: 0.08 });
+        noiseHit(d, { t: 0, dur: 0.12, type: 'lowpass', freq: 1800, freqEnd: 300, attack: 0.001, gain: 0.35 });
+      } else if (kind === 'reflect') {
+        metal(d, { t: 0, base: 2200, ratios: [1, 1.5, 2.4], dur: 0.4, gain: 0.07 });
+        noiseHit(d, { t: 0, dur: 0.15, type: 'bandpass', freq: 3500, freqEnd: 1200, q: 2, attack: 0.002, gain: 0.25 });
       }
     },
     /**
@@ -767,6 +807,22 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   combat.on('auraStrike', ({ fighter }) => sfx.ultHero('auraStrike', fighter));
   combat.on('ultWind', ({ fighter, phase }) => sfx.ultHero(phase === 'release' ? 'release' : 'draw', fighter, { dur: 1.4 }));
   combat.on('deflect', ({ target, x, y, z }) => sfx.ultHero('deflect', target, { x, y, z }));
+  // （後半 2026-11-26）千岩槍獄・紅蓮崩天・天門開闢と、纏う物の音
+  combat.on('ultEarth', ({ fighter, phase, x, y, z }) => {
+    if (phase === 'ring') sfx.ultHero('rockRing', fighter, { x, y, z });
+    else if (phase === 'big') sfx.ultHero('bigSpike', fighter, { x, y, z });
+  });
+  combat.on('ultFire', ({ fighter, phase }) => {
+    if (phase === 'pillar') sfx.ultHero('fireRise', fighter, { dur: 1.2 });
+    else if (phase === 'jump') sfx.ultHero('fireJump', fighter);
+  });
+  combat.on('ultHoly', ({ fighter, phase, x, y, z }) => {
+    if (phase === 'gate') sfx.ultHero('gate', fighter);
+    else if (phase === 'spear') sfx.ultHero('spear', fighter, { x, y: y + 4, z });
+    else if (phase === 'impact') sfx.ultHero('holyImpact', fighter, { x, y, z });
+  });
+  combat.on('auraBurst', ({ fighter, x, y, z }) => sfx.ultHero('auraBurst', fighter, { x, y, z }));
+  combat.on('auraReflect', ({ target }) => sfx.ultHero('reflect', target));
   combat.on('ultBurst', ({ fighter, ult }) => sfx.ultBurst(fighter, ult?.element));
   // 祓魔僧の奇跡（game/miracles.js）：唱え始め・効き目・蘇る・光壁・炎・途切れる
   combat.on('miracleCast', ({ fighter, id }) => sfx.miracle('cast', fighter, { dur: MIRACLES[id].at }));

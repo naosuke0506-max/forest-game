@@ -346,7 +346,7 @@ export function createBot(fighter, rng, fighters) {
         const d = Math.hypot(b.target.x - f.x, b.target.z - f.z);
         chance = hp < 0.45 && d < 70 ? 0.4 : 0;
       } else {
-        const reach = f.char === 'sword' ? ULT_SPECS.sword.bolt.range : f.char === 'shield' ? ULT_SPECS.shield.radius : ULT_BURST.radius;
+        const reach = f.char === 'sword' ? ULT_SPECS.sword.bolt.range : f.char === 'shield' ? ULT_SPECS.shield.radius : ULT_SPECS[f.char]?.reach ?? ULT_BURST.radius;
         const R = reach * 0.8, fy = f.y ?? 0;
         const near = fighters.filter((t) => t !== f && t.alive && !t.hidden && b.known.get(t)?.seen
           && Math.hypot(t.x - f.x, t.z - f.z) < R && Math.abs((t.y ?? fy) - fy) < 3).length;

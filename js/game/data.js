@@ -474,13 +474,13 @@ export const ULTIMATES = {
   sword:   { name: '雷霆一閃', element: 'thunder', crest: 'swords',
              desc: '閃光で目をくらませて稲妻になり、稲妻の姿のまま超高速で 12 回ほど折れ曲がって敵を貫く（貫かれた敵はしびれ続ける）。体に戻ると同時に構え、カメラの向きへ一瞬で踏み込んで間の敵を斬り裂き、最後に落雷が落ちる。その後 10 秒、雷をまとい、回避と疾驅で稲妻になる（回避は遠くまで動けて、その間は無敵。どちらも時々自分に落雷が落ちる）' },
   polearm: { name: '千岩槍獄', element: 'earth', crest: 'mountain',
-             desc: '（Claude の案）槍を地面へ突き立てると、地が割れて周りから岩の槍が次々に突き上がり、敵を打ち上げて閉じ込める。最後に大きな岩の槍が真下から突き上がる。その後 10 秒、岩の鎧をまとい、受ける傷が半分になり、ひるまず、楯で受けられても崩れない' },
+             desc: '槍を地面へ突き立てると、地が割れて周りから岩の槍が次々に突き上がり、敵を打ち上げて閉じ込める。最後に大きな岩の槍が真下から突き上がる。その後 10 秒、岩の鎧をまとい、受ける傷が半分になり、ひるまず、吹き飛ばされない。槍を楯で受けた相手はよろめく' },
   blunt:   { name: '紅蓮崩天', element: 'fire', crest: 'hammer',
-             desc: '（Claude の案）武器を振りかぶって炎の柱の中へ跳び上がり、落ちながら地面へ叩きつける。地が裂けて溶けた岩と炎が噴き上がり、周りを焼き払う（当たった敵は火炎になる）。その後 10 秒、紅蓮の炎をまとい、一撃ごとに炎が爆ぜ、楯の上からでも傷が通る' },
+             desc: '武器を振りかぶって炎の柱の中へ跳び上がり、落ちながら地面へ叩きつける。地が裂けて溶けた岩と炎が噴き上がり、周りを焼き払う（当たった敵は火炎になる）。その後 10 秒、紅蓮の炎をまとい、一撃ごとに炎が爆ぜ、楯の上からでも傷が通る' },
   archer:  { name: '颶風一矢', element: 'wind', crest: 'wing',
              desc: '鷹の目で、建物を全部通して敵の姿を捉え、同時に大きな大弓を取り出して、嵐をまとうほど速い大きな矢を放つ。家さえ貫いて、通り抜けられるほどの穴が開く。その後 12 秒、鷹の目で建物越しに敵の姿が見え続ける' },
   cleric:  { name: '天門開闢', element: 'holy', crest: 'halo',
-             desc: '（Claude の案）宙に浮いて天を仰ぐと、頭上の空に光の門が開き、無数の光の槍が周りへ降りそそぐ（当たった敵は目がくらむ）。最後に門から太い光の柱が落ちる。その後 10 秒、光輪をまとい、傷が少しずつ癒え、受けた攻撃の一部を光で返す' },
+             desc: '宙に浮いて天を仰ぐと、頭上の空に光の門が開き、無数の光の槍が周りへ降りそそぐ（当たった敵は目がくらむ）。最後に門から太い光の柱が落ちる。その後 10 秒、光輪をまとい、傷が少しずつ癒え、受けた攻撃の一部を光で返す' },
 };
 /**
  * 1 回目の仮の必殺技：属性の衝撃波（どの英雄も同じ。2 回目で英雄ごとの技に替える）。
@@ -499,6 +499,18 @@ export const ULT_BURST = { time: 2.2, at: 1.25, radius: 8, damage: 40, minK: 0.4
  *     雷の衣：回避の距離が dodge 倍で、回避の間はずっと無敵。回避・疾驅の間は稲妻の姿になり、every 秒ごとに自分へ落雷（周り radius m の敵に傷 damage）
  *   弓兵（颶風一矢）：release 秒に嵐の大矢を放つ（speed m/秒・range m までまっすぐ。幅 width m の中の人・木・壁を貫く。傷 damage は楯でも防げない・横へ push m 吹き飛ばす）。
  *     家の壁に通れる穴（幅 hole.w m・高さ hole.h m）。始めから鷹の目（建物越しに敵が見える）で、技の後も hawk 秒続く。大弓は長弓を bow 倍の大きさで持つ
+ *   （2 回目の後半。2026-11-26。技の姿は Claude の案を利用者が「次行きましょう」で進めた）
+ *   長柄騎士（千岩槍獄）：at 秒に槍を地面へ突き立てる。rings＝岩の槍が輪になって次々に突き上がる（at 秒に r0〜r1 m の帯の敵に傷 damage・
+ *     launch m 打ち上げる（見た目）・pin 秒閉じ込める＝動けない）。big＝最後に大きな岩の槍が、閉じ込めた敵（いなければ近くの敵・前 ahead m）の真下から
+ *     突き上がる（range m まで。半径 radius m に傷 damage・launch m 打ち上げる）。岩の衣（岩の鎧）：受ける傷が cut だけ減る・ひるまない・吹き飛ばされない・
+ *     槍を楯で受けた相手はよろめく
+ *   打擊騎士（紅蓮崩天）：炎の柱の中へ跳び上がり（jump：from 秒に跳ぶ・apex 秒に一番高く height m・at 秒に叩きつける。前へ dist m まで。bot は相手の方へ）、
+ *     叩きつけると周り radius m に炎の傷 damage（端で minK 倍）・吹き飛ばし（push〜pushMin m）。blaze m 以内は火炎になる（溜まり 100%）、外は buildup %。
+ *     地の裂け目 fissures か所に地面の火。紅蓮の衣：近接の一撃ごとに炎が爆ぜる（当てた相手のまわり radius m に炎の傷 damage・火炎を buildup 溜める）・楯の上からでも傷が通る
+ *   祓魔僧（天門開闢）：lift m 宙に浮き（rise 秒の間に上がり、down 秒の間に下りる）、at 秒に頭上 gate m に光の門が開く。rain＝from〜to 秒に count 本の光の槍が、
+ *     半径 radius m に降る（aim の割合は敵を狙う。fall 秒で落ちる）。当たると半径 hit m に傷 damage・blind 秒目がくらむ（1 人 maxHits 本まで）。
+ *     pillar＝at 秒に門から太い光の柱が落ちる（自分のまわり radius m に傷 damage・吹き飛ばし push m）。光輪：1 秒に最大体力の heal ずつ癒える・受けた傷の reflect を光で返す
+ *   reach：bot が使う目安の届く所（m）
  */
 export const ULT_SPECS = {
   shield: { time: 2.2, at: 1.25, radius: 8.5, damage: 46, minK: 0.4, push: 9, pushMin: 3, stun: 1.5,
@@ -511,6 +523,19 @@ export const ULT_SPECS = {
   archer: { time: 2.4, release: 1.45, bow: 1.8, hawk: 12,
             arrow: { speed: 85, range: 160, width: 1.1, damage: 72, push: 3.5 },
             hole: { w: 1.7, h: 2.15 } },
+  polearm: { time: 2.6, at: 0.62, reach: 6.5,
+             rings: [{ at: 0.72, r0: 0.6, r1: 3.3 }, { at: 0.98, r0: 3.3, r1: 5.1 }, { at: 1.24, r0: 5.1, r1: 6.9 }],
+             damage: 16, launch: 1.2, pin: 1.8,
+             big: { at: 1.85, range: 8, ahead: 3.5, radius: 1.6, damage: 34, launch: 2.6 },
+             aura: { kind: 'rock', time: 10, cut: 0.5 } },
+  blunt:   { time: 2.4, at: 1.3, reach: 9,
+             jump: { from: 0.42, apex: 0.95, height: 3.6, dist: 5.5 },
+             radius: 7, damage: 44, minK: 0.4, push: 6, pushMin: 2, stun: 1.2, blaze: 3.5, buildup: 60, fissures: 7,
+             aura: { kind: 'fire', time: 10, radius: 2.2, damage: 8, buildup: 25 } },
+  cleric:  { time: 3.0, at: 0.75, reach: 8, lift: 1.3, rise: [0.1, 0.7], down: [2.55, 2.95], gate: 14,
+             rain: { from: 0.95, to: 2.2, count: 22, radius: 9, aim: 0.5, fall: 0.18, hit: 1.1, damage: 11, blind: 1.6, maxHits: 3 },
+             pillar: { at: 2.35, radius: 4.2, damage: 30, push: 5 },
+             aura: { kind: 'holy', time: 10, heal: 0.025, reflect: 0.3 } },
 };
 
 /**

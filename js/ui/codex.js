@@ -3,7 +3,7 @@
 //   動きの再生は、動作監督の画面と同じ作り：動きの一覧（見出しごと）・流す／止める・繰り返す・速さ・時刻のつまみ
 import { L } from './labels.js';
 import { ruby, rubyIn } from './ruby.js';
-import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, SHARED_SKILLS, TECHNIQUES, SHIELD_SKILLS, MIRACLES, MIRACLE_SLOTS, ULTIMATES, ULTIMATE, ULT_BURST, ELEMENT_KINDS } from '../game/data.js';
+import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, SHARED_SKILLS, TECHNIQUES, SHIELD_SKILLS, MIRACLES, MIRACLE_SLOTS, ULTIMATES, ULTIMATE, ELEMENT_KINDS } from '../game/data.js';
 import { crestSvg } from './crests.js';
 import { attackStats } from '../game/combat.js';
 import { resolveLoadout } from '../game/match.js';
@@ -97,7 +97,7 @@ function ultCard(U, main = false) {
     <b>${ruby(U.name)}</b><span class="sk-meta">${esc(`${E.name}の属性・1 試合 ${ULTIMATE.uses} 回（延長戰でもう ${ULTIMATE.overtimeUses} 回）`)}</span></div>
     <p class="sk-desc">${esc(U.desc)}</p></div>`;
 }
-const ULT_NOTE = `必殺ボタン（PC は G）で放つ。1 つの試合で ${ULTIMATE.uses} 回だけ（延長戰＝第 ${ULTIMATE.overtime + 1} 刻から、もう ${ULTIMATE.overtimeUses} 回）。強いが、もしもの時のために取っておく技。必殺技の間は無敵。楯劍騎士・劍騎士・弓兵は技ができた。長柄騎士・打擊騎士・祓魔僧はまだ仮の「属性の衝撃波」（周り ${ULT_BURST.radius} m に傷と吹き飛ばし。技の姿は案）`;
+const ULT_NOTE = `必殺ボタン（PC は G）で放つ。1 つの試合で ${ULTIMATE.uses} 回だけ（延長戰＝第 ${ULTIMATE.overtime + 1} 刻から、もう ${ULTIMATE.overtimeUses} 回）。強いが、もしもの時のために取っておく技。必殺技の間は無敵。技の後は、英雄ごとの纏う物が 10 秒ほど続く（水の衣・雷の衣・岩の鎧・紅蓮の衣・鷹の目・光輪）`;
 const MIRACLE_NOTE = `刻を越えるたびの褒美で、奇跡が 3 つ出て 1 つ覚える（最大 ${MIRACLE_SLOTS} つ。そろった後の褒美は能力値）。左手の奇跡ボタン（PC は K）で唱え、替ボタン（PC は H）で唱える奇跡を替える。唱える途中で攻撃を受けてひるむと途切れる`;
 
 /**
