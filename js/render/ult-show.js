@@ -71,6 +71,17 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
     const under = y < heightAt(f.x, f.z) - 1.5;   // 洞窟の中（上の地面とは比べない）
     // ほかの人の体のすぐそば（1.5 m より近く）には置かない（前は案山子のすぐ横に置かれ、画面の半分が体でふさがった）
     const nearBody = (px, py, pz) => { for (const o of views.keys()) if (o !== f && o.alive !== false && Math.hypot(o.x - px, o.z - pz) < 1.5 && py > (o.y ?? 0) - 0.5 && py < (o.y ?? 0) + 2.4) return true; return false; };
+    // カメラ (px, pz) と英雄の間の線の近く（0.7 m）に、ほかの人の体があるか
+    const bodyBetween = (px, pz, h) => {
+      const sx = h.x - px, sz = h.z - pz, l2 = sx * sx + sz * sz || 1;
+      for (const o of views.keys()) {
+        if (o === h || o.alive === false) continue;
+        const k = ((o.x - px) * sx + (o.z - pz) * sz) / l2;
+        if (k <= 0.05 || k >= 0.95) continue;
+        if (Math.hypot(px + sx * k - o.x, pz + sz * k - o.z) < 0.7) return true;
+      }
+      return false;
+    };
     const ok = (px, py, pz, from) => (under || py > heightAt(px, pz) + 0.35) && !nearBody(px, py, pz) && (!player.cameraClear || player.cameraClear(px, py, pz, from));
     for (const k of [1, 0.8, 0.62]) {
       for (const sd of [side, -side]) {
@@ -81,6 +92,7 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
           if (!around.every(([ox, oy, oz]) => ok(px + ox, py + oy, pz + oz, head))) continue;
           const L = [f.x + Rx * sd * 0.12 + Fx * lookFwd, y + look, f.z + Rz * sd * 0.12 + Fz * lookFwd];   // lookFwd：英雄の前のこれだけ先を見る（肩越し・見下ろし）
           if (player.cameraClear && !player.cameraClear(f.x, y + 0.9, f.z, [px, py, pz])) continue;   // カメラから腰が見える
+          if (bodyBetween(px, pz, f)) continue;   // カメラと英雄の間に、ほかの人の体がない（前は手前の案山子が英雄を隠した）
           // span：見る所の左右 span m まで見通せる（広く撮る構図で、手前の屋根や壁が画面の半分をふさがないように）
           if (span && player.cameraClear) {
             const vx = L[0] - px, vz = L[2] - pz, vl = Math.hypot(vx, vz) || 1, sx = -vz / vl, sz = vx / vl;
