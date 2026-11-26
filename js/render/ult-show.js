@@ -69,7 +69,9 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
     const Fx = -Math.sin(a), Fz = -Math.cos(a), Rx = Math.cos(a), Rz = -Math.sin(a);
     const head = [f.x, y + 1.5, f.z];
     const under = y < heightAt(f.x, f.z) - 1.5;   // 洞窟の中（上の地面とは比べない）
-    const ok = (px, py, pz, from) => (under || py > heightAt(px, pz) + 0.35) && (!player.cameraClear || player.cameraClear(px, py, pz, from));
+    // ほかの人の体のすぐそば（1.5 m より近く）には置かない（前は案山子のすぐ横に置かれ、画面の半分が体でふさがった）
+    const nearBody = (px, py, pz) => { for (const o of views.keys()) if (o !== f && o.alive !== false && Math.hypot(o.x - px, o.z - pz) < 1.5 && py > (o.y ?? 0) - 0.5 && py < (o.y ?? 0) + 2.4) return true; return false; };
+    const ok = (px, py, pz, from) => (under || py > heightAt(px, pz) + 0.35) && !nearBody(px, py, pz) && (!player.cameraClear || player.cameraClear(px, py, pz, from));
     for (const k of [1, 0.8, 0.62]) {
       for (const sd of [side, -side]) {
         for (const uu of [up, up * 0.72]) {
@@ -143,7 +145,7 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
         for (const v of views.values()) v.hitstop?.(0.11);
         root.classList.add('boom');
         setVars(e.fighter, e.ult);
-        flash.classList.remove('on', 'big'); void flash.offsetWidth; flash.classList.add('big');
+        flash.classList.remove('on', 'big'); void flash.offsetWidth; flash.classList.add(e.strike ? 'on' : 'big');   // 雷霆一閃の最後の落雷は小さな閃光（始めに大きな閃光があるので、二度目は画面を白く飛ばさない）
       } else if (d < 40) {
         shake.a = Math.max(shake.a, 0.16 * (1 - d / 40) ** 1.5);
         if (d < 22) { setVars(e.fighter, e.ult); flash.classList.remove('on', 'big'); void flash.offsetWidth; flash.classList.add('on'); }
