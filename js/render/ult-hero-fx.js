@@ -232,8 +232,9 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
     return m;
   };
   const pillarMesh = twisterMesh(device, (v) => 0.75 + 0.55 * v, 36, 10, 1.8);
-  const firePillars = Array.from({ length: 2 }, () => ({ a: makeEnt(pillarMesh, fireMat([1.0, 0.42, 0.08], 0.95), 'ult-fire-a'),
-    b: makeEnt(pillarMesh, fireMat([1.0, 0.78, 0.25], 0.8), 'ult-fire-b'), busy: false }));
+  // 赤橙の外と、橙の内（前は黄が強く、金色の光に見えた）
+  const firePillars = Array.from({ length: 2 }, () => ({ a: makeEnt(pillarMesh, fireMat([1.0, 0.26, 0.04], 0.95), 'ult-fire-a'),
+    b: makeEnt(pillarMesh, fireMat([1.0, 0.55, 0.12], 0.7), 'ult-fire-b'), busy: false }));
   const fireActs = [];   // { p, f, t, life, landed }
 
   // ---- 光の門（天門開闢） ----
@@ -619,14 +620,14 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
         const A = fireActs[i], f = A.f, S = ULT_SPECS.blunt;
         A.t += dt;
         const up = Math.min(1, A.t / S.jump.from), after = Math.max(0, (A.t - S.at) / 0.5);
-        const lift = f.lift || 0, H = lerp(1.0, 6.5, ease(up)) + lift * 1.1, sc = lerp(0.6, 1.0, up) * (1 + after * 1.6);
+        const lift = f.lift || 0, H = lerp(1.0, 6.5, ease(up)) + lift * 1.1, sc = lerp(0.6, 1.0, up) * (1 + after * 1.6 + lift * 0.12);
         const fade = 1 - ease(after);
         for (const [it, dir, sp] of [[A.p.a, 1, 460], [A.p.b, -1, 340]]) {
           it.e.setPosition(f.x, yOf(f) - 0.05, f.z);
           it.e.setLocalScale(sc * (dir > 0 ? 1 : 0.78), H * (dir > 0 ? 1 : 0.92), sc * (dir > 0 ? 1 : 0.78));
           it.e.setEulerAngles(0, time * sp * dir, 0);
           it.mat.emissiveMapOffset.set(0, -time * 2.4); it.mat.opacityMapOffset.set(0, -time * 2.4);
-          it.mat.opacity = (dir > 0 ? 0.95 : 0.8) * fade * Math.min(1, A.t / 0.15);
+          it.mat.opacity = (dir > 0 ? 0.95 : 0.7 * (1 - Math.min(0.6, lift * 0.2))) * fade * Math.min(1, A.t / 0.15);   // 宙にいる間は内を薄く（体が隠れない）
           it.mat.update();
         }
         // 火の粉（跳んでいる間は体から尾を引く）

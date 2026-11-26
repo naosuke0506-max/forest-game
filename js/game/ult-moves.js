@@ -303,13 +303,16 @@ export function createUltMoves(ctx) {
     start(f, a) {
       const S = ULT_SPECS.blunt, J = S.jump;
       a.slam = false; a.jumped = false; a.moved = 0;
-      // 跳ぶ向きと距離：自分はカメラの向き（前へ dist m）、bot は一番近い敵の手前へ
+      // 跳ぶ向きと距離：自分はカメラの向きへ。見ている向き（左右 35 度の中）に敵がいれば、一番近い敵の手前へ降りる（いなければ dist m）。
+      //   bot は一番近い敵の手前へ（前は自分はいつも dist m 跳び、教練では近くの案山子を飛び越えて 1 人にしか当たらなかった）
       let yaw = f.isPlayer && f._viewYaw != null ? f._viewYaw : f.yaw, dist = J.dist;
-      if (!f.isPlayer) {
-        let best = null, bd = Infinity;
-        for (const t of foes(f, 14)) { const d = Math.hypot(t.x - f.x, t.z - f.z); if (d < bd) { bd = d; best = t; } }
-        if (best) { yaw = yawTo(f, best.x, best.z); dist = Math.max(0, Math.min(J.dist, bd - 1.2)); }
+      let best = null, bd = Infinity;
+      for (const t of foes(f, 14)) {
+        const d = Math.hypot(t.x - f.x, t.z - f.z);
+        if (f.isPlayer) { let da = Math.abs(((yawTo(f, t.x, t.z) - yaw) % 360 + 540) % 360 - 180); if (da > 35 || d > J.dist + 3) continue; }
+        if (d < bd) { bd = d; best = t; }
       }
+      if (best) { if (!f.isPlayer) yaw = yawTo(f, best.x, best.z); dist = Math.max(0, Math.min(J.dist, bd - 1.0)); }
       a.yaw = yaw; a.dist = dist;
       f.yaw = yaw;
       emit('ultFire', { fighter: f, phase: 'pillar', x: f.x, y: yOf(f), z: f.z });

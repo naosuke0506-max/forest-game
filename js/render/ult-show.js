@@ -104,7 +104,7 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
     // （後半 2026-11-26）vast 高く広く（千岩槍獄の岩の槍の輪・天門開闢の光の槍の雨）・jump 跳ぶ道の横の低い所から見上げる（紅蓮崩天）・
     //   under 前の低い所から見上げる（天門開闢の浮いた体と門）
     vast: (f) => shot(f, 8.5, 5, 7.5, 0.4, 1.3, 0, 4.5),
-    jump: (f) => { const d = (ULT_SPECS.blunt?.jump.dist || 5) / 2; return shot(f, d, 7, 0.9, 2.4, 0.8, d); },
+    jump: (f) => { const d = (ULT_SPECS.blunt?.jump.dist || 5) / 2; return shot(f, d, 6, 0.9, 2.4, 0.8, d, 3); },
     under: (f) => shot(f, 4.2, 1.6, 0.6, 3.6, 0.5),
   };
   /** 英雄ごとの構図の並び：[始まる秒, 種類]。まだ英雄ごとの技が無い人は、寄り → 放つ少し前に引き */
