@@ -166,9 +166,11 @@ export function createUltFx(app, { combat, fighters, camera, dust = null }) {
   // 放った後の物：{ kind, it, x, y, z, t, life, ... }
   const bursts = [];
 
-  combat.on('ult', ({ fighter }) => {
+  combat.on('ult', ({ fighter, hero, at }) => {
     const U = ultOf(fighter), E = ELEMENT_KINDS[U?.element] || ELEMENT_KINDS.holy;
-    const c = { f: fighter, E, St: STYLE[U?.element] || STYLE.holy, aura: take(auras), foot: take(footRings), light: lights.find((l) => !l.busy) || null, t: 0, acc: 0 };
+    // 英雄ごとの技（2 回目）は、溜めの渦・輪・吸い込まれる粒を出さない（render/ult-hero-fx.js が技ごとの見た目を出す）。光だけ使う
+    const c = { f: fighter, E, St: STYLE[U?.element] || STYLE.holy, aura: hero ? null : take(auras), foot: hero ? null : take(footRings),
+      light: lights.find((l) => !l.busy) || null, t: 0, acc: 0, hero: !!hero, at: at || ULT_BURST.at };
     if (c.light) { c.light.busy = true; c.light.e.enabled = true; c.light.e.light.color = new pc.Color(...E.rgb); }
     charging.get(fighter) && endCharge(charging.get(fighter));
     charging.set(fighter, c);
@@ -232,7 +234,7 @@ export function createUltFx(app, { combat, fighters, camera, dust = null }) {
         const f = c.f, a = f.action;
         if (!f.alive || a?.kind !== 'ult') { endCharge(c); continue; }
         c.t = a.t;
-        const k = Math.min(1, c.t / Math.max(0.2, ULT_BURST.at)), y = yOf(f), rgb = c.E.rgb;
+        const k = Math.min(1, c.t / Math.max(0.2, c.at)), y = yOf(f), rgb = c.E.rgb;
         if (c.aura) {
           const r = lerp(1.25, 0.8, k), h = lerp(1.6, 3.2, k);
           c.aura.e.setPosition(f.x, y, f.z);
@@ -253,8 +255,8 @@ export function createUltFx(app, { combat, fighters, camera, dust = null }) {
           c.light.e.setPosition(f.x - Math.sin(ya) * 1.1, y + 1.5, f.z - Math.cos(ya) * 1.1);
           c.light.e.light.intensity = 0.6 + 2.6 * k * k;
         }
-        // 吸い込まれる粒（だんだん多く）
-        c.acc += dt * (40 + 140 * k);
+        // 吸い込まれる粒（だんだん多く。英雄ごとの技は出さない）
+        c.acc += c.hero ? 0 : dt * (40 + 140 * k);
         for (; c.acc >= 1; c.acc--) {
           const th = rnd() * Math.PI * 2, R = 2.2 + rnd() * 1.8, hy = 0.2 + rnd() * 2.4;
           const sx = f.x + Math.cos(th) * R, sy = y + hy, sz = f.z + Math.sin(th) * R;
@@ -324,6 +326,13 @@ export function createUltFx(app, { combat, fighters, camera, dust = null }) {
       glowE.enabled = gi > 0;
       if (gi) { gq.mesh.setPositions(gq.pos); gq.mesh.setColors(gq.col); gq.mesh.update(pc.PRIMITIVE_TRIANGLES); }
     },
+    /** 粒・光の玉・衝撃波の輪を足す（render/ult-hero-fx.js が使う） */
+    spark, glow: (x, y, z, size, life, color) => glows.push({ x, y, z, size, life, max: life, color }),
+    ring(x, y, z, r1, life, color, k = 2, wide = false) {
+      const it = take(wide ? waves2 : waves);
+      if (it) bursts.push({ kind: 'ring', it, x, y: y + 0.1, z, t: 0, life, r0: 0.4, r1, k, color });
+    },
+    STYLE,
     /** 確認用：今出ている物の数 */
     get stats() {
       return { sparks: sparks.filter((s) => s.life > 0).length, charging: charging.size, bursts: bursts.length, glows: glows.length,

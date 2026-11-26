@@ -36,6 +36,7 @@ export function createProjectileViews(app, combat) {
         if (!live.has(p)) { e.enabled = false; pool.push(e); views.delete(p); }
       }
       for (const p of combat.projectiles) {
+        if (p.storm) continue;   // 嵐の大矢（颶風一矢）は render/ult-hero-fx.js が描く
         let e = views.get(p);
         if (!e) {
           e = pool.pop() || createArrowModel();

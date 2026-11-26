@@ -17,6 +17,9 @@ export function createSight(heightAt, { grassAt = null, openAt = null } = {}) {
   let stamp = 0;
   let count = 0;
   let group = null;   // 今まとめている家（addGroup〜endGroup の間に足した物は、その家の中に入る）
+  // 壁の穴（颶風一矢の嵐の大矢が家の壁に開けた、通れる穴。world/arrow-holes.js）：箱（壁）を通る所が穴の中なら、見通せる
+  //   { x, z（壁の外の面の点）, nx, nz（外向き）, hw（幅の半分）, y0, y1（下と上） }
+  const holes = [];
 
   function insert(o, minx, minz, maxx, maxz) {
     o.stamp = 0;
@@ -73,7 +76,17 @@ export function createSight(heightAt, { grassAt = null, openAt = null } = {}) {
   function endGroup() { group = null; }
 
   // ---- 線分（p から p + d の t = 0〜1）と物 ----
-  function hitBox(o, p, d) {
+  /** 点が壁の穴の中か（壁の厚みの所だけ） */
+  function inHole(x, y, z) {
+    for (const H of holes) {
+      const dx = x - H.x, dz = z - H.z, dn = dx * H.nx + dz * H.nz;
+      if (dn > 0.15 || dn < -0.45) continue;
+      if (Math.abs(-dx * H.nz + dz * H.nx) > H.hw || y < H.y0 || y > H.y1) continue;
+      return true;
+    }
+    return false;
+  }
+  function hitBox(o, p, d, holeCheck = false) {
     let t0 = 0, t1 = 1;
     const rx = p[0] - o.c[0], ry = p[1] - o.c[1], rz = p[2] - o.c[2];
     for (let k = 0; k < 3; k++) {
@@ -86,7 +99,12 @@ export function createSight(heightAt, { grassAt = null, openAt = null } = {}) {
       if (u1 < t1) t1 = u1;
       if (t0 > t1) return false;
     }
-    return t1 > EPS && t0 < 1 - EPS;
+    if (!(t1 > EPS && t0 < 1 - EPS)) return false;
+    if (holeCheck && holes.length) {   // 箱（壁）を通る所の真ん中が壁の穴の中なら、さえぎらない（家をまとめる外側の箱では見ない）
+      const tm = (Math.max(t0, 0) + Math.min(t1, 1)) / 2;
+      if (inHole(p[0] + d[0] * tm, p[1] + d[1] * tm, p[2] + d[2] * tm)) return false;
+    }
+    return true;
   }
   function hitCyl(o, p, d) {
     const fx = p[0] - o.x, fz = p[2] - o.z;
@@ -125,7 +143,7 @@ export function createSight(heightAt, { grassAt = null, openAt = null } = {}) {
     if (o.stamp === stamp) return false;
     o.stamp = stamp;
     if (o.off) return false;   // 無い物として扱う（開いている扉。world/doors.js が切り替える）
-    if (o.t === 0) return hitBox(o, p, d);
+    if (o.t === 0) return hitBox(o, p, d, true);
     if (o.t === 1) return wallsOnly ? false : hitCyl(o, p, d);
     if (o.t === 2) return hitTri(o, p, d);
     // 家：外側の箱に当たれば、中の物
@@ -181,5 +199,7 @@ export function createSight(heightAt, { grassAt = null, openAt = null } = {}) {
     return noGround ? false : groundBlocks(p, d, len);
   }
 
-  return { addBox, addYawBox, addCyl, addTri, beginGroup, endGroup, blocked, get count() { return count; } };
+  /** 壁の穴を足す（world/arrow-holes.js） */
+  function addHole(h) { holes.push(h); }
+  return { addBox, addYawBox, addCyl, addTri, beginGroup, endGroup, blocked, addHole, get count() { return count; } };
 }

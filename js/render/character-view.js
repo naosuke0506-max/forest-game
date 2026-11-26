@@ -3,7 +3,7 @@
 // 模型は tools/characters/build_character.py で作る（assets/characters/<名前>.glb と、動きの長さ・速さの .json）。
 // 戦闘の計算（game/combat.js）の状態を見て、どの動きを流すかを決めるだけ
 import * as pc from 'playcanvas';
-import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, ULT_POSE, ULT_BURST, HIDE_ACTS, SLOPE, MIRACLES, REVIVE_TIME, LADDER } from '../game/data.js';
+import { WEAPONS, DODGE, STANCE_TIME, TECHNIQUES, ASSASSIN, ULT_POSE, ULT_BURST, ULT_SPECS, HIDE_ACTS, SLOPE, MIRACLES, REVIVE_TIME, LADDER } from '../game/data.js';
 import { attackStats } from '../game/combat.js';
 import { techSetOf } from '../game/techniques.js';
 import { stanceShape } from '../game/stance.js';
@@ -213,7 +213,11 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   const stanceClips = ['crouch', 'crouch_walk', 'prone_down', 'prone', 'crawl', 'prone_up'].every(has);
   let current = '', lastAction = null, lastPhase = '', swingIndex = 0, deathStarted = false;
   let stopLeft = 0;                    // ヒットストップの残り（秒）
-  let ultPose = null, ultPhase = '';   // 必殺技の仮の動き（data.js の ULT_POSE）と、溜め（pre）・放つ（go）のどちらか
+  let boltHidden = false;              // 稲妻の姿（雷霆一閃・雷の衣の回避と疾驅）：体と武器を隠している
+  let bowScale = 1;                    // 大弓（颶風一矢）：長弓を大きくして持つ
+  let ultPose = null, ultPhase = '', ultAt = ULT_BURST.at, ultTime = ULT_BURST.time;   // 必殺技の動き（data.js の ULT_POSE）と、溜め（pre）・放つ（go）のどちらか、放つ時刻と長さ
+  // 英雄ごとの必殺技の専用の動き（2 回目。tools/characters/*_moves.py）：その英雄の技の長さに合わせて作ってある（放つ時刻も同じ）
+  const HERO_CLIP = { shield: 'sh_ult', archer: 'bw_ult' };
   let charred = false, charK = 0, paraHeld = false;   // 火炎で焦げて倒れた（黒くなっていく割合）・雷痺で止めている
   const VICTIM = /^(as_back_v|as_slide_v|drag_wd_v|drag_bed_v)$/;   // される側の動き（倒れても最後の姿のまま）
   // 攻撃を受けた動き（game/reactions.js の fighter.react）：流している受けた動きの番号と残りの時間。
@@ -424,6 +428,17 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
     hitstop(sec) { stopLeft = Math.max(stopLeft, sec); },
     update(dt) {
       placeTalisman(paused || directed ? 0 : dt);   // 祓魔僧の護符（時間が止まっている間・圖鑑では揺らさない）
+      // 稲妻の姿（雷霆一閃の稲妻・雷の衣の回避と疾驅）：体と武器を隠す（動きは進める。見た目は render/ult-fx.js の稲妻）
+      const bolt = !directed && (!!fighter.boltForm || (fighter.aura?.kind === 'thunder' && (fighter.action?.kind === 'dodge' || !!fighter.sprinting)));
+      if (bolt !== boltHidden) { boltHidden = bolt; for (const r of root.findComponents('render')) r.enabled = !bolt; }
+      // 大弓（颶風一矢）：長弓を ULT_SPECS.archer.bow 倍へ大きくして持ち、収めると戻す
+      const bowWant = fighter.greatBow ? ULT_SPECS.archer.bow : 1;
+      if (weaponHolder && WEAPONS[shownWeapon]?.kind === 'bow' && Math.abs(bowScale - bowWant) > 1e-3) {
+        bowScale += (bowWant - bowScale) * Math.min(1, dt * 7);
+        if (Math.abs(bowScale - bowWant) < 0.01) bowScale = bowWant;
+        const k = bowScale / meta.scale;
+        weaponHolder.setLocalScale(k, k, k);
+      }
       if (stopLeft > 0) stopLeft = Math.max(0, stopLeft - dt);
       if (body.anim && body.anim.playing !== !(stopLeft > 0)) body.anim.playing = !(stopLeft > 0);
       if (paused) return;   // 時間が止まっている（刻が変わった直後）：姿もそのまま
@@ -509,6 +524,8 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
      *   talismanPos：護符の真ん中、weaponHead：右手の武器の頭（持ち手から reach m 先。鎚矛の頭は 0.5 m）
      */
     talismanPos(out) { return talisman && talisman.enabled ? out.copy(bob) : null; },
+    /** 弓の持ち手の所（颶風一矢の大弓に巻く風）。模型が映っていなければ null */
+    bowPos(out) { return root.enabled && sockBow ? out.copy(sockBow.getPosition()) : null; },
     weaponHead(out, reach = 0.5) {
       if (!root.enabled || !sockR) return null;
       return out.copy(sockR.up).mulScalar(reach).add(sockR.getPosition());
@@ -754,13 +771,19 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       if (a?.kind === 'charge' && a === lastAction && a.t >= (clip(a.tech.in)?.duration ?? 0)) play(a.tech.hold, 1, 0.1);
       // 必殺技：溜めの動き（pre）の後、放つ時刻（ULT_BURST.at）に技の当たる所（hit）が来るように、放つ動きを流す
       if (a?.kind === 'ult' && a === lastAction && ultPose && ultPhase === 'pre') {
-        const B = ULT_BURST, P = ultPose;
-        if (P.pre && a.t >= B.at - P.hit) { ultPhase = 'go'; if (has(P.clip)) restart(P.clip, 1); }
-        else if (!P.pre && a.t >= B.at) {
+        const P = ultPose;
+        if (P.pre && a.t >= ultAt - P.hit) { ultPhase = 'go'; if (has(P.clip)) restart(P.clip, 1); }
+        else if (!P.pre && a.t >= ultAt) {
           ultPhase = 'go';
           const L = clip(P.clip)?.duration ?? 1;
-          body.anim.speed = Math.max(0.8, Math.min(1.6, (L - P.hit) / Math.max(0.2, B.time - B.at)));   // 放った後は、残りの時間に合わせる
+          body.anim.speed = Math.max(0.8, Math.min(1.6, (L - P.hit) / Math.max(0.2, ultTime - ultAt)));   // 放った後は、残りの時間に合わせる
         }
+      }
+      // 劍騎士「雷霆一閃」：体に戻って構えた所から、踏み込んで斬る動き（雙劍は前の奧義の交差滑斬、長劍は ls_flash）
+      if (a?.kind === 'ult' && a === lastAction && ultPhase === 'sword' && a.t >= ULT_SPECS.sword.stance) {
+        ultPhase = 'go';
+        const name = fighter.weapon === 'dualsword' ? 'dw_ult' : has('ls_flash') ? 'ls_flash' : 'ls_ult';
+        if (has(name)) restart(name, 1);
       }
       if (a && a !== lastAction) {
         lastAction = a;
@@ -802,10 +825,25 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
         } else if (a.kind === 'ult') {
           // 必殺技（2026-11-25 の 1 回目は仮の動き：今ある大きな技。data.js の ULT_POSE。2 回目で英雄ごとの動きに替える）。
           // 溜めの動き（pre）があれば溜めの間それを流し、無ければ放つ動きをゆっくり流して、放つ時刻に当たる所が来るようにする
-          const P = ULT_POSE[fighter.char] || ULT_POSE[fighter.weapon] || { clip: has('heavy') ? 'heavy' : 'a1', hit: 0.5 };
-          ultPose = P; ultPhase = 'pre';
-          if (P.pre && has(P.pre)) play(P.pre, 1, 0.15);
-          else if (has(P.clip)) restart(P.clip, P.hit / Math.max(0.2, ULT_BURST.at));
+          const S = a.hero ? ULT_SPECS[fighter.char] : null;
+          ultAt = S ? (S.at ?? S.release ?? ULT_BURST.at) : ULT_BURST.at;
+          ultTime = S ? S.time : ULT_BURST.time;
+          if (fighter.char === 'sword' && S) {
+            // 閃光の間は溜めの構え（稲妻の間は体を隠す）。構える時刻に、踏み込んで斬る動きへ
+            ultPose = null; ultPhase = 'sword';
+            const hold = fighter.weapon === 'dualsword' ? 'dw_c1_hold' : 'ls_c1_hold';
+            if (has(hold)) play(hold, 1, 0.1);
+          } else if (S && HERO_CLIP[fighter.char] && has(HERO_CLIP[fighter.char])) {
+            // 英雄ごとの専用の動き：技の長さに合わせて流す
+            const name = HERO_CLIP[fighter.char];
+            ultPose = null; ultPhase = 'go';
+            restart(name, clip(name).duration / S.time);
+          } else {
+            const P = ULT_POSE[fighter.char] || ULT_POSE[fighter.weapon] || { clip: has('heavy') ? 'heavy' : 'a1', hit: 0.5 };
+            ultPose = P; ultPhase = 'pre';
+            if (P.pre && has(P.pre)) play(P.pre, 1, 0.15);
+            else if (has(P.clip)) restart(P.clip, P.hit / Math.max(0.2, ultAt));
+          }
         } else if (a.kind === 'miracle') {
           // 祓魔僧の奇跡を唱える：奇跡ごとの動き（data.js の MIRACLES の clip・time。tools/characters/cleric_moves.py）
           const M = MIRACLES[a.id];

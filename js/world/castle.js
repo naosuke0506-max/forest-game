@@ -21,6 +21,7 @@ import { placeVillageLife } from './village-life.js';
 import { buildPlaza } from './plaza.js';
 import { createVillageItems } from './village-items.js';
 import { createHouseLife } from './house-life.js';
+import { applyHoleClip } from './arrow-holes.js';
 
 /**
  * 木の柵（杭と 2 本の横木）を a から b へ。杭の間は約 2.4m
@@ -192,6 +193,8 @@ export function createVillage(app, config, terrain, obstacles, zones, floors, si
     if (surf === 'asphalt' || surf === 'paint' || surf === 'slab') { m.depthBias = -1; m.depthBiasSlope = -3; }   // 地面の上に貼る：ちらつかないよう手前へ
     if (surf === 'paint') m.gloss = 0.35;
     m.update();
+    // 家の壁の質感（石・漆喰・木）：嵐の大矢（颶風一矢）が開けた大きな穴の所を描かない（world/arrow-holes.js。穴が無い間は何もしない）
+    if (surf === 'stone' || surf === 'plaster' || surf === 'wood') applyHoleClip(m);
     materials[surf] = m;
     const e = new pc.Entity(`village-${surf}`);
     e.addComponent('render', { meshInstances: [new pc.MeshInstance(mesh, m)], castShadows: true, receiveShadows: true });

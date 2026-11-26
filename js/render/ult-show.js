@@ -5,7 +5,7 @@
 //   ほかの人の必殺技は、近いほど画面が揺れ、近ければ閃光が少し（カメラは動かさない）。
 //   3D の光・衝撃波・粒は render/ult-fx.js（みんなの画面に出る）
 import * as pc from 'playcanvas';
-import { ELEMENT_KINDS, CHARACTERS } from '../game/data.js';
+import { ELEMENT_KINDS, CHARACTERS, ULT_SPECS } from '../game/data.js';
 import { crestSvg } from '../ui/crests.js';
 
 const ease = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
@@ -64,12 +64,14 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
    * 置けなければ近づけ・反対の横・低くも試す。margin：カメラのまわり（左右・上・後ろ）にも、これだけ空きが要る
    * （壁や屋根にぴったり寄った所に置くと、画面の半分が壁や屋根になる）。カメラから英雄の腰が見えることも確かめる
    */
-  function shot(f, fwd, side, up, look, margin) {
+  function shot(f, fwd, side, up, look, margin, lookFwd = 0) {
     const y = f.y ?? heightAt(f.x, f.z), a = (f.yaw * Math.PI) / 180;
     const Fx = -Math.sin(a), Fz = -Math.cos(a), Rx = Math.cos(a), Rz = -Math.sin(a);
     const head = [f.x, y + 1.5, f.z];
     const under = y < heightAt(f.x, f.z) - 1.5;   // 洞窟の中（上の地面とは比べない）
-    const ok = (px, py, pz, from) => (under || py > heightAt(px, pz) + 0.35) && (!player.cameraClear || player.cameraClear(px, py, pz, from));
+    // ほかの人の体のすぐそば（1.5 m より近く）には置かない（前は案山子のすぐ横に置かれ、画面の半分が体でふさがった）
+    const nearBody = (px, py, pz) => { for (const o of views.keys()) if (o !== f && o.alive !== false && Math.hypot(o.x - px, o.z - pz) < 1.5 && py > (o.y ?? 0) - 0.5 && py < (o.y ?? 0) + 2.4) return true; return false; };
+    const ok = (px, py, pz, from) => (under || py > heightAt(px, pz) + 0.35) && !nearBody(px, py, pz) && (!player.cameraClear || player.cameraClear(px, py, pz, from));
     for (const k of [1, 0.8, 0.62]) {
       for (const sd of [side, -side]) {
         for (const uu of [up, up * 0.72]) {
@@ -77,13 +79,30 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
           if (!ok(px, py, pz, head)) continue;
           const around = [[Rx * margin, 0, Rz * margin], [-Rx * margin, 0, -Rz * margin], [0, margin * 0.8, 0], [Fx * margin, 0, Fz * margin]];
           if (!around.every(([ox, oy, oz]) => ok(px + ox, py + oy, pz + oz, head))) continue;
-          const L = [f.x + Rx * sd * 0.12, y + look, f.z + Rz * sd * 0.12];
+          const L = [f.x + Rx * sd * 0.12 + Fx * lookFwd, y + look, f.z + Rz * sd * 0.12 + Fz * lookFwd];   // lookFwd：英雄の前のこれだけ先を見る（肩越し・見下ろし）
           if (player.cameraClear && !player.cameraClear(f.x, y + 0.9, f.z, [px, py, pz])) continue;   // カメラから腰が見える
           return { p: [px, py, pz], l: L };
         }
       }
     }
     return null;
+  }
+
+  // 構図の種類：close 前から顔（寄り）・wide 斜め上から引き・high 後ろの高い所から前を見下ろす（稲妻の道）・behind 肩越しに前を見る（大矢）・
+  //   cross 踏み込む道の真ん中の横から（雷霆一閃の踏み込みが画面を横切る。後ろからだと、体がすぐ遠ざかって小さく映った）
+  const SHOTS = {
+    close: (f) => shot(f, 2.3, 0.8, 1.45, 1.38, 0.4),
+    wide: (f) => shot(f, 5.6, 3.2, 3.5, 0.7, 1.3),
+    high: (f) => shot(f, -8.5, 2.5, 8.5, 0.3, 1.0, 5),
+    behind: (f) => shot(f, -3.2, 0.95, 1.85, 1.35, 0.5, 9),
+    cross: (f) => { const d = (ULT_SPECS.sword.dash.dist || 11) / 2; return shot(f, d, 9.5, 2.6, 1.0, 0.8, d); },   // 少し高く遠く（低いと、手前の背の高い草で体が隠れた）
+  };
+  /** 英雄ごとの構図の並び：[始まる秒, 種類]。まだ英雄ごとの技が無い人は、寄り → 放つ少し前に引き */
+  function timeline(f, time, at) {
+    const S = ULT_SPECS[f.char];
+    if (f.char === 'sword' && S) return [[0, 'close'], [S.bolt.from - 0.05, 'high'], [S.stance, 'close'], [S.dash.at - 0.2, 'cross'], [S.strike.at - 0.06, 'wide']];
+    if (f.char === 'archer' && S) return [[0, 'close'], [0.95, 'behind']];
+    return [[0, 'close'], [at - 0.12, 'wide']];
   }
 
   function setVars(f, U) {
@@ -100,7 +119,8 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
     /** 自分の必殺技が始まった（game/combat.js の 'ult'）。U：ULTIMATES の 1 つ、time・at：動きの長さと放つ時刻（秒） */
     play(f, U, { time, at }) {
       const E = setVars(f, U);
-      show = { f, t: 0, k: 1, time, at, close: shot(f, 2.3, 0.8, 1.45, 1.38, 0.4), wide: shot(f, 5.6, 3.2, 3.5, 0.7, 1.3) };
+      // 構図は、その構図が始まる時の英雄の所と向きで決める（劍騎士は稲妻で動くので）
+      show = { f, t: 0, k: 1, time, at, plan: timeline(f, time, at).map(([t0, kind]) => ({ t0, kind, pose: undefined })) };
       // 名前の帯：字を 1 つずつ（遅れて）出す
       $('.us-el').textContent = E.name;
       $('.us-crest').innerHTML = crestSvg(U.crest);
@@ -114,7 +134,7 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
       void root.offsetWidth;   // 動きを最初から
       root.classList.add('on');
       document.body.classList.add('ult-cine');
-      flash.classList.remove('on', 'big'); void flash.offsetWidth; flash.classList.add('on');   // 始まりの小さな閃光
+      flash.classList.remove('on', 'big'); void flash.offsetWidth; flash.classList.add(f.char === 'sword' ? 'big' : 'on');   // 始まりの閃光（雷霆一閃は目くらましの大きな閃光）
     },
     /** 必殺技が放たれた（だれの物でも。'ultBurst'）。自分の物なら閃光・大きな揺れ・ヒットストップ。ほかの人の物は近いほど揺れる */
     burst(e) {
@@ -125,11 +145,16 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
         for (const v of views.values()) v.hitstop?.(0.11);
         root.classList.add('boom');
         setVars(e.fighter, e.ult);
-        flash.classList.remove('on', 'big'); void flash.offsetWidth; flash.classList.add('big');
+        flash.classList.remove('on', 'big'); void flash.offsetWidth; flash.classList.add(e.strike ? 'on' : 'big');   // 雷霆一閃の最後の落雷は小さな閃光（始めに大きな閃光があるので、二度目は画面を白く飛ばさない）
       } else if (d < 40) {
         shake.a = Math.max(shake.a, 0.16 * (1 - d / 40) ** 1.5);
         if (d < 22) { setVars(e.fighter, e.ult); flash.classList.remove('on', 'big'); void flash.offsetWidth; flash.classList.add('on'); }
       }
+    },
+    /** 小さな手ごたえ（自分の稲妻が貫いた・踏み込みで斬った・大矢を放った）：stop 秒のヒットストップと揺れ */
+    kick(stop = 0.06, a = 0.08) {
+      shake.a = Math.max(shake.a, a);
+      if (stop > 0) for (const v of views.values()) v.hitstop?.(stop);
     },
     /** やめる（自分が倒れた・試合が終わった） */
     cancel() {
@@ -155,22 +180,39 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
           const fp = player.viewMode !== 'third';
           const k = fp ? (t < time - 0.12 ? 1 : 0) : ease(t / 0.28) * (1 - ease((t - (time - 0.25)) / 0.55));
           S.k = k;
-          const s = ease((t - (at - 0.12)) / 0.2);
-          const A = S.close, B = S.wide;
-          const cur = camera.getPosition(), fw = camera.forward;
-          vL.set(cur.x + fw.x * 6, cur.y + fw.y * 6, cur.z + fw.z * 6);
-          // 使える構図を混ぜる（寄りが使えない所では、ふつうのカメラのまま溜め、引きだけ使う）
-          let px = cur.x, py = cur.y, pz = cur.z, lx = vL.x, ly = vL.y, lz = vL.z, w = 0;
-          const add = (C, m) => {
-            if (!C || m <= 0) return;
-            const push = C === A ? Math.min(1, t / at) * 0.35 : 0;   // 寄りの間、少しずつ前へ寄る
-            const qx = C.p[0] + (C.l[0] - C.p[0]) * push * 0.25, qy = C.p[1] + (C.l[1] - C.p[1]) * push * 0.25, qz = C.p[2] + (C.l[2] - C.p[2]) * push * 0.25;
-            px += (qx - px) * m; py += (qy - py) * m; pz += (qz - pz) * m;
-            lx += (C.l[0] - lx) * m; ly += (C.l[1] - ly) * m; lz += (C.l[2] - lz) * m;
-            w = Math.max(w, m);
+          // 今の構図と、ひとつ前の構図（0.16 秒で素早く移る）。置けない構図は、ひとつ前の構図のまま
+          let cur = -1;
+          for (let i = 0; i < S.plan.length; i++) if (t >= S.plan[i].t0) cur = i;
+          const poseOf = (i) => {
+            for (let j = i; j >= 0; j--) {
+              const P = S.plan[j];
+              if (P.pose === undefined) P.pose = SHOTS[P.kind](S.f);
+              if (P.pose) return P;
+            }
+            return null;
           };
-          add(A, k * (1 - s));
-          if (B) { const m = k * s; add(B, m); } else if (A) add(A, k * s);   // 引きが使えなければ、寄りのまま
+          const Pc = poseOf(cur), Pp = cur > 0 ? poseOf(cur - 1) : null;
+          const cp = camera.getPosition(), fw = camera.forward;
+          vL.set(cp.x + fw.x * 6, cp.y + fw.y * 6, cp.z + fw.z * 6);
+          let px = cp.x, py = cp.y, pz = cp.z, lx = vL.x, ly = vL.y, lz = vL.z, w = 0;
+          const at2 = (P) => {
+            // 寄りの間は少しずつ前へ寄る
+            const push = P.kind === 'close' ? Math.min(1, (t - P.t0) / 1.2) * 0.09 : 0;
+            const C = P.pose;
+            return [C.p[0] + (C.l[0] - C.p[0]) * push, C.p[1] + (C.l[1] - C.p[1]) * push, C.p[2] + (C.l[2] - C.p[2]) * push, C.l];
+          };
+          if (Pc) {
+            let [qx, qy, qz, L] = at2(Pc);
+            if (Pp && Pp !== Pc) {
+              const m = ease((t - Pc.t0) / 0.16);
+              const [ox, oy, oz, Lo] = at2(Pp);
+              qx = ox + (qx - ox) * m; qy = oy + (qy - oy) * m; qz = oz + (qz - oz) * m;
+              L = [Lo[0] + (L[0] - Lo[0]) * m, Lo[1] + (L[1] - Lo[1]) * m, Lo[2] + (L[2] - Lo[2]) * m];
+            }
+            px += (qx - px) * k; py += (qy - py) * k; pz += (qz - pz) * k;
+            lx += (L[0] - lx) * k; ly += (L[1] - ly) * k; lz += (L[2] - lz) * k;
+            w = k;
+          }
           if (w > 0.001) {
             vA.set(px, py, pz); vL2.set(lx, ly, lz);
             camera.setPosition(vA);
