@@ -665,7 +665,7 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
           const a = (j / 12) * Math.PI * 2 - time * 0.6;
           segment(G.x + Math.cos(a) * R2 * 0.2, G.y, G.z + Math.sin(a) * R2 * 0.2, G.x + Math.cos(a) * R1 * 0.95, G.y, G.z + Math.sin(a) * R1 * 0.95, 0.16, HOLY[0] * k * 0.7, HOLY[1] * k * 0.7, HOLY[2] * k * 0.7);
         }
-        if (rnd() < 0.5) fx.glow(G.x, G.y, G.z, 6 * open, 0.12, HOLY.map((c) => c * 0.5 * k));
+        if (rnd() < 0.5) fx.glow(G.x, G.y, G.z, 4.5 * open, 0.12, HOLY.map((c) => c * 0.38 * k));   // 門の真ん中の光（強すぎると白く飛ぶ）
         // 光の柱：門から地面へ（太い筋を重ねる）
         if (G.pillar !== undefined) {
           G.pillar += dt;

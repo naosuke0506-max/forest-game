@@ -119,7 +119,7 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
     jump: (f) => { const d = (ULT_SPECS.blunt?.jump.dist || 5) / 2; return shot(f, d, 6, 0.9, 2.4, 0.8, d, 3); },
     under: (f) => shot(f, 5.5, 1.8, 0.7, 4.2, 0.5),
     // rain：少し離れた低めの所から、頭上の光の門と地面の両方を（天門開闢の光の槍の雨。高く広くでは門が画面の外だった）
-    rain: (f) => shot(f, 10, 3, 2.2, 4.6, 1.3, 0, 4.5),
+    rain: (f) => shot(f, 10, 3, 2.2, 3.9, 1.3, 0, 4.5),   // 前は 4.6 m を見て空ばかりになり、浮いた体が帯に隠れた
   };
   /** 英雄ごとの構図の並び：[始まる秒, 種類]。まだ英雄ごとの技が無い人は、寄り → 放つ少し前に引き */
   function timeline(f, time, at) {
