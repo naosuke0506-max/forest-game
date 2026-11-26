@@ -86,7 +86,8 @@
     見た目は `js/render/ult-hero-fx.js`（水の竜巻・波・稲妻の姿と道・斬撃・落雷・大弓の風・嵐の大矢・壁の破片）、構図の並びは `ult-show.js` の英雄ごとの shots。
     嵐の大矢が家の壁に開ける大きな穴は `arrow-holes.js` の `bigHole`（壁の材質のシェーダーでその所を描かない `applyHoleClip`・縁の絵・`sight.addHole`・その階の当たり判定の円を off）。
     専用の動き（sh_ult・ls_flash・bw_ult）は `tools/characters/ult_moves.py`（build_character.py から呼ぶ）。雙劍は前の dw_ult を使う。
-    確かめは作業用の場所の `ulttest2.mjs`（計算だけ 24 項目）と `ultshot.js`（TIMES=撮る時刻の並び・HOUSE=1 で弓兵の前に家を置く）
+    確かめは作業用の場所の `ulttest2.mjs`（計算だけ 24 項目）と `ultshot.js`（TIMES=撮る時刻の並び・HOUSE=1 で弓兵の前に家を置く。ログの me で体の位置）。
+    技で体を動かすときは試合の計算（f.x・f.z）で動かす。必殺技の間は `match-session.js` が計算の位置を操作側へ写す（回避と同じ。前は写さず、本物のページでだけ踏み込みが進まなかった）
 - 技能（スキル）：前の專用技能（反擊・奧義・強靱・剛力・鷹目・神怒。2026-11-10 に作った）は、2026-11-25 に利用者の指示（「今ある技は残しません」）で無くした（`skills.js`・`wrath-wave.js` を消した）。
   残した物：鷹の目の見え方（`heat-vision.js`。`f.hawkEye`）・貫く矢と矢の穴（`arrow-holes.js`・`PIERCE_ARROW`）・大技の動き（`ls_ult`・`dw_ult`・`cl_ult`）・砂煙（`ult-dust.js`）は 2 回目で使う。
   神怒で家・樽が壊れる仕組み（前の `js/world/destruction.js`）は、2026-11-13 に利用者の指示で消した。
