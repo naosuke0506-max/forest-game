@@ -156,7 +156,7 @@ export const LESSONS = {
     },
     steps: [
       { text: '必殺ボタン（PC は G）で必殺技を放つ', done: (S) => S.ult },
-      { text: '必殺技の衝撃波で、2 人以上を吹き飛ばす', done: (S) => S.ultHits >= 2 },
+      { text: '必殺技を、2 人以上に当てる', done: (S) => S.ultHits >= 2 },   // 前は「衝撃波で吹き飛ばす」（1 回目の仮の技）。英雄ごとの技は吹き飛ばさない物もある
     ],
   },
   shield: {

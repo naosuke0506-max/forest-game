@@ -19,11 +19,11 @@ export function hitDir(f, fromX, fromZ) {
 /**
  * 受けた動きを決める
  * @param {object} o { guarded（楯で受けた）, broke（防禦が崩れた）, power（l 軽い / h 重い）, pierce（防禦の上から響く割合）, impact（受けた一撃の強さ）,
- *   crush（楯の上からでもよろめく重い一撃。前は剛力。今は使っていない） }
+ *   crush（楯の上からでもよろめく重い一撃。前は剛力。2026-11-26 から岩の鎧＝千岩槍獄の後の槍） }
  */
 export function reactKind(target, { guarded, broke, power, pierce, impact = 0, crush = false }) {
   if (broke) return 'stagger';   // 防禦が崩れた（スタミナ切れ）：よろめく
-  if (crush && !guarded) return 'stagger';
+  if (crush && guarded) return 'stagger';   // 楯で受けても、よろめく（前は !guarded で、楯で受けた時に効いていなかった。使っていなかった）
   // 防禦で受けた：受けた一撃の強さで使い分ける（重い攻撃・強い一撃は「強い受け」で押し込まれる。軽い一撃は「弱い受け」）
   if (guarded) return power === 'h' || impact >= COMBAT.guardHeavyImpact || pierce >= 0.3 ? 'guard_h' : 'guard_l';
   if (power !== 'h') return 'hit_l';

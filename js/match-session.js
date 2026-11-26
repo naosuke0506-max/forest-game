@@ -239,10 +239,21 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   });
   combat.on('auraStart', ({ fighter, aura }) => {
     if (fighter !== me) return;
-    hud.addFeed(aura.kind === 'water' ? `水の衣を纏った（${Math.round(aura.time)} 秒。傷が半分・ひるまない・矢を弾く）`
-      : aura.kind === 'thunder' ? `雷の衣を纏った（${Math.round(aura.time)} 秒。回避と疾驅で稲妻になる）` : `鷹の目が続く（${Math.round(aura.time)} 秒。建物越しに敵が見える）`);
+    const T = Math.round(aura.time);
+    hud.addFeed({
+      water: `水の衣を纏った（${T} 秒。傷が半分・ひるまない・矢を弾く）`,
+      thunder: `雷の衣を纏った（${T} 秒。回避と疾驅で稲妻になる）`,
+      rock: `岩の鎧を纏った（${T} 秒。傷が半分・ひるまない・吹き飛ばされない・槍を楯で受けた相手がよろめく）`,
+      fire: `紅蓮の衣を纏った（${T} 秒。一撃ごとに炎が爆ぜる・楯の上からでも傷が通る）`,
+      holy: `光輪を纏った（${T} 秒。少しずつ癒える・受けた傷の一部を光で返す）`,
+    }[aura.kind] || `鷹の目が続く（${T} 秒。建物越しに敵が見える）`);
   });
-  combat.on('auraEnd', ({ fighter, aura }) => { if (fighter === me) hud.addFeed(aura.kind === 'water' ? '水の衣が消えた' : '雷の衣が消えた'); });
+  const AURA_GONE = { water: '水の衣が消えた', thunder: '雷の衣が消えた', rock: '岩の鎧が崩れた', fire: '紅蓮の衣が消えた', holy: '光輪が消えた' };
+  combat.on('auraEnd', ({ fighter, aura }) => { if (fighter === me && AURA_GONE[aura.kind]) hud.addFeed(AURA_GONE[aura.kind]); });
+  combat.on('pinned', ({ fighter, by }) => {
+    if (fighter === me) hud.addFeed('岩の槍に閉じ込められた');
+    else if (by === me) hud.addFeed(`${fighter.name}を閉じ込めた`);
+  });
   // 延長戰（第 6 刻から）：必殺技がもう 1 回使える。刻の門が開いてから知らせる
   let overtimeNote = false;
   match.on('overtime', () => { overtimeNote = true; showUlt(); });
@@ -297,6 +308,9 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       // 必殺技の後に纏う物（2026-11-25）：水の衣・雷の衣・鷹の目
       if (me.aura?.kind === 'water') list.push(['', crestSvg('wave', { ring: false }), '水衣', me.aura.left]);
       if (me.aura?.kind === 'thunder') list.push(['', ICONS.m_thunder, '雷衣', me.aura.left]);
+      if (me.aura?.kind === 'rock') list.push(['', crestSvg('mountain', { ring: false }), '岩鎧', me.aura.left]);
+      if (me.aura?.kind === 'fire') list.push(['', ICONS.m_flame, '紅蓮', me.aura.left]);
+      if (me.aura?.kind === 'holy') list.push(['', crestSvg('halo', { ring: false }), '光輪', me.aura.left]);
       if (me.hawkEye > 0) list.push(['', ICONS.eye, '鷹目', me.hawkEye]);
       const ail = me.ail;
       if (ail && ail.fire >= 1 && !me.blaze) list.push(['gauge fire', ICONS.m_flame, '炎', ail.fire, true]);
@@ -554,7 +568,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
   const ultFx = createUltFx(app, { combat, fighters, camera: player.camera, dust });
   const ultShow = createUltShow({ camera: player.camera, player, views, me, heightAt: terrain.heightAt });
   // 英雄ごとの必殺技の見た目（水の竜巻と波・稲妻・嵐の大矢など。render/ult-hero-fx.js）
-  heroFx = createUltHeroFx(app, { combat, fighters, views, camera: player.camera, fx: ultFx, me, firstPerson: () => !thirdPerson && !ultShow.active && !spectating });
+  heroFx = createUltHeroFx(app, { combat, fighters, views, camera: player.camera, fx: ultFx, me, dust, firstPerson: () => !thirdPerson && !ultShow.active && !spectating });
   combat.on('ult', ({ fighter, ult, time, at }) => { if (fighter === me && ult) ultShow.play(me, ult, { time, at }); });
   combat.on('ultBurst', (e) => ultShow.burst(e));
   combat.on('ultPierce', ({ fighter, slash }) => { if (fighter === me) ultShow.kick(slash ? 0.09 : 0.04, slash ? 0.14 : 0.06); });   // 自分の稲妻・斬撃の手ごたえ

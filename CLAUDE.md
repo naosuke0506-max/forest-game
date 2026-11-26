@@ -88,6 +88,11 @@
     専用の動き（sh_ult・ls_flash・bw_ult）は `tools/characters/ult_moves.py`（build_character.py から呼ぶ）。雙劍は前の dw_ult を使う。
     確かめは作業用の場所の `ulttest2.mjs`（計算だけ 24 項目）と `ultshot.js`（TIMES=撮る時刻の並び・HOUSE=1 で弓兵の前に家を置く。ログの me で体の位置）。
     技で体を動かすときは試合の計算（f.x・f.z）で動かす。必殺技の間は `match-session.js` が計算の位置を操作側へ写す（回避と同じ。前は写さず、本物のページでだけ踏み込みが進まなかった）
+  - 2 回目の後半（2026-11-26）：長柄騎士「千岩槍獄」・打擊騎士「紅蓮崩天」・祓魔僧「天門開闢」を作った（Claude の案を利用者が「次行きましょう」で進めた）。6 人とも英雄ごとの技になった
+    （仮の `ULT_BURST`・`ULT_POSE` は、英雄ごとの技が無い時の予備として残した）。跳ぶ・浮く・打ち上げられる高さは見た目だけの `f.lift`（当たり判定は地面のまま。
+    `character-view.js` が体を持ち上げ、`ult-show.js` のカメラが追う）。打ち上げは `combat.js` の `launch`、閉じ込めは `pin`（ひるみと同じで動けない）。
+    纏う物は岩の鎧（`firm`＝水の衣と同じく傷半分・ひるまない・吹き飛ばない。槍を楯で受けた相手はよろめく＝`crush`）・紅蓮の衣（近接が楯を通る・`fireBurst`）・光輪（癒える・`auraReflect`）。
+    動きは `ult_moves.py` の `sp_ult`・`mc_ult`/`wh_ult`/`lc_ult`（打擊騎士は武器ごと。`character-view.js` の `HERO_CLIP`）・`cl_gate`。確かめは作業用の場所の `ulttest3.mjs`（計算だけ 30 項目）
 - 技能（スキル）：前の專用技能（反擊・奧義・強靱・剛力・鷹目・神怒。2026-11-10 に作った）は、2026-11-25 に利用者の指示（「今ある技は残しません」）で無くした（`skills.js`・`wrath-wave.js` を消した）。
   残した物：鷹の目の見え方（`heat-vision.js`。`f.hawkEye`）・貫く矢と矢の穴（`arrow-holes.js`・`PIERCE_ARROW`）・大技の動き（`ls_ult`・`dw_ult`・`cl_ult`）・砂煙（`ult-dust.js`）は 2 回目で使う。
   神怒で家・樽が壊れる仕組み（前の `js/world/destruction.js`）は、2026-11-13 に利用者の指示で消した。

@@ -64,13 +64,24 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
    * 置けなければ近づけ・反対の横・低くも試す。margin：カメラのまわり（左右・上・後ろ）にも、これだけ空きが要る
    * （壁や屋根にぴったり寄った所に置くと、画面の半分が壁や屋根になる）。カメラから英雄の腰が見えることも確かめる
    */
-  function shot(f, fwd, side, up, look, margin, lookFwd = 0) {
+  function shot(f, fwd, side, up, look, margin, lookFwd = 0, span = 0) {
     const y = f.y ?? heightAt(f.x, f.z), a = (f.yaw * Math.PI) / 180;
     const Fx = -Math.sin(a), Fz = -Math.cos(a), Rx = Math.cos(a), Rz = -Math.sin(a);
     const head = [f.x, y + 1.5, f.z];
     const under = y < heightAt(f.x, f.z) - 1.5;   // 洞窟の中（上の地面とは比べない）
     // ほかの人の体のすぐそば（1.5 m より近く）には置かない（前は案山子のすぐ横に置かれ、画面の半分が体でふさがった）
     const nearBody = (px, py, pz) => { for (const o of views.keys()) if (o !== f && o.alive !== false && Math.hypot(o.x - px, o.z - pz) < 1.5 && py > (o.y ?? 0) - 0.5 && py < (o.y ?? 0) + 2.4) return true; return false; };
+    // カメラ (px, pz) と英雄の間の線の近く（0.7 m）に、ほかの人の体があるか
+    const bodyBetween = (px, pz, h) => {
+      const sx = h.x - px, sz = h.z - pz, l2 = sx * sx + sz * sz || 1;
+      for (const o of views.keys()) {
+        if (o === h || o.alive === false) continue;
+        const k = ((o.x - px) * sx + (o.z - pz) * sz) / l2;
+        if (k <= 0.05 || k >= 0.95) continue;
+        if (Math.hypot(px + sx * k - o.x, pz + sz * k - o.z) < 0.7) return true;
+      }
+      return false;
+    };
     const ok = (px, py, pz, from) => (under || py > heightAt(px, pz) + 0.35) && !nearBody(px, py, pz) && (!player.cameraClear || player.cameraClear(px, py, pz, from));
     for (const k of [1, 0.8, 0.62]) {
       for (const sd of [side, -side]) {
@@ -81,6 +92,12 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
           if (!around.every(([ox, oy, oz]) => ok(px + ox, py + oy, pz + oz, head))) continue;
           const L = [f.x + Rx * sd * 0.12 + Fx * lookFwd, y + look, f.z + Rz * sd * 0.12 + Fz * lookFwd];   // lookFwd：英雄の前のこれだけ先を見る（肩越し・見下ろし）
           if (player.cameraClear && !player.cameraClear(f.x, y + 0.9, f.z, [px, py, pz])) continue;   // カメラから腰が見える
+          if (bodyBetween(px, pz, f)) continue;   // カメラと英雄の間に、ほかの人の体がない（前は手前の案山子が英雄を隠した）
+          // span：見る所の左右 span m まで見通せる（広く撮る構図で、手前の屋根や壁が画面の半分をふさがないように）
+          if (span && player.cameraClear) {
+            const vx = L[0] - px, vz = L[2] - pz, vl = Math.hypot(vx, vz) || 1, sx = -vz / vl, sz = vx / vl;
+            if (![-1, 1].every((g) => player.cameraClear(L[0] + sx * span * g, y + 1.2, L[2] + sz * span * g, [px, py, pz]))) continue;
+          }
           return { p: [px, py, pz], l: L };
         }
       }
@@ -96,12 +113,22 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
     high: (f) => shot(f, -8.5, 2.5, 8.5, 0.3, 1.0, 5),
     behind: (f) => shot(f, -3.2, 0.95, 1.85, 1.35, 0.5, 9),
     cross: (f) => { const d = (ULT_SPECS.sword.dash.dist || 11) / 2; return shot(f, d, 9.5, 2.6, 1.0, 0.8, d); },   // 少し高く遠く（低いと、手前の背の高い草で体が隠れた）
+    // （後半 2026-11-26）vast 高く広く（千岩槍獄の岩の槍の輪・天門開闢の光の槍の雨）・jump 跳ぶ道の横の低い所から見上げる（紅蓮崩天）・
+    //   under 前の低い所から見上げる（天門開闢の浮いた体と門）
+    vast: (f) => shot(f, 8.5, 5, 7.5, 0.4, 1.3, 0, 4.5),
+    jump: (f) => { const d = (ULT_SPECS.blunt?.jump.dist || 5) / 2; return shot(f, d, 6, 0.9, 2.4, 0.8, d, 3); },
+    under: (f) => shot(f, 5.5, 1.8, 0.7, 4.2, 0.5),
+    // rain：少し離れた低めの所から、頭上の光の門と地面の両方を（天門開闢の光の槍の雨。高く広くでは門が画面の外だった）
+    rain: (f) => shot(f, 10, 3, 2.2, 3.9, 1.3, 0, 4.5),   // 前は 4.6 m を見て空ばかりになり、浮いた体が帯に隠れた
   };
   /** 英雄ごとの構図の並び：[始まる秒, 種類]。まだ英雄ごとの技が無い人は、寄り → 放つ少し前に引き */
   function timeline(f, time, at) {
     const S = ULT_SPECS[f.char];
     if (f.char === 'sword' && S) return [[0, 'close'], [S.bolt.from - 0.05, 'high'], [S.stance, 'close'], [S.dash.at - 0.2, 'cross'], [S.strike.at - 0.06, 'wide']];
     if (f.char === 'archer' && S) return [[0, 'close'], [0.95, 'behind']];
+    if (f.char === 'polearm' && S) return [[0, 'close'], [S.at - 0.14, 'wide'], [S.rings[1].at + 0.1, 'vast']];
+    if (f.char === 'blunt' && S) return [[0, 'close'], [S.jump.from - 0.08, 'jump'], [S.at - 0.06, 'wide']];
+    if (f.char === 'cleric' && S) return [[0, 'close'], [S.rise[1] - 0.2, 'under'], [S.rain.from + 0.15, 'rain'], [S.pillar.at - 0.12, 'wide']];
     return [[0, 'close'], [at - 0.12, 'wide']];
   }
 
@@ -199,7 +226,9 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
             // 寄りの間は少しずつ前へ寄る
             const push = P.kind === 'close' ? Math.min(1, (t - P.t0) / 1.2) * 0.09 : 0;
             const C = P.pose;
-            return [C.p[0] + (C.l[0] - C.p[0]) * push, C.p[1] + (C.l[1] - C.p[1]) * push, C.p[2] + (C.l[2] - C.p[2]) * push, C.l];
+            // 跳ぶ・浮く体（見た目の高さ lift）を追って見上げる。寄りはカメラも一緒に上がる
+            const lift = S.f.lift || 0, up = P.kind === 'close' ? lift : 0;
+            return [C.p[0] + (C.l[0] - C.p[0]) * push, C.p[1] + up + (C.l[1] - C.p[1]) * push, C.p[2] + (C.l[2] - C.p[2]) * push, [C.l[0], C.l[1] + lift, C.l[2]]];
           };
           if (Pc) {
             let [qx, qy, qz, L] = at2(Pc);

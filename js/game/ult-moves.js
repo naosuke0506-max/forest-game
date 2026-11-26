@@ -4,6 +4,14 @@
 //   劍騎士「雷霆一閃」：閃光で目くらまし → 稲妻の姿で 12 回折れて敵を貫く（しびれ続ける）→ 体に戻って構え → カメラの向きへ一瞬で踏み込んで斬る → 落雷。
 //     その後 10 秒、雷の衣（回避と疾驅で稲妻になる。回避は遠くまで・その間は無敵。時々自分に落雷）
 //   弓兵「颶風一矢」：鷹の目で建物越しに敵が見え、大弓を引いて嵐の大矢を放つ（人・木・家を貫く。家の壁に通れる穴＝world/arrow-holes.js）。その後 12 秒、鷹の目が続く
+//   （後半 2026-11-26。技の姿は Claude の案を利用者が進めた）
+//   長柄騎士「千岩槍獄」：槍を地面へ突き立てると、周りから岩の槍が輪になって次々に突き上がり、敵を打ち上げて閉じ込める。最後に大きな岩の槍が真下から。
+//     その後 10 秒、岩の鎧（傷が半分・ひるまない・吹き飛ばされない・槍を楯で受けた相手はよろめく）
+//   打擊騎士「紅蓮崩天」：炎の柱の中へ跳び上がり、落ちながら地面へ叩きつける。溶けた岩と炎が噴き上がって周りを焼き払う（近くの敵は火炎）。地の裂け目に地面の火。
+//     その後 10 秒、紅蓮の衣（一撃ごとに炎が爆ぜる・楯の上からでも傷が通る）
+//   祓魔僧「天門開闢」：宙に浮いて天を仰ぐと、頭上に光の門が開き、光の槍が降りそそぐ（目がくらむ）。最後に門から太い光の柱。
+//     その後 10 秒、光輪（少しずつ癒える・受けた傷の一部を光で返す）
+//   跳ぶ・浮く・打ち上げられる高さは、見た目だけの f.lift（当たり判定は地面のまま。render/character-view.js が体を持ち上げる）
 //   見た目は render/ult-fx.js、自分の画面のカメラは render/ult-show.js、音は audio/sfx.js が、ここで出す知らせ（emit）で出す
 import { ULT_SPECS } from './data.js';
 
@@ -229,7 +237,208 @@ export function createUltMoves(ctx) {
     end(f) { f.greatBow = false; emit('auraStart', { fighter: f, aura: { kind: 'wind', left: f.hawkEye, time: ULT_SPECS.archer.hawk } }); },
   };
 
-  const MOVES = { shield: water, sword: thunder, archer: wind };
+  // ===================== 長柄騎士「千岩槍獄」 =====================
+  const earth = {
+    start(f, a) { a.slam = false; a.ring = []; a.big = false; emit('ultEarth', { fighter: f, phase: 'raise' }); },
+    update(f, a) {
+      const S = ULT_SPECS.polearm, fy = yOf(f);
+      // 槍を地面へ突き立てる（地が割れる。揺れ・閃光・衝撃波の輪）
+      if (!a.slam && a.t >= S.at) {
+        a.slam = true;
+        const [fx, fz] = fwdOf(f.yaw);
+        a.cx = f.x; a.cz = f.z;
+        emit('ultEarth', { fighter: f, phase: 'slam', x: f.x + fx * 0.9, y: fy, z: f.z + fz * 0.9 });
+        emit('ultBurst', { fighter: f, ult: f.ultInfo, x: f.x, y: fy, z: f.z, radius: S.rings[S.rings.length - 1].r1, hits: 0, ground: true });
+      }
+      // 岩の槍が輪になって次々に突き上がる：帯の中の敵に傷・打ち上げる・閉じ込める
+      S.rings.forEach((R, i) => {
+        if (a.ring[i] || a.t < R.at) return;
+        a.ring[i] = true;
+        let hits = 0;
+        for (const t of foes(f, R.r1 + 0.4, 3)) {
+          if (t.invuln > 0) continue;
+          const d = Math.hypot(t.x - f.x, t.z - f.z);
+          if (d < R.r0 - 0.4 || d > R.r1 + 0.4) continue;
+          ctx.damage(t, S.damage, f, { fromX: f.x, fromZ: f.z, kind: 'ult', power: 'h', physical: false });
+          if (!t.alive) continue;
+          hits++;
+          ctx.launch(t, S.launch, 0.75);
+          ctx.pin(t, f, S.pin + (S.big.at - R.at));   // 大きな岩の槍が来るまで閉じ込めておく
+          emit('ultEarth', { fighter: f, phase: 'hit', target: t, x: t.x, y: yOf(t), z: t.z });
+        }
+        emit('ultEarth', { fighter: f, phase: 'ring', i, x: f.x, y: fy, z: f.z, r0: R.r0, r1: R.r1, hits });
+      });
+      // 最後に大きな岩の槍：閉じ込めた敵（いなければ近くの敵、それもいなければ前）の真下から
+      if (!a.big && a.t >= S.big.at) {
+        a.big = true;
+        const B = S.big;
+        let best = null, bd = Infinity;
+        for (const t of foes(f, B.range, 3)) {
+          if (t.invuln > 0) continue;
+          const d = Math.hypot(t.x - f.x, t.z - f.z) - (t.pinned > 0 ? 100 : 0);   // 閉じ込めた敵を先に
+          if (d < bd) { bd = d; best = t; }
+        }
+        let x, z;
+        if (best) { x = best.x; z = best.z; }
+        else { const [fx, fz] = fwdOf(f.yaw); x = f.x + fx * B.ahead; z = f.z + fz * B.ahead; }
+        const y = ctx.floorAt(x, z, fy);
+        let hits = 0;
+        for (const t of foes(f, B.range + B.radius, 3)) {
+          if (t.invuln > 0 || Math.hypot(t.x - x, t.z - z) > B.radius) continue;
+          ctx.damage(t, B.damage, f, { fromX: x, fromZ: z, kind: 'ult', power: 'h', physical: false });
+          if (!t.alive) continue;
+          hits++;
+          ctx.launch(t, B.launch, 1.0);
+          ctx.pin(t, f, 1.0);
+        }
+        emit('ultEarth', { fighter: f, phase: 'big', x, y, z, hits });
+      }
+      return a.t >= S.time;
+    },
+    end(f) { const A = ULT_SPECS.polearm.aura; f.aura = { kind: A.kind, left: A.time, time: A.time, cut: A.cut }; emit('auraStart', { fighter: f, aura: f.aura }); },
+  };
+
+  // ===================== 打擊騎士「紅蓮崩天」 =====================
+  const fire = {
+    start(f, a) {
+      const S = ULT_SPECS.blunt, J = S.jump;
+      a.slam = false; a.jumped = false; a.moved = 0;
+      // 跳ぶ向きと距離：自分はカメラの向きへ。見ている向き（左右 35 度の中）に敵がいれば、一番近い敵の手前へ降りる（いなければ dist m）。
+      //   bot は一番近い敵の手前へ（前は自分はいつも dist m 跳び、教練では近くの案山子を飛び越えて 1 人にしか当たらなかった）
+      let yaw = f.isPlayer && f._viewYaw != null ? f._viewYaw : f.yaw, dist = J.dist;
+      let best = null, bd = Infinity;
+      for (const t of foes(f, 14)) {
+        const d = Math.hypot(t.x - f.x, t.z - f.z);
+        if (f.isPlayer) { let da = Math.abs(((yawTo(f, t.x, t.z) - yaw) % 360 + 540) % 360 - 180); if (da > 35 || d > J.dist + 3) continue; }
+        if (d < bd) { bd = d; best = t; }
+      }
+      if (best) { if (!f.isPlayer) yaw = yawTo(f, best.x, best.z); dist = Math.max(0, Math.min(J.dist, bd - 1.0)); }
+      a.yaw = yaw; a.dist = dist;
+      f.yaw = yaw;
+      emit('ultFire', { fighter: f, phase: 'pillar', x: f.x, y: yOf(f), z: f.z });
+    },
+    update(f, a) {
+      const S = ULT_SPECS.blunt, J = S.jump;
+      // 跳び上がって（from → apex）、落ちる（apex → at）。高さは見た目だけ（f.lift）。前へは壁を抜けずに進む
+      if (a.t >= J.from && a.t < S.at) {
+        if (!a.jumped) { a.jumped = true; emit('ultFire', { fighter: f, phase: 'jump', x: f.x, y: yOf(f), z: f.z }); }
+        const up = a.t < J.apex, u = up ? (a.t - J.from) / (J.apex - J.from) : (a.t - J.apex) / (S.at - J.apex);
+        f.lift = up ? J.height * (1 - (1 - u) * (1 - u)) : J.height * (1 - u * u);
+        const goal = a.dist * Math.min(1, (a.t - J.from) / (S.at - J.from)), step = goal - a.moved;
+        a.moved = goal;
+        if (step > 0) { const [fx, fz] = fwdOf(a.yaw); ctx.shove(f, fx * step, fz * step); }
+        f.yaw = a.yaw;
+      }
+      // 叩きつける：溶けた岩と炎が噴き上がる。近いほど強い炎の傷と吹き飛ばし、近くは火炎、地の裂け目に地面の火
+      if (!a.slam && a.t >= S.at) {
+        a.slam = true;
+        f.lift = 0;
+        const rest = a.dist - a.moved;   // 最後のフレームで進み残した分
+        if (rest > 0) { const [fx, fz] = fwdOf(a.yaw); ctx.shove(f, fx * rest, fz * rest); a.moved = a.dist; }
+        const fy = yOf(f);
+        let hits = 0;
+        for (const t of foes(f, S.radius, 4)) {
+          if (t.invuln > 0) continue;
+          const d = Math.hypot(t.x - f.x, t.z - f.z), k = 1 - d / S.radius;
+          ctx.elementHit(t, f, 'fire', S.damage * (S.minK + (1 - S.minK) * k), d <= S.blaze ? 100 : S.buildup, { fromX: f.x, fromZ: f.z, kind: 'ult', power: 'h' });
+          if (!t.alive) continue;
+          hits++;
+          ctx.knock(t, f.x, f.z, S.pushMin + (S.push - S.pushMin) * k, S.stun * (0.6 + 0.4 * k), 0.9 + 0.3 * k);
+          ctx.launch(t, 0.5 + 0.9 * k, 0.6);
+        }
+        // 地の裂け目：まわりの決まった向きに、地面の火を起こす
+        const fissures = [];
+        for (let i = 0; i < S.fissures; i++) {
+          const th = (i / S.fissures) * Math.PI * 2 + rnd() * 0.5, r = 2.4 + rnd() * 2.6;
+          const x = f.x + Math.cos(th) * r, z = f.z + Math.sin(th) * r;
+          if (!ctx.obstacles.isFree(x, z, 0.3, true)) continue;
+          const y = ctx.floorAt(x, z, fy);
+          if (Math.abs(y - fy) > 1.5) continue;
+          fissures.push({ x, z, y, th });
+          ctx.kindle?.({ kind: 'grass', x, z }, y, f);
+        }
+        emit('ultFire', { fighter: f, phase: 'slam', x: f.x, y: fy, z: f.z, fissures });
+        emit('ultBurst', { fighter: f, ult: f.ultInfo, x: f.x, y: fy, z: f.z, radius: S.radius, hits });
+      }
+      return a.t >= S.time;
+    },
+    end(f) { f.lift = 0; const A = ULT_SPECS.blunt.aura; f.aura = { kind: A.kind, left: A.time, time: A.time }; emit('auraStart', { fighter: f, aura: f.aura }); },
+  };
+
+  // ===================== 祓魔僧「天門開闢」 =====================
+  const holy = {
+    start(f, a) {
+      const R = ULT_SPECS.cleric.rain;
+      a.gate = null; a.pillar = false; a.drops = []; a.hitCount = new Map();
+      // 光の槍の降る時刻（少しずつずらす）
+      a.plan = Array.from({ length: R.count }, (_, k) => R.from + ((R.to - R.from) * (k + rnd() * 0.7)) / R.count);
+      emit('ultHoly', { fighter: f, phase: 'rise', x: f.x, y: yOf(f), z: f.z });
+    },
+    update(f, a) {
+      const S = ULT_SPECS.cleric, R = S.rain, fy = yOf(f);
+      // 宙に浮く（見た目だけ）
+      const [r0, r1] = S.rise, [d0, d1] = S.down;
+      const e = (u) => u * u * (3 - 2 * u);
+      f.lift = S.lift * (a.t < r0 ? 0 : a.t < r1 ? e((a.t - r0) / (r1 - r0)) : a.t < d0 ? 1 : a.t < d1 ? 1 - e((a.t - d0) / (d1 - d0)) : 0);
+      // 光の門が開く（頭上）
+      if (!a.gate && a.t >= S.at) {
+        a.gate = { x: f.x, y: fy + S.gate, z: f.z };
+        emit('ultHoly', { fighter: f, phase: 'gate', ...a.gate });
+      }
+      // 光の槍：半分は敵を狙う（少しずらす）、残りは半径の中のどこか
+      while (a.gate && a.plan.length && a.t >= a.plan[0]) {
+        a.plan.shift();
+        let x, z;
+        const near = foes(f, R.radius, 4).filter((t) => !(t.invuln > 0));
+        if (near.length && rnd() < R.aim) {
+          const t = near[Math.floor(rnd() * near.length)];
+          x = t.x + (rnd() - 0.5) * 1.2; z = t.z + (rnd() - 0.5) * 1.2;
+        } else {
+          const th = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R.radius;
+          x = a.gate.x + Math.cos(th) * r; z = a.gate.z + Math.sin(th) * r;
+        }
+        const y = ctx.floorAt(x, z, fy);
+        a.drops.push({ x, y, z, at: a.t + R.fall });
+        emit('ultHoly', { fighter: f, phase: 'spear', x, y, z, from: a.gate, fall: R.fall });
+      }
+      for (let i = a.drops.length - 1; i >= 0; i--) {
+        const d = a.drops[i];
+        if (a.t < d.at) continue;
+        a.drops.splice(i, 1);
+        for (const t of foes(f, R.radius + 3, 6)) {
+          if (t.invuln > 0 || Math.hypot(t.x - d.x, t.z - d.z) > R.hit || Math.abs(yOf(t) - d.y) > 2.5) continue;
+          const n = (a.hitCount.get(t) || 0) + 1;
+          if (n > R.maxHits) continue;
+          a.hitCount.set(t, n);
+          ctx.damage(t, R.damage, f, { fromX: d.x, fromZ: d.z, kind: 'ult', power: 'l', physical: false });
+          if (!t.alive) continue;
+          t.blind = Math.max(t.blind || 0, R.blind);
+          emit('blinded', { fighter: t, time: R.blind, by: f });
+        }
+        emit('ultHoly', { fighter: f, phase: 'impact', x: d.x, y: d.y, z: d.z });
+      }
+      // 最後に、門から太い光の柱（自分のまわり）
+      if (!a.pillar && a.t >= S.pillar.at) {
+        a.pillar = true;
+        const P = S.pillar;
+        let hits = 0;
+        for (const t of foes(f, P.radius, 4)) {
+          if (t.invuln > 0) continue;
+          const d = Math.hypot(t.x - f.x, t.z - f.z), k = 1 - d / P.radius;
+          ctx.damage(t, P.damage * (0.5 + 0.5 * k), f, { fromX: f.x, fromZ: f.z, kind: 'ult', power: 'h', physical: false });
+          if (!t.alive) continue;
+          hits++;
+          ctx.knock(t, f.x, f.z, 1.5 + P.push * k, 1.0, 0.9);
+        }
+        emit('ultHoly', { fighter: f, phase: 'pillar', x: f.x, y: fy, z: f.z, radius: P.radius });
+        emit('ultBurst', { fighter: f, ult: f.ultInfo, x: f.x, y: fy, z: f.z, radius: P.radius, hits, pillar: true });
+      }
+      return a.t >= S.time;
+    },
+    end(f) { f.lift = 0; const A = ULT_SPECS.cleric.aura; f.aura = { kind: A.kind, left: A.time, time: A.time }; emit('auraStart', { fighter: f, aura: f.aura }); },
+  };
+
+  const MOVES = { shield: water, sword: thunder, archer: wind, polearm: earth, blunt: fire, cleric: holy };
   return {
     /** その人に英雄ごとの必殺技があるか（無ければ仮の属性の衝撃波） */
     has: (f) => !!MOVES[f.char],
@@ -241,6 +450,6 @@ export function createUltMoves(ctx) {
     /** 終わった（纏う物を付ける） */
     end(f) { MOVES[f.char].end(f); },
     /** 途中で止まった（倒れた・試合が終わった） */
-    cancel(f) { f.boltForm = false; f.greatBow = false; },
+    cancel(f) { f.boltForm = false; f.greatBow = false; f.lift = 0; },
   };
 }

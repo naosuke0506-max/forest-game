@@ -217,7 +217,9 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
   let bowScale = 1;                    // 大弓（颶風一矢）：長弓を大きくして持つ
   let ultPose = null, ultPhase = '', ultAt = ULT_BURST.at, ultTime = ULT_BURST.time;   // 必殺技の動き（data.js の ULT_POSE）と、溜め（pre）・放つ（go）のどちらか、放つ時刻と長さ
   // 英雄ごとの必殺技の専用の動き（2 回目。tools/characters/*_moves.py）：その英雄の技の長さに合わせて作ってある（放つ時刻も同じ）
-  const HERO_CLIP = { shield: 'sh_ult', archer: 'bw_ult' };
+  // 英雄ごとの必殺技の専用の動き（tools/characters/ult_moves.py）。打擊騎士は持っている武器ごと
+  const HERO_CLIP = { shield: 'sh_ult', archer: 'bw_ult', polearm: 'sp_ult', cleric: 'cl_gate', blunt: { mace: 'mc_ult', warhammer: 'wh_ult', lucerne: 'lc_ult' } };
+  const heroClip = () => { const c = HERO_CLIP[fighter.char]; return typeof c === 'object' ? c[fighter.weapon] : c; };
   let charred = false, charK = 0, paraHeld = false;   // 火炎で焦げて倒れた（黒くなっていく割合）・雷痺で止めている
   const VICTIM = /^(as_back_v|as_slide_v|drag_wd_v|drag_bed_v)$/;   // される側の動き（倒れても最後の姿のまま）
   // 攻撃を受けた動き（game/reactions.js の fighter.react）：流している受けた動きの番号と残りの時間。
@@ -589,7 +591,8 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
       swimLift += ((fighter.swimming ? swimLiftWant : 0) - swimLift) * Math.min(1, dt * 5);
       if (hid) { root.setPosition(hid.outX, groundY, hid.outZ); root.setEulerAngles(0, hid.yaw, 0); }
       else {
-        root.setPosition(fighter.x - knock.x - (cv ? cv.nx * 0.14 : 0), groundY + swimLift, fighter.z - knock.z - (cv ? cv.nz * 0.14 : 0));
+        // lift：跳ぶ・浮く・打ち上げられる見た目の高さ（必殺技。当たり判定は地面のまま。game/ult-moves.js・combat.js）
+        root.setPosition(fighter.x - knock.x - (cv ? cv.nx * 0.14 : 0), groundY + swimLift + (fighter.lift || 0), fighter.z - knock.z - (cv ? cv.nz * 0.14 : 0));
         if (Math.abs(leanF) > 0.05 || Math.abs(leanS) > 0.05) {
           // 前のめり＝横の軸（X）まわりに負の向き、右へ傾く＝前後の軸（Z）まわりに負の向き
           root.setRotation(qRoot.mul2(qYaw.setFromEulerAngles(0, fighter.yaw, 0), qLean.setFromEulerAngles(-leanF, 0, -leanS)));
@@ -833,9 +836,9 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
             ultPose = null; ultPhase = 'sword';
             const hold = fighter.weapon === 'dualsword' ? 'dw_c1_hold' : 'ls_c1_hold';
             if (has(hold)) play(hold, 1, 0.1);
-          } else if (S && HERO_CLIP[fighter.char] && has(HERO_CLIP[fighter.char])) {
+          } else if (S && heroClip() && has(heroClip())) {
             // 英雄ごとの専用の動き：技の長さに合わせて流す
-            const name = HERO_CLIP[fighter.char];
+            const name = heroClip();
             ultPose = null; ultPhase = 'go';
             restart(name, clip(name).duration / S.time);
           } else {
