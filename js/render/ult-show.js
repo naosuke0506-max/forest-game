@@ -95,7 +95,7 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
     wide: (f) => shot(f, 5.6, 3.2, 3.5, 0.7, 1.3),
     high: (f) => shot(f, -8.5, 2.5, 8.5, 0.3, 1.0, 5),
     behind: (f) => shot(f, -3.2, 0.95, 1.85, 1.35, 0.5, 9),
-    cross: (f) => { const d = (ULT_SPECS.sword.dash.dist || 11) / 2; return shot(f, d, 8.5, 1.7, 1.0, 0.8, d); },
+    cross: (f) => { const d = (ULT_SPECS.sword.dash.dist || 11) / 2; return shot(f, d, 9.5, 2.6, 1.0, 0.8, d); },   // 少し高く遠く（低いと、手前の背の高い草で体が隠れた）
   };
   /** 英雄ごとの構図の並び：[始まる秒, 種類]。まだ英雄ごとの技が無い人は、寄り → 放つ少し前に引き */
   function timeline(f, time, at) {
