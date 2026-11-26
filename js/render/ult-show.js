@@ -105,7 +105,9 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
     //   under 前の低い所から見上げる（天門開闢の浮いた体と門）
     vast: (f) => shot(f, 8.5, 5, 7.5, 0.4, 1.3, 0, 4.5),
     jump: (f) => { const d = (ULT_SPECS.blunt?.jump.dist || 5) / 2; return shot(f, d, 6, 0.9, 2.4, 0.8, d, 3); },
-    under: (f) => shot(f, 4.2, 1.6, 0.6, 3.6, 0.5),
+    under: (f) => shot(f, 5.5, 1.8, 0.7, 4.2, 0.5),
+    // rain：少し離れた低めの所から、頭上の光の門と地面の両方を（天門開闢の光の槍の雨。高く広くでは門が画面の外だった）
+    rain: (f) => shot(f, 10, 3, 2.2, 4.6, 1.3, 0, 4.5),
   };
   /** 英雄ごとの構図の並び：[始まる秒, 種類]。まだ英雄ごとの技が無い人は、寄り → 放つ少し前に引き */
   function timeline(f, time, at) {
@@ -114,7 +116,7 @@ export function createUltShow({ camera, player, views, me, heightAt }) {
     if (f.char === 'archer' && S) return [[0, 'close'], [0.95, 'behind']];
     if (f.char === 'polearm' && S) return [[0, 'close'], [S.at - 0.14, 'wide'], [S.rings[1].at + 0.1, 'vast']];
     if (f.char === 'blunt' && S) return [[0, 'close'], [S.jump.from - 0.08, 'jump'], [S.at - 0.06, 'wide']];
-    if (f.char === 'cleric' && S) return [[0, 'close'], [S.rise[1] - 0.2, 'under'], [S.rain.from + 0.15, 'vast'], [S.pillar.at - 0.12, 'wide']];
+    if (f.char === 'cleric' && S) return [[0, 'close'], [S.rise[1] - 0.2, 'under'], [S.rain.from + 0.15, 'rain'], [S.pillar.at - 0.12, 'wide']];
     return [[0, 'close'], [at - 0.12, 'wide']];
   }
 

@@ -532,7 +532,7 @@ export const ULT_SPECS = {
              jump: { from: 0.42, apex: 0.95, height: 3.6, dist: 5.5 },
              radius: 7, damage: 44, minK: 0.4, push: 6, pushMin: 2, stun: 1.2, blaze: 3.5, buildup: 60, fissures: 7,
              aura: { kind: 'fire', time: 10, radius: 2.2, damage: 8, buildup: 25 } },
-  cleric:  { time: 3.0, at: 0.75, reach: 8, lift: 1.3, rise: [0.1, 0.7], down: [2.55, 2.95], gate: 14,
+  cleric:  { time: 3.0, at: 0.75, reach: 8, lift: 1.3, rise: [0.1, 0.7], down: [2.55, 2.95], gate: 9,
              rain: { from: 0.95, to: 2.2, count: 22, radius: 9, aim: 0.5, fall: 0.18, hit: 1.1, damage: 11, blind: 1.6, maxHits: 3 },
              pillar: { at: 2.35, radius: 4.2, damage: 30, push: 5 },
              aura: { kind: 'holy', time: 10, heal: 0.025, reflect: 0.3 } },

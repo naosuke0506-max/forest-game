@@ -671,8 +671,9 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
           G.pillar += dt;
           const pk = Math.max(0, 1 - G.pillar / 0.8) * Math.min(1, G.pillar / 0.06);
           if (pk > 0) {
-            segment(G.px, G.py, G.pz, G.x, G.y, G.z, 3.6 * pk, HOLY[0] * pk * 0.8, HOLY[1] * pk * 0.8, HOLY[2] * pk * 0.8);
-            segment(G.px, G.py, G.pz, G.x, G.y, G.z, 1.4 * pk, pk, pk, pk * 0.9);
+            // 前は幅 3.6 m と白い芯 1.4 m で、画面が白く飛んだ（共通の光の柱も重なる）。細く、金色に
+            segment(G.px, G.py, G.pz, G.x, G.y, G.z, 2.2 * pk, HOLY[0] * pk * 0.6, HOLY[1] * pk * 0.55, HOLY[2] * pk * 0.4);
+            segment(G.px, G.py, G.pz, G.x, G.y, G.z, 0.7 * pk, pk * 0.8, pk * 0.75, pk * 0.55);
           }
         }
       }
