@@ -419,16 +419,18 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
   /** 岩壁：壁に沿って岩の槍を並べて突き上げる（真ん中から外へ）。根もとは低く太い岩でつなぐ */
   function raiseRockWall(w) {
     const rx = Math.cos(w.yaw * DEGR), rz = -Math.sin(w.yaw * DEGR), fx0 = -Math.sin(w.yaw * DEGR), fz0 = -Math.cos(w.yaw * DEGR);
-    const list = [], n = 10, life = w.life + 0.6;
-    for (let i = 0; i < n; i++) {
-      const v = -w.half + ((i + 0.5) / n) * w.half * 2 + (rnd() - 0.5) * 0.12, d = (rnd() - 0.5) * 0.3;
-      list.push(spike(w.x + rx * v + fx0 * d, w.y, w.z + rz * v + fz0 * d, 0.48 + rnd() * 0.16, w.height * (0.86 + rnd() * 0.26), 0.04 + rnd() * 0.08,
-        rnd() * Math.PI * 2, life, Math.abs(v) * 0.06));
-    }
-    for (let i = 0; i < 5; i++) {
-      const v = -w.half * 0.9 + (i / 4) * w.half * 1.8 + (rnd() - 0.5) * 0.2;
-      list.push(spike(w.x + rx * v, w.y, w.z + rz * v, 0.72 + rnd() * 0.15, 0.9 + rnd() * 0.4, 0.02, rnd() * 6.28, life, 0.03 + Math.abs(v) * 0.06));
-    }
+    // 1 枚の壁に見えるよう、すき間なく 2 列に並べ（前の列が高い）、根もとを太く低い岩でつなぐ（前は 1 列で、すき間から向こうが見えた）
+    const list = [], life = w.life + 0.6;
+    const row = (n, back, rMin, rAdd, hMin, hAdd, tilt) => {
+      for (let i = 0; i < n; i++) {
+        const v = -w.half + ((i + 0.5) / n) * w.half * 2 + (rnd() - 0.5) * 0.1, d = back + (rnd() - 0.5) * 0.15;
+        list.push(spike(w.x + rx * v - fx0 * d, w.y, w.z + rz * v - fz0 * d, rMin + rnd() * rAdd, w.height * (hMin + rnd() * hAdd), tilt * rnd(),
+          rnd() * Math.PI * 2, life, Math.abs(v) * 0.06));
+      }
+    };
+    row(12, -0.12, 0.5, 0.16, 0.9, 0.24, 0.06);    // 前の列（高い）
+    row(9, 0.32, 0.55, 0.15, 0.62, 0.22, 0.05);    // 後ろの列（すき間を埋める）
+    row(6, 0.08, 0.82, 0.16, 0.42, 0.16, 0.02);    // 根もとの太く低い岩
     wallRocks.set(w, list);
     const ends = [{ th: Math.atan2(rz, rx), x: w.x + rx * w.half, z: w.z + rz * w.half }, { th: Math.atan2(-rz, -rx), x: w.x - rx * w.half, z: w.z - rz * w.half }];
     crack(w.x, w.y, w.z, 2, w.half, EARTH, 1.0, ends);
