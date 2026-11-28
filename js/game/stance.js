@@ -50,7 +50,7 @@ export const canMove = (f) => !(f.stanceT > 0);
 /** 歩く速さの倍率（走れない姿勢は、歩きの速さまで） */
 export const stanceSpeed = (f) => (f.stanceT > 0 ? 0 : STANCES[f.stance || 'stand'].speed);
 /** 走れるか（立っていて、息が切れていない。川の深めの所では走れない。息切れは game/combat.js のスタミナ） */
-export const canRun = (f) => (f.stance || 'stand') === 'stand' && !(f.stanceT > 0) && !f.winded && !(f.waterDepth > SWIM.noRun);
+export const canRun = (f) => (f.stance || 'stand') === 'stand' && !(f.stanceT > 0) && !f.winded && !(f.waterDepth > SWIM.noRun) && !(f.heavy > 0);   // 重（地の状態異常）の間は走れない
 
 /**
  * 目と体の高さ（伏せる・起き上がる途中は、間を取る）

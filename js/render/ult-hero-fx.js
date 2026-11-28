@@ -11,10 +11,12 @@
 //     噴き上がる炎（地面の火は game/combat.js の地面の火）。紅蓮の衣：体から火の粉。一撃ごとに炎が爆ぜる
 //   祓魔僧「天門開闢」：昇る光の粒 → 頭上の光の門（金の二重の輪と回る光の筋）→ 門から降る光の槍（落ちた所に光の輪）→ 門から太い光の柱。
 //     光輪：頭の上の金の輪・時々光の粒。返した光は、攻めた人へ走る光の筋
-//   描画命令：線（稲妻・筋・割れ目・門）1・破片 1・岩の槍 1（どれも出ている間だけ）、水の筒・波・炎の筒は 1 つずつ（出ている間だけ）
+//   状態異常（③-1。2026-11-27）：濡＝しずくが落ちる・重＝足もとの砂ぼこり・崩＝体のまわりの風の筋・眩＝頭の光。発動した時はその色の弾け。
+//   纏（属性強化）：武器に沿って属性の粒（水のしぶき・火花・礫・火の粉・風・光）。当てると相手のところで弾ける。組み合わせ（感電・煽火・盲撃）にも弾け
+//   描画命令：線（稲妻・筋・割れ目・門）1・破片 1・岩の槍 1（どれも出ている間だけ）、水の筒・波・炎の筒は 1 つずつ（出ている間だけ）。粒と光の玉は render/ult-fx.js
 import * as pc from 'playcanvas';
 import { canvasTexture, addMat, quads, billboard } from './hall-fire.js';
-import { ELEMENT_KINDS, ULT_SPECS } from '../game/data.js';
+import { ELEMENT_KINDS, ULT_SPECS, WEAPONS } from '../game/data.js';
 
 const LINES = 420, DEBRIS = 160, SPIKES = 72;
 const rnd = Math.random;
@@ -360,6 +362,38 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
   combat.on('auraReflect', ({ fighter, target }) => {
     beams.push({ a: { x: fighter.x, y: yOf(fighter) + 1.3, z: fighter.z }, b: { x: target.x, y: yOf(target) + 1.2, z: target.z }, t: 0, life: 0.3 });
     fx.glow(target.x, yOf(target) + 1.2, target.z, 1.6, 0.2, HOLY);
+  });
+
+  // ---- 状態異常・纏・組み合わせ（③-1） ----
+  const ELC = (el) => ELEMENT_KINDS[el]?.rgb || [1, 1, 1];
+  // 武器の長さ（持ち手から先まで。纏の粒を武器に沿って出す）
+  const BLADE = { armingsword: 0.75, falchion: 0.7, longsword: 1.0, greatsword: 1.2, dualsword: 0.75, mace: 0.5, warhammer: 0.64, lucerne: 1.24, spear: 1.3, dagger: 0.3 };
+  combat.on('ailment', ({ fighter: f, el }) => {
+    const y = yOf(f) + (f.lift || 0), c = ELC(el);
+    if (el === 'water') {
+      fx.ring(f.x, y, f.z, 2.2, 0.4, c, 2.4);
+      for (let n = 0; n < 26; n++) { const a = rnd() * 6.28, sp = 2 + rnd() * 3; fx.spark(f.x, y + 1 + rnd() * 0.6, f.z, Math.cos(a) * sp, 1.5 + rnd() * 3, Math.sin(a) * sp, 0.6 + rnd() * 0.3, 0.04 + rnd() * 0.03, [0.65, 0.88, 1], { grav: 9, drag: 0.5 }); }
+    } else if (el === 'earth') {
+      fx.ring(f.x, y, f.z, 2.5, 0.45, c, 2.2);
+      for (let n = 0; n < 16; n++) chip(f.x + (rnd() - 0.5) * 0.8, y + 0.1, f.z + (rnd() - 0.5) * 0.8, (rnd() - 0.5) * 3, 1 + rnd() * 2.5, (rnd() - 0.5) * 3, 0.8 + rnd() * 0.5, 0.04 + rnd() * 0.05, rockCol(), y);
+      dust?.burst({ x: f.x, y, z: f.z, lift: 0.2 });
+    } else if (el === 'wind') {
+      fx.ring(f.x, y, f.z, 3, 0.4, c, 2.2);
+      for (let n = 0; n < 24; n++) { const a = rnd() * 6.28; fx.spark(f.x + Math.cos(a) * 0.5, y + 0.3 + rnd() * 1.4, f.z + Math.sin(a) * 0.5, -Math.sin(a) * 5, 1 + rnd() * 2, Math.cos(a) * 5, 0.5, 0.035, rnd() < 0.5 ? c : [0.9, 1, 0.95], { drag: 0.4 }); }
+    } else if (el === 'holy') {
+      fx.glow(f.x, y + 1.6, f.z, 2.6, 0.35, c);
+    }
+  });
+  combat.on('enchantHit', ({ target: t, el }) => {
+    const y = yOf(t) + (t.lift || 0) + 1.1, c = ELC(el);
+    fx.glow(t.x, y, t.z, 1.2, 0.15, c.map((v) => v * 0.8));
+    for (let n = 0; n < 12; n++) burstSpark(t.x, y, t.z, rnd() < 0.6 ? c : [1, 1, 1], 5);
+  });
+  combat.on('combo', ({ fighter: t, combo }) => {
+    const y = yOf(t) + (t.lift || 0);
+    if (combo === 'shock') { for (let n = 0; n < 2; n++) skyBolts.push({ x: t.x + (rnd() - 0.5) * 0.6, y, z: t.z + (rnd() - 0.5) * 0.6, t: 0, life: 0.22, big: false }); fx.glow(t.x, y + 1, t.z, 2, 0.2, [0.7, 0.85, 1]); }
+    if (combo === 'fan') { fx.ring(t.x, y, t.z, 3.2, 0.45, FIRE, 2.4); for (let n = 0; n < 24; n++) burstSpark(t.x, y + 0.8, t.z, rnd() < 0.5 ? [1, 0.5, 0.1] : [1, 0.85, 0.3], 7); }
+    if (combo === 'blind') fx.glow(t.x, y + 1.4, t.z, 2.2, 0.3, HOLY);
   });
 
   combat.on('deflect', ({ x, y, z }) => {
@@ -715,6 +749,42 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
         segment(B.a.x, B.a.y, B.a.z, B.b.x, B.b.y, B.b.z, 0.22 * k, HOLY[0] * k, HOLY[1] * k, HOLY[2] * k);
         segment(B.a.x, B.a.y, B.a.z, B.b.x, B.b.y, B.b.z, 0.07 * k, k, k, k);
         if (B.t >= B.life) beams.splice(i, 1);
+      }
+
+      // ---- 状態異常の続き（濡・重・崩）と纏 ----
+      for (const f of fighters) {
+        if (!f.alive || f.hidden) continue;
+        const fp = f === me && firstPerson(), y = yOf(f) + (f.lift || 0);
+        if (f.wet > 0 && !fp && rnd() < dt * 16) {   // 濡：体からしずくが落ちる
+          const a = rnd() * 6.28, r = 0.18 + rnd() * 0.18;
+          fx.spark(f.x + Math.cos(a) * r, y + 0.6 + rnd() * 1.1, f.z + Math.sin(a) * r, 0, -0.5, 0, 0.6, 0.03, [0.6, 0.85, 1], { grav: 9 });
+        }
+        if (f.heavy > 0 && rnd() < dt * 12) {   // 重：足もとの砂ぼこりと、落ちる小石
+          const a = rnd() * 6.28, r = 0.3 + rnd() * 0.3;
+          fx.spark(f.x + Math.cos(a) * r, y + 0.05, f.z + Math.sin(a) * r, Math.cos(a) * 0.4, 0.3 + rnd() * 0.4, Math.sin(a) * 0.4, 0.7, 0.07, [0.62, 0.5, 0.34], { drag: 0.8 });
+          if (rnd() < 0.3) chip(f.x + (rnd() - 0.5) * 0.5, y + 0.8 + rnd() * 0.8, f.z + (rnd() - 0.5) * 0.5, 0, 0, 0, 0.5, 0.03, rockCol(), y);
+        }
+        if (f.broken > 0 && !fp) {   // 崩：体のまわりを風の筋が回る
+          const W = ELC('wind'), k = Math.min(1, f.broken / 0.5);
+          for (let j = 0; j < 2; j++) {
+            let px = 0, py = 0, pz = 0;
+            for (let n = 0; n <= 8; n++) {
+              const v = n / 8, th = time * 10 + v * 3 + j * Math.PI, r = 0.55;
+              const x = f.x + Math.cos(th) * r, yy = y + 0.3 + v * 1.4, z = f.z + Math.sin(th) * r;
+              if (n) segment(px, py, pz, x, yy, z, 0.05, W[0] * k * 0.8, W[1] * k * 0.8, W[2] * k * 0.8);
+              px = x; py = yy; pz = z;
+            }
+          }
+        }
+        if (f.enchant && rnd() < dt * 26) {   // 纏：武器に沿って属性の粒
+          const v = views.get(f), c = ELC(f.enchant), isBow = WEAPONS[f.weapon]?.kind === 'bow';
+          const p = isBow ? v?.bowPos?.(tmp) : v?.weaponHead?.(tmp, (BLADE[f.weapon] || 0.6) * (0.2 + rnd() * 0.8));
+          if (p) {
+            const fire = f.enchant === 'fire', water = f.enchant === 'water', earth = f.enchant === 'earth';
+            fx.spark(p.x + (rnd() - 0.5) * 0.06, p.y + (rnd() - 0.5) * 0.06, p.z + (rnd() - 0.5) * 0.06, (rnd() - 0.5) * 0.4, fire ? 0.8 : water || earth ? -0.3 : 0.3, (rnd() - 0.5) * 0.4,
+              0.35 + rnd() * 0.25, 0.025 + rnd() * 0.02, rnd() < 0.7 ? c : [1, 1, 1], { grav: water || earth ? 5 : fire ? -1 : 0, drag: 0.6, flick: f.enchant === 'thunder' });
+          }
+        }
       }
 
       // ---- 線を描く ----

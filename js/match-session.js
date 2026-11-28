@@ -304,7 +304,11 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       else if (me.burn) list.push(['burn', ICONS.m_flame, '燃', me.burn.left]);
       if (me.paralyzed > 0) list.push(['para', ICONS.m_thunder, '雷痺', me.paralyzed]);
       else if (me.shock > 0) list.push(['shock', ICONS.m_thunder, '痺', me.shock]);
-      if (me.blind > 0) list.push(['', ICONS.m_pillar, '眩', me.blind]);
+      if (me.blind > 0) list.push(['dazzle', ICONS.m_pillar, '眩', me.blind]);
+      // 新しい状態異常（③-1。2026-11-27）：濡・重・崩
+      if (me.wet > 0) list.push(['wet', crestSvg('wave', { ring: false }), '濡', me.wet]);
+      if (me.heavy > 0) list.push(['heavy', crestSvg('mountain', { ring: false }), '重', me.heavy]);
+      if (me.broken > 0) list.push(['broken', crestSvg('wing', { ring: false }), '崩', me.broken]);
       // 必殺技の後に纏う物（2026-11-25）：水の衣・雷の衣・鷹の目
       if (me.aura?.kind === 'water') list.push(['', crestSvg('wave', { ring: false }), '水衣', me.aura.left]);
       if (me.aura?.kind === 'thunder') list.push(['', ICONS.m_thunder, '雷衣', me.aura.left]);
@@ -315,6 +319,10 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       const ail = me.ail;
       if (ail && ail.fire >= 1 && !me.blaze) list.push(['gauge fire', ICONS.m_flame, '炎', ail.fire, true]);
       if (ail && ail.thunder >= 1 && !(me.paralyzed > 0)) list.push(['gauge thunder', ICONS.m_thunder, '雷', ail.thunder, true]);
+      if (ail && ail.water >= 1 && !(me.wet > 0)) list.push(['gauge water', crestSvg('wave', { ring: false }), '水', ail.water, true]);
+      if (ail && ail.earth >= 1 && !(me.heavy > 0)) list.push(['gauge earth', crestSvg('mountain', { ring: false }), '地', ail.earth, true]);
+      if (ail && ail.wind >= 1 && !(me.broken > 0)) list.push(['gauge wind', crestSvg('wing', { ring: false }), '風', ail.wind, true]);
+      if (ail && ail.holy >= 1 && !(me.blind > 0)) list.push(['gauge holy', crestSvg('halo', { ring: false }), '聖', ail.holy, true]);
     }
     const key = list.map((b) => `${b[2]}${b[4] ? Math.round(b[3] / 5) : Math.ceil(b[3])}`).join('|');
     if (key === buffsShown) return;
@@ -335,6 +343,21 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (fighter === me) hud.centerMsg('雷痺', 'しびれて動けない（無防備）', 2.2);
     else if (by === me || Math.hypot(fighter.x - me.x, fighter.z - me.z) < 20) hud.addFeed(`${fighter.name}が雷痺した（近づいて致命の一撃を）`);
   });
+  // 新しい状態異常と組み合わせの知らせ（③-1。2026-11-27）
+  const AIL_MSG = {
+    water: ['濡', '濡れた：動きとスタミナの戻りが鈍い。火は消えるが、雷がよく通る'],
+    earth: ['重', '重くなって転んだ：しばらく走れず、回避が短い'],
+    wind: ['崩', '吹き飛ばされて崩れた：しばらく防禦できない'],
+    holy: ['眩', '目がくらんだ'],
+  };
+  combat.on('ailment', ({ fighter, by, el }) => {
+    const M = AIL_MSG[el];
+    if (!M) return;
+    if (fighter === me) { if (el !== 'holy') hud.centerMsg(M[0], M[1], 1.8); }
+    else if (by === me) hud.addFeed(`${fighter.name}に${M[0]}`);
+  });
+  const COMBO_MSG = { shock: '感電：濡れた相手に雷がよく通った', fan: '煽火：風で炎が燃え広がった', blind: '盲撃：目がくらんだ相手を、前から深く斬った' };
+  combat.on('combo', ({ fighter, by, combo }) => { if ((by === me || fighter === me) && COMBO_MSG[combo]) hud.addFeed(COMBO_MSG[combo]); });
   combat.on('fireSpread', ({ fire }) => { if (fire.kind === 'tree' && Math.hypot(fire.x - me.x, fire.z - me.z) < 25) hud.addFeed('木に火が移った'); });
   combat.on('hit', ({ attacker, target, kind, wound, back }) => {
     if (kind !== 'assassinate' || !wound) return;

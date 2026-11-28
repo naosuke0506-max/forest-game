@@ -2,7 +2,8 @@
 // 画面中央の大きな知らせ、フェーズ報酬の選択、試合の結果
 import { L } from './labels.js';
 import * as pc from 'playcanvas';
-import { CHARACTERS, phaseAt, DIVE, MIRACLES } from '../game/data.js';
+import { CHARACTERS, phaseAt, DIVE, ELEMENT_KINDS } from '../game/data.js';
+import { ruby } from './ruby.js';
 import { TIMES } from '../world/time-of-day.js';
 import { timeIcon, weaponIconOf } from './icons.js';
 
@@ -71,14 +72,20 @@ export function createHud(match, me, { label = null, trial = null } = {}) {
     r.options.forEach((o, i) => {
       const b = document.createElement('button');
       b.type = 'button';
-      // 奇跡（祓魔僧）：「奇跡」の印・名前・短い説明。ほかは能力値の名前と、上がる数
-      const mir = o.reward.kind === 'miracle' ? MIRACLES[o.reward.miracle] : null;
-      b.className = `reward-card${mir ? ' miracle' : ''}`;
-      b.innerHTML = mir ? `<div class="rc-kind">${L.miracle}</div><div class="rc-name">${esc(mir.name)}</div><div class="rc-desc">${esc(mir.short)}</div>`
-        : `<div class="rc-name">${esc(o.reward.name)}</div><div class="rc-val">+${o.value}${o.reward.unit}</div>`;
-      b.addEventListener('click', () => { match.chooseReward(me, i); });
+      // 札（2026-11-27）：屬性強化（纏・操・従。属性の色）・變異強化・兵器強化。中身がまだ無い札は「未完」で押せない
+      const R = o.reward, E = R.el ? ELEMENT_KINDS[R.el] : null;
+      const kind = { element: '屬性強化', mutation: '變異強化', arms: '兵器強化', miracle: L.miracle }[R.kind];
+      b.className = `reward-card ${R.kind || ''}${R.planned ? ' planned' : ''}`;
+      if (E) b.style.setProperty('--el', E.color);
+      b.disabled = !!R.planned;
+      b.innerHTML = kind
+        ? `<div class="rc-kind">${ruby(kind)}</div><div class="rc-name">${ruby(R.planned && R.kind !== 'element' ? '未完' : R.name)}</div><div class="rc-desc">${esc(R.planned ? `${R.short}（まだ作っていない）` : R.short || '')}</div>`
+        : `<div class="rc-name">${esc(R.name)}</div><div class="rc-val">+${o.value}${R.unit}</div>`;
+      b.addEventListener('click', () => { if (!R.planned) match.chooseReward(me, i); });
       cards.appendChild(b);
     });
+    // どの札も選べない時（纏の後、操ができるまで）：自動で閉じる
+    reward.querySelector('.reward-time').dataset.none = r.options.every((o) => o.reward.planned) ? '1' : '';
     reward.hidden = false;
   }
 
@@ -95,7 +102,10 @@ export function createHud(match, me, { label = null, trial = null } = {}) {
     if (fighter !== me) return;
     reward.hidden = true;
     shownReward = null;
-    addFeed(option.reward.kind === 'miracle' ? `奇跡「${option.reward.name}」を覚えた（左手の奇跡ボタンで唱える）` : `報酬：${option.reward.name} +${option.value}${option.reward.unit}`);
+    if (!option) { addFeed('今は強められる物が無い（操・變異・兵器は、まだ作っていない）'); return; }
+    const R = option.reward;
+    addFeed(R.kind === 'element' ? `屬性強化「${R.name}」：${R.step === 'enchant' ? '武器に属性を纏った（当てるたびに属性の傷と状態異常が溜まる）' : R.short}`
+      : R.kind === 'miracle' ? `奇跡「${R.name}」を覚えた（左手の奇跡ボタンで唱える）` : `報酬：${R.name} +${option.value}${R.unit}`);
   });
 
   // ===== 戦闘の表示 =====
@@ -213,7 +223,8 @@ export function createHud(match, me, { label = null, trial = null } = {}) {
       if (me.pendingReward && me.pendingReward !== shownReward) showReward();
       if (!me.pendingReward && !reward.hidden) reward.hidden = true;
       if (me.pendingReward) {
-        reward.querySelector('.reward-time').textContent = `${Math.ceil(me.pendingReward.timeLeft)} 秒で自動で選ぶ`;
+        const tEl = reward.querySelector('.reward-time');
+        tEl.textContent = tEl.dataset.none ? `今は選べる札が無い（${Math.ceil(me.pendingReward.timeLeft)} 秒で閉じる）` : `${Math.ceil(me.pendingReward.timeLeft)} 秒で自動で選ぶ`;
       }
     },
     /** 試合の結果 */

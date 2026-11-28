@@ -1,8 +1,8 @@
 // 試合の流れ：フェーズ・残り時間・延長・歩ける範囲・ポイント・脱落・終了。
 // PlayCanvas に依存しない「計算だけ」の部分（後でオンライン化するとき、サーバーにそのまま移せるように）
-import { phaseAt, POINTS, REWARDS, REWARD_PICK_TIME, PHASE_FREEZE, PHASE_TICKS, CHARACTERS, COMBAT, LOADOUTS, WEAPONS, SHIELDS, MIRACLES, ULTIMATE } from './data.js';
+import { phaseAt, POINTS, REWARD_PICK_TIME, PHASE_FREEZE, PHASE_TICKS, CHARACTERS, COMBAT, LOADOUTS, WEAPONS, SHIELDS, ULTIMATE, ULTIMATES, ELEMENT_KINDS, ELEMENT_STEPS } from './data.js';
 import { initStance, resetStance } from './stance.js';
-import { miracleOffers, learnMiracle } from './miracles.js';
+import { learnMiracle, canMiracle, MIRACLE_IDS } from './miracles.js';
 
 /** 選べる物か（武器・楯の模型と動きがある） */
 const usable = (slot, id) => (slot === 'shield' ? !!SHIELDS[id] && !SHIELDS[id].planned : !!WEAPONS[id]);
@@ -67,6 +67,8 @@ export function createFighter({ id, name, char, isPlayer, color, loadout = null 
     ultUsed: 0,
   };
   initStance(f);             // 立つ・しゃがむ・伏せる（game/stance.js）
+  // 祓魔僧は、初めから全部の奇跡を使える（利用者の指示 2026-11-27。前は刻の褒美で 1 つずつ覚えた）
+  if (canMiracle(f)) { for (const id of MIRACLE_IDS) learnMiracle(f, id); f.miracle.sel = 0; }
   return f;
 }
 
@@ -134,9 +136,13 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
     chooseReward(f, index) {
       const r = f.pendingReward;
       if (!r || !f.alive) return;
-      const opt = r.options[Math.max(0, Math.min(r.options.length - 1, index))];
-      opt.reward.apply(f, opt.value);
-      f.rewards.push({ phase: r.phase, id: opt.reward.id, value: opt.value });
+      // 選べない札（未完）なら、選べる札のうち最初の物。どれも選べなければ、何も付かずに閉じる
+      let opt = r.options[Math.max(0, Math.min(r.options.length - 1, index))];
+      if (opt?.reward.planned) opt = r.options.find((o) => !o.reward.planned) || null;
+      if (opt) {
+        opt.reward.apply(f, opt.value);
+        f.rewards.push({ phase: r.phase, id: opt.reward.id, value: opt.value });
+      }
       f.pendingReward = null;
       emit('rewardChosen', { fighter: f, option: opt });
     },
@@ -203,20 +209,24 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
   }
 
   /**
-   * 報酬の候補を 3 つ（重ならないように）。
-   * 祓魔僧は、まだ覚えていない奇跡が先に出る（利用者の指示 2026-11-17。最大 4 つ。game/miracles.js）。足りない分は能力値
+   * 報酬の札を 3 枚（利用者の指示 2026-11-27）：属性強化（その人の属性の次の段＝纏 → 操 → 従）・變異強化・兵器強化。
+   * 變異強化・兵器強化は、中身（クリーチャーになる・兵器に乗る・撃つ）ができるまで「未完」で選べない。操・従も、できるまで「未完」。
+   * 前の能力値の札（data.js の REWARDS）と奇跡の札は出さない（祓魔僧は初めから全部の奇跡を使える）
    */
   function pickRewards(phase, f = null) {
-    const out = miracleOffers(f, () => rng.next()).map((id) => ({
-      reward: { id: `miracle:${id}`, kind: 'miracle', miracle: id, name: MIRACLES[id].name, unit: '', apply: (who) => learnMiracle(who, id) },
+    const el = f ? ULTIMATES[f.char]?.element : null;
+    const step = f ? ELEMENT_STEPS[f.elemStep || 0] : null;
+    const E = el ? ELEMENT_KINDS[el] : null;
+    const elementCard = step && E ? {
+      reward: { id: `element:${step.id}`, kind: 'element', step: step.id, el, name: `${step.name}・${E.name}`, short: step.short, planned: !!step.planned,
+        apply: (who) => { if (step.id === 'enchant') who.enchant = el; who.elemStep = (who.elemStep || 0) + 1; } },
       value: '',
-    }));
-    const pool = [...REWARDS];
-    while (out.length < 3 && pool.length) {
-      const r = pool.splice(Math.floor(rng.next() * pool.length), 1)[0];
-      out.push({ reward: r, value: r.values[Math.min(phase, r.values.length - 1)] });
-    }
-    return out;
+    } : { reward: { id: 'element:done', kind: 'element', name: '屬性強化', short: 'これ以上は無い', planned: true, apply: () => {} }, value: '' };
+    return [
+      elementCard,
+      { reward: { id: 'mutation', kind: 'mutation', name: '變異強化', short: 'クリーチャーに変わる藥を強める', planned: true, apply: () => {} }, value: '' },
+      { reward: { id: 'arms', kind: 'arms', name: '兵器強化', short: '兵器を強める', planned: true, apply: () => {} }, value: '' },
+    ];
   }
 
   function finish() {

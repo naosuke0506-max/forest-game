@@ -856,7 +856,7 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
           if (has('cl_rise')) restart('cl_rise', clip('cl_rise').duration / REVIVE_TIME);
         } else if (a.kind === 'getup') {
           // 暗殺されて生き残った（利用者の指示 2026-11-18：暗殺は体力の一部を削る）：倒れた姿から起き上がる
-          if (has('prone_up')) restart('prone_up', clip('prone_up').duration / ASSASSIN.getup);
+          if (has('prone_up')) restart('prone_up', clip('prone_up').duration / (a.time ?? ASSASSIN.getup));   // 重（地の状態異常）で転んだ時は短い
         } else if (a.kind === 'dodge') {
           const d = DODGE[fighter.weight] || DODGE.medium;
           restart(d.anim, clip(d.anim) ? clip(d.anim).duration / d.duration : 1);

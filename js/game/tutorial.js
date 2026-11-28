@@ -173,6 +173,7 @@ export const LESSONS = {
     name: '奇跡', char: 'cleric', desc: '左手の護符で奇跡を唱える。替ボタンで唱える奇跡を替える（祓魔僧）',
     bots: [{ char: 'polearm', role: 'dummy' }],
     setup({ me, bots }) {
+      me.miracle = { owned: [], sel: 0, cool: {} };   // 試合では初めから全部の奇跡を使えるが、教練では 4 つ（替える順番を手順に合わせる）
       for (const id of ['flame', 'heal', 'wall', 'revive']) learnMiracle(me, id);
       selectMiracle(me, 'flame');
       place(bots[0], me, 3, 0);
@@ -189,6 +190,7 @@ export const LESSONS = {
     name: '奇跡・攻', char: 'cleric', desc: '天光柱・聖火彈・神罰雷で、離れた敵を攻める（祓魔僧）',
     bots: [{ char: 'polearm', role: 'dummy' }, { char: 'shield', role: 'dummy' }, { char: 'blunt', role: 'dummy' }],
     setup({ me, bots, isFree, insideHouse, heightAt, spawn }) {
+      me.miracle = { owned: [], sel: 0, cool: {} };   // 教練では攻める奇跡の 3 つだけ
       for (const id of ['pillar', 'fireball', 'thunder']) learnMiracle(me, id);
       selectMiracle(me, 'pillar');
       // 開けた所を探す：前 18 m・左右 3 m に、木・岩・家が無く、地面の高さがほぼ同じ所（火の玉と雷の槍が、途中の物に当たらないように）

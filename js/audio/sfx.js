@@ -657,7 +657,8 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
     ultHero(kind, f, { dur = 1, x, y, z } = {}) {
       const src = x !== undefined ? { x, y, z, isPlayer: false } : f;
       const loud = { flash: 1.6, bolt: 1.4, pierce: 0.9, stance: 0.9, dash: 1.5, auraStrike: 1.0, draw: 1.2, release: 1.9, wallBreak: 1.5, deflect: 0.8,
-        rockRing: 1.4, bigSpike: 1.8, fireRise: 1.3, fireJump: 1.3, auraBurst: 0.9, gate: 1.6, spear: 0.8, holyImpact: 0.7, reflect: 0.8 }[kind] ?? 1;
+        rockRing: 1.4, bigSpike: 1.8, fireRise: 1.3, fireJump: 1.3, auraBurst: 0.9, gate: 1.6, spear: 0.8, holyImpact: 0.7, reflect: 0.8,
+        ailWater: 0.9, ailEarth: 1.0, ailWind: 1.0, ailHoly: 0.8, enchant: 0.45, comboShock: 1.0, comboFan: 1.0 }[kind] ?? 1;
       const d = at(src, loud, { ref: 25, max: 200 });
       if (!d) return;
       const c = audio.ctx;
@@ -742,6 +743,26 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
       } else if (kind === 'holyImpact') {
         metal(d, { t: 0, base: 1760 + R() * 300, ratios: [1, 2.01, 2.76], dur: 0.5, gain: 0.08 });
         noiseHit(d, { t: 0, dur: 0.12, type: 'lowpass', freq: 1800, freqEnd: 300, attack: 0.001, gain: 0.35 });
+      } else if (kind === 'ailWater') {
+        // 状態異常（③-1）：濡＝水をかぶる音・重＝どすんと倒れる・崩＝突風・眩＝きらめき
+        noiseHit(d, { t: 0, dur: 0.5, type: 'bandpass', freq: 1300, freqEnd: 500, q: 0.9, attack: 0.01, gain: 0.55 });
+        for (let i = 0; i < 8; i++) noiseHit(d, { t: 0.1 + R() * 0.5, dur: 0.04, type: 'bandpass', freq: 1800 + R() * 1500, q: 2, attack: 0.003, gain: 0.07 });
+      } else if (kind === 'ailEarth') {
+        toneHit(d, { t: 0, dur: 0.35, f0: 90, f1: 45, type: 'sine', attack: 0.003, gain: 0.6 });
+        noiseHit(d, { t: 0, dur: 0.3, type: 'lowpass', freq: 700, freqEnd: 150, attack: 0.002, gain: 0.5 });
+      } else if (kind === 'ailWind') {
+        noiseHit(d, { t: 0, dur: 0.6, type: 'bandpass', freq: 2200, freqEnd: 500, q: 1.2, attack: 0.01, gain: 0.6 });
+      } else if (kind === 'ailHoly') {
+        metal(d, { t: 0, base: 2000, ratios: [1, 1.5, 2.4], dur: 0.6, gain: 0.07 });
+      } else if (kind === 'enchant') {
+        noiseHit(d, { t: 0, dur: 0.12, type: 'bandpass', freq: 2400, freqEnd: 900, q: 1.5, attack: 0.002, gain: 0.25 });
+      } else if (kind === 'comboShock') {
+        noiseHit(d, { t: 0, dur: 0.05, type: 'highpass', freq: 2600, attack: 0.0005, gain: 0.6 });
+        toneHit(d, { t: 0, dur: 0.3, f0: 1400, f1: 300, type: 'sawtooth', attack: 0.002, gain: 0.06 });
+        noiseHit(d, { t: 0.02, dur: 0.4, type: 'bandpass', freq: 1800, freqEnd: 3500, q: 1.5, attack: 0.01, gain: 0.3 });
+      } else if (kind === 'comboFan') {
+        noiseHit(d, { t: 0, dur: 0.8, type: 'lowpass', freq: 1400, freqEnd: 250, attack: 0.02, gain: 0.6 });   // ごうっと燃え広がる
+        for (let i = 0; i < 10; i++) noiseHit(d, { t: R() * 0.6, dur: 0.02, type: 'highpass', freq: 2400, attack: 0.001, gain: 0.1 });
       } else if (kind === 'reflect') {
         metal(d, { t: 0, base: 2200, ratios: [1, 1.5, 2.4], dur: 0.4, gain: 0.07 });
         noiseHit(d, { t: 0, dur: 0.15, type: 'bandpass', freq: 3500, freqEnd: 1200, q: 2, attack: 0.002, gain: 0.25 });
@@ -823,6 +844,10 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   });
   combat.on('auraBurst', ({ fighter, x, y, z }) => sfx.ultHero('auraBurst', fighter, { x, y, z }));
   combat.on('auraReflect', ({ target }) => sfx.ultHero('reflect', target));
+  // 状態異常・纏・組み合わせ（③-1。2026-11-27）
+  combat.on('ailment', ({ fighter, el }) => { const k = { water: 'ailWater', earth: 'ailEarth', wind: 'ailWind', holy: 'ailHoly' }[el]; if (k) sfx.ultHero(k, fighter); });
+  combat.on('enchantHit', ({ target }) => sfx.ultHero('enchant', target));
+  combat.on('combo', ({ fighter, combo }) => { if (combo === 'shock') sfx.ultHero('comboShock', fighter); else if (combo === 'fan') sfx.ultHero('comboFan', fighter); });
   combat.on('ultBurst', ({ fighter, ult }) => sfx.ultBurst(fighter, ult?.element));
   // 祓魔僧の奇跡（game/miracles.js）：唱え始め・効き目・蘇る・光壁・炎・途切れる
   combat.on('miracleCast', ({ fighter, id }) => sfx.miracle('cast', fighter, { dur: MIRACLES[id].at }));
