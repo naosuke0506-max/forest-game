@@ -948,7 +948,9 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
         if (!G || !f.alive) { g.busy = false; g.f = null; g.a.e.enabled = false; g.b.e.enabled = false; continue; }
         const k = Math.min(1, (G.time - G.left) / 0.25) * Math.min(1, G.left / 0.5), y = yOf(f), R = G.r;
         const fp = f === me && firstPerson();
-        for (const [it, dir, sp, sc, op] of [[g.a, 1, 520, 1, 0.32], [g.b, -1, 380, 0.72, 0.22]]) {
+        // 自分の旋風は、三人称のカメラが筒の中に入るので薄く（撮ると、下半分が白くかすんで体が見えにくかった）
+        const thin = f === me ? 0.45 : 1;
+        for (const [it, dir, sp, sc, op] of [[g.a, 1, 520, 1, 0.26 * thin], [g.b, -1, 380, 0.72, 0.18 * thin]]) {
           it.e.enabled = !fp;
           it.e.setPosition(f.x, y - 0.05, f.z);
           it.e.setLocalScale(R * sc, 2.6 * (sc > 0.9 ? 1 : 1.25), R * sc);
