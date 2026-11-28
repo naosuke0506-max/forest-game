@@ -1,6 +1,6 @@
 // 練習モードの試合：あなた＋bot 3 体。試合の計算（game/）と、見た目・画面（render/・ui/）をつなぐ
 import * as pc from 'playcanvas';
-import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS, SHIELD_SKILLS, SHIELD_MOVES, SPRINT, DASH, MIRACLES, ELEMENTS } from './game/data.js';
+import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS, SHIELD_SKILLS, SHIELD_MOVES, SPRINT, DASH, MIRACLES, ELEMENTS, CONTROL } from './game/data.js';
 import { selectedMiracle, miraclesOf, miracleCool } from './game/miracles.js';
 import { createMinimap } from './ui/minimap.js';
 import { ZONE_NAMES } from './world/zones.js';
@@ -25,6 +25,7 @@ import { stanceButton, stanceSpeed, canRun, stanceShape, resetStance } from './g
 import { swimSpeed, toggleDive } from './game/swim.js';
 import { STANCES, BODY_TURN } from './game/data.js';
 import { ultOf, elementOf, ultLeft } from './game/ultimate.js';
+import { hasControl, controlCool } from './game/controls.js';
 import { createHeatVision } from './render/heat-vision.js';
 import { createUltDust } from './render/ult-dust.js';
 import { createUltFx } from './render/ult-fx.js';
@@ -227,6 +228,39 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     ultBtn.classList.toggle('on', on);
   };
   showUlt();
+  // 操ボタン（属性強化の 2 段目。2026-11-28。game/controls.js。PC は B）：刻の報酬で「操」を選ぶと出る。技の絵と名前・属性の色。
+  // 待ち時間の間は影と残りの秒。祓魔僧はボタンが無い（奇跡が強くなる＝聖化）
+  const ctrlBtn = document.getElementById('btn-ctrl') || document.createElement('button');
+  const myCtrl = CONTROL[me.char];
+  if (myEl) {
+    ctrlBtn.style.setProperty('--c1', myEl.color); ctrlBtn.style.setProperty('--c2', mixColor(myEl.color, myEl.deep, 0.6));
+    ctrlBtn.style.setProperty('--c3', myEl.deep); ctrlBtn.style.setProperty('--uc', myEl.color);
+  }
+  let ctrlShown = '';
+  const showCtrl = (canShow) => {
+    ctrlBtn.hidden = !canShow || !hasControl(me);
+    if (ctrlBtn.hidden || !myCtrl) return;
+    const cool = controlCool(me), on = me.action?.kind === 'control';
+    const sec = cool > 0 ? Math.ceil(cool) : 0;
+    setCd(ctrlBtn, cool > 0 ? cool / myCtrl.cd : 0);
+    const key = `${sec}|${on}`;
+    if (key === ctrlShown) return;
+    ctrlShown = key;
+    setBtn(ctrlBtn, ICONS[`c_${me.char}`] || ICONS.skill, myCtrl.name, sec || '');
+    ctrlBtn.classList.toggle('cool', cool > 0);
+    ctrlBtn.classList.toggle('ready', !(cool > 0) && !on);
+    ctrlBtn.classList.toggle('on', on);
+  };
+  combat.on('controlDenied', ({ fighter }) => {
+    if (fighter !== me) return;
+    const cool = controlCool(me);
+    hud.addFeed(cool > 0 ? `${myCtrl?.name || '操'}は、あと ${Math.ceil(cool)} 秒で使える` : `今は${myCtrl?.name || '操'}を出せない`);
+  });
+  combat.on('controlBroken', ({ fighter }) => { if (fighter === me) hud.addFeed(`${myCtrl?.name || '操'}が途切れた`); });
+  match.on('rewardChosen', ({ fighter, option }) => {
+    if (fighter !== me || option?.reward?.step !== 'control') return;
+    hud.addFeed(hasControl(me) ? `操「${myCtrl.name}」を覚えた（操ボタン・PC は B）` : `操「${myCtrl?.name || '聖化'}」を覚えた（奇跡の待ち時間が短くなり、攻める奇跡で目がくらむ）`);
+  });
   combat.on('ultDenied', ({ fighter }) => {
     if (fighter !== me) return;
     if (!(ultLeft(me) > 0)) hud.addFeed(match.overtime ? '必殺技は使い切った' : '必殺技は使い切った（延長戰で、もう一度だけ使える）');
@@ -297,8 +331,12 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (me.alive) {
       if (me.blessing > 0) list.push(['', ICONS.m_revive, '加護', me.blessing]);
       if (me.flame > 0) list.push(['', ICONS.m_flame, '淨炎', me.flame]);
-      const w = combat.walls.find((x) => x.owner === me);
+      const w = combat.walls.find((x) => x.owner === me && x.kind !== 'rock');
       if (w) list.push(['', ICONS.m_wall, '光壁', w.left]);
+      // 操（2026-11-28）：岩壁の残り・旋風の残り
+      const rw = combat.walls.find((x) => x.owner === me && x.kind === 'rock');
+      if (rw) list.push(['', ICONS.c_polearm, '岩壁', rw.left]);
+      if (me.gale) list.push(['', ICONS.c_archer, '旋風', me.gale.left]);
       // 状態異常（利用者の指示 2026-11-18）：火炎（回避を続けた数）・雷痺。発動していない間は、溜まり（％）を小さな棒で
       if (me.blaze) list.push(['blaze', ICONS.m_flame, `火炎 ${me.blaze.dodges}/${ELEMENTS.fire.dodges}`, me.blaze.left]);
       else if (me.burn) list.push(['burn', ICONS.m_flame, '燃', me.burn.left]);
@@ -376,7 +414,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (fighter === me) hud.centerMsg(MIRACLES.revive.name, '光の中から蘇った', 2.6);
     else hud.addFeed(`${fighter.name}が光の中から蘇った`);
   });
-  combat.on('wallEnd', ({ wall, broke }) => { if (wall.owner === me && broke) hud.addFeed('光壁が砕けた'); });
+  combat.on('wallEnd', ({ wall, broke }) => { if (wall.owner === me && broke) hud.addFeed(wall.kind === 'rock' ? '岩壁が崩れた' : '光壁が砕けた'); });
   combat.on('blinded', ({ fighter, by }) => {
     if (fighter === me) hud.addFeed('光で目がくらんだ');
     else if (by === me) hud.addFeed(`${fighter.name}の目がくらんだ`);
@@ -858,6 +896,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       showSprint();
       ultBtn.hidden = !myUlt || !running || !me.alive || !!me.hidden;
       showUlt();
+      showCtrl(running && me.alive && !me.hidden && !spectating);
       showMiracle(running && me.alive && !me.hidden && !spectating);
       showBuffs();
       showBlind();
@@ -975,7 +1014,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       const pushed = me.react && me.react.push > 0 && me.react.t <= me.react.time;
       const lunging = me.action?.kind === 'attack' && ((me.action.tech?.dash && me.action.t <= DASH.lungeTime + 0.05) || me.action.tech?.slide);   // 疾驅攻撃の踏み込み・奧義の滑り
       // 必殺技（雷霆一閃の稲妻・踏み込み）も、試合の計算が体を動かす。前は写さなかったので、毎フレーム操作の位置へ戻され、踏み込んでも進まなかった（2026-11-25）
-      if (me.alive && (me.action?.kind === 'dodge' || me.action?.kind === 'ult' || pushed || lunging)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
+      // 操（雷步の稲妻）も同じ
+      if (me.alive && (me.action?.kind === 'dodge' || me.action?.kind === 'ult' || me.action?.kind === 'control' || pushed || lunging)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
       // 暗殺の動きなど：体の位置と向きを、プレイヤーの操作へ合わせる（動きが終わった時の、体の移った所と向きも）
       const scriptedNow = SCRIPTED.has(me.action?.kind);
       const viewBefore = player.viewYaw;

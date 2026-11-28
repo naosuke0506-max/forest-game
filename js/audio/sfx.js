@@ -864,8 +864,8 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   combat.on('lethal', ({ target, how }) => { if (how === 'charred') sfx.miracle('charred', target); });
   combat.on('paralyzed', ({ fighter, time }) => sfx.miracle('shock', fighter, { dur: time }));
   combat.on('revived', ({ fighter }) => sfx.miracle('revived', fighter));
-  combat.on('wallHit', ({ wall, x, y, z }) => sfx.miracle('wallHit', wall.owner, { x, y, z }));
-  combat.on('wallEnd', ({ wall, broke }) => { if (broke) sfx.miracle('wallBreak', wall.owner, { x: wall.x, y: wall.y + 1.2, z: wall.z }); });
+  combat.on('wallHit', ({ wall, x, y, z }) => { if (wall.kind !== 'rock') sfx.miracle('wallHit', wall.owner, { x, y, z }); });   // 岩壁（操）の音は ctrl の音で
+  combat.on('wallEnd', ({ wall, broke }) => { if (broke && wall.kind !== 'rock') sfx.miracle('wallBreak', wall.owner, { x: wall.x, y: wall.y + 1.2, z: wall.z }); });
   combat.on('ignite', ({ fighter }) => sfx.miracle('ignite', fighter));
   combat.on('miracleBroken', ({ fighter }) => sfx.miracle('broken', fighter));
   combat.on('miracleNotReady', ({ fighter }) => { if (fighter === me) sfx.miracle('notReady', fighter); });

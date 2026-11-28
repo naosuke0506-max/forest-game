@@ -628,9 +628,29 @@ export const AILMENTS = { fire: '火炎', thunder: '雷痺', water: '濡', earth
 export const ENCHANT = { damage: 0.2, buildup: 20 };
 export const ELEMENT_STEPS = [
   { id: 'enchant', name: '纏', short: '武器に属性を纏う' },
-  { id: 'control', name: '操', short: '属性を操る技（ボタンが増える）', planned: true },
+  { id: 'control', name: '操', short: '属性を操る技（操ボタンが増える）' },
   { id: 'servant', name: '従', short: '属性の魔物を従える', planned: true },
 ];
+/**
+ * 操（属性強化の 2 段目。2026-11-28。利用者が選んだ案。数は Claude の案）：操ボタン（PC は B）で、その人の属性を操る技。待ち時間 cd 秒。
+ *   clip：動き（time 秒に合わせて流す。at 秒に効く）。英雄ごと：
+ *   楯劍騎士「水鞭」：前 range m・arc 度を水の鞭でなぎ払う（傷 damage・濡 buildup・pull m 引き寄せる）
+ *   劍騎士「雷步」：見ている向きへ dist m、稲妻になって移る（travel 秒。その間は無敵）。通り道の幅 width m の敵に傷 damage・雷 buildup
+ *   長柄騎士「岩壁」：前 ahead m に岩の壁（幅 width m・高さ height m・life 秒）。攻撃と矢を止め（hp まで受けると崩れる）、人も通れない
+ *   打擊騎士「爆炎」：前 ahead m の地面を叩いて爆炎（半径 radius m に炎の傷 damage・炎 buildup・push m 吹き飛ばす・地面の火 fires か所）
+ *   弓兵「旋風」：life 秒、自分のまわりに旋風（半径 radius m。矢と飛ぶ奇跡をそらす。始めに近くの敵を push m 吹き飛ばし・崩 buildup）
+ *   祓魔僧：ボタンは増やさない（奇跡のボタンがあるため）。奇跡の待ち時間が cdCut だけ短く、攻める奇跡が当たると眩が buildup 溜まる
+ */
+export const CONTROL = {
+  shield:  { name: '水鞭', el: 'water', clip: 'sh_whip', time: 1.0, at: 0.42, cd: 22, range: 6, arc: 70, damage: 14, buildup: 40, pull: 1.5 },
+  sword:   { name: '雷步', el: 'thunder', clip: null, time: 0.45, at: 0.06, cd: 18, dist: 6, travel: 0.18, width: 1.6, damage: 10, buildup: 30 },
+  polearm: { name: '岩壁', el: 'earth', clip: 'sp_wall', time: 0.9, at: 0.5, cd: 28, ahead: 2.2, width: 4, height: 2.2, life: 10, hp: 120 },
+  // 打擊騎士は今ある叩きつけの動きを武器ごとに使う（[動き, 叩く秒, 動きの長さ]。鎚矛「地碎」・戰鎚「天墜」・長柄鎚「打落」）
+  blunt:   { name: '爆炎', el: 'fire', clip: { mace: ['mc_c2', 0.32, 1.0], warhammer: ['wh_cut3', 0.92, 1.45], lucerne: ['lc_cut1', 0.38, 0.85] }, cd: 22,
+             ahead: 3, radius: 2.8, damage: 16, buildup: 40, push: 1.6, fires: 3 },
+  archer:  { name: '旋風', el: 'wind', clip: 'bw_gale', time: 0.8, at: 0.35, cd: 25, life: 3, radius: 3.2, push: 3, buildup: 40, stun: 0.6 },
+  cleric:  { name: '聖化', el: 'holy', passive: true, cdCut: 0.2, buildup: 30 },
+};
 
 /** 奇跡を持てる数（2026-11-27 から、祓魔僧は初めから全部の奇跡を使える＝7 つ。前は刻の褒美で 1 つずつ・最大 4 つ） */
 export const MIRACLE_SLOTS = 7;

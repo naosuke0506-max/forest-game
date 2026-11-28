@@ -6,6 +6,7 @@ import { WEAPONS, COMBAT, DODGE, HEAVY, TECH, SHIELD_SKILLS, SHIELD_MOVES, SHIEL
 import { selectedMiracle, selectMiracle, cycleMiracle, miracleReady, startCool, updateMiracles } from './miracles.js';
 import { canUlt, spendUlt, ultOf } from './ultimate.js';
 import { createUltMoves } from './ult-moves.js';
+import { createControls, hasControl, controlReady, holyMark } from './controls.js';
 import { keepInside, BODY_RADIUS } from './movement.js';
 import { setStance, updateStance, stanceShape, resetStance } from './stance.js';
 import { techSetOf, controlTech, updateTech, interruptTech } from './techniques.js';
@@ -143,6 +144,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (ta?.kind === 'drag' && !ta.hit) { if (ta.victim.action?.kind === 'dragged') ta.victim.action = null; target.action = null; }
       if (ta && ['hideIn', 'hideOut', 'search'].includes(ta.kind)) target.action = null;   // 隠れる・出る・探すのを取りやめる
       if (ta && ((ta.kind === 'attack' && !ta.hit) || (ta.kind === 'shield' && !ta.hit) || ta.kind === 'charge' || ta.kind === 'charge2')) target.action = null;
+      if (ta?.kind === 'control' && !ta.fired) { target.action = null; emit('controlBroken', { fighter: target }); }   // 操が効く前に斬られた：途切れる（待ち時間は始まらない）
       // 奇跡を唱えている途中（効き目が出る前）：途切れる（待ち時間は始まらない）
       if (ta?.kind === 'miracle' && !ta.done) { target.action = null; emit('miracleBroken', { fighter: target, id: ta.id }); }
       interruptTech(target);
@@ -577,7 +579,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
   /** (ax, az) → (bx, bz) の線が、光壁を横切るか（高さ y で）。横切る壁を返す（owner の壁は通す） */
   function wallBetween(ax, az, bx, bz, y, owner) {
     for (const w of walls) {
-      if (w.owner === owner || w.left <= 0) continue;
+      if ((w.owner === owner && !w.solid) || w.left <= 0) continue;   // 光壁は張った人の攻撃を通す。岩壁（操）は誰の攻撃も止める
       if (y < w.y - 0.3 || y > w.y + w.height) continue;
       // 壁の線：真ん中 (w.x, w.z) から、壁の向き（右へ）に ±half
       const rx = Math.cos(w.yaw * DEG), rz = -Math.sin(w.yaw * DEG);
@@ -605,6 +607,9 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     if (i < 0) return;
     walls.splice(i, 1);
     w.left = 0;
+    // 岩壁（操）：人を止める円と、目・カメラをさえぎる箱を外す
+    if (w.obs) for (const o of w.obs) o.off = true;
+    if (w.box) w.box.off = true;
     emit('wallEnd', { wall: w, broke });
   }
 
@@ -693,6 +698,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       const guarded = guardsFront(t, sp.x, sp.z);
       if (!elementHit(t, owner, 'fire', M.damage * (M.minK + (1 - M.minK) * k), M.buildup * k, { fromX: sp.x, fromZ: sp.z, kind: 'fireball', power: 'h' })) continue;
       hits++;
+      afflict(t, 'holy', holyMark(owner), owner);   // 聖化（祓魔僧の操）：攻める奇跡が当たると眩が溜まる
       if (!guarded && !(t.paralyzed > 0)) blowAway(t, sp.x, sp.z, M.pushMin + (M.push - M.pushMin) * k, 0.8 + 0.5 * k);   // 楯で受けたら吹き飛ばない
     }
     emit('fireballBoom', { x: sp.x, y: sp.y, z: sp.z, gy: floorAt(sp.x, sp.z, sp.y), owner, hits });
@@ -725,10 +731,18 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (sp.kind === 'fireball') fireballBoom(sp); else emit('thunderHit', { x: ox, y: oy, z: oz, spell: sp, wall: true });
       return false;
     }
+    // 旋風（弓兵の操）：飛ぶ奇跡をそらす（横へ曲がり、もう追わない。旋風の人には当たらない）
+    const gv = !sp.galeBy && ctrl.galeAt(sp.x, sp.y, sp.z, owner);
+    if (gv) {
+      sp.galeBy = gv;
+      sp.target = null;
+      turnAside(sp, gv);
+      emit('galeDeflect', { fighter: gv, x: sp.x, y: sp.y, z: sp.z, spell: sp });
+    }
     // 人に当たる：線分（前の位置 → 今の位置）と、体の円柱（聖火彈は少し太い）
     const R = COMBAT.bodyRadius + (sp.kind === 'fireball' ? 0.25 : 0.05);
     for (const v of fighters) {
-      if (v === owner || !v.alive || v.hidden) continue;
+      if (v === owner || v === sp.galeBy || !v.alive || v.hidden) continue;
       const g = yOf(v);
       if (sp.y < g - 0.2 || sp.y > g + stanceShape(v).height + 0.2) continue;
       const sx = sp.x - ox, sz = sp.z - oz, len2 = sx * sx + sz * sz || 1e-6;
@@ -738,7 +752,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       if (v.aura?.kind === 'water') { emit('deflect', { target: v, x: sp.x, y: sp.y, z: sp.z, spell: sp }); return false; }
       if (sp.kind === 'fireball') { fireballBoom(sp); return false; }
       // 神罰雷：雷の傷・少ししびれる・雷痺を溜める（楯で前から受けると、傷も溜まりも半分で、しびれない）
-      elementHit(v, owner, 'thunder', M.damage, M.buildup, { fromX: ox, fromZ: oz, kind: 'thunder', power: 'h' });
+      if (elementHit(v, owner, 'thunder', M.damage, M.buildup, { fromX: ox, fromZ: oz, kind: 'thunder', power: 'h' })) afflict(v, 'holy', holyMark(owner), owner);
       emit('thunderHit', { x: sp.x, y: sp.y, z: sp.z, spell: sp, target: v });
       return false;
     }
@@ -780,6 +794,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       damage(t, M.damage, owner, { fromX: s.x, fromZ: s.z, kind: 'pillar', power: 'l', physical: false });
       if (!t.alive || t.stats.hp >= before) continue;
       hits++;
+      afflict(t, 'holy', holyMark(owner), owner);   // 聖化：目がくらむ前に眩を溜める
       t.blind = Math.max(t.blind || 0, M.blind);
       emit('blinded', { fighter: t, time: M.blind, by: owner });
     }
@@ -873,6 +888,12 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     kindle: (spot, y, owner) => kindle(spot, y, owner),
     addProjectile: (p) => projectiles.push(p),
   });
+  // 操（属性強化の 2 段目。game/controls.js。2026-11-28）
+  const ctrl = createControls({
+    fighters, yOf, floorAt, obstacles, sight, shove, walls, breakWall,
+    elementHit, afflict, knock, fan, guardsFront, emit,
+    kindle: (spot, y, owner) => kindle(spot, y, owner),
+  });
 
   /** 近接の当たり判定：間合いと角度に入っている、ほかの全員に当たる */
   function meleeHit(f, w) {
@@ -924,6 +945,17 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     emit('fire', { fighter: f, projectile: p });
   }
 
+  /** 旋風でそらす：飛ぶ物 o の向きを、旋風の人 g から外れる横向きへ曲げる（少し遅くなる） */
+  function turnAside(o, g) {
+    const sp = Math.hypot(o.vx, o.vz) || 1;
+    const ax = o.x - g.x, az = o.z - g.z, al = Math.hypot(ax, az) || 1;
+    // 渦の向き（反時計回り）に流しながら、外へ
+    const tx = -az / al, tz = ax / al;
+    const side = tx * o.vx + tz * o.vz >= 0 ? 1 : -1;
+    const nx = tx * side * 0.8 + (ax / al) * 0.6, nz = tz * side * 0.8 + (az / al) * 0.6, nl = Math.hypot(nx, nz) || 1;
+    o.vx = (nx / nl) * sp * 0.6; o.vz = (nz / nl) * sp * 0.6;
+  }
+
   function stepProjectile(p, dt) {
     if (p.stuck) { p.stuck += dt; return p.stuck < 6; }
     p.life -= dt;
@@ -938,6 +970,17 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
         hitWall(w, p.damage * (p.owner ? p.owner.stats.attack : 1), p.owner, ox, oz);
         emit('projectileBlocked', { projectile: p, wall: w });
         return false;
+      }
+    }
+    // 旋風（弓兵の操）：ふつうの矢はそらされて、誰にも当たらない（貫く矢・嵐の大矢はそらせない）
+    if (!p.pierce && !p.deflected) {
+      const g = ctrl.galeAt(p.x, p.y, p.z, p.owner);
+      if (g) {
+        p.deflected = true;
+        turnAside(p, g);
+        p.vy = Math.abs(p.vy) * 0.3 + 2;
+        emit('galeDeflect', { fighter: g, x: p.x, y: p.y, z: p.z, projectile: p });
+        return true;
       }
     }
     // 人に当たる：線分（前の位置 → 今の位置）と、体の円柱
@@ -1028,6 +1071,8 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       f._shieldHeld = !!input.shield;
       const ultPressed = input.ult && !f._ultHeld;            // 必殺ボタン（game/ultimate.js。PC は G）
       f._ultHeld = !!input.ult;
+      const ctrlPressed = input.control && !f._ctrlHeld;      // 操ボタン（game/controls.js。PC は B）
+      f._ctrlHeld = !!input.control;
       // 奇跡（祓魔僧。左手ボタンで唱える）：替ボタンで次の奇跡へ（いつでも替えられる）。bot は唱える奇跡の名前（input.miracle）を渡す
       const swapPressed = input.swap && !f._swapHeld;
       f._swapHeld = !!input.swap;
@@ -1069,11 +1114,11 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       // しゃがんでいれば、すぐ立って、そのまま攻撃・防御・回避する（game/stance.js）
       if (f.stanceT > 0) { f.guarding = false; return; }
       if (f.stance === 'prone') {
-        if (pressed || leftPressed || dodgePressed || shieldPressed) setStance(f, 'stand');
+        if (pressed || leftPressed || dodgePressed || shieldPressed || ctrlPressed) setStance(f, 'stand');
         f.guarding = false;
         return;
       }
-      if (f.stance === 'crouch' && (pressed || leftPressed || dodgePressed || shieldPressed || (leftHeld && f.left === 'guard'))) setStance(f, 'stand');
+      if (f.stance === 'crouch' && (pressed || leftPressed || dodgePressed || shieldPressed || ctrlPressed || (leftHeld && f.left === 'guard'))) setStance(f, 'stand');
       // 探す：近くのベッドやタンスを開ける
       if (searchPressed && !f.action && acts) {
         const spot = hiding.nearest(f);
@@ -1101,6 +1146,18 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
 
       // 回避：移動スティックの向きへ（倒していなければ後ろへ）。行動中（弓を引いている途中は除く）はできない
       if (f.action?.kind === 'dodge') { f.guarding = false; return; }
+      // 操（属性強化の 2 段目）：何もしていない時か、弓を引いている途中から。待ち時間の間は 'controlDenied'
+      if (ctrlPressed && hasControl(f)) {
+        if (controlReady(f) && (!f.action || f.action.kind === 'draw')) {
+          if (f.cover) cover?.exit(f);
+          f.guarding = false;
+          f.sprinting = false;
+          interruptTech(f);
+          ctrl.start(f);
+          return;
+        }
+        emit('controlDenied', { fighter: f });
+      }
       // 持ち替え（弓兵）：弓を引いている途中でも、すぐに持ち替える
       if (f.left === 'switch' && leftPressed && f.sidearm && (!f.action || f.action.kind === 'draw')) {
         f.action = null;
@@ -1196,8 +1253,10 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
     update(dt) {
       clock += dt;
       for (const f of fighters) {
-        if (!f.alive) { if (f.boltForm || f.greatBow || f.lift) moves.cancel(f); f.aura = null; f.launch = null; f.pinned = 0; continue; }   // 倒れた：稲妻の姿・大弓・浮いた体・纏う物を外す
-        updateAura(f, dt);   // 必殺技の後に纏う物（水の衣・雷の衣・岩の鎧・紅蓮の衣・光輪）と鷹の目
+        if (!f.alive) { if (f.boltForm || f.greatBow || f.lift) moves.cancel(f); f.aura = null; f.launch = null; f.pinned = 0; if (f.gale) ctrl.tick(f, dt); continue; }   // 倒れた：稲妻の姿・大弓・浮いた体・纏う物を外す
+        updateAura(f, dt);
+        ctrl.tick(f, dt);   // 操の待ち時間・旋風の残り
+        if (f.boltForm && f.action?.kind !== 'control' && f.action?.kind !== 'ult') f.boltForm = false;   // 雷步が途切れた   // 必殺技の後に纏う物（水の衣・雷の衣・岩の鎧・紅蓮の衣・光輪）と鷹の目
         if (f.pinned > 0) f.pinned = Math.max(0, f.pinned - dt);
         if (f.launch) {   // 打ち上げられた（見た目の高さ）
           const L = f.launch;
@@ -1267,6 +1326,9 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
               if (!a.fired && a.t >= ULT_BURST.at) { a.fired = true; ultBurst(f); }
               if (a.t >= ULT_BURST.time) f.action = null;
             }
+          } else if (a.kind === 'control') {
+            // 操（game/controls.js）：動きの at 秒に効く
+            if (ctrl.update(f, a, dt)) { f.action = null; ctrl.end(f, a); }
           } else if (a.kind === 'miracle') {
             // 奇跡を唱える：動きの at 秒に効き目が出る（data.js の MIRACLES）
             const M = MIRACLES[a.id];
@@ -1328,7 +1390,7 @@ export function createCombat({ match, heightAt, obstacles, groundAt = null, hidi
       // 光壁：時間が来たら消える（張った人が倒れても消える）
       for (const w of [...walls]) {
         w.left -= dt;
-        if (w.left <= 0 || !w.owner.alive) breakWall(w, false);
+        if (w.left <= 0 || (!w.owner.alive && !w.solid)) breakWall(w, false);   // 岩壁は張った人が倒れても残る
       }
     },
 

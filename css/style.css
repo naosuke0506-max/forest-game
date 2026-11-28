@@ -865,6 +865,12 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .act-btn.sprint { right: calc(25px + var(--safe-r)); bottom: calc(323px + var(--safe-b)); width: 68px; height: 68px;
   --c1: #dcba60; --c2: #8a661f; --c3: #2e2008; }
 .act-btn.sprint.armed { filter: brightness(1.25); }
+/* 操（属性を操る技。2026-11-28）：攻擊の外の弧の左（楯擊・替の左、角燈の上）。属性の色（--c1〜--c3 は js が書く）。
+   待ち時間の間は影（--cd）と残りの秒、使っている間は明るく光る */
+.act-btn.ctrl { right: calc(368px + var(--safe-r)); bottom: calc(180px + var(--safe-b)); width: 68px; height: 68px; --lb: 12px;
+  --c1: #9ab0c8; --c2: #3e5468; --c3: #121c26; }
+.act-btn.ctrl.ready .ab-icon { filter: drop-shadow(0 0 5px var(--uc, #fff)); }
+.act-btn.ctrl.on { filter: brightness(1.35); animation: none; box-shadow: 0 0 24px calc(var(--ring) + 6px) var(--uc, #fff), var(--sh-base), var(--halo); }
 /* 姿勢（しゃがむ・伏せる）：外の弧のいちばん下（左手の左）。しゃがむ・伏せている間は明るい */
 .act-btn.stance { right: calc(293px + var(--safe-r)); bottom: calc(83px + var(--safe-b)); width: 66px; height: 66px; --lb: 12px;
   --c1: #9aa290; --c2: #485040; --c3: #171b14; }

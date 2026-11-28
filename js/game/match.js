@@ -210,7 +210,7 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
 
   /**
    * 報酬の札を 3 枚（利用者の指示 2026-11-27）：属性強化（その人の属性の次の段＝纏 → 操 → 従）・變異強化・兵器強化。
-   * 變異強化・兵器強化は、中身（クリーチャーになる・兵器に乗る・撃つ）ができるまで「未完」で選べない。操・従も、できるまで「未完」。
+   * 變異強化・兵器強化は、中身（クリーチャーになる・兵器に乗る・撃つ）ができるまで「未完」で選べない。従も、できるまで「未完」（操は 2026-11-28 にできた）。
    * 前の能力値の札（data.js の REWARDS）と奇跡の札は出さない（祓魔僧は初めから全部の奇跡を使える）
    */
   function pickRewards(phase, f = null) {
@@ -219,7 +219,11 @@ export function createMatch({ fighters, rng, phaseDuration = null }) {
     const E = el ? ELEMENT_KINDS[el] : null;
     const elementCard = step && E ? {
       reward: { id: `element:${step.id}`, kind: 'element', step: step.id, el, name: `${step.name}・${E.name}`, short: step.short, planned: !!step.planned,
-        apply: (who) => { if (step.id === 'enchant') who.enchant = el; who.elemStep = (who.elemStep || 0) + 1; } },
+        apply: (who) => {
+          if (step.id === 'enchant') who.enchant = el;
+          if (step.id === 'control') who.ctrl = { cool: 0 };   // 操：操ボタンで属性を操る技（祓魔僧は奇跡が強くなる。game/controls.js）
+          who.elemStep = (who.elemStep || 0) + 1;
+        } },
       value: '',
     } : { reward: { id: 'element:done', kind: 'element', name: '屬性強化', short: 'これ以上は無い', planned: true, apply: () => {} }, value: '' };
     return [

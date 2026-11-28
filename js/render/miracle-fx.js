@@ -272,6 +272,7 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
   lTex.addressU = pc.ADDRESS_REPEAT; lTex.addressV = pc.ADDRESS_REPEAT;   // 模様を壁に繰り返して貼る（端の色を引き伸ばさない）
   const wallViews = new Map();   // 壁 → { e, mat, hit }
   combat.on('wallUp', ({ wall }) => {
+    if (wall.kind === 'rock') return;   // 岩壁（長柄騎士の操）は render/ult-hero-fx.js が描く
     // ふつうの重ね方（加算にすると昼の空の前で白く飛ぶ）：模様の線は濃く光り、線の間はうすいガラス。縁と上は頂点の色で薄く
     const mat = new pc.StandardMaterial();
     mat.useLighting = false; mat.useSkybox = false; mat.useFog = false;
@@ -295,6 +296,7 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
     }
   });
   combat.on('wallHit', ({ wall, x, y, z, amount }) => {
+    if (wall.kind === 'rock') return;
     const v = wallViews.get(wall);
     if (v) v.hit = 1;
     flashes.push({ x, y, z, size: 0.5 + Math.min(1, amount / 30) * 0.6, life: 0.35, max: 0.35, color: [1, 0.95, 0.75] });
@@ -304,6 +306,7 @@ export function createMiracleFx(app, { combat, fighters, views, camera, firstPer
     }
   });
   combat.on('wallEnd', ({ wall, broke }) => {
+    if (wall.kind === 'rock') return;
     const v = wallViews.get(wall);
     if (!v) return;
     if (broke) {

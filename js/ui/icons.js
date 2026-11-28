@@ -53,6 +53,17 @@ export const ICONS = {
   exit: svg(`<path fill="currentColor" d="M4 3h9v4h-2V5H6v14h5v-2h2v4H4z"/><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M10 12h10m-3.5-3.5L20 12l-3.5 3.5"/>`),
   skull: svg(`<path fill="currentColor" d="M12 2.5c4.7 0 8 3.2 8 7.6 0 2.6-1.2 4.4-2.8 5.4V19c0 .8-.7 1.5-1.5 1.5h-1.2v-2h-1.3v2h-2.4v-2H9.5v2H8.3c-.8 0-1.5-.7-1.5-1.5v-3.5C5.2 14.5 4 12.7 4 10.1c0-4.4 3.3-7.6 8-7.6zM8.6 9.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6.8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12 13.6l-1.1 2h2.2z"/>`),
   close: svg(`<path stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/>`),
+  // ===== 操（属性を操る技。2026-11-28。game/controls.js） =====
+  // 水鞭：しなる水の鞭と、しずく
+  c_shield: svg(`<path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M3.5 20.5c3-5.5 6.5-7 10-6.5 3.2.5 5.2-1.6 5.6-4.4.3-2.3-1-4.4-3.2-5"/><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M7 20.8c2.4-3.6 5-4.8 7.6-4.4"/><path fill="currentColor" d="M18.6 13.4c1.2 1.4 1.8 2.4 1.8 3.3a1.8 1.8 0 0 1-3.6 0c0-.9.6-1.9 1.8-3.3z"/>`),
+  // 雷步：前へ走る稲妻と、後ろに残る筋
+  c_sword: svg(`<path fill="currentColor" d="M14.6 2.5 7.8 12.6h4.4l-2.6 8.9 7.6-11.2h-4.6l3.4-7.8z"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M2.5 9h4M1.5 13h4.2M2.5 17h4.4"/>`),
+  // 岩壁：積んだ岩の壁
+  c_polearm: svg(`<path fill="currentColor" d="M3 21.5v-5.2l2.4-1.4 3 .8v5.8zM9.2 21.5v-5.6l3.3-1.2 2.7 1v5.8zM16 21.5v-5.4l2.6-.9 2.4 1.5v4.8z"/><path fill="currentColor" d="M4.2 14.2l.4-5.2 3-1.6 2.8 1.4.3 4.4-3.1 1.6zM11.4 13.6l.2-5.4 3.4-1.4 2.6 1.6.2 4.6-3 1.6zM6.4 6.6l1.4-3.8 3.4-.6 2 2.2-.8 2.4-3-.2z"/>`),
+  // 爆炎：地面から噴き上がる炎と、飛び散る火
+  c_blunt: svg(`<path fill="currentColor" d="M12 2.6c1.4 3 4.6 4.6 4.6 8.8a4.6 4.6 0 0 1-9.2 0c0-2 1-3.4 2.2-4.4 0 1.6.6 2.6 1.6 3 .4-2.6.1-4.8.8-7.4z"/><path fill="currentColor" d="M2.5 21.5 6 17l2.4 1.6L12 15.8l3.6 2.8L18 17l3.5 4.5z"/><circle cx="4.6" cy="11" r="1.2" fill="currentColor"/><circle cx="19.6" cy="9.6" r="1.1" fill="currentColor"/>`),
+  // 旋風：渦を巻く風
+  c_archer: svg(`<path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M4 7.5c4-3.4 12-3.6 15.4.2M5.6 12c3.2-2.4 9-2.4 11.6.4M8 16.4c2-1.4 5.4-1.4 7 .2M10.4 20.4h3.4"/><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M19.4 7.7c1 1.4.2 3-1.2 3.4"/>`),
 };
 
 /** 時間帯の絵（朝・昼は太陽、夕暮れは沈む日、深夜は月） */
