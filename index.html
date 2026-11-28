@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b211c">
 <title>時輪戰記</title>
 <!-- 版の番号（js/version.js と同じ値。古いファイルが混ざったら main.js が取り直す） -->
-<script>window.__BUILD = '2026-11-28.2';</script>
+<script>window.__BUILD = '2026-11-28.3';</script>
 <link rel="stylesheet" href="./css/style.css">
 <!-- 読み込みを速くする：ページを開いた瞬間に、エンジンと質感画像を並行して取りに行く -->
 <link rel="modulepreload" href="./vendor/playcanvas/2.23.3/playcanvas.min.mjs">
@@ -425,14 +425,22 @@
     <div class="pane" data-pane="hall">
       <p id="hall-who" class="hall-who"></p>
       <div class="menu">
-        <button type="button" class="menu-btn" data-go="tutorial" data-ruby>教練<small class="sub">遊び方を覚える（基本・暗殺・必殺技・人物ごとの技）</small></button>
+        <button type="button" class="menu-btn" data-go="tchar" data-ruby>教練<small class="sub">人物を選んで、遊び方を覚える（基本・暗殺・必殺技・操・人物ごとの技）</small></button>
         <button type="button" class="menu-btn" data-go="mode" data-ruby>戰鬥<small class="sub">試合を選んで始める</small></button>
         <button type="button" class="menu-btn" data-go="codex" data-ruby>圖鑑<small class="sub">人物・武器・技・必殺技の説明</small></button>
         <button type="button" class="menu-btn" data-act="settings">設定<small class="sub">音・題の曲・表示</small></button>
       </div>
     </div>
+    <!-- 教練（2026-11-28。利用者の指示：教練を選んだら人物を選び、それから教練を選ぶ）：1. 人物・武器 → 2. 教練の札 -->
+    <div class="pane" data-pane="tchar" hidden>
+      <div id="tchar-select" class="char-select"></div>
+      <p id="tchar-desc" class="char-desc"></p>
+      <div id="tloadout" class="loadout"></div>
+      <p class="lo-note">教練で使う人物と武器を選ぶ（ここで選んだ人物は、大廳と戰鬥でもそのまま）</p>
+      <button type="button" class="start" data-go="tutorial">次</button>
+    </div>
     <div class="pane" data-pane="tutorial" hidden>
-      <p class="lo-note">選ぶとすぐ始まる。手順は画面の左に出る。人物の名前が付いた教練は、その人物で行う（ほかは大廳で選んでいる人物で）</p>
+      <p id="lesson-note" class="lo-note"></p>
       <div id="lesson-list" class="picks"></div>
     </div>
     <div class="pane" data-pane="codex" hidden>
