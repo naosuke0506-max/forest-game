@@ -1,5 +1,6 @@
 // 題の画面と大廳、試合の前に選ぶ画面の流れ（画面の文字とボタンだけ。後ろの 3D の広間は render/hall.js）
-//   題（蠱毒・読み込み）→「入」→ 大廳（戰鬥・圖鑑・設定）→ 戰鬥（蠱毒）→ 戰場（森）→ 人物・武器 → 兵器・變異 →「開戰」
+//   題（蠱毒・読み込み）→「入」→ 大廳（教練・戰鬥・圖鑑・設定）→ 戰鬥（蠱毒）→ 戰場（森）→ 人物・武器 → 兵器・變異 →「開戰」
+//   教練は、人物・武器 → 教練の札（その人物でできる教練だけ）。選ぶとすぐ始まる（2026-11-28。利用者の指示）
 //   人物・武器を替えると、大廳に立つ人物も替わる（onShow）
 import { L } from './labels.js';
 import { ruby, rubyIn } from './ruby.js';
@@ -17,10 +18,11 @@ const plannedOf = (slot, id) => (slot === 'shield' ? !SHIELDS[id] || SHIELDS[id]
 const eraOf = (char) => CHARACTERS[char].era ?? 'medieval';
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-// 画面の順番と見出し（大廳は数えない）
+// 画面の順番と見出し（大廳は数えない）。戰鬥の 4 つと、教練の 2 つ
 const STEPS = ['mode', 'map', 'char', 'arms'];
-const HEADS = { hall: L.hall, codex: L.codex, tutorial: '教練', mode: L.battle, map: L.map, char: `${L.person}・${L.weapon}`, arms: `${L.arms}・${L.mutation}` };
-const BACK = { codex: 'hall', tutorial: 'hall', mode: 'hall', map: 'mode', char: 'map', arms: 'char' };
+const TSTEPS = ['tchar', 'tutorial'];
+const HEADS = { hall: L.hall, codex: L.codex, tchar: `教練・${L.person}`, tutorial: '教練', mode: L.battle, map: L.map, char: `${L.person}・${L.weapon}`, arms: `${L.arms}・${L.mutation}` };
+const BACK = { codex: 'hall', tchar: 'hall', tutorial: 'tchar', mode: 'hall', map: 'mode', char: 'map', arms: 'char' };
 
 /**
  * @param {object} o
@@ -77,11 +79,12 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
     step = to;
     for (const [k, p] of Object.entries(panes)) p.hidden = k !== to;
     head.innerHTML = ruby(HEADS[to]);   // 読みにくい漢字にはふりがな（ui/ruby.js）
-    const i = STEPS.indexOf(to);
-    stepEl.textContent = i >= 0 ? `${i + 1} / ${STEPS.length}` : '';
+    const seq = TSTEPS.includes(to) ? TSTEPS : STEPS, i = seq.indexOf(to);
+    stepEl.textContent = i >= 0 ? `${i + 1} / ${seq.length}` : '';
     backBtn.hidden = to === 'hall';
     if (to === 'hall') renderWho();
     if (to === 'arms') renderArms();
+    if (to === 'tutorial') renderLessons();
     if (to === 'codex') codex.open(pick.char);
   }
   backBtn.addEventListener('click', () => go(BACK[step] || 'hall'));
@@ -99,15 +102,19 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
     who.innerHTML = `<b>${ruby(CHARACTERS[pick.char].name)}</b><span>${gear.map(ruby).join('・')}</span>`;
   }
 
-  // ---- 教練（チュートリアル。game/tutorial.js）：札を選ぶとすぐ始まる ----
+  // ---- 教練（チュートリアル。game/tutorial.js）：人物・武器を選んでから（tchar）、札を選ぶとすぐ始まる ----
+  //   札は、選んだ人物でできる教練だけ（みんなの教練と、その人物だけの教練。楯劍騎士の「防禦」・祓魔僧の「奇跡」など）
   let startFn = null;   // 試合を始める（ready で受け取る）
-  const lessonEl = document.getElementById('lesson-list');
-  lessonEl.innerHTML = LESSON_ORDER.map((id) => {
-    const t = LESSONS[id], who = t.char ? CHARACTERS[t.char].name : '大廳で選んでいる人物';
-    return `<button type="button" class="pick" data-lesson="${id}"><span class="pick-name">${ruby(t.name)}</span>
-      <span class="pick-when">${esc(who)}</span><span class="pick-desc">${esc(t.desc)}</span></button>`;
-  }).join('');
-  rubyIn(lessonEl, '.pick-when');
+  const lessonEl = document.getElementById('lesson-list'), lessonNote = document.getElementById('lesson-note');
+  function renderLessons() {
+    const name = CHARACTERS[pick.char].name;
+    lessonNote.innerHTML = `${ruby(name)}で行う。選ぶとすぐ始まる。手順は画面の左に出る`;
+    lessonEl.innerHTML = LESSON_ORDER.filter((id) => !LESSONS[id].char || LESSONS[id].char === pick.char).map((id) => {
+      const t = LESSONS[id];
+      return `<button type="button" class="pick" data-lesson="${id}"><span class="pick-name">${ruby(t.name)}</span>
+        ${t.char ? `<span class="pick-when">${ruby(name)}だけの教練</span>` : ''}<span class="pick-desc">${esc(t.desc)}</span></button>`;
+    }).join('');
+  }
   lessonEl.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-lesson]');
     if (!b || !startFn || lessonEl.dataset.busy) return;
@@ -132,40 +139,48 @@ export function createLobby({ onGate = () => {}, onEnter = () => {}, onHall = ()
   cards(document.getElementById('map-list'), MAPS, 'map');
 
   // ---- 人物・武器（試合の途中では替えられない。模型と動きがまだ無い物は「未完」で選べない） ----
-  const list = document.getElementById('char-select');
-  const desc = document.getElementById('char-desc');
-  const loadoutEl = document.getElementById('loadout');
-  const renderLoadout = () => {
+  //   戰鬥の「人物・武器」と、教練の「人物」の 2 か所に同じ物を出す（選んでいる人物は 1 つ。どちらで替えても大廳の人物が替わる）
+  const charPanes = [['char-select', 'char-desc', 'loadout'], ['tchar-select', 'tchar-desc', 'tloadout']]
+    .map(([l, d, o]) => ({ list: document.getElementById(l), desc: document.getElementById(d), lo: document.getElementById(o) }))
+    .filter((c) => c.list && c.desc && c.lo);
+  const loadoutHtml = () => {
     const lo = LOADOUTS[pick.char], cur = loadouts[pick.char];
-    loadoutEl.innerHTML = SLOTS.filter(([slot]) => lo[slot]?.length).map(([slot, label]) => `<div class="lo-row" role="group" aria-label="${label}">
+    return SLOTS.filter(([slot]) => lo[slot]?.length).map(([slot, label]) => `<div class="lo-row" role="group" aria-label="${label}">
       <span class="lo-label">${label}</span>
       <div class="lo-opts">${lo[slot].map((id) => {
         const off = plannedOf(slot, id);
         return `<button type="button" class="lo-btn${cur[slot] === id ? ' sel' : ''}" data-slot="${slot}" data-id="${id}" aria-pressed="${cur[slot] === id}"${off ? ' disabled' : ''}>${nameOf(slot, id)}${off ? `<small>${L.planned}</small>` : ''}</button>`;
       }).join('')}</div>
     </div>`).join('');
-    rubyIn(loadoutEl, '.lo-btn');
   };
-  loadoutEl.addEventListener('click', (e) => {
-    const b = e.target.closest('.lo-btn');
-    if (!b || b.disabled) return;
-    loadouts[pick.char][b.dataset.slot] = b.dataset.id;
-    renderLoadout();
-    show();
-  });
+  const renderLoadout = () => {
+    const html = loadoutHtml();
+    for (const c of charPanes) { c.lo.innerHTML = html; rubyIn(c.lo, '.lo-btn'); }
+  };
   const renderChar = () => {
-    for (const b of list.children) b.classList.toggle('sel', b.dataset.id === pick.char);
-    desc.textContent = CHARACTERS[pick.char].desc;
+    for (const c of charPanes) {
+      for (const b of c.list.children) b.classList.toggle('sel', b.dataset.id === pick.char);
+      c.desc.textContent = CHARACTERS[pick.char].desc;
+    }
     renderLoadout();
   };
-  for (const [id, c] of Object.entries(CHARACTERS)) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'char-btn';
-    b.dataset.id = id;
-    b.innerHTML = ruby(c.name);
-    b.addEventListener('click', () => { pick.char = id; renderChar(); show(); });
-    list.appendChild(b);
+  for (const c of charPanes) {
+    c.lo.addEventListener('click', (e) => {
+      const b = e.target.closest('.lo-btn');
+      if (!b || b.disabled) return;
+      loadouts[pick.char][b.dataset.slot] = b.dataset.id;
+      renderLoadout();
+      show();
+    });
+    for (const [id, ch] of Object.entries(CHARACTERS)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'char-btn';
+      b.dataset.id = id;
+      b.innerHTML = ruby(ch.name);
+      b.addEventListener('click', () => { pick.char = id; renderChar(); show(); });
+      c.list.appendChild(b);
+    }
   }
   renderChar();
 
