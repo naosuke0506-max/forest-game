@@ -755,9 +755,9 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
       for (const f of fighters) {
         if (!f.alive || f.hidden) continue;
         const fp = f === me && firstPerson(), y = yOf(f) + (f.lift || 0);
-        if (f.wet > 0 && !fp && rnd() < dt * 16) {   // 濡：体からしずくが落ちる
-          const a = rnd() * 6.28, r = 0.18 + rnd() * 0.18;
-          fx.spark(f.x + Math.cos(a) * r, y + 0.6 + rnd() * 1.1, f.z + Math.sin(a) * r, 0, -0.5, 0, 0.6, 0.03, [0.6, 0.85, 1], { grav: 9 });
+        if (f.wet > 0 && !fp && rnd() < dt * 30) {   // 濡：体からしずくが落ちる（写すと小さくて見えなかったので、大きく多く）
+          const a = rnd() * 6.28, r = 0.18 + rnd() * 0.2;
+          fx.spark(f.x + Math.cos(a) * r, y + 0.5 + rnd() * 1.3, f.z + Math.sin(a) * r, 0, -0.5, 0, 0.6, 0.045 + rnd() * 0.02, [0.55, 0.82, 1], { grav: 9 });
         }
         if (f.heavy > 0 && rnd() < dt * 12) {   // 重：足もとの砂ぼこりと、落ちる小石
           const a = rnd() * 6.28, r = 0.3 + rnd() * 0.3;
@@ -776,13 +776,16 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
             }
           }
         }
-        if (f.enchant && rnd() < dt * 26) {   // 纏：武器に沿って属性の粒
-          const v = views.get(f), c = ELC(f.enchant), isBow = WEAPONS[f.weapon]?.kind === 'bow';
-          const p = isBow ? v?.bowPos?.(tmp) : v?.weaponHead?.(tmp, (BLADE[f.weapon] || 0.6) * (0.2 + rnd() * 0.8));
+        if (f.enchant) {   // 纏：武器に沿って属性の粒と、武器の頭に小さな光（写すと粒が小さくて見えなかったので、大きく多く）
+          const v = views.get(f), c = ELC(f.enchant), isBow = WEAPONS[f.weapon]?.kind === 'bow', L = BLADE[f.weapon] || 0.6;
+          const head = isBow ? v?.bowPos?.(tmp) : v?.weaponHead?.(tmp, L * 0.85);
+          if (head) fx.glow(head.x, head.y, head.z, 0.45, 1e-3, c.map((k) => k * 0.55));
+          const n = rnd() < dt * 40 ? 1 : 0;
+          const p = n && (isBow ? v?.bowPos?.(tmp) : v?.weaponHead?.(tmp, L * (0.25 + rnd() * 0.75)));
           if (p) {
             const fire = f.enchant === 'fire', water = f.enchant === 'water', earth = f.enchant === 'earth';
-            fx.spark(p.x + (rnd() - 0.5) * 0.06, p.y + (rnd() - 0.5) * 0.06, p.z + (rnd() - 0.5) * 0.06, (rnd() - 0.5) * 0.4, fire ? 0.8 : water || earth ? -0.3 : 0.3, (rnd() - 0.5) * 0.4,
-              0.35 + rnd() * 0.25, 0.025 + rnd() * 0.02, rnd() < 0.7 ? c : [1, 1, 1], { grav: water || earth ? 5 : fire ? -1 : 0, drag: 0.6, flick: f.enchant === 'thunder' });
+            fx.spark(p.x + (rnd() - 0.5) * 0.08, p.y + (rnd() - 0.5) * 0.08, p.z + (rnd() - 0.5) * 0.08, (rnd() - 0.5) * 0.5, fire ? 0.9 : water || earth ? -0.3 : 0.3, (rnd() - 0.5) * 0.5,
+              0.4 + rnd() * 0.25, 0.04 + rnd() * 0.03, rnd() < 0.7 ? c : [1, 1, 1], { grav: water || earth ? 5 : fire ? -1 : 0, drag: 0.6, flick: f.enchant === 'thunder' });
           }
         }
       }
