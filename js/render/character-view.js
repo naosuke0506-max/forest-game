@@ -847,6 +847,10 @@ export function createCharacterView(app, fighter, terrain, { asset, meta }) {
             if (P.pre && has(P.pre)) play(P.pre, 1, 0.15);
             else if (has(P.clip)) restart(P.clip, P.hit / Math.max(0.2, ultAt));
           }
+        } else if (a.kind === 'control') {
+          // 操（game/controls.js。2026-11-28）：水鞭 sh_whip・岩壁 sp_wall・旋風 bw_gale・爆炎は今ある叩きつけ（mc_c2・wh_cut3・lc_cut1）。
+          // どれも作った速さのまま流す（効く時刻が合う）。雷步は動きが無い（稲妻の姿で体を隠す）
+          if (a.clip && has(a.clip)) restart(a.clip, 1);
         } else if (a.kind === 'miracle') {
           // 祓魔僧の奇跡を唱える：奇跡ごとの動き（data.js の MIRACLES の clip・time。tools/characters/cleric_moves.py）
           const M = MIRACLES[a.id];

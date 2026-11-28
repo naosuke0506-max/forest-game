@@ -26,6 +26,8 @@ export const ctrlSpec = (f) => CONTROL[f?.char] || null;
 export function hasControl(f) { const S = ctrlSpec(f); return !!(f?.ctrl && S && !S.passive); }
 /** 待ち時間の残り（秒） */
 export const controlCool = (f) => f?.ctrl?.cool || 0;
+/** 待ち時間の長さ（秒）。教練（f.ctrlFree）では短い */
+export const controlCd = (f) => { const S = ctrlSpec(f); return S?.cd ? (f?.ctrlFree ? Math.min(S.cd, 4) : S.cd) : 0; };
 /** 今出せるか（待ち時間が無い） */
 export const controlReady = (f) => hasControl(f) && controlCool(f) <= 0;
 /** 祓魔僧の聖化：奇跡の待ち時間にかける割合（ほかの人は 1） */
@@ -190,7 +192,7 @@ export function createControls(ctx) {
       const S = ctrlSpec(f);
       if (!a.fired && a.t >= a.at) {
         a.fired = true;
-        f.ctrl.cool = S.cd;
+        f.ctrl.cool = controlCd(f);
         if (f.char === 'shield') whip(f);
         else if (f.char === 'sword') boltStart(f, a);
         else if (f.char === 'polearm') rockWall(f);

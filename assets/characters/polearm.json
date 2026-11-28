@@ -118,6 +118,11 @@
    "loop": false,
    "speed": 0.0
   },
+  "sp_wall": {
+   "duration": 0.9,
+   "loop": false,
+   "speed": 0.0
+  },
   "hit_l_f": {
    "duration": 0.4667,
    "loop": false,

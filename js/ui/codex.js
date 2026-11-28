@@ -3,7 +3,7 @@
 //   動きの再生は、動作監督の画面と同じ作り：動きの一覧（見出しごと）・流す／止める・繰り返す・速さ・時刻のつまみ
 import { L } from './labels.js';
 import { ruby, rubyIn } from './ruby.js';
-import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, SHARED_SKILLS, TECHNIQUES, SHIELD_SKILLS, MIRACLES, MIRACLE_SLOTS, ULTIMATES, ULTIMATE, ELEMENT_KINDS, AILMENTS } from '../game/data.js';
+import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, SHARED_SKILLS, TECHNIQUES, SHIELD_SKILLS, MIRACLES, MIRACLE_SLOTS, ULTIMATES, ULTIMATE, ELEMENT_KINDS, AILMENTS, CONTROL } from '../game/data.js';
 import { crestSvg } from './crests.js';
 import { attackStats } from '../game/combat.js';
 import { resolveLoadout } from '../game/match.js';
@@ -108,7 +108,21 @@ const ELEMENT_NOTE = (el) => {
     earth: '重：転んで、しばらく走れず回避が短い。重い間は崩れない（不動）',
     wind: '崩：吹き飛ばされ、しばらく防禦できない。燃えている相手に当てると炎が燃え広がる（煽火）',
     holy: '眩：目がくらむ。目がくらんだ相手は、前からの暗殺も深く入る（盲撃）' }[el] || '';
-  return `${E.name}の属性。当てるたびに状態異常が溜まり、100% で${A}になる。${what}。刻の報酬の「屬性強化」で、纏（武器に${E.name}を纏う）→ 操 → 従と強くなる（操・従はまだ作っていない）`;
+  return `${E.name}の属性。当てるたびに状態異常が溜まり、100% で${A}になる。${what}。刻の報酬の「屬性強化」で、纏（武器に${E.name}を纏う）→ 操 → 従と強くなる（従はまだ作っていない）`;
+};
+/** 操（属性強化の 2 段目。2026-11-28。game/controls.js）：英雄ごとの技の説明 */
+const CONTROL_NOTE = (id) => {
+  const C = CONTROL[id];
+  if (!C) return '';
+  const what = {
+    shield: `前 ${C.range} m を水の鞭でなぎ払う。濡が溜まり、相手を ${C.pull} m 引き寄せる（楯で受けた相手は引かれない）`,
+    sword: `見ている向きへ ${C.dist} m、稲妻になって一瞬で移る（その間は無敵）。通り道の敵に雷`,
+    polearm: `前に岩の壁を立てる（幅 ${C.width} m・高さ ${C.height} m・${C.life} 秒）。攻撃も矢も人も通さない（自分の攻撃も）。受けすぎると崩れる`,
+    blunt: `前 ${C.ahead} m の地面を叩いて爆炎。まわりの敵に炎が溜まり、地面に火が残る`,
+    archer: `まわりに旋風を起こす。近くの敵を ${C.push} m 吹き飛ばして崩を溜め、${C.life} 秒の間、矢と飛ぶ奇跡をそらす`,
+    cleric: `ボタンは増えない。奇跡の待ち時間が ${Math.round(C.cdCut * 100)}% 短くなり、天光柱・聖火彈・神罰雷が当たると眩が溜まる`,
+  }[id] || '';
+  return C.passive ? `操「${C.name}」：${what}` : `操「${C.name}」（操ボタン・PC は B。待ち時間 ${C.cd} 秒）：${what}`;
 };
 
 /**
@@ -179,6 +193,7 @@ export function createCodex({ hall }) {
       ${ex ? ultCard(ex, true) : ''}
       <p class="codex-note">${esc(ULT_NOTE)}</p>
       <p class="codex-note">${esc(ELEMENT_NOTE(ex?.element))}</p>
+      <p class="codex-note">${esc(CONTROL_NOTE(char))}</p>
       ${c.left === 'miracle' ? `<h4 class="codex-head">奇跡</h4><p class="codex-note">${esc(MIRACLE_NOTE)}</p>${Object.values(MIRACLES).map(miracleCard).join('')}` : ''}
       <h4 class="codex-head">性能</h4>
       ${gauges(char)}

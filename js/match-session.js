@@ -25,7 +25,7 @@ import { stanceButton, stanceSpeed, canRun, stanceShape, resetStance } from './g
 import { swimSpeed, toggleDive } from './game/swim.js';
 import { STANCES, BODY_TURN } from './game/data.js';
 import { ultOf, elementOf, ultLeft } from './game/ultimate.js';
-import { hasControl, controlCool } from './game/controls.js';
+import { hasControl, controlCool, controlCd } from './game/controls.js';
 import { createHeatVision } from './render/heat-vision.js';
 import { createUltDust } from './render/ult-dust.js';
 import { createUltFx } from './render/ult-fx.js';
@@ -242,7 +242,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (ctrlBtn.hidden || !myCtrl) return;
     const cool = controlCool(me), on = me.action?.kind === 'control';
     const sec = cool > 0 ? Math.ceil(cool) : 0;
-    setCd(ctrlBtn, cool > 0 ? cool / myCtrl.cd : 0);
+    setCd(ctrlBtn, cool > 0 ? cool / controlCd(me) : 0);
     const key = `${sec}|${on}`;
     if (key === ctrlShown) return;
     ctrlShown = key;

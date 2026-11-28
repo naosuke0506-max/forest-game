@@ -159,6 +159,19 @@ export const LESSONS = {
       { text: '必殺技を、2 人以上に当てる', done: (S) => S.ultHits >= 2 },   // 前は「衝撃波で吹き飛ばす」（1 回目の仮の技）。英雄ごとの技は吹き飛ばさない物もある
     ],
   },
+  // 操（③-2。2026-11-28）：試合では刻の報酬で「操」を選ぶと使える（纏の次）。教練では初めから使え、待ち時間が短い（4 秒）
+  control: {
+    name: '操', char: null, desc: '操ボタンで、英雄の属性を操る技を出す（試合では、刻の報酬で纏の次に「操」を選ぶと使える）',
+    bots: [{ char: 'sword', role: 'dummy' }, { char: 'blunt', role: 'dummy' }, { char: 'archer', role: 'dummy' }],
+    setup({ me, bots }) {
+      me.ctrl = { cool: 0 }; me.ctrlFree = true;
+      place(bots[0], me, 3, 0); place(bots[1], me, 4.5, 25); place(bots[2], me, 5, -25);
+    },
+    steps: [
+      { text: '操ボタン（PC は B）で技を出す（祓魔僧は、神罰雷などの攻める奇跡を当てる）', done: (S) => S.controls >= 1 || S.holyMarks >= 1 },
+      { text: '待ち時間が明けたら、もう一度出す', done: (S) => S.controls >= 2 || S.holyMarks >= 2 },
+    ],
+  },
   shield: {
     name: '防禦', char: 'shield', desc: '楯で攻撃を受け止め、楯擊で返す（楯劍騎士）',
     bots: [{ char: 'sword', role: 'attacker', loadout: { main: 'longsword' } }],
@@ -217,7 +230,7 @@ export const LESSONS = {
   },
 };
 /** 大廳に並べる順 */
-export const LESSON_ORDER = ['basic', 'search', 'searchBed', 'ambush', 'cover', 'evade', 'ult', 'shield', 'miracle', 'miracleStrike'];
+export const LESSON_ORDER = ['basic', 'search', 'searchBed', 'ambush', 'cover', 'evade', 'ult', 'control', 'shield', 'miracle', 'miracleStrike'];
 
 /** 相手を、自分の向きから右へ ang 度の向きに d m、さらに右へ side m ずらして置き、こちらを向かせる */
 function place(f, me, d, ang = 0, side = 0) {
@@ -306,7 +319,7 @@ export function createTutorBot(f, role, me) {
  */
 export function createTutorState(lesson, { me, combat, cover, match }) {
   const S = { moved: 0, turned: 0, sprinted: false, hits: 0, dodges: 0, inside: false, searched: 0, kills: 0, covered: false, hid: false,
-    assassinTries: 0, assassinKills: 0, guarded: 0, ult: false, ultHits: 0, shieldHits: 0,
+    assassinTries: 0, assassinKills: 0, guarded: 0, ult: false, ultHits: 0, shieldHits: 0, controls: 0, holyMarks: 0,
     evaded: 0, miracles: {}, ignited: 0, strikeHits: { pillar: 0, fireball: 0, thunder: 0 } };
   const ultHit = new Set();
   let lastX = me.x, lastZ = me.z, lastYaw = me.yaw;
@@ -319,6 +332,8 @@ export function createTutorState(lesson, { me, combat, cover, match }) {
     if (target === me && guarded) S.guarded++;
   });
   combat.on('ult', ({ fighter }) => { if (fighter === me) S.ult = true; });
+  combat.on('ctrlFx', ({ fighter, phase }) => { if (fighter === me && phase !== 'end') S.controls++; });   // 操の技が効いた
+  combat.on('buildup', ({ el, by }) => { if (by === me && el === 'holy' && me.ctrl && me.char === 'cleric') S.holyMarks++; });   // 祓魔僧の聖化：眩を溜めた
   combat.on('shieldStrike', ({ fighter, hits }) => { if (fighter === me && hits) S.shieldHits++; });   // 楯擊・楯押が当たった
   combat.on('miracle', ({ fighter, id }) => { if (fighter === me) S.miracles[id] = true; });   // 奇跡を唱えた（効き目が出た）
   combat.on('ignite', ({ by }) => { if (by === me) S.ignited++; });                            // 淨炎で相手を燃やした
