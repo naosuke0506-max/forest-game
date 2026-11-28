@@ -55,6 +55,7 @@ export function createUltMoves(ctx) {
           if (!t.alive) continue;
           hits++;
           ctx.knock(t, f.x, f.z, S.pushMin + (S.push - S.pushMin) * k, S.stun * (0.6 + 0.4 * k), 1.0 + 0.4 * k);
+          ctx.afflict(t, 'water', S.buildup ?? 100, f);   // 濡を溜める（③-1）
         }
         emit('ultBurst', { fighter: f, ult: f.ultInfo, x: f.x, y: fy, z: f.z, radius: S.radius, hits });
       }
@@ -262,6 +263,7 @@ export function createUltMoves(ctx) {
           ctx.damage(t, S.damage, f, { fromX: f.x, fromZ: f.z, kind: 'ult', power: 'h', physical: false });
           if (!t.alive) continue;
           hits++;
+          ctx.afflict(t, 'earth', S.buildup ?? 40, f);   // 重を溜める（③-1）
           ctx.launch(t, S.launch, 0.75);
           ctx.pin(t, f, S.pin + (S.big.at - R.at));   // 大きな岩の槍が来るまで閉じ込めておく
           emit('ultEarth', { fighter: f, phase: 'hit', target: t, x: t.x, y: yOf(t), z: t.z });
@@ -288,6 +290,7 @@ export function createUltMoves(ctx) {
           ctx.damage(t, B.damage, f, { fromX: x, fromZ: z, kind: 'ult', power: 'h', physical: false });
           if (!t.alive) continue;
           hits++;
+          ctx.afflict(t, 'earth', B.buildup ?? 60, f);
           ctx.launch(t, B.launch, 1.0);
           ctx.pin(t, f, 1.0);
         }

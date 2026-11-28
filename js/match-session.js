@@ -1,6 +1,6 @@
 // 練習モードの試合：あなた＋bot 3 体。試合の計算（game/）と、見た目・画面（render/・ui/）をつなぐ
 import * as pc from 'playcanvas';
-import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS, SHIELD_SKILLS, SHIELD_MOVES, SPRINT, DASH, MIRACLES, ELEMENTS } from './game/data.js';
+import { CHARACTERS, BOT_NAMES, WEAPONS, AREA_RADIUS, ARMS, MUTATIONS, SHIELD_SKILLS, SHIELD_MOVES, SPRINT, DASH, MIRACLES, ELEMENTS, CONTROL } from './game/data.js';
 import { selectedMiracle, miraclesOf, miracleCool } from './game/miracles.js';
 import { createMinimap } from './ui/minimap.js';
 import { ZONE_NAMES } from './world/zones.js';
@@ -25,6 +25,7 @@ import { stanceButton, stanceSpeed, canRun, stanceShape, resetStance } from './g
 import { swimSpeed, toggleDive } from './game/swim.js';
 import { STANCES, BODY_TURN } from './game/data.js';
 import { ultOf, elementOf, ultLeft } from './game/ultimate.js';
+import { hasControl, controlCool, controlCd } from './game/controls.js';
 import { createHeatVision } from './render/heat-vision.js';
 import { createUltDust } from './render/ult-dust.js';
 import { createUltFx } from './render/ult-fx.js';
@@ -227,6 +228,39 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     ultBtn.classList.toggle('on', on);
   };
   showUlt();
+  // 操ボタン（属性強化の 2 段目。2026-11-28。game/controls.js。PC は B）：刻の報酬で「操」を選ぶと出る。技の絵と名前・属性の色。
+  // 待ち時間の間は影と残りの秒。祓魔僧はボタンが無い（奇跡が強くなる＝聖化）
+  const ctrlBtn = document.getElementById('btn-ctrl') || document.createElement('button');
+  const myCtrl = CONTROL[me.char];
+  if (myEl) {
+    ctrlBtn.style.setProperty('--c1', myEl.color); ctrlBtn.style.setProperty('--c2', mixColor(myEl.color, myEl.deep, 0.6));
+    ctrlBtn.style.setProperty('--c3', myEl.deep); ctrlBtn.style.setProperty('--uc', myEl.color);
+  }
+  let ctrlShown = '';
+  const showCtrl = (canShow) => {
+    ctrlBtn.hidden = !canShow || !hasControl(me);
+    if (ctrlBtn.hidden || !myCtrl) return;
+    const cool = controlCool(me), on = me.action?.kind === 'control';
+    const sec = cool > 0 ? Math.ceil(cool) : 0;
+    setCd(ctrlBtn, cool > 0 ? cool / controlCd(me) : 0);
+    const key = `${sec}|${on}`;
+    if (key === ctrlShown) return;
+    ctrlShown = key;
+    setBtn(ctrlBtn, ICONS[`c_${me.char}`] || ICONS.skill, myCtrl.name, sec || '');
+    ctrlBtn.classList.toggle('cool', cool > 0);
+    ctrlBtn.classList.toggle('ready', !(cool > 0) && !on);
+    ctrlBtn.classList.toggle('on', on);
+  };
+  combat.on('controlDenied', ({ fighter }) => {
+    if (fighter !== me) return;
+    const cool = controlCool(me);
+    hud.addFeed(cool > 0 ? `${myCtrl?.name || '操'}は、あと ${Math.ceil(cool)} 秒で使える` : `今は${myCtrl?.name || '操'}を出せない`);
+  });
+  combat.on('controlBroken', ({ fighter }) => { if (fighter === me) hud.addFeed(`${myCtrl?.name || '操'}が途切れた`); });
+  match.on('rewardChosen', ({ fighter, option }) => {
+    if (fighter !== me || option?.reward?.step !== 'control') return;
+    hud.addFeed(hasControl(me) ? `操「${myCtrl.name}」を覚えた（操ボタン・PC は B）` : `操「${myCtrl?.name || '聖化'}」を覚えた（奇跡の待ち時間が短くなり、攻める奇跡で目がくらむ）`);
+  });
   combat.on('ultDenied', ({ fighter }) => {
     if (fighter !== me) return;
     if (!(ultLeft(me) > 0)) hud.addFeed(match.overtime ? '必殺技は使い切った' : '必殺技は使い切った（延長戰で、もう一度だけ使える）');
@@ -297,14 +331,22 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (me.alive) {
       if (me.blessing > 0) list.push(['', ICONS.m_revive, '加護', me.blessing]);
       if (me.flame > 0) list.push(['', ICONS.m_flame, '淨炎', me.flame]);
-      const w = combat.walls.find((x) => x.owner === me);
+      const w = combat.walls.find((x) => x.owner === me && x.kind !== 'rock');
       if (w) list.push(['', ICONS.m_wall, '光壁', w.left]);
+      // 操（2026-11-28）：岩壁の残り・旋風の残り
+      const rw = combat.walls.find((x) => x.owner === me && x.kind === 'rock');
+      if (rw) list.push(['', ICONS.c_polearm, '岩壁', rw.left]);
+      if (me.gale) list.push(['', ICONS.c_archer, '旋風', me.gale.left]);
       // 状態異常（利用者の指示 2026-11-18）：火炎（回避を続けた数）・雷痺。発動していない間は、溜まり（％）を小さな棒で
       if (me.blaze) list.push(['blaze', ICONS.m_flame, `火炎 ${me.blaze.dodges}/${ELEMENTS.fire.dodges}`, me.blaze.left]);
       else if (me.burn) list.push(['burn', ICONS.m_flame, '燃', me.burn.left]);
       if (me.paralyzed > 0) list.push(['para', ICONS.m_thunder, '雷痺', me.paralyzed]);
       else if (me.shock > 0) list.push(['shock', ICONS.m_thunder, '痺', me.shock]);
-      if (me.blind > 0) list.push(['', ICONS.m_pillar, '眩', me.blind]);
+      if (me.blind > 0) list.push(['dazzle', ICONS.m_pillar, '眩', me.blind]);
+      // 新しい状態異常（③-1。2026-11-27）：濡・重・崩
+      if (me.wet > 0) list.push(['wet', crestSvg('wave', { ring: false }), '濡', me.wet]);
+      if (me.heavy > 0) list.push(['heavy', crestSvg('mountain', { ring: false }), '重', me.heavy]);
+      if (me.broken > 0) list.push(['broken', crestSvg('wing', { ring: false }), '崩', me.broken]);
       // 必殺技の後に纏う物（2026-11-25）：水の衣・雷の衣・鷹の目
       if (me.aura?.kind === 'water') list.push(['', crestSvg('wave', { ring: false }), '水衣', me.aura.left]);
       if (me.aura?.kind === 'thunder') list.push(['', ICONS.m_thunder, '雷衣', me.aura.left]);
@@ -315,6 +357,10 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       const ail = me.ail;
       if (ail && ail.fire >= 1 && !me.blaze) list.push(['gauge fire', ICONS.m_flame, '炎', ail.fire, true]);
       if (ail && ail.thunder >= 1 && !(me.paralyzed > 0)) list.push(['gauge thunder', ICONS.m_thunder, '雷', ail.thunder, true]);
+      if (ail && ail.water >= 1 && !(me.wet > 0)) list.push(['gauge water', crestSvg('wave', { ring: false }), '水', ail.water, true]);
+      if (ail && ail.earth >= 1 && !(me.heavy > 0)) list.push(['gauge earth', crestSvg('mountain', { ring: false }), '地', ail.earth, true]);
+      if (ail && ail.wind >= 1 && !(me.broken > 0)) list.push(['gauge wind', crestSvg('wing', { ring: false }), '風', ail.wind, true]);
+      if (ail && ail.holy >= 1 && !(me.blind > 0)) list.push(['gauge holy', crestSvg('halo', { ring: false }), '聖', ail.holy, true]);
     }
     const key = list.map((b) => `${b[2]}${b[4] ? Math.round(b[3] / 5) : Math.ceil(b[3])}`).join('|');
     if (key === buffsShown) return;
@@ -335,6 +381,21 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (fighter === me) hud.centerMsg('雷痺', 'しびれて動けない（無防備）', 2.2);
     else if (by === me || Math.hypot(fighter.x - me.x, fighter.z - me.z) < 20) hud.addFeed(`${fighter.name}が雷痺した（近づいて致命の一撃を）`);
   });
+  // 新しい状態異常と組み合わせの知らせ（③-1。2026-11-27）
+  const AIL_MSG = {
+    water: ['濡', '濡れた：動きとスタミナの戻りが鈍い。火は消えるが、雷がよく通る'],
+    earth: ['重', '重くなって転んだ：しばらく走れず、回避が短い'],
+    wind: ['崩', '吹き飛ばされて崩れた：しばらく防禦できない'],
+    holy: ['眩', '目がくらんだ'],
+  };
+  combat.on('ailment', ({ fighter, by, el }) => {
+    const M = AIL_MSG[el];
+    if (!M) return;
+    if (fighter === me) { if (el !== 'holy') hud.centerMsg(M[0], M[1], 1.8); }
+    else if (by === me) hud.addFeed(`${fighter.name}に${M[0]}`);
+  });
+  const COMBO_MSG = { shock: '感電：濡れた相手に雷がよく通った', fan: '煽火：風で炎が燃え広がった', blind: '盲撃：目がくらんだ相手を、前から深く斬った' };
+  combat.on('combo', ({ fighter, by, combo }) => { if ((by === me || fighter === me) && COMBO_MSG[combo]) hud.addFeed(COMBO_MSG[combo]); });
   combat.on('fireSpread', ({ fire }) => { if (fire.kind === 'tree' && Math.hypot(fire.x - me.x, fire.z - me.z) < 25) hud.addFeed('木に火が移った'); });
   combat.on('hit', ({ attacker, target, kind, wound, back }) => {
     if (kind !== 'assassinate' || !wound) return;
@@ -353,7 +414,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
     if (fighter === me) hud.centerMsg(MIRACLES.revive.name, '光の中から蘇った', 2.6);
     else hud.addFeed(`${fighter.name}が光の中から蘇った`);
   });
-  combat.on('wallEnd', ({ wall, broke }) => { if (wall.owner === me && broke) hud.addFeed('光壁が砕けた'); });
+  combat.on('wallEnd', ({ wall, broke }) => { if (wall.owner === me && broke) hud.addFeed(wall.kind === 'rock' ? '岩壁が崩れた' : '光壁が砕けた'); });
   combat.on('blinded', ({ fighter, by }) => {
     if (fighter === me) hud.addFeed('光で目がくらんだ');
     else if (by === me) hud.addFeed(`${fighter.name}の目がくらんだ`);
@@ -835,6 +896,7 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       showSprint();
       ultBtn.hidden = !myUlt || !running || !me.alive || !!me.hidden;
       showUlt();
+      showCtrl(running && me.alive && !me.hidden && !spectating);
       showMiracle(running && me.alive && !me.hidden && !spectating);
       showBuffs();
       showBlind();
@@ -952,7 +1014,8 @@ export async function startPracticeMatch({ app, config, terrain, obstacles, play
       const pushed = me.react && me.react.push > 0 && me.react.t <= me.react.time;
       const lunging = me.action?.kind === 'attack' && ((me.action.tech?.dash && me.action.t <= DASH.lungeTime + 0.05) || me.action.tech?.slide);   // 疾驅攻撃の踏み込み・奧義の滑り
       // 必殺技（雷霆一閃の稲妻・踏み込み）も、試合の計算が体を動かす。前は写さなかったので、毎フレーム操作の位置へ戻され、踏み込んでも進まなかった（2026-11-25）
-      if (me.alive && (me.action?.kind === 'dodge' || me.action?.kind === 'ult' || pushed || lunging)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
+      // 操（雷步の稲妻）も同じ
+      if (me.alive && (me.action?.kind === 'dodge' || me.action?.kind === 'ult' || me.action?.kind === 'control' || pushed || lunging)) { player.position.x = me.x; player.position.z = me.z; player.position.y = me.y; }
       // 暗殺の動きなど：体の位置と向きを、プレイヤーの操作へ合わせる（動きが終わった時の、体の移った所と向きも）
       const scriptedNow = SCRIPTED.has(me.action?.kind);
       const viewBefore = player.viewYaw;

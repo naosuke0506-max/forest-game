@@ -633,6 +633,11 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .reward-card .rc-kind { font: 600 11px/1 var(--serif); letter-spacing: .3em; color: #f3dc9a; opacity: .85; margin-bottom: 6px; }
 .reward-card .rc-desc { margin-top: 8px; font-size: clamp(11px, 1.6vmin, 13px); line-height: 1.4; color: #e9dcb8; }
 .reward-time { margin-top: 12px; color: var(--dim); font-size: 13px; }
+/* 札（2026-11-27）：屬性強化は属性の色の縁と光。中身がまだ無い札（未完）は暗く、押せない */
+.reward-card.element { border-color: var(--el, #f3dc9a); box-shadow: inset 0 0 18px color-mix(in srgb, var(--el, #f3dc9a) 35%, transparent), 0 0 0 1px #0b0906; }
+.reward-card.element .rc-kind { color: var(--el, #f3dc9a); }
+.reward-card.planned { opacity: .45; filter: grayscale(.85); cursor: default; }
+.reward-card.planned:active { filter: grayscale(.85); }
 .result-head { font-size: clamp(28px, 5vmin, 50px); }
 .result-list { list-style: none; margin: 0 0 16px; padding: 0; text-align: left; }
 .result-list li { display: grid; grid-template-columns: 2em 1fr auto; gap: 8px; padding: 8px 6px; border-bottom: 1px solid rgba(217, 180, 95, .15); font-size: clamp(14px, 2.2vmin, 18px); }
@@ -724,6 +729,18 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .buffs .bf.gauge { position: relative; overflow: hidden; padding-bottom: 6px; }
 .buffs .bf.gauge i { position: absolute; left: 0; bottom: 0; height: 3px; background: #ff8a3a; }
 .buffs .bf.gauge.thunder i { background: #8fb4ff; }
+/* 新しい状態異常（③-1。2026-11-27）：濡＝蒼・重＝琥珀・崩＝翠・眩＝金 */
+.buffs .bf.gauge.water i { background: #5fb4ff; }
+.buffs .bf.gauge.earth i { background: #e0a040; }
+.buffs .bf.gauge.wind i { background: #6fe0a0; }
+.buffs .bf.gauge.holy i { background: #ffdc6e; }
+.buffs .bf.wet { border-color: #5fb4ff; color: #dff0ff; background: linear-gradient(180deg, rgba(14, 50, 96, .92), rgba(4, 16, 36, .9)); }
+.buffs .bf.wet b { color: #9fd2ff; }
+.buffs .bf.heavy { border-color: #e0a040; color: #ffeccc; background: linear-gradient(180deg, rgba(92, 54, 10, .92), rgba(36, 20, 4, .9)); }
+.buffs .bf.heavy b { color: #ffc878; }
+.buffs .bf.broken { border-color: #6fe0a0; color: #e0fff0; background: linear-gradient(180deg, rgba(16, 80, 50, .92), rgba(4, 30, 18, .9)); animation: bfPulse .4s ease-in-out infinite alternate; }
+.buffs .bf.broken b { color: #a8ffd0; }
+.buffs .bf.dazzle { border-color: #ffdc6e; color: #fff6d8; }
 .vitals.low .bar.hp i:not(.trail) { animation: hpLow .7s ease-in-out infinite; }
 .vitals.low .vt-hp { color: #ff9a84; }
 @keyframes hpLow { 0%, 100% { filter: none; } 50% { filter: brightness(1.7); } }
@@ -848,6 +865,12 @@ small.sub { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 400; 
 .act-btn.sprint { right: calc(25px + var(--safe-r)); bottom: calc(323px + var(--safe-b)); width: 68px; height: 68px;
   --c1: #dcba60; --c2: #8a661f; --c3: #2e2008; }
 .act-btn.sprint.armed { filter: brightness(1.25); }
+/* 操（属性を操る技。2026-11-28）：攻擊の外の弧の左（楯擊・替の左、角燈の上）。属性の色（--c1〜--c3 は js が書く）。
+   待ち時間の間は影（--cd）と残りの秒、使っている間は明るく光る */
+.act-btn.ctrl { right: calc(368px + var(--safe-r)); bottom: calc(180px + var(--safe-b)); width: 68px; height: 68px; --lb: 12px;
+  --c1: #9ab0c8; --c2: #3e5468; --c3: #121c26; }
+.act-btn.ctrl.ready .ab-icon { filter: drop-shadow(0 0 5px var(--uc, #fff)); }
+.act-btn.ctrl.on { filter: brightness(1.35); animation: none; box-shadow: 0 0 24px calc(var(--ring) + 6px) var(--uc, #fff), var(--sh-base), var(--halo); }
 /* 姿勢（しゃがむ・伏せる）：外の弧のいちばん下（左手の左）。しゃがむ・伏せている間は明るい */
 .act-btn.stance { right: calc(293px + var(--safe-r)); bottom: calc(83px + var(--safe-b)); width: 66px; height: 66px; --lb: 12px;
   --c1: #9aa290; --c2: #485040; --c3: #171b14; }

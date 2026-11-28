@@ -3,7 +3,7 @@
 //   動きの再生は、動作監督の画面と同じ作り：動きの一覧（見出しごと）・流す／止める・繰り返す・速さ・時刻のつまみ
 import { L } from './labels.js';
 import { ruby, rubyIn } from './ruby.js';
-import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, SHARED_SKILLS, TECHNIQUES, SHIELD_SKILLS, MIRACLES, MIRACLE_SLOTS, ULTIMATES, ULTIMATE, ELEMENT_KINDS } from '../game/data.js';
+import { CHARACTERS, LOADOUTS, WEAPONS, SHIELDS, PLANNED, ARMS, MUTATIONS, PHASES, SKILL_TYPES, SHARED_SKILLS, TECHNIQUES, SHIELD_SKILLS, MIRACLES, MIRACLE_SLOTS, ULTIMATES, ULTIMATE, ELEMENT_KINDS, AILMENTS, CONTROL } from '../game/data.js';
 import { crestSvg } from './crests.js';
 import { attackStats } from '../game/combat.js';
 import { resolveLoadout } from '../game/match.js';
@@ -98,7 +98,32 @@ function ultCard(U, main = false) {
     <p class="sk-desc">${esc(U.desc)}</p></div>`;
 }
 const ULT_NOTE = `必殺ボタン（PC は G）で放つ。1 つの試合で ${ULTIMATE.uses} 回だけ（延長戰＝第 ${ULTIMATE.overtime + 1} 刻から、もう ${ULTIMATE.overtimeUses} 回）。強いが、もしもの時のために取っておく技。必殺技の間は無敵。技の後は、英雄ごとの纏う物が 10 秒ほど続く（水の衣・雷の衣・岩の鎧・紅蓮の衣・鷹の目・光輪）`;
-const MIRACLE_NOTE = `刻を越えるたびの褒美で、奇跡が 3 つ出て 1 つ覚える（最大 ${MIRACLE_SLOTS} つ。そろった後の褒美は能力値）。左手の奇跡ボタン（PC は K）で唱え、替ボタン（PC は H）で唱える奇跡を替える。唱える途中で攻撃を受けてひるむと途切れる`;
+const MIRACLE_NOTE = `初めから全部の奇跡（${MIRACLE_SLOTS} つ）を使える。左手の奇跡ボタン（PC は K）で唱え、替ボタン（PC は H）で唱える奇跡を替える。唱える途中で攻撃を受けてひるむと途切れる`;
+/** 属性と状態異常・属性強化（③-1。2026-11-27） */
+const ELEMENT_NOTE = (el) => {
+  const E = ELEMENT_KINDS[el], A = AILMENTS[el];
+  if (!E) return '';
+  const what = { fire: '火炎：強く燃え、草・木に燃え移る（回避を続けるか水で消す）', thunder: '雷痺：しびれて無防備（致命の一撃を受ける）',
+    water: '濡：動きとスタミナの戻りが鈍る。火は消えるが、雷がよく通る（感電）・地がよく溜まる（泥濘）',
+    earth: '重：転んで、しばらく走れず回避が短い。重い間は崩れない（不動）',
+    wind: '崩：吹き飛ばされ、しばらく防禦できない。燃えている相手に当てると炎が燃え広がる（煽火）',
+    holy: '眩：目がくらむ。目がくらんだ相手は、前からの暗殺も深く入る（盲撃）' }[el] || '';
+  return `${E.name}の属性。当てるたびに状態異常が溜まり、100% で${A}になる。${what}。刻の報酬の「屬性強化」で、纏（武器に${E.name}を纏う）→ 操 → 従と強くなる（従はまだ作っていない）`;
+};
+/** 操（属性強化の 2 段目。2026-11-28。game/controls.js）：英雄ごとの技の説明 */
+const CONTROL_NOTE = (id) => {
+  const C = CONTROL[id];
+  if (!C) return '';
+  const what = {
+    shield: `前 ${C.range} m を水の鞭でなぎ払う。濡が溜まり、相手を ${C.pull} m 引き寄せる（楯で受けた相手は引かれない）`,
+    sword: `見ている向きへ ${C.dist} m、稲妻になって一瞬で移る（その間は無敵）。通り道の敵に雷`,
+    polearm: `前に岩の壁を立てる（幅 ${C.width} m・高さ ${C.height} m・${C.life} 秒）。攻撃も矢も人も通さない（自分の攻撃も）。受けすぎると崩れる`,
+    blunt: `前 ${C.ahead} m の地面を叩いて爆炎。まわりの敵に炎が溜まり、地面に火が残る`,
+    archer: `まわりに旋風を起こす。近くの敵を ${C.push} m 吹き飛ばして崩を溜め、${C.life} 秒の間、矢と飛ぶ奇跡をそらす`,
+    cleric: `ボタンは増えない。奇跡の待ち時間が ${Math.round(C.cdCut * 100)}% 短くなり、天光柱・聖火彈・神罰雷が当たると眩が溜まる`,
+  }[id] || '';
+  return C.passive ? `操「${C.name}」：${what}` : `操「${C.name}」（操ボタン・PC は B。待ち時間 ${C.cd} 秒）：${what}`;
+};
 
 /**
  * 性能（殺傷力・生命力・敏捷・防禦力）：全キャラの中での強さを 10 の目盛りで表す（一番弱い人で 3、一番強い人で 10）
@@ -167,6 +192,8 @@ export function createCodex({ hall }) {
       <h4 class="codex-head">${ruby('必殺技')}</h4>
       ${ex ? ultCard(ex, true) : ''}
       <p class="codex-note">${esc(ULT_NOTE)}</p>
+      <p class="codex-note">${esc(ELEMENT_NOTE(ex?.element))}</p>
+      <p class="codex-note">${esc(CONTROL_NOTE(char))}</p>
       ${c.left === 'miracle' ? `<h4 class="codex-head">奇跡</h4><p class="codex-note">${esc(MIRACLE_NOTE)}</p>${Object.values(MIRACLES).map(miracleCard).join('')}` : ''}
       <h4 class="codex-head">性能</h4>
       ${gauges(char)}

@@ -93,10 +93,23 @@
     `character-view.js` が体を持ち上げ、`ult-show.js` のカメラが追う）。打ち上げは `combat.js` の `launch`、閉じ込めは `pin`（ひるみと同じで動けない）。
     纏う物は岩の鎧（`firm`＝水の衣と同じく傷半分・ひるまない・吹き飛ばない。槍を楯で受けた相手はよろめく＝`crush`）・紅蓮の衣（近接が楯を通る・`fireBurst`）・光輪（癒える・`auraReflect`）。
     動きは `ult_moves.py` の `sp_ult`・`mc_ult`/`wh_ult`/`lc_ult`（打擊騎士は武器ごと。`character-view.js` の `HERO_CLIP`）・`cl_gate`。確かめは作業用の場所の `ulttest3.mjs`（計算だけ 30 項目）
+  - 3 回目の前半（2026-11-27。利用者が決めた）：新しい状態異常（濡・重・崩・眩）・組み合わせ（消火・感電・泥濘・煽火・不動・盲撃）・纏・刻の報酬。
+    数は `data.js` の `ELEMENTS`（water・earth・wind・holy）・`AILMENTS`・`ENCHANT`・`ELEMENT_STEPS`。仕組みは `combat.js` の `afflict`（6 属性。発動は startWet・startHeavy・startBroken・startDazzle）・
+    `elementHit`（感電・煽火）・`enchantHit`（纏）。残りの秒は `f.wet`・`f.heavy`・`f.broken`（眩は `f.blind`）。重の転ぶのは getup の動き（`a.time` 秒）、走れないのは `stance.js` の `canRun`。
+    刻の報酬は `match.js` の `pickRewards`（屬性強化・變異強化・兵器強化。中身の無い札は `planned` で押せない＝`chooseReward` は選べる札へ）、札の画面は `hud.js` の `showReward`。
+    祓魔僧は `createFighter` で全部の奇跡を覚える（教練は setup で 4 つ・3 つに戻す）。見た目は `ult-hero-fx.js` の「状態異常・纏」、音は `sfx.js` の ail*・enchant・combo*。
+    確かめは作業用の場所の `ailtest.mjs`（計算だけ 23 項目）と `elemshot.js`（報酬の札・纏の粒・濡・重・崩を撮る。CHAR で人物）
+  - 3 回目の後半（2026-11-28。利用者が「この案で」と選んだ）：操。刻の報酬で纏の次に選ぶと操ボタン（`btn-ctrl`。PC は B。攻擊の外の弧の左）。数は `data.js` の `CONTROL`、
+    中身は `js/game/controls.js`（水鞭・雷步・岩壁・爆炎・旋風・待ち時間 `f.ctrl.cool`・旋風 `f.gale`・祓魔僧の聖化＝`miracleCdScale`・`holyMark`）。combat.js の動きは `kind: 'control'`
+    （効く前に斬られると途切れて待ち時間は始まらない）。岩壁は `combat.walls` に `kind: 'rock'`・`solid`（自分の攻撃も止める・張った人が倒れても残る）で入れ、
+    人を止める円（`obstacles.add` → 終わったら `off`）と `sight.addYawBox`（終わったら `off`）を足す。光壁の見た目・音は岩壁では出さない。
+    動きは `tools/characters/ctrl_moves.py`（sh_whip・sp_wall・bw_gale。爆炎は今ある mc_c2・wh_cut3・lc_cut1、雷步は f.boltForm で体を隠す）。
+    見た目は `ult-hero-fx.js` の「操」、音は `sfx.js` の whip・step・rockWall・blast・gale ほか。教練「操」は待ち時間 4 秒（`f.ctrlFree`）。
+    確かめは作業用の場所の `ctrltest.mjs`（計算だけ 28 項目）と `ctrlshot.js`（教練「必殺」で操を覚えさせて撮る。CHAR・TIMES・DIST）
 - 技能（スキル）：前の專用技能（反擊・奧義・強靱・剛力・鷹目・神怒。2026-11-10 に作った）は、2026-11-25 に利用者の指示（「今ある技は残しません」）で無くした（`skills.js`・`wrath-wave.js` を消した）。
   残した物：鷹の目の見え方（`heat-vision.js`。`f.hawkEye`）・貫く矢と矢の穴（`arrow-holes.js`・`PIERCE_ARROW`）・大技の動き（`ls_ult`・`dw_ult`・`cl_ult`）・砂煙（`ult-dust.js`）は 2 回目で使う。
   神怒で家・樽が壊れる仕組み（前の `js/world/destruction.js`）は、2026-11-13 に利用者の指示で消した。
-  残り：刻の報酬は共通技能を 3 つから 1 つ選ぶ（最大 4 つ）／前の能力値の報酬は無くす。案は `docs/DESIGN.md` の「技能」
+  残り：共通技能（案は `docs/DESIGN.md` の「技能」）。刻の報酬は 2026-11-27 に屬性強化・變異強化・兵器強化の 3 枚になったので、共通技能の入れ方は作る時に決め直す
 - 2026-11-13：視点を一人称・三人称で切り替えられるようにした（左上の目のボタン・設定の視點・V）。移動スティックでは向きが変わらず、
   見回す操作でだけ体の向きが変わる（全員共通）。大廳に「教練」（チュートリアル。`js/game/tutorial.js`・`js/ui/tutor-panel.js`）を足した。
   教練を足すときは `LESSONS` に置き方（setup）・手順（steps）・相手（bots）を書き、`LESSON_ORDER` に並べる。手順の数え方は `createTutorState`。

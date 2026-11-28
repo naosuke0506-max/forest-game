@@ -14,15 +14,16 @@
 // 後で、逃走・アイテムの使用を足す
 import { moveFighter } from './movement.js';
 import { canRun, setStance } from './stance.js';
-import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY, ULT_BURST, ULT_SPECS, HAWK_EYE } from './data.js';
+import { WEAPONS, COMBAT, SENSES, TECH, BODY_TURN, SHIELD_MOVES, BOT_RIVALRY, ULT_BURST, ULT_SPECS, HAWK_EYE, CONTROL } from './data.js';
 import { canUlt } from './ultimate.js';
+import { controlReady } from './controls.js';
 import { canMiracle, miracleReady } from './miracles.js';
 import { techSetOf } from './techniques.js';
 import { breathLevel, HEAR_REACH } from './hiding.js';
 
 const DEG = Math.PI / 180;
 /** 試合の計算が体の位置と向きを決める行動（その間、bot は体を動かさない・向きを変えない） */
-const SCRIPTED_ACTS = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged', 'ult']);
+const SCRIPTED_ACTS = new Set(['assassinate', 'assassinated', 'hideIn', 'hideOut', 'search', 'drag', 'dragged', 'ult', 'control']);
 const wrap = (a) => ((a + 540) % 360) - 180;
 const yawTo = (f, x, z) => Math.atan2(-(x - f.x), -(z - f.z)) / DEG;
 
@@ -380,6 +381,23 @@ export function createBot(fighter, rng, fighters) {
       else if (miracleReady(f, 'flame') && t && d < 12) pick = 'flame';
       if (pick) b.miracleTap = pick;
     }
+    // 操（game/controls.js。刻の報酬で覚える）：見えている相手が、技の届く所にいる時（相手の方を向いて、操ボタンを 1 フレームだけ押す）
+    //   水鞭：前 2〜5.5 m／雷步：前 3〜7 m（踏み込んで斬りかかる）／岩壁：弓・奇跡の相手が 6〜30 m（間に壁を立てる）か、体力が少なく相手が近い（壁を立てて離れる）／
+    //   爆炎：前 1.8〜4.5 m／旋風：近接の相手が 3.5 m 以内・弓の相手に狙われている
+    if (controlReady(f) && b.target && !f.action && !f.hidden && !f.swimming && rng.next() < 0.35) {
+      const t = b.target, d = Math.hypot(t.x - f.x, t.z - f.z), seen = !!b.known.get(t)?.seen && !t.hidden;
+      const ranged = WEAPONS[t.weapon]?.kind === 'bow' || t.char === 'cleric', hpK = f.stats.hp / f.stats.maxHp;
+      const S = CONTROL[f.char];
+      let want = false;
+      if (seen && Math.abs((t.y ?? 0) - (f.y ?? 0)) < 1.5) {
+        if (f.char === 'shield') want = d > 2 && d < S.range - 0.5;
+        else if (f.char === 'sword') want = d > 3 && d < S.dist + 1;
+        else if (f.char === 'polearm') want = (ranged && d > 6 && d < 30) || (hpK < 0.4 && d < 6);
+        else if (f.char === 'blunt') want = d > 1.8 && d < S.ahead + 1.5;
+        else if (f.char === 'archer') want = (!ranged && d < S.radius + 0.3) || (ranged && d < 40 && t.action?.kind === 'draw');
+      }
+      if (want) { b.ctrlTap = true; if (f.char !== 'archer') f.yaw = yawTo(f, t.x, t.z); }
+    }
     if (!b.look) setStance(f, 'stand');   // 探しに行っていなければ立つ（相手が見えたら立って戦う）
     // 近くに隠れている人の息遣いが聞こえたら、その場所を覚えて探す（息が荒いほど気づきやすい）
     if (!b.knownSpot) {
@@ -593,7 +611,9 @@ export function createBot(fighter, rng, fighters) {
       b.ultTap = false;
       const miracle = b.miracleTap;
       b.miracleTap = null;
-      return { attack, assassinate, ult, miracle, left: f.left === 'guard' ? i.guard || leftTap : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
+      const control = b.ctrlTap;
+      b.ctrlTap = false;
+      return { attack, assassinate, ult, miracle, control, left: f.left === 'guard' ? i.guard || leftTap : i.left, dodge: i.dodge, moveX: i.dodgeX, moveY: i.dodgeY, search: i.search };
     },
   };
 }

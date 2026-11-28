@@ -11,13 +11,18 @@
 //     噴き上がる炎（地面の火は game/combat.js の地面の火）。紅蓮の衣：体から火の粉。一撃ごとに炎が爆ぜる
 //   祓魔僧「天門開闢」：昇る光の粒 → 頭上の光の門（金の二重の輪と回る光の筋）→ 門から降る光の槍（落ちた所に光の輪）→ 門から太い光の柱。
 //     光輪：頭の上の金の輪・時々光の粒。返した光は、攻めた人へ走る光の筋
-//   描画命令：線（稲妻・筋・割れ目・門）1・破片 1・岩の槍 1（どれも出ている間だけ）、水の筒・波・炎の筒は 1 つずつ（出ている間だけ）
+//   状態異常（③-1。2026-11-27）：濡＝しずくが落ちる・重＝足もとの砂ぼこり・崩＝体のまわりの風の筋・眩＝頭の光。発動した時はその色の弾け。
+//   纏（属性強化）：武器に沿って属性の粒（水のしぶき・火花・礫・火の粉・風・光）。当てると相手のところで弾ける。組み合わせ（感電・煽火・盲撃）にも弾け
+//   操（③-2。2026-11-28。game/controls.js の 'ctrlFx'）：水鞭＝剣の先から伸びてなぎ払う水の鞭としずく・雷步＝稲妻の姿（必殺技と同じ）と道の残像・
+//     岩壁＝並んで突き上がる岩の槍の壁（崩れる・時間で沈む）・爆炎＝溶けた割れ目と噴き上がる炎・旋風＝体のまわりの風の筒と渦の筋と木の葉。そらした矢は風の弾け
+//   描画命令：線（稲妻・筋・割れ目・門）1・破片 1・岩の槍 1（どれも出ている間だけ）、水の筒・波・炎の筒・風の筒は 1 つずつ（出ている間だけ）。粒と光の玉は render/ult-fx.js
 import * as pc from 'playcanvas';
 import { canvasTexture, addMat, quads, billboard } from './hall-fire.js';
-import { ELEMENT_KINDS, ULT_SPECS } from '../game/data.js';
+import { ELEMENT_KINDS, ULT_SPECS, WEAPONS, ULTIMATES } from '../game/data.js';
 
-const LINES = 420, DEBRIS = 160, SPIKES = 72;
+const LINES = 420, DEBRIS = 160, SPIKES = 96;   // 岩の槍は岩壁（操）の分も足した
 const rnd = Math.random;
+const ULTIMATE_EL = Object.fromEntries(Object.entries(ULTIMATES).map(([k, u]) => [k, u.element]));   // 英雄 → 属性
 const lerp = (a, b, k) => a + (b - a) * k;
 const ease = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 
@@ -203,8 +208,10 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
   /** 岩の槍を 1 本出す（delay 秒後に突き上がる。tilt：傾き（外向き＋）、dir：傾ける向き（ラジアン）） */
   function spike(x, y, z, r, h, tilt, dir, life, delay = 0) {
     if (spikes.length >= SPIKES) spikes.shift();
-    spikes.push({ x, y, z, r, h, tx: Math.cos(dir) * tilt, tz: Math.sin(dir) * tilt, b: Array.from({ length: 5 }, () => 0.78 + rnd() * 0.4),
-      a0: rnd() * Math.PI, t: -delay, life, rise: 0.11, sink: 0.45, shade: 0.75 + rnd() * 0.3 });
+    const K = { x, y, z, r, h, tx: Math.cos(dir) * tilt, tz: Math.sin(dir) * tilt, b: Array.from({ length: 5 }, () => 0.78 + rnd() * 0.4),
+      a0: rnd() * Math.PI, t: -delay, life, rise: 0.11, sink: 0.45, shade: 0.75 + rnd() * 0.3 };
+    spikes.push(K);
+    return K;
   }
   const cracks = [];    // { pts, t, life, c }：地の割れ目・溶けた割れ目（光る線）
   /** 地の割れ目：中心からまわりへ n 本、len m ほど（折れながら） */
@@ -362,10 +369,148 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
     fx.glow(target.x, yOf(target) + 1.2, target.z, 1.6, 0.2, HOLY);
   });
 
+  // ---- 状態異常・纏・組み合わせ（③-1） ----
+  const ELC = (el) => ELEMENT_KINDS[el]?.rgb || [1, 1, 1];
+  // 武器の長さ（持ち手から先まで。纏の粒を武器に沿って出す）
+  const BLADE = { armingsword: 0.75, falchion: 0.7, longsword: 1.0, greatsword: 1.2, dualsword: 0.75, mace: 0.5, warhammer: 0.64, lucerne: 1.24, spear: 1.3, dagger: 0.3 };
+  combat.on('ailment', ({ fighter: f, el }) => {
+    const y = yOf(f) + (f.lift || 0), c = ELC(el);
+    if (el === 'water') {
+      fx.ring(f.x, y, f.z, 2.2, 0.4, c, 2.4);
+      for (let n = 0; n < 26; n++) { const a = rnd() * 6.28, sp = 2 + rnd() * 3; fx.spark(f.x, y + 1 + rnd() * 0.6, f.z, Math.cos(a) * sp, 1.5 + rnd() * 3, Math.sin(a) * sp, 0.6 + rnd() * 0.3, 0.04 + rnd() * 0.03, [0.65, 0.88, 1], { grav: 9, drag: 0.5 }); }
+    } else if (el === 'earth') {
+      fx.ring(f.x, y, f.z, 2.5, 0.45, c, 2.2);
+      for (let n = 0; n < 16; n++) chip(f.x + (rnd() - 0.5) * 0.8, y + 0.1, f.z + (rnd() - 0.5) * 0.8, (rnd() - 0.5) * 3, 1 + rnd() * 2.5, (rnd() - 0.5) * 3, 0.8 + rnd() * 0.5, 0.04 + rnd() * 0.05, rockCol(), y);
+      dust?.burst({ x: f.x, y, z: f.z, lift: 0.2 });
+    } else if (el === 'wind') {
+      fx.ring(f.x, y, f.z, 3, 0.4, c, 2.2);
+      for (let n = 0; n < 24; n++) { const a = rnd() * 6.28; fx.spark(f.x + Math.cos(a) * 0.5, y + 0.3 + rnd() * 1.4, f.z + Math.sin(a) * 0.5, -Math.sin(a) * 5, 1 + rnd() * 2, Math.cos(a) * 5, 0.5, 0.035, rnd() < 0.5 ? c : [0.9, 1, 0.95], { drag: 0.4 }); }
+    } else if (el === 'holy') {
+      fx.glow(f.x, y + 1.6, f.z, 2.6, 0.35, c);
+    }
+  });
+  combat.on('enchantHit', ({ target: t, el }) => {
+    const y = yOf(t) + (t.lift || 0) + 1.1, c = ELC(el);
+    fx.glow(t.x, y, t.z, 1.2, 0.15, c.map((v) => v * 0.8));
+    for (let n = 0; n < 12; n++) burstSpark(t.x, y, t.z, rnd() < 0.6 ? c : [1, 1, 1], 5);
+  });
+  combat.on('combo', ({ fighter: t, combo }) => {
+    const y = yOf(t) + (t.lift || 0);
+    if (combo === 'shock') { for (let n = 0; n < 2; n++) skyBolts.push({ x: t.x + (rnd() - 0.5) * 0.6, y, z: t.z + (rnd() - 0.5) * 0.6, t: 0, life: 0.22, big: false }); fx.glow(t.x, y + 1, t.z, 2, 0.2, [0.7, 0.85, 1]); }
+    if (combo === 'fan') { fx.ring(t.x, y, t.z, 3.2, 0.45, FIRE, 2.4); for (let n = 0; n < 24; n++) burstSpark(t.x, y + 0.8, t.z, rnd() < 0.5 ? [1, 0.5, 0.1] : [1, 0.85, 0.3], 7); }
+    if (combo === 'blind') fx.glow(t.x, y + 1.4, t.z, 2.2, 0.3, HOLY);
+  });
+
   combat.on('deflect', ({ x, y, z }) => {
     fx.glow(x, y, z, 1.6, 0.25, [0.6, 0.85, 1]);
     for (let i = 0; i < 22; i++) { const a = rnd() * Math.PI * 2, sp = 2 + rnd() * 3; fx.spark(x, y, z, Math.cos(a) * sp, 1 + rnd() * 3, Math.sin(a) * sp, 0.5 + rnd() * 0.4, 0.05 + rnd() * 0.04, [0.6, 0.85, 1], { grav: 9, drag: 0.6 }); }
   });
+  // ===================== 操（③-2。2026-11-28） =====================
+  const WATER = ELEMENT_KINDS.water.rgb;
+  const DEGR = Math.PI / 180;
+  const whips = [];    // { f, t, yaw, range, arc }：水鞭
+  const blasts = [];   // { x, y, z, r, t, life }：爆炎の噴き上がる炎
+  const wallRocks = new Map();   // 岩壁 → その岩の槍
+  // 旋風の筒（風の色。水の筒と同じ作り）：2 人分
+  const galeMesh = twisterMesh(device, (v) => 0.78 + 0.3 * v, 36, 8, 2.4);
+  const galeTubes = Array.from({ length: 2 }, () => ({ a: makeEnt(galeMesh, waterMat([0.82, 1.0, 0.86], 0.32), 'ctrl-gale-a'),
+    b: makeEnt(galeMesh, waterMat([0.95, 1.0, 0.95], 0.22), 'ctrl-gale-b'), busy: false, f: null }));
+  const leafCol = () => (rnd() < 0.5 ? [0.42, 0.5, 0.2] : rnd() < 0.5 ? [0.55, 0.42, 0.2] : [0.3, 0.38, 0.16]);
+  /** 岩壁：壁に沿って岩の槍を並べて突き上げる（真ん中から外へ）。根もとは低く太い岩でつなぐ */
+  function raiseRockWall(w) {
+    const rx = Math.cos(w.yaw * DEGR), rz = -Math.sin(w.yaw * DEGR), fx0 = -Math.sin(w.yaw * DEGR), fz0 = -Math.cos(w.yaw * DEGR);
+    // 1 枚の壁に見えるよう、すき間なく 2 列に並べ（前の列が高い）、根もとを太く低い岩でつなぐ（前は 1 列で、すき間から向こうが見えた）
+    const list = [], life = w.life + 0.6;
+    const row = (n, back, rMin, rAdd, hMin, hAdd, tilt) => {
+      for (let i = 0; i < n; i++) {
+        const v = -w.half + ((i + 0.5) / n) * w.half * 2 + (rnd() - 0.5) * 0.1, d = back + (rnd() - 0.5) * 0.15;
+        list.push(spike(w.x + rx * v - fx0 * d, w.y, w.z + rz * v - fz0 * d, rMin + rnd() * rAdd, w.height * (hMin + rnd() * hAdd), tilt * rnd(),
+          rnd() * Math.PI * 2, life, Math.abs(v) * 0.06));
+      }
+    };
+    row(12, -0.12, 0.5, 0.16, 0.9, 0.24, 0.06);    // 前の列（高い）
+    row(9, 0.32, 0.55, 0.15, 0.62, 0.22, 0.05);    // 後ろの列（すき間を埋める）
+    row(6, 0.08, 0.82, 0.16, 0.42, 0.16, 0.02);    // 根もとの太く低い岩
+    wallRocks.set(w, list);
+    const ends = [{ th: Math.atan2(rz, rx), x: w.x + rx * w.half, z: w.z + rz * w.half }, { th: Math.atan2(-rz, -rx), x: w.x - rx * w.half, z: w.z - rz * w.half }];
+    crack(w.x, w.y, w.z, 2, w.half, EARTH, 1.0, ends);
+    fx.glow(w.x, w.y + 0.6, w.z, 3.4, 0.3, EARTH.map((c) => c * 0.9));
+    for (let k = 0; k < 30; k++) {
+      const v = (rnd() - 0.5) * w.half * 2;
+      chip(w.x + rx * v, w.y + 0.2, w.z + rz * v, (rnd() - 0.5) * 3 + fx0 * 2, 2 + rnd() * 5, (rnd() - 0.5) * 3 + fz0 * 2, 0.9 + rnd() * 0.6, 0.05 + rnd() * 0.08, rockCol(), w.y);
+    }
+    dust?.burst({ x: w.x, y: w.y, z: w.z, lift: 0.25 });
+  }
+  combat.on('ctrlFx', (e) => {
+    const f = e.fighter;
+    if (e.kind === 'whip') {
+      whips.push({ f, t: 0, yaw: e.yaw, range: e.range, arc: e.arc });
+    } else if (e.kind === 'bolt') {
+      // 雷步：稲妻の姿は f.boltForm（必殺技と同じ）。始めと終わりに閃光と火花、終わったら道の残像
+      fx.glow(e.x, e.y + 1.1, e.z, e.phase === 'start' ? 2.8 : 3.4, 0.22, TH);
+      for (let i = 0; i < 18; i++) burstSpark(e.x, e.y + 1, e.z, i % 2 ? TH : [1, 1, 1], e.phase === 'start' ? 5 : 7);
+      if (e.phase === 'end') paths.push({ pts: [{ x: e.x0, y: e.y0, z: e.z0 }, { x: e.x, y: e.y, z: e.z }], t: 0, life: 0.5 });
+    } else if (e.kind === 'wall') {
+      raiseRockWall(e.wall);
+    } else if (e.kind === 'blast') {
+      // 爆炎：溶けた割れ目・炎の輪・火の粉と礫・砂煙。噴き上がる炎は blasts（少しの間）
+      crack(e.x, e.y, e.z, 7, e.radius, [1, 0.45, 0.1], 1.6);
+      crack(e.x, e.y, e.z, 5, e.radius * 0.55, [1, 0.72, 0.28], 1.1);
+      fx.glow(e.x, e.y + 0.7, e.z, 4.8, 0.35, FIRE);
+      fx.ring(e.x, e.y, e.z, e.radius + 0.4, 0.4, FIRE, 2.2);
+      for (let n = 0; n < 36; n++) {
+        fx.spark(e.x + (rnd() - 0.5) * 1.2, e.y + 0.15, e.z + (rnd() - 0.5) * 1.2, (rnd() - 0.5) * 5, 4 + rnd() * 8, (rnd() - 0.5) * 5, 0.5 + rnd() * 0.5, 0.07 + rnd() * 0.09,
+          rnd() < 0.5 ? [1, 0.45, 0.08] : [1, 0.8, 0.3], { grav: 5, drag: 0.5 });
+      }
+      for (let n = 0; n < 22; n++) chip(e.x, e.y + 0.2, e.z, (rnd() - 0.5) * 8, 3 + rnd() * 5, (rnd() - 0.5) * 8, 0.9 + rnd() * 0.7, 0.05 + rnd() * 0.07, rnd() < 0.5 ? [0.25, 0.12, 0.08] : [1, 0.45, 0.1], e.y);
+      blasts.push({ x: e.x, y: e.y, z: e.z, r: e.radius, t: 0, life: 0.55 });
+      dust?.burst({ x: e.x, y: e.y, z: e.z, lift: 0.2 });
+    } else if (e.kind === 'gale' && e.phase === 'start') {
+      // 旋風：足もとから外へ走る風の輪・木の葉と砂ぼこりが外へ飛ぶ
+      fx.ring(e.x, e.y + 0.1, e.z, e.radius + 0.8, 0.45, WIND, 2.4);
+      fx.ring(e.x, e.y + 1.0, e.z, e.radius * 0.8, 0.35, [0.9, 1, 0.92], 2.0);
+      fx.glow(e.x, e.y + 1.1, e.z, 3, 0.25, [0.85, 1, 0.9]);
+      for (let n = 0; n < 26; n++) {
+        const th = rnd() * Math.PI * 2, sp = 5 + rnd() * 5;
+        chip(e.x + Math.cos(th) * 0.6, e.y + 0.3 + rnd() * 1.2, e.z + Math.sin(th) * 0.6, Math.cos(th) * sp - Math.sin(th) * 3, 1.5 + rnd() * 3, Math.sin(th) * sp + Math.cos(th) * 3,
+          1.0 + rnd() * 0.6, 0.05 + rnd() * 0.05, leafCol(), e.y);
+      }
+      dust?.burst({ x: e.x, y: e.y, z: e.z, lift: 0.15 });
+      const g = galeTubes.find((it) => !it.busy) || galeTubes[0];
+      g.busy = true; g.f = f; g.a.e.enabled = true; g.b.e.enabled = true;
+    }
+  });
+  // 操の当たり：当てた所で、その属性の弾け
+  combat.on('hit', ({ target: t, kind, attacker }) => {
+    if (kind !== 'control' || !t?.alive || !attacker) return;
+    const c = ELC(ULTIMATE_EL[attacker.char]), y = yOf(t) + 1.1;
+    for (let i = 0; i < 14; i++) burstSpark(t.x, y, t.z, i % 3 ? c : [1, 1, 1], 5);
+    if (attacker.char === 'shield') for (let i = 0; i < 16; i++) { const a = rnd() * 6.28; fx.spark(t.x, y, t.z, Math.cos(a) * 3, 1 + rnd() * 3, Math.sin(a) * 3, 0.5 + rnd() * 0.3, 0.05, [0.7, 0.9, 1], { grav: 9, drag: 0.6 }); }
+  });
+  // 岩壁：当たった所から礫、崩れる（時間で沈む）
+  combat.on('wallHit', ({ wall: w, x, y, z }) => {
+    if (w.kind !== 'rock') return;
+    for (let k = 0; k < 8; k++) chip(x, y, z, (rnd() - 0.5) * 4, 1 + rnd() * 3, (rnd() - 0.5) * 4, 0.7 + rnd() * 0.4, 0.04 + rnd() * 0.05, rockCol(), w.y);
+  });
+  combat.on('wallEnd', ({ wall: w, broke }) => {
+    if (w.kind !== 'rock') return;
+    for (const K of wallRocks.get(w) || []) if (spikes.includes(K)) { K.sink = broke ? 0.3 : 0.7; K.life = Math.min(K.life, Math.max(0, K.t) + K.sink); }
+    wallRocks.delete(w);
+    if (broke) {
+      const rx = Math.cos(w.yaw * DEGR), rz = -Math.sin(w.yaw * DEGR);
+      for (let k = 0; k < 40; k++) {
+        const v = (rnd() - 0.5) * w.half * 2;
+        chip(w.x + rx * v, w.y + 0.3 + rnd() * w.height, w.z + rz * v, (rnd() - 0.5) * 6, 1 + rnd() * 4, (rnd() - 0.5) * 6, 1 + rnd() * 0.6, 0.06 + rnd() * 0.1, rockCol(), w.y);
+      }
+      dust?.burst({ x: w.x, y: w.y, z: w.z, lift: 0.3 });
+    }
+  });
+  // 旋風にそらされた矢・奇跡：風の弾け
+  combat.on('galeDeflect', ({ x, y, z }) => {
+    fx.glow(x, y, z, 1.2, 0.18, [0.85, 1, 0.9]);
+    for (let i = 0; i < 12; i++) burstSpark(x, y, z, i % 2 ? WIND : [1, 1, 1], 5);
+  });
+
   function burstSpark(x, y, z, c, sp) {
     const a = rnd() * Math.PI * 2, e = (rnd() - 0.3) * 1.2, v = sp * (0.4 + rnd() * 0.6);
     fx.spark(x, y, z, Math.cos(a) * v, e * v * 0.6, Math.sin(a) * v, 0.18 + rnd() * 0.25, 0.04 + rnd() * 0.04, c, { drag: 0.05, flick: true });
@@ -717,6 +862,120 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
         if (B.t >= B.life) beams.splice(i, 1);
       }
 
+      // ---- 状態異常の続き（濡・重・崩）と纏 ----
+      for (const f of fighters) {
+        if (!f.alive || f.hidden) continue;
+        const fp = f === me && firstPerson(), y = yOf(f) + (f.lift || 0);
+        if (f.wet > 0 && !fp && rnd() < dt * 30) {   // 濡：体からしずくが落ちる（写すと小さくて見えなかったので、大きく多く）
+          const a = rnd() * 6.28, r = 0.18 + rnd() * 0.2;
+          fx.spark(f.x + Math.cos(a) * r, y + 0.5 + rnd() * 1.3, f.z + Math.sin(a) * r, 0, -0.5, 0, 0.6, 0.045 + rnd() * 0.02, [0.55, 0.82, 1], { grav: 9 });
+        }
+        if (f.heavy > 0 && rnd() < dt * 12) {   // 重：足もとの砂ぼこりと、落ちる小石
+          const a = rnd() * 6.28, r = 0.3 + rnd() * 0.3;
+          fx.spark(f.x + Math.cos(a) * r, y + 0.05, f.z + Math.sin(a) * r, Math.cos(a) * 0.4, 0.3 + rnd() * 0.4, Math.sin(a) * 0.4, 0.7, 0.07, [0.62, 0.5, 0.34], { drag: 0.8 });
+          if (rnd() < 0.3) chip(f.x + (rnd() - 0.5) * 0.5, y + 0.8 + rnd() * 0.8, f.z + (rnd() - 0.5) * 0.5, 0, 0, 0, 0.5, 0.03, rockCol(), y);
+        }
+        if (f.broken > 0 && !fp) {   // 崩：体のまわりを風の筋が回る
+          const W = ELC('wind'), k = Math.min(1, f.broken / 0.5);
+          for (let j = 0; j < 2; j++) {
+            let px = 0, py = 0, pz = 0;
+            for (let n = 0; n <= 8; n++) {
+              const v = n / 8, th = time * 10 + v * 3 + j * Math.PI, r = 0.55;
+              const x = f.x + Math.cos(th) * r, yy = y + 0.3 + v * 1.4, z = f.z + Math.sin(th) * r;
+              if (n) segment(px, py, pz, x, yy, z, 0.05, W[0] * k * 0.8, W[1] * k * 0.8, W[2] * k * 0.8);
+              px = x; py = yy; pz = z;
+            }
+          }
+        }
+        if (f.enchant) {   // 纏：武器に沿って属性の粒と、武器の頭に小さな光（写すと粒が小さくて見えなかったので、大きく多く）
+          const v = views.get(f), c = ELC(f.enchant), isBow = WEAPONS[f.weapon]?.kind === 'bow', L = BLADE[f.weapon] || 0.6;
+          const head = isBow ? v?.bowPos?.(tmp) : v?.weaponHead?.(tmp, L * 0.85);
+          if (head) fx.glow(head.x, head.y, head.z, 0.45, 1e-3, c.map((k) => k * 0.55));
+          const n = rnd() < dt * 40 ? 1 : 0;
+          const p = n && (isBow ? v?.bowPos?.(tmp) : v?.weaponHead?.(tmp, L * (0.25 + rnd() * 0.75)));
+          if (p) {
+            const fire = f.enchant === 'fire', water = f.enchant === 'water', earth = f.enchant === 'earth';
+            fx.spark(p.x + (rnd() - 0.5) * 0.08, p.y + (rnd() - 0.5) * 0.08, p.z + (rnd() - 0.5) * 0.08, (rnd() - 0.5) * 0.5, fire ? 0.9 : water || earth ? -0.3 : 0.3, (rnd() - 0.5) * 0.5,
+              0.4 + rnd() * 0.25, 0.04 + rnd() * 0.03, rnd() < 0.7 ? c : [1, 1, 1], { grav: water || earth ? 5 : fire ? -1 : 0, drag: 0.6, flick: f.enchant === 'thunder' });
+          }
+        }
+      }
+
+      // ---- 操：水鞭（剣の先から伸びて、右から左へなぎ払う水の鞭） ----
+      for (let i = whips.length - 1; i >= 0; i--) {
+        const W = whips[i], f = W.f;
+        W.t += dt;
+        const SW = 0.2, LIFE = 0.62;
+        if (W.t >= LIFE || !f.alive) { whips.splice(i, 1); continue; }
+        const u = Math.min(1, W.t / SW), fade = W.t < SW ? 1 : 1 - (W.t - SW) / (LIFE - SW);
+        const v = views.get(f), head = v?.weaponHead?.(tmp, (BLADE[f.weapon] || 0.75) * 0.95);
+        const bx = head ? head.x : f.x, by = head ? head.y : yOf(f) + 1.2, bz = head ? head.z : f.z;
+        const base = W.yaw - W.arc / 2 + W.arc * ease(u);              // 右（向き − arc/2）から左へ
+        const reach = W.range * (W.t < SW ? 0.6 + 0.4 * u : 1 - 0.55 * (1 - fade));
+        const N = 14;
+        let px = bx, py = by, pz = bz;
+        for (let k = 1; k <= N; k++) {
+          const sN = k / N, ang = (base - 26 * sN * (W.t < SW ? 1 : 0.35)) * DEGR;   // 先は少し遅れてしなる
+          const d = 0.4 + sN * reach, sag = Math.sin(sN * Math.PI) * 0.22 + Math.sin(time * 30 + k) * 0.03;
+          const qx = f.x - Math.sin(ang) * d, qz = f.z - Math.cos(ang) * d, qy = lerp(by, yOf(f) + 1.05, sN) - sag;
+          // 明るい昼の空でも見えるよう、太い水の帯・青い芯・白い芯の 3 重（加算なので、色は濃いめに）
+          const w = lerp(0.42, 0.14, sN) * (0.55 + 0.45 * fade);
+          segment(px, py, pz, qx, qy, qz, w * 1.8, 0.12 * fade, 0.3 * fade, 0.45 * fade);
+          segment(px, py, pz, qx, qy, qz, w, WATER[0] * 1.1 * fade, WATER[1] * 1.1 * fade, WATER[2] * 1.2 * fade);
+          segment(px, py, pz, qx, qy, qz, w * 0.4, fade, fade, fade);
+          if (rnd() < 0.35 * fade) fx.spark(qx, qy, qz, (rnd() - 0.5) * 1.5, 0.5 + rnd() * 1.5, (rnd() - 0.5) * 1.5, 0.4 + rnd() * 0.3, 0.04 + rnd() * 0.03, [0.72, 0.9, 1], { grav: 9, drag: 0.6 });
+          px = qx; py = qy; pz = qz;
+        }
+        fx.glow(px, py, pz, 0.9 * fade, 1e-3, [0.45, 0.75, 1]);   // 鞭の先の光
+      }
+      // ---- 操：爆炎（叩いた所から噴き上がる炎） ----
+      for (let i = blasts.length - 1; i >= 0; i--) {
+        const B = blasts[i];
+        B.t += dt;
+        if (B.t >= B.life) { blasts.splice(i, 1); continue; }
+        const k = 1 - B.t / B.life;
+        for (let n = 0; n < 6; n++) {
+          const th = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * B.r * 0.7;
+          fx.spark(B.x + Math.cos(th) * r, B.y + 0.1, B.z + Math.sin(th) * r, (rnd() - 0.5) * 0.8, 3 + rnd() * 4 * k, (rnd() - 0.5) * 0.8, 0.35 + rnd() * 0.3,
+            0.16 + rnd() * 0.16 * k, rnd() < 0.6 ? [1, 0.38, 0.06] : [1, 0.7, 0.2], { grav: -1, drag: 0.8 });
+        }
+        fx.glow(B.x, B.y + 0.8, B.z, 2.4 * k + 0.6, 1e-3, FIRE.map((c) => c * 0.7 * k));
+      }
+      // ---- 操：旋風（体のまわりの風の筒・渦を巻く筋・回る木の葉） ----
+      for (const g of galeTubes) {
+        if (!g.busy) continue;
+        const f = g.f, G = f?.gale;
+        if (!G || !f.alive) { g.busy = false; g.f = null; g.a.e.enabled = false; g.b.e.enabled = false; continue; }
+        const k = Math.min(1, (G.time - G.left) / 0.25) * Math.min(1, G.left / 0.5), y = yOf(f), R = G.r;
+        const fp = f === me && firstPerson();
+        // 自分の旋風は、三人称のカメラが筒の中に入るので薄く（撮ると、下半分が白くかすんで体が見えにくかった）
+        const thin = f === me ? 0.45 : 1;
+        for (const [it, dir, sp, sc, op] of [[g.a, 1, 520, 1, 0.26 * thin], [g.b, -1, 380, 0.72, 0.18 * thin]]) {
+          it.e.enabled = !fp;
+          it.e.setPosition(f.x, y - 0.05, f.z);
+          it.e.setLocalScale(R * sc, 2.6 * (sc > 0.9 ? 1 : 1.25), R * sc);
+          it.e.setEulerAngles(0, time * sp * dir, 0);
+          it.mat.emissiveMapOffset.set(0, -time * 2.2); it.mat.opacityMapOffset.set(0, -time * 2.2);
+          it.mat.opacity = op * k; it.mat.update();
+        }
+        // 渦の筋（円の一部を、昇りながら回る）
+        for (let n = 0; n < 7; n++) {
+          const ph = time * 7 + n * 0.9, a0 = ph % (Math.PI * 2), rr = R * (0.55 + 0.42 * ((n * 37) % 10) / 10), h = 0.2 + ((time * 1.6 + n * 0.37) % 1) * 2.4;
+          let ax = f.x + Math.cos(a0) * rr, az = f.z + Math.sin(a0) * rr, ay = y + h;
+          for (let j = 1; j <= 3; j++) {
+            const a1 = a0 + j * 0.28, bx2 = f.x + Math.cos(a1) * rr, bz2 = f.z + Math.sin(a1) * rr, by2 = ay + 0.06;
+            const c = (0.45 + 0.25 * j / 3) * k;
+            segment(ax, ay, az, bx2, by2, bz2, 0.05 + 0.03 * j / 3, WIND[0] * c + 0.25 * c, WIND[1] * c + 0.25 * c, WIND[2] * c + 0.25 * c);
+            ax = bx2; ay = by2; az = bz2;
+          }
+        }
+        if (rnd() < dt * 30 * k) {
+          const th = rnd() * Math.PI * 2, rr = R * (0.5 + rnd() * 0.5);
+          fx.spark(f.x + Math.cos(th) * rr, y + 0.2 + rnd() * 2, f.z + Math.sin(th) * rr, -Math.sin(th) * 6, 1 + rnd() * 1.5, Math.cos(th) * 6, 0.35 + rnd() * 0.25, 0.05 + rnd() * 0.04,
+            rnd() < 0.6 ? leafCol() : [0.92, 1, 0.94], { drag: 0.2 });
+        }
+      }
+
       // ---- 線を描く ----
       for (let i = lineUsed; i < LINES; i++) { const o = i * 12; for (let k = 0; k < 12; k++) lq.pos[o + k] = k % 3 === 1 ? -9999 : 0; }
       lineE.enabled = lineUsed > 0;
@@ -747,6 +1006,7 @@ export function createUltHeroFx(app, { combat, fighters, views, camera, fx, me =
       }
       fx.glow(x, y, z, 2.5, 0.3, [0.85, 1, 0.9]);
     },
-    get stats() { return { lines: lineUsed, chips: chips.filter((c) => c.life > 0).length, active: active.length, veils: veilOf.size, spikes: spikes.length, fire: fireActs.length, gates: gates.length }; },
+    get stats() { return { lines: lineUsed, chips: chips.filter((c) => c.life > 0).length, active: active.length, veils: veilOf.size, spikes: spikes.length, fire: fireActs.length, gates: gates.length,
+      whips: whips.length, blasts: blasts.length, gales: galeTubes.filter((g) => g.busy).length }; },
   };
 }

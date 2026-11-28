@@ -511,9 +511,10 @@ export const ULT_BURST = { time: 2.2, at: 1.25, radius: 8, damage: 40, minK: 0.4
  *     半径 radius m に降る（aim の割合は敵を狙う。fall 秒で落ちる）。当たると半径 hit m に傷 damage・blind 秒目がくらむ（1 人 maxHits 本まで）。
  *     pillar＝at 秒に門から太い光の柱が落ちる（自分のまわり radius m に傷 damage・吹き飛ばし push m）。光輪：1 秒に最大体力の heal ずつ癒える・受けた傷の reflect を光で返す
  *   reach：bot が使う目安の届く所（m）
+ *   buildup：当てた相手に溜める自分の属性の状態異常（③-1。2026-11-27。大海嘯＝濡・千岩槍獄＝重・颶風一矢＝崩。雷霆一閃・紅蓮崩天は前から。天門開闢は目くらましを直接かける）
  */
 export const ULT_SPECS = {
-  shield: { time: 2.2, at: 1.25, radius: 8.5, damage: 46, minK: 0.4, push: 9, pushMin: 3, stun: 1.5,
+  shield: { time: 2.2, at: 1.25, radius: 8.5, damage: 46, minK: 0.4, push: 9, pushMin: 3, stun: 1.5, buildup: 100,
             aura: { kind: 'water', time: 10, cut: 0.5 } },
   sword:  { time: 3.0, flash: { at: 0.06, range: 18, blind: 1.3 },
             bolt: { from: 0.38, to: 1.5, turns: 12, range: 16, width: 1.4, damage: 9, maxHits: 3, para: 2.0 },
@@ -521,12 +522,12 @@ export const ULT_SPECS = {
             strike: { at: 2.3, radius: 3.6, damage: 26, buildup: 60 },
             aura: { kind: 'thunder', time: 10, dodge: 1.7, every: 1.1, radius: 2.6, damage: 12 } },
   archer: { time: 2.4, release: 1.45, bow: 1.8, hawk: 12,
-            arrow: { speed: 85, range: 160, width: 1.1, damage: 72, push: 3.5 },
+            arrow: { speed: 85, range: 160, width: 1.1, damage: 72, push: 3.5, buildup: 100 },
             hole: { w: 1.7, h: 2.15 } },
   polearm: { time: 2.6, at: 0.62, reach: 6.5,
              rings: [{ at: 0.72, r0: 0.6, r1: 3.3 }, { at: 0.98, r0: 3.3, r1: 5.1 }, { at: 1.24, r0: 5.1, r1: 6.9 }],
-             damage: 16, launch: 1.2, pin: 1.8,
-             big: { at: 1.85, range: 8, ahead: 3.5, radius: 1.6, damage: 34, launch: 2.6 },
+             damage: 16, launch: 1.2, pin: 1.8, buildup: 40,
+             big: { at: 1.85, range: 8, ahead: 3.5, radius: 1.6, damage: 34, launch: 2.6, buildup: 60 },
              aura: { kind: 'rock', time: 10, cut: 0.5 } },
   blunt:   { time: 2.4, at: 1.3, reach: 9,
              jump: { from: 0.42, apex: 0.95, height: 3.6, dist: 5.5 },
@@ -597,15 +598,62 @@ export const MIRACLES = {
  *       消せないまま時間が来ると、焦げて倒れる
  *   雷：当たるたびに少ししびれる（jolt 秒）。100% で雷痺：paralysis 秒しびれ続けて無防備（致命の一撃を受ける）
  */
+/*
+ *   （2026-11-27。③-1。利用者が決めた：新しい状態異常 4 つと、属性どうしの組み合わせ。数は Claude の案）
+ *   水：100% で濡：wet 秒、歩き・走りが slow 倍・スタミナの戻りが regen 倍。濡れた時に燃えている・火炎は消える。
+ *       消火（いつも）：濡れている間は燃え始めず、炎の溜まりが fireCut 倍。感電：濡れている相手には雷の傷と溜まりが shock 倍。泥濘：濡れている相手には地が mud 倍溜まる
+ *   地：100% で重：発動した時に転ぶ（fall 秒、倒れて起き上がる）。heavy 秒、回避の距離が dodge 倍・走れない。
+ *       不動：重い間は風が溜まらず、吹き飛ばされない
+ *   風：100% で崩：push m 吹き飛ばされ、stagger 秒よろめく（その間は防禦できない）。
+ *       煽火：燃えている・火炎の相手に風が当たると、まわり fan.radius m の敵にも炎が fan.buildup 溜まって燃える
+ *   聖：100% で眩：blind 秒、目がくらむ（天光柱と同じ。bot は相手を見失う）。盲撃：目がくらんでいる相手には、前・横からの暗殺も後ろからと同じ傷
+ */
 export const ELEMENTS = {
   guardPass: 0.5,
   fire: { slip: 3, slipDps: 2, decay: 8, decayDelay: 4, blaze: 10, blazeDps: 4, dodges: 3, gap: 1.6,
           ground: { life: { grass: 7, tree: 12 }, radius: { grass: 1.1, tree: 1.4 }, dps: 4, buildup: 15, max: 32, every: 0.25 } },
   thunder: { jolt: 0.45, decay: 8, decayDelay: 4, paralysis: 3.5 },
+  water: { decay: 8, decayDelay: 4, wet: 8, slow: 0.8, regen: 0.5, fireCut: 0.5, shock: 1.5, mud: 1.5 },
+  earth: { decay: 8, decayDelay: 4, heavy: 6, fall: 1.2, dodge: 0.5 },
+  wind:  { decay: 8, decayDelay: 4, push: 4, stagger: 2.0, fan: { radius: 3, buildup: 30 } },
+  holy:  { decay: 8, decayDelay: 4, blind: 3 },
+};
+/** 状態異常の名前（溜まりの棒・知らせ。属性 → 状態異常） */
+export const AILMENTS = { fire: '火炎', thunder: '雷痺', water: '濡', earth: '重', wind: '崩', holy: '眩' };
+/**
+ * 属性強化（刻の報酬。2026-11-27。利用者が決めた：報酬の 3 枚のうち 1 枚はいつも属性強化。纏 → 操 → 従の順に 1 段ずつ）
+ *   纏（enchant）：試合の終わりまで、武器に自分の属性を纏う。近接・矢が当たるたびに、属性の傷（武器の傷の damage 倍。楯でも半分通る）と、
+ *     状態異常の溜まり buildup。操・従は、まだ作っていない（操は ③-2、従はクリーチャーを作ってから）
+ */
+export const ENCHANT = { damage: 0.2, buildup: 20 };
+export const ELEMENT_STEPS = [
+  { id: 'enchant', name: '纏', short: '武器に属性を纏う' },
+  { id: 'control', name: '操', short: '属性を操る技（操ボタンが増える）' },
+  { id: 'servant', name: '従', short: '属性の魔物を従える', planned: true },
+];
+/**
+ * 操（属性強化の 2 段目。2026-11-28。利用者が選んだ案。数は Claude の案）：操ボタン（PC は B）で、その人の属性を操る技。待ち時間 cd 秒。
+ *   clip：動き（time 秒に合わせて流す。at 秒に効く）。英雄ごと：
+ *   楯劍騎士「水鞭」：前 range m・arc 度を水の鞭でなぎ払う（傷 damage・濡 buildup・pull m 引き寄せる）
+ *   劍騎士「雷步」：見ている向きへ dist m、稲妻になって移る（travel 秒。その間は無敵）。通り道の幅 width m の敵に傷 damage・雷 buildup
+ *   長柄騎士「岩壁」：前 ahead m に岩の壁（幅 width m・高さ height m・life 秒）。攻撃と矢を止め（hp まで受けると崩れる）、人も通れない
+ *   打擊騎士「爆炎」：前 ahead m の地面を叩いて爆炎（半径 radius m に炎の傷 damage・炎 buildup・push m 吹き飛ばす・地面の火 fires か所）
+ *   弓兵「旋風」：life 秒、自分のまわりに旋風（半径 radius m。矢と飛ぶ奇跡をそらす。始めに近くの敵を push m 吹き飛ばし・崩 buildup）
+ *   祓魔僧：ボタンは増やさない（奇跡のボタンがあるため）。奇跡の待ち時間が cdCut だけ短く、攻める奇跡が当たると眩が buildup 溜まる
+ */
+export const CONTROL = {
+  shield:  { name: '水鞭', el: 'water', clip: 'sh_whip', time: 1.0, at: 0.42, cd: 22, range: 6, arc: 70, damage: 14, buildup: 40, pull: 1.5 },
+  sword:   { name: '雷步', el: 'thunder', clip: null, time: 0.45, at: 0.06, cd: 18, dist: 6, travel: 0.18, width: 1.6, damage: 10, buildup: 30 },
+  polearm: { name: '岩壁', el: 'earth', clip: 'sp_wall', time: 0.9, at: 0.5, cd: 28, ahead: 2.2, width: 4, height: 2.2, life: 10, hp: 120 },
+  // 打擊騎士は今ある叩きつけの動きを武器ごとに使う（[動き, 叩く秒, 動きの長さ]。鎚矛「地碎」・戰鎚「天墜」・長柄鎚「打落」）
+  blunt:   { name: '爆炎', el: 'fire', clip: { mace: ['mc_c2', 0.32, 1.0], warhammer: ['wh_cut3', 0.92, 1.45], lucerne: ['lc_cut1', 0.38, 0.85] }, cd: 22,
+             ahead: 3, radius: 2.8, damage: 16, buildup: 40, push: 1.6, fires: 3 },
+  archer:  { name: '旋風', el: 'wind', clip: 'bw_gale', time: 0.8, at: 0.35, cd: 25, life: 3, radius: 3.2, push: 3, buildup: 40, stun: 0.6 },
+  cleric:  { name: '聖化', el: 'holy', passive: true, cdCut: 0.2, buildup: 30 },
 };
 
-/** 奇跡を持てる数（利用者の指示 2026-11-17。そろった後の刻の報酬は能力値） */
-export const MIRACLE_SLOTS = 4;
+/** 奇跡を持てる数（2026-11-27 から、祓魔僧は初めから全部の奇跡を使える＝7 つ。前は刻の褒美で 1 つずつ・最大 4 つ） */
+export const MIRACLE_SLOTS = 7;
 /** 蘇る動きの長さ（秒。cl_rise。この間と、その後 MIRACLES.revive.invuln 秒は傷を受けない） */
 export const REVIVE_TIME = 1.9;
 

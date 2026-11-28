@@ -103,6 +103,11 @@
    "loop": false,
    "speed": 0.0
   },
+  "bw_gale": {
+   "duration": 0.8,
+   "loop": false,
+   "speed": 0.0
+  },
   "dg_cut1": {
    "duration": 0.5667,
    "loop": false,

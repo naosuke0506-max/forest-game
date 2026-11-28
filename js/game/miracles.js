@@ -8,6 +8,7 @@
 //          f.invuln（傷を受けない残り秒。蘇った後）・f.blind（天光柱の目くらまし）・f.shock（神罰雷のしびれ）。
 //          光壁・聖火彈・神罰雷・天光柱は combat.js が持つ（walls・spells・strikes）
 import { CHARACTERS, MIRACLES, MIRACLE_SLOTS } from './data.js';
+import { miracleCdScale } from './controls.js';
 
 /** 奇跡を使う人か（祓魔僧） */
 export const canMiracle = (f) => !!f && CHARACTERS[f.char]?.left === 'miracle';
@@ -67,7 +68,7 @@ export function miracleReady(f, id) {
 /** 効き目が出たときに、待ち時間を始める（蘇生は加護が終わってから） */
 export function startCool(f, id) {
   const M = MIRACLES[id];
-  state(f).cool[id] = id === 'revive' ? 0 : M.cd;
+  state(f).cool[id] = id === 'revive' ? 0 : M.cd * miracleCdScale(f);   // 聖化（祓魔僧の操）：待ち時間が短い
 }
 
 /**
@@ -82,7 +83,7 @@ export function updateMiracles(f, dt) {
   if (f.invuln > 0) f.invuln = Math.max(0, f.invuln - dt);
   if (f.blessing > 0) {
     f.blessing = Math.max(0, f.blessing - dt);
-    if (f.blessing <= 0 && m) m.cool.revive = MIRACLES.revive.cd;   // 加護が切れた：待ち時間に入る
+    if (f.blessing <= 0 && m) m.cool.revive = MIRACLES.revive.cd * miracleCdScale(f);   // 加護が切れた：待ち時間に入る
   }
 }
 

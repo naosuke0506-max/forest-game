@@ -657,7 +657,9 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
     ultHero(kind, f, { dur = 1, x, y, z } = {}) {
       const src = x !== undefined ? { x, y, z, isPlayer: false } : f;
       const loud = { flash: 1.6, bolt: 1.4, pierce: 0.9, stance: 0.9, dash: 1.5, auraStrike: 1.0, draw: 1.2, release: 1.9, wallBreak: 1.5, deflect: 0.8,
-        rockRing: 1.4, bigSpike: 1.8, fireRise: 1.3, fireJump: 1.3, auraBurst: 0.9, gate: 1.6, spear: 0.8, holyImpact: 0.7, reflect: 0.8 }[kind] ?? 1;
+        rockRing: 1.4, bigSpike: 1.8, fireRise: 1.3, fireJump: 1.3, auraBurst: 0.9, gate: 1.6, spear: 0.8, holyImpact: 0.7, reflect: 0.8,
+        ailWater: 0.9, ailEarth: 1.0, ailWind: 1.0, ailHoly: 0.8, enchant: 0.45, comboShock: 1.0, comboFan: 1.0,
+        whip: 1.0, step: 1.1, rockWall: 1.4, rockHit: 0.6, rockBreak: 1.2, blast: 1.4, gale: 1.2, galeDeflect: 0.6, ctrlNot: 0.35 }[kind] ?? 1;
       const d = at(src, loud, { ref: 25, max: 200 });
       if (!d) return;
       const c = audio.ctx;
@@ -742,6 +744,64 @@ export function createSfx({ terrain, zones = null, plazas = [] }) {
       } else if (kind === 'holyImpact') {
         metal(d, { t: 0, base: 1760 + R() * 300, ratios: [1, 2.01, 2.76], dur: 0.5, gain: 0.08 });
         noiseHit(d, { t: 0, dur: 0.12, type: 'lowpass', freq: 1800, freqEnd: 300, attack: 0.001, gain: 0.35 });
+      } else if (kind === 'ailWater') {
+        // 状態異常（③-1）：濡＝水をかぶる音・重＝どすんと倒れる・崩＝突風・眩＝きらめき
+        noiseHit(d, { t: 0, dur: 0.5, type: 'bandpass', freq: 1300, freqEnd: 500, q: 0.9, attack: 0.01, gain: 0.55 });
+        for (let i = 0; i < 8; i++) noiseHit(d, { t: 0.1 + R() * 0.5, dur: 0.04, type: 'bandpass', freq: 1800 + R() * 1500, q: 2, attack: 0.003, gain: 0.07 });
+      } else if (kind === 'ailEarth') {
+        toneHit(d, { t: 0, dur: 0.35, f0: 90, f1: 45, type: 'sine', attack: 0.003, gain: 0.6 });
+        noiseHit(d, { t: 0, dur: 0.3, type: 'lowpass', freq: 700, freqEnd: 150, attack: 0.002, gain: 0.5 });
+      } else if (kind === 'ailWind') {
+        noiseHit(d, { t: 0, dur: 0.6, type: 'bandpass', freq: 2200, freqEnd: 500, q: 1.2, attack: 0.01, gain: 0.6 });
+      } else if (kind === 'ailHoly') {
+        metal(d, { t: 0, base: 2000, ratios: [1, 1.5, 2.4], dur: 0.6, gain: 0.07 });
+      } else if (kind === 'enchant') {
+        noiseHit(d, { t: 0, dur: 0.12, type: 'bandpass', freq: 2400, freqEnd: 900, q: 1.5, attack: 0.002, gain: 0.25 });
+      } else if (kind === 'comboShock') {
+        noiseHit(d, { t: 0, dur: 0.05, type: 'highpass', freq: 2600, attack: 0.0005, gain: 0.6 });
+        toneHit(d, { t: 0, dur: 0.3, f0: 1400, f1: 300, type: 'sawtooth', attack: 0.002, gain: 0.06 });
+        noiseHit(d, { t: 0.02, dur: 0.4, type: 'bandpass', freq: 1800, freqEnd: 3500, q: 1.5, attack: 0.01, gain: 0.3 });
+      } else if (kind === 'comboFan') {
+        noiseHit(d, { t: 0, dur: 0.8, type: 'lowpass', freq: 1400, freqEnd: 250, attack: 0.02, gain: 0.6 });   // ごうっと燃え広がる
+        for (let i = 0; i < 10; i++) noiseHit(d, { t: R() * 0.6, dur: 0.02, type: 'highpass', freq: 2400, attack: 0.001, gain: 0.1 });
+      } else if (kind === 'whip') {
+        // 操（③-2）：水鞭＝鞭のうなりと水しぶき・雷步＝はじける雷と走る音・岩壁＝地鳴りと岩がせり上がる・爆炎＝爆ぜる炎・旋風＝渦巻く風
+        noiseHit(d, { t: 0, dur: 0.28, type: 'bandpass', freq: 700, freqEnd: 2600, q: 1.4, attack: 0.01, gain: 0.5 });   // しなる音
+        noiseHit(d, { t: 0.12, dur: 0.06, type: 'highpass', freq: 2500, attack: 0.001, gain: 0.45 });                    // 鞭の先が鳴る
+        noiseHit(d, { t: 0.1, dur: 0.6, type: 'bandpass', freq: 1300, freqEnd: 500, q: 0.9, attack: 0.02, gain: 0.45 });   // 水しぶき
+        for (let i = 0; i < 6; i++) noiseHit(d, { t: 0.2 + R() * 0.4, dur: 0.04, type: 'bandpass', freq: 1800 + R() * 1500, q: 2, attack: 0.003, gain: 0.06 });
+      } else if (kind === 'step') {
+        verb(0.4);
+        noiseHit(d, { t: 0, dur: 0.05, type: 'highpass', freq: 2400, attack: 0.0005, gain: 0.7 });
+        noiseHit(d, { t: 0, dur: 0.3, type: 'bandpass', freq: 900, freqEnd: 3200, q: 1.2, attack: 0.01, gain: 0.45 });
+        toneHit(d, { t: 0, dur: 0.25, f0: 1200, f1: 300, type: 'sawtooth', attack: 0.002, gain: 0.05 });
+      } else if (kind === 'rockWall') {
+        verb(0.5);
+        toneHit(d, { t: 0, dur: 0.7, f0: 75, f1: 36, type: 'sine', attack: 0.004, gain: 0.6 });
+        noiseHit(d, { t: 0, dur: 0.55, type: 'lowpass', freq: 1000, freqEnd: 150, attack: 0.002, gain: 0.6 });
+        for (let i = 0; i < 10; i++) noiseHit(d, { t: R() * 0.25, dur: 0.06, type: 'bandpass', freq: 400 + R() * 900, q: 1.2, attack: 0.001, gain: 0.16 });
+      } else if (kind === 'rockHit') {
+        noiseHit(d, { t: 0, dur: 0.12, type: 'bandpass', freq: 600 + R() * 500, q: 1.4, attack: 0.001, gain: 0.4 });
+        for (let i = 0; i < 4; i++) noiseHit(d, { t: 0.03 + R() * 0.2, dur: 0.04, type: 'bandpass', freq: 900 + R() * 1200, q: 2, attack: 0.002, gain: 0.08 });
+      } else if (kind === 'rockBreak') {
+        verb(0.5);
+        noiseHit(d, { t: 0, dur: 0.7, type: 'lowpass', freq: 1200, freqEnd: 180, attack: 0.002, gain: 0.7 });
+        toneHit(d, { t: 0, dur: 0.5, f0: 80, f1: 40, type: 'sine', attack: 0.004, gain: 0.4 });
+        for (let i = 0; i < 14; i++) noiseHit(d, { t: 0.05 + R() * 0.7, dur: 0.06, type: 'bandpass', freq: 500 + R() * 1000, q: 1.5, attack: 0.002, gain: 0.1 });
+      } else if (kind === 'blast') {
+        verb(0.5);
+        toneHit(d, { t: 0, dur: 0.5, f0: 110, f1: 40, type: 'sine', attack: 0.003, gain: 0.6 });                         // 叩きつけ
+        noiseHit(d, { t: 0, dur: 0.9, type: 'lowpass', freq: 1800, freqEnd: 220, attack: 0.002, gain: 0.75 });           // 爆ぜる炎
+        noiseHit(d, { t: 0.05, dur: 0.8, type: 'bandpass', freq: 300, freqEnd: 900, q: 0.8, attack: 0.05, gain: 0.45 });   // ごうっと燃える
+        for (let i = 0; i < 10; i++) noiseHit(d, { t: R() * 0.6, dur: 0.02, type: 'highpass', freq: 2400, attack: 0.001, gain: 0.1 });
+      } else if (kind === 'gale') {
+        verb(0.4);
+        noiseHit(d, { t: 0, dur: 0.5, type: 'bandpass', freq: 2600, freqEnd: 600, q: 1.1, attack: 0.005, gain: 0.7 });   // 吹き飛ばす突風
+        noiseHit(d, { t: 0.1, dur: dur, type: 'bandpass', freq: 500, freqEnd: 900, q: 1.6, attack: 0.25, gain: 0.35 });   // 渦巻く風
+      } else if (kind === 'galeDeflect') {
+        noiseHit(d, { t: 0, dur: 0.25, type: 'bandpass', freq: 2200, freqEnd: 900, q: 1.5, attack: 0.005, gain: 0.45 });
+      } else if (kind === 'ctrlNot') {
+        toneHit(d, { t: 0, dur: 0.12, f0: 330, f1: 300, type: 'triangle', attack: 0.005, gain: 0.12 });   // まだ使えない（待ち時間）
       } else if (kind === 'reflect') {
         metal(d, { t: 0, base: 2200, ratios: [1, 1.5, 2.4], dur: 0.4, gain: 0.07 });
         noiseHit(d, { t: 0, dur: 0.15, type: 'bandpass', freq: 3500, freqEnd: 1200, q: 2, attack: 0.002, gain: 0.25 });
@@ -823,6 +883,10 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   });
   combat.on('auraBurst', ({ fighter, x, y, z }) => sfx.ultHero('auraBurst', fighter, { x, y, z }));
   combat.on('auraReflect', ({ target }) => sfx.ultHero('reflect', target));
+  // 状態異常・纏・組み合わせ（③-1。2026-11-27）
+  combat.on('ailment', ({ fighter, el }) => { const k = { water: 'ailWater', earth: 'ailEarth', wind: 'ailWind', holy: 'ailHoly' }[el]; if (k) sfx.ultHero(k, fighter); });
+  combat.on('enchantHit', ({ target }) => sfx.ultHero('enchant', target));
+  combat.on('combo', ({ fighter, combo }) => { if (combo === 'shock') sfx.ultHero('comboShock', fighter); else if (combo === 'fan') sfx.ultHero('comboFan', fighter); });
   combat.on('ultBurst', ({ fighter, ult }) => sfx.ultBurst(fighter, ult?.element));
   // 祓魔僧の奇跡（game/miracles.js）：唱え始め・効き目・蘇る・光壁・炎・途切れる
   combat.on('miracleCast', ({ fighter, id }) => sfx.miracle('cast', fighter, { dur: MIRACLES[id].at }));
@@ -839,8 +903,23 @@ export function wireSounds(sfx, { combat, match, hiding, me }) {
   combat.on('lethal', ({ target, how }) => { if (how === 'charred') sfx.miracle('charred', target); });
   combat.on('paralyzed', ({ fighter, time }) => sfx.miracle('shock', fighter, { dur: time }));
   combat.on('revived', ({ fighter }) => sfx.miracle('revived', fighter));
-  combat.on('wallHit', ({ wall, x, y, z }) => sfx.miracle('wallHit', wall.owner, { x, y, z }));
-  combat.on('wallEnd', ({ wall, broke }) => { if (broke) sfx.miracle('wallBreak', wall.owner, { x: wall.x, y: wall.y + 1.2, z: wall.z }); });
+  combat.on('wallHit', ({ wall, x, y, z }) => { if (wall.kind !== 'rock') sfx.miracle('wallHit', wall.owner, { x, y, z }); else sfx.ultHero('rockHit', null, { x, y, z }); });
+  combat.on('wallEnd', ({ wall, broke }) => {
+    if (!broke) return;
+    if (wall.kind === 'rock') sfx.ultHero('rockBreak', null, { x: wall.x, y: wall.y + 1, z: wall.z });
+    else sfx.miracle('wallBreak', wall.owner, { x: wall.x, y: wall.y + 1.2, z: wall.z });
+  });
+  // 操（③-2。game/controls.js）
+  combat.on('ctrlFx', (e) => {
+    const f = e.fighter;
+    if (e.kind === 'whip') sfx.ultHero('whip', f);
+    else if (e.kind === 'bolt' && e.phase === 'start') sfx.ultHero('step', f);
+    else if (e.kind === 'wall') sfx.ultHero('rockWall', null, { x: e.x, y: e.y + 0.5, z: e.z });
+    else if (e.kind === 'blast') sfx.ultHero('blast', null, { x: e.x, y: e.y + 0.5, z: e.z });
+    else if (e.kind === 'gale' && e.phase === 'start') sfx.ultHero('gale', f, { dur: e.life });
+  });
+  combat.on('galeDeflect', ({ x, y, z }) => sfx.ultHero('galeDeflect', null, { x, y, z }));
+  combat.on('controlDenied', ({ fighter }) => { if (fighter.isPlayer) sfx.ultHero('ctrlNot', fighter); });
   combat.on('ignite', ({ fighter }) => sfx.miracle('ignite', fighter));
   combat.on('miracleBroken', ({ fighter }) => sfx.miracle('broken', fighter));
   combat.on('miracleNotReady', ({ fighter }) => { if (fighter === me) sfx.miracle('notReady', fighter); });

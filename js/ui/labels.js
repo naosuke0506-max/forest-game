@@ -8,6 +8,7 @@ export const L = {
   // 右下のボタン
   attack: '攻擊', shoot: '射', thrust: '突', assassinate: '暗殺', finisher: '誅殺',
   dodge: '迴避', search: '搜索', sprint: '疾驅', skill: '技能',
+  control: '操',   // 操ボタン（属性を操る技。2026-11-28。ボタンには技の名前が出る：水鞭・雷步・岩壁・爆炎・旋風）
   ult: '必殺',   // 必殺ボタン（必殺技。2026-11-25。延長戰＝第 6 刻からは L.overtime）
   miracle: '奇跡', swap: '替',   // 祓魔僧：左手の奇跡ボタン（選んでいる奇跡の名前が出る）・唱える奇跡を替えるボタン（2026-11-17）
   crouch: '屈身', stand: '起立', getUp: '起身',
